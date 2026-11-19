@@ -237,3 +237,40 @@ test('a blank page is not a reason to restart', async () => {
   assert.equal(result.body.planes.page.state, 'blank')
   assert.equal(result.body.planes.dom.state, 'skipped')
 })
+
+test('/status exposes backend-discovered networking.hostGateway without a literal', async () => {
+  const routes = routesFor(depsWith({
+    backend: {
+      async inspect() {
+        return { raw: JSON.stringify([{ status: { state: 'running', networks: [
+          { ipv4Gateway: '10.99.0.1', ipv4Address: '10.99.0.42', network: 'net0' },
+        ] }, configuration: { publishedPorts: [
+          { containerPort: 8787, hostAddress: '127.0.0.1', hostPort: 8800 },
+          { containerPort: 8791, hostAddress: '127.0.0.1', hostPort: 8801 },
+        ] } }]) }
+      },
+    },
+  }))
+  const result = await call(routes['/nano-local-sandbox/status'])
+  assert.equal(result.status, 200)
+  // The field surfaces verbatim whatever the backend reported — the route
+  // must not rewrite, default, or hard-code a topology value.
+  assert.deepEqual(result.body.networking, { hostGateway: '10.99.0.1', containerAddress: '10.99.0.42', network: 'net0' })
+})
+
+test('/diagnostics flags a committed-but-broken app from console exceptions', async () => {
+  const routes = routesFor(depsWith({
+    session: {
+      phase: 'running', history: [{ url: 'https://example.com/p' }], containerName: 'kitesurf-dev', httpBase: 'http://127.0.0.1:8800',
+      console: [{ level: 'exception', text: 'ReferenceError: exports is not defined', at: 't' }],
+      network: [],
+    },
+  }))
+  const result = await call(routes['/nano-local-sandbox/diagnostics'])
+  assert.equal(result.status, 200)
+  const hint = (result.body.hints || []).find((row) => row.includes('应用'))
+  assert.equal(typeof hint, 'string', `expected an app-broken derived hint in ${JSON.stringify(result.body.hints)}`)
+  assert.equal(hint.includes('ReferenceError'), true)
+  // Networking is always present on the payload so consumers do not branch on field existence.
+  assert.equal('networking' in result.body, true)
+})

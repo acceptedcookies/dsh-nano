@@ -104,5 +104,31 @@ export default function createDriver(api) {
       probes: { 'bridge-writer-free': bridgeWriterFree, 'history-consistent': historyConsistent },
     },
     errors: { namespace: 'kitesurf', rows: ERROR_ROWS },
+    /**
+     * The engine marks its egress refusals two ways: an
+     * `x-kitesurf-blocked:<reason>` header on the synthetic 403 (visible in the
+     * recorded network ring's responseHeaders), and a `kitesurf: …` body inside
+     * the wrapped <pre>. Either is proof this "successful" commit is actually a
+     * refused egress. These marker strings are engine-specific — they belong
+     * in the driver, never in the kernel.
+     */
+    blockedDocument({ landed, url, network }) {
+      const rows = Array.isArray(network) ? network.slice(-12) : []
+      const stripHash = (value) => String(value || '').split('#')[0]
+      for (const row of rows) {
+        const headers = row?.responseHeaders || {}
+        const reason = Object.entries(headers).find(([key]) => key.toLowerCase() === 'x-kitesurf-blocked')?.[1]
+        if (!reason) continue
+        const rowUrl = stripHash(row.url)
+        if (rowUrl === stripHash(landed?.url) || rowUrl === stripHash(url)) return String(reason)
+      }
+      const bodyText = String(landed?.bodyText || '')
+      if (/^kitesurf:\s/i.test(bodyText)) {
+        if (/egress timeout/i.test(bodyText)) return 'egress-timeout'
+        if (/may not reach/i.test(bodyText)) return 'private-network'
+        return 'kitesurf-blocked'
+      }
+      return null
+    },
   }
 }

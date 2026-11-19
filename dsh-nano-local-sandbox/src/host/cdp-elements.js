@@ -140,12 +140,12 @@ export function navigate(session, httpBase, url, connect = connectCdp, options =
   }
   return queueNavigation(session, () => navigateOnce(session, httpBase, url, connect, options.isCancelled || (() => false), options.hooks || {}), options)
     .then((value) => {
-      if (session.navigation?.intent === url) session.navigation = { ...session.navigation, outcome: 'committed', url: value?.url ?? url, settledAt: new Date().toISOString() }
+      if (session.navigation?.intent === url) session.navigation = { ...session.navigation, outcome: 'committed', url: value?.url ?? url, settledAt: new Date().toISOString(), ms: Math.max(0, Date.now() - (session.navigation.sinceMs || Date.now())) }
       return value
     })
     .catch((error) => {
       if (session.navigation?.intent === url) {
-        session.navigation = { ...session.navigation, outcome: /timed out/i.test(error?.message || '') ? 'in-flight' : 'failed', timedOut: /timed out/i.test(error?.message || ''), errorId: error?.errorId || errorCode('navigate.failed'), settledAt: new Date().toISOString() }
+        session.navigation = { ...session.navigation, outcome: /timed out/i.test(error?.message || '') ? 'in-flight' : 'failed', timedOut: /timed out/i.test(error?.message || ''), errorId: error?.errorId || errorCode('navigate.failed'), settledAt: new Date().toISOString(), ms: Math.max(0, Date.now() - (session.navigation.sinceMs || Date.now())), error: String(error?.message || '').slice(0, 240) }
       }
       throw error
     })
@@ -216,11 +216,26 @@ async function navigateOnce(session, httpBase, url, connect, isCancelled, hooks 
   // non-blank shell. Verify the document the page actually committed to and
   // report its truth — never a fabricated success off errorText alone.
   const observed = await client.send('Runtime.evaluate', {
-    expression: '(()=>({url:location.href,title:document.title,readyState:document.readyState,root:!!document.documentElement,bodyBytes:(document.body&&document.body.innerText||"").length}))()',
+    expression: '(()=>({url:location.href,title:document.title,readyState:document.readyState,root:!!document.documentElement,bodyBytes:(document.body&&document.body.innerText||"").length,bodyText:(document.body&&document.body.innerText||"").slice(0,300)}))()',
     returnByValue: true,
   }, sessionId)
   const landed = observed?.result?.value || null
   if (landed) session.lastArrival = landed
+  // A refused/errored egress hop may still commit a synthetic text document —
+  // Page.navigate answers cleanly and the URL is the target's, so a bare
+  // ok:true would be a lie. The engine-specific markers (blocked-response
+  // header, refusal body prefix) live in the driver; the kernel only calls the
+  // hook and maps a detected refusal to navigate.egress/failed.
+  const blockedReason = typeof hooks.blockedDocument === 'function'
+    ? hooks.blockedDocument({ session, landed, url, network: session?.network })
+    : null
+  if (blockedReason) {
+    const error = new Error(`navigation committed a blocked document (${blockedReason}): ${String(landed?.bodyText || '').slice(0, 160)}`)
+    error.status = /timeout/i.test(blockedReason) ? 504 : 502
+    error.errorId = /egress-timeout/i.test(blockedReason) ? errorCode('navigate.egress') : errorCode('navigate.failed')
+    error.blockedReason = blockedReason
+    throw error
+  }
   // JS overrides also run in the committed document for the CURRENT page;
   // the pre-nav script already covered the first scripts of the new document.
   if (typeof hooks.applySettings === 'function') {
@@ -296,6 +311,19 @@ function networkHeaders(value) {
     if (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') out[key] = String(entry)
   }
   return out
+}
+
+/**
+ * Per-call CDP round-trip ring (cap 64). One data point per send() answers
+ * "which CDP call was slow" — the missing segment between REST duration and
+ * page work. `via` is relay|direct so relay hop cost is separable.
+ */
+function recordCdpCall(client, method, startedMs, outcome) {
+  const session = client?.__session
+  if (!session) return
+  session.cdpCalls = session.cdpCalls || []
+  session.cdpCalls.push({ method, ms: Math.max(0, Math.round(performance.now() - startedMs)), outcome, via: client?.via || null, at: new Date().toISOString() })
+  if (session.cdpCalls.length > 64) session.cdpCalls.shift()
 }
 
 function networkPayload(value) {
@@ -437,6 +465,7 @@ async function acquireClient(session, httpBase, connect) {
   session.console = session.console || []
   session.network = session.network || []
   const client = connect.length >= 2 ? await connect(httpBase, {}) : await connect(httpBase)
+  client.__session = session
   session.cdp = client
   client.probedAt = Date.now()
   if (typeof client.listen === 'function') {
@@ -516,6 +545,7 @@ async function acquireClient(session, httpBase, connect) {
       errorId: failed ? (message?.error?.errorId || errorCode('navigate.failed')) : nav.errorId,
       error: message?.result?.errorText || message?.error?.message || nav.error,
       settledAt: new Date().toISOString(),
+      ms: Math.max(0, Date.now() - (nav.sinceMs || Date.now())),
     }
   }
   try {
@@ -620,9 +650,11 @@ export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket,
         // the navigation it actually answers — an A-reply must not settle B.
         navIntents.set(id, params?.url || params?.entryId || null)
       }
+      const startedMs = performance.now()
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
           pending.delete(id)
+          recordCdpCall(client, method, startedMs, 'timeout')
           // The engine may still finish this work. A deadline is neither a
           // transport failure nor permission to close its page-owning socket;
           // Page.stopLoading is a no-op at this pin, so nothing was cancelled.
@@ -631,10 +663,11 @@ export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket,
         pending.set(id, {
           resolve: (message) => {
             clearTimeout(timer)
+            recordCdpCall(client, method, startedMs, message.error ? 'error' : 'ok')
             if (message.error) reject(new Error(message.error.message || method))
             else resolve(message.result ?? {})
           },
-          reject: (error) => { clearTimeout(timer); reject(error) },
+          reject: (error) => { clearTimeout(timer); recordCdpCall(client, method, startedMs, 'error'); reject(error) },
         })
         try { ws.send(JSON.stringify(frame)) } catch (error) {
           clearTimeout(timer)

@@ -35,7 +35,7 @@ const KERNEL_CODES = [
   { code: 'elements.empty', status: 502, cause: 'DOM.getDocument 没有文档根', next: '先 POST /open' },
   { code: 'body.toolarge', status: 413, cause: '请求体超过该路由上限', next: '拆小请求' },
   { code: 'body.', wildcard: true, status: 400, cause: 'body 不是 JSON 对象', next: '发送 JSON 对象' },
-  { code: 'url.', wildcard: true, status: 400, cause: '地址不是 http(s)', next: '用完整 https:// 地址' },
+  { code: 'url.', wildcard: true, status: 400, cause: '地址不是 http(s)', next: '用完整 http(s) 地址' },
   { code: 'shot.(scroll|format)', wildcard: true, status: 400, cause: 'scroll 或 format 非法', next: 'POST /shot {scroll,format}' },
   { code: 'evaluate.(empty|toolong)', wildcard: true, status: 400, cause: 'expression 为空或超过 2000 字符', next: '缩短表达式' },
   { code: 'engine.', wildcard: true, status: 502, cause: 'CDP 连接失败', next: 'GET /status' },

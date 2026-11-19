@@ -216,10 +216,18 @@ function parseInspect(raw, containerPort = 8787) {
     hostAddress: row.hostAddress || '127.0.0.1',
   }))
   const resources = item?.configuration?.resources ?? item?.resources ?? null
+  // Backend-reported container networking (status.networks[] on apple-container).
+  // `ipv4Gateway` is the address inside the container that reaches the host —
+  // the value is whatever the runtime reports, never a literal this side owns.
+  const network = (item?.status?.networks ?? []).find((row) => row?.ipv4Gateway) || null
+  const networking = network
+    ? { hostGateway: network.ipv4Gateway || null, containerAddress: network.ipv4Address || null, network: network.network || null }
+    : null
   return {
     state,
     ports,
     containerPort,
+    networking,
     ...activeDriver.inspectedRecipe(item?.configuration ?? item),
     resources: resources
       ? {
@@ -468,6 +476,7 @@ async function observeOnce(session, deps) {
     buildId: BUILD_ID,
     effective,
     ports,
+    networking: info?.networking ?? null,
   })
   const epoch = bumpEpoch(session, draft.planes)
   const snap = { ...draft, epoch, phase: session.phase, httpBase }
@@ -902,6 +911,37 @@ function navigationUrl(raw) {
   return url.href
 }
 
+/**
+ * Topology hint for a failed navigation. The address is evaluated from the
+ * CONTAINER's address space, not the host's: `localhost`/loopback names the
+ * container itself, never the host that runs this plugin. The reachable
+ * host-side address is whatever the backend reports — `GET /status` →
+ * `networking.hostGateway` — and that field is referenced by NAME here so no
+ * deployment's actual value is ever written into code, docs, or hints.
+ */
+function navigateHint(error, url) {
+  const text = String(error?.message || error?.result?.errorText || '')
+  let host = ''
+  try { host = url ? new URL(url).hostname.toLowerCase() : '' } catch { host = '' }
+  const isLoopback = host === 'localhost' || host.endsWith('.localhost') || /^127\./.test(host) || host === '::1' || host === '[::1]' || /^0\./.test(host)
+  if (isLoopback && /ERR_CONNECTION_REFUSED|ERR_ADDRESS_UNREACHABLE|timed out|egress/i.test(text)) {
+    return '目标地址是 localhost/回环：容器内它指向容器自身，不是跑本插件的宿主。宿主上的服务走容器宿主网关——查 GET /status → networking.hostGateway 字段（运行时值，按 backend 拓扑发现，非字面量）。'
+  }
+  if (/ERR_NAME_NOT_RESOLVED|ERR_NAME_NOT_RESOL/i.test(text)) {
+    return '域名无法解析：容器内无该主机记录，或公网 DNS 未配。内网服务请用 IP 或容器宿主网关（networking.hostGateway），并确认地址在容器内可达。'
+  }
+  if (/ERR_CONNECTION_REFUSED|ERR_ADDRESS_UNREACHABLE/i.test(text)) {
+    return '连接被拒/不可达：若服务跑在宿主机 localhost，容器内请改用宿主网关地址（GET /status → networking.hostGateway）；否则确认目标端口确实监听且非仅绑 127.0.0.1。'
+  }
+  if (/ERR_CONNECTION_TIMED_OUT|ERR_TIMED_OUT/i.test(text)) {
+    return '连接超时：目标在容器网络内不可达。确认服务监听地址允许容器网段（如 next dev 默认 *、勿仅绑 127.0.0.1），宿主侧服务走 networking.hostGateway。'
+  }
+  if (/ERR_ABORTED/i.test(text)) {
+    return '导航被中止（blocked/204/205）：引擎将不可渲染响应拦下。看 GET /network?failedOnly=true 找被拦请求与原因。'
+  }
+  return null
+}
+
 async function readJson(req, limit = 0) {
   const checkShape = (parsed) => {
     // Every consumer treats the body as an options object. A JSON array or
@@ -950,7 +990,7 @@ function clientFor(session, base, deps) {
 /** Driver hooks for a navigation: pre-navigation settings and URL decoration. */
 function navHooks(session) {
   const driver = driverOf(session)
-  return { applySettings: driver.settings.applyToPage, decorateUrl: driver.settings.decorateUrl }
+  return { applySettings: driver.settings.applyToPage, decorateUrl: driver.settings.decorateUrl, blockedDocument: driver.blockedDocument }
 }
 
 /** Re-open the last address once after restart, only if the page is blank. */
@@ -1036,6 +1076,10 @@ function send(res, status, body) {
     const rpcFail = rpcErr !== null || body?.result?.isError === true
     res.__op.ok = status < 400 && !rpcFail
     res.__op.errorId = body?.errorId ?? body?.result?.errorId ?? (rpcErr ? `jsonrpc:${rpcErr.code}` : null)
+    // The upstream reason text (net::ERR_* / engine detail) belongs on the
+    // audit row too — errorId alone can't tell "refused" from "dns".
+    const errText = body?.error ?? body?.result?.error ?? rpcErr?.message ?? null
+    if (errText) res.__op.error = String(errText).slice(0, 240)
     // A clean answer retires the pane's last-error line; only real failures
     // keep it lit.
     if (res.__op.ok && res.__session) res.__session.lastError = null
@@ -1124,6 +1168,20 @@ async function diagnosticsPayload(session, deps, { withCatalog = false } = {}) {
   if (targetInfos.length === 0 && snap.engineAlive) hints.push('无 page target：先 POST /open 打开一个页面')
   if (snap.checks.page?.ok && snap.checks.dom && !snap.checks.dom.ok) hints.push(`DOM 不可渲染（${snap.checks.dom.detail}）：面板会退回截图模式`)
   if (snap.checks.bridge && !snap.checks.bridge.ok) hints.push(`MCP 桥不可达（${snap.checks.bridge.detail}）：HITL 控制态与 agent 工具会失败`)
+  // Page committed but the app itself may be broken: recent exceptions/console
+  // errors or a hollow body are the signature a bare `page:open` cannot show.
+  // This is a derived hint, not a new plane — the plane keeps its honest
+  // "document is committed" meaning.
+  if (snap.page?.state === 'open' || snap.planes?.page?.state === 'open') {
+    const recent = (session.console || []).slice(-40)
+    const errors = recent.filter((row) => row.level === 'exception' || (row.level === 'error' && row.source !== 'network'))
+    const netFailed = (session.network || []).slice(-30).filter((row) => row.failed === true).length
+    const bodyEmpty = session.lastArrival && session.lastArrival.bodyBytes === 0
+    if (errors.length || bodyEmpty) {
+      const first = errors[0]?.text ? ` · 首个：${String(errors[0].text).slice(0, 90)}` : ''
+      hints.push(`页面已加载但应用可能异常（${errors.length} 条 error/exception${netFailed ? `、${netFailed} 个失败请求` : ''}${bodyEmpty ? '、body 为空' : ''}${first}）：GET /console?level=exception,error 定位源码层`)
+    }
+  }
   const summary = summaryOf(snap)
   const text = [
     `环境诊断 · ${snap.healthy ? '正常' : '异常'}`,
@@ -1162,6 +1220,11 @@ async function diagnosticsPayload(session, deps, { withCatalog = false } = {}) {
     summary,
     text,
     navigation: navigationLedger(session),
+    // Backend-reported container networking (see projectSnapshot): the
+    // host-facing gateway is a runtime value, surfaced here for agents that
+    // need "which address inside the container reaches the host".
+    networking: snap.networking ?? null,
+    cdpCalls: (session.cdpCalls || []).slice(-20),
     targets: targetInfos.map((t) => ({ targetId: t.targetId, type: t.type, url: t.url, title: t.title })),
     console: (session.console || []).slice(-10),
     network: (session.network || []).slice(-10),
@@ -1434,23 +1497,45 @@ export function routeSpecs(deps = {}) {
           }
           const fit = body.fit && typeof body.fit === 'object' ? body.fit : null
           const scroll = Number(body.scroll) || 0
+          let targetsMs = 0
+          let targetsT = performance.now()
           const targets = await client.send('Target.getTargets')
+          targetsMs = Math.round(performance.now() - targetsT)
           const pageTargetId = (targets?.targetInfos || []).find((row) => row.type === 'page')?.targetId || ''
+          const phases = { targetsMs }
+          let viewportT = 0
+          let scrollT = 0
+          let captureT = 0
+          let identityT = 0
           const shot = await withPage(client, async (sessionId) => {
+            let t = performance.now()
             const viewport = await driverOf(session).settings.viewport(session, client, fit, sessionId)
+            viewportT = Math.round(performance.now() - t)
             if (scroll) {
+              t = performance.now()
               await client.send('Runtime.evaluate', { expression: `window.scrollBy(0, ${scroll})`, returnByValue: true }, sessionId)
+              scrollT = Math.round(performance.now() - t)
             }
             const params = format === 'png' ? { format } : { format, quality }
+            t = performance.now()
             const cap = await client.send('Page.captureScreenshot', params, sessionId)
+            captureT = Math.round(performance.now() - t)
             // Frame identity rides with the shot so the pane's pick-drift check
             // compares a pick's identity against the frame it's drawn over.
+            t = performance.now()
             const info = await client.send('Runtime.evaluate', {
               expression: `(()=>({url:location.href,scrollX:window.scrollX||0,scrollY:window.scrollY||0}))()`,
               returnByValue: true,
             }, sessionId)
+            identityT = Math.round(performance.now() - t)
             return { ...cap, identity: info?.result?.value, viewport }
           })
+          phases.viewportMs = viewportT
+          if (scroll) phases.scrollMs = scrollT
+          phases.captureMs = captureT
+          phases.identityMs = identityT
+          phases.payloadBytes = typeof shot?.data === 'string' ? shot.data.length : 0
+          if (res.__op) res.__op.phases = phases
           const data = shot?.data
           // G32: an engine-side capture error travels back in-band at this pin
           // (cap.error alongside an empty/placeholder data). Never report it
@@ -1580,8 +1665,14 @@ export function routeSpecs(deps = {}) {
           send(res, error.status || 400, { ok: false, errorId: error.errorId || errorCode('body.json'), error: error.message })
           return
         }
+        let url = null
         try {
-          const url = navigationUrl(body.url)
+          url = navigationUrl(body.url)
+          // Failed navigations must leave the address they attempted: /open
+          // lives outside the shared pageBody block, so its argSummary is
+          // written here — /operations?errorsOnly can then answer "which
+          // URL refused" instead of only "navigate.failed".
+          if (res.__op) res.__op.argSummary = JSON.stringify({ url }).slice(0, 300)
           // Explicit navigation wins over startup restoration. Never replay a
           // remembered address on top of the page the human is opening now.
           restoreAttempted = true
@@ -1609,7 +1700,12 @@ export function routeSpecs(deps = {}) {
           if (!res.destroyed) send(res, 200, { ok: true, url: result?.url || url, landed: session.lastArrival || null })
         } catch (error) {
           const errorId = error.errorId || errorCode('navigate.failed')
-          if (!res.destroyed) send(res, error.status || statusOf(errorId), { ok: false, errorId, error: error.message })
+          const hint = error.blockedReason
+            ? (error.blockedReason === 'private-network'
+              ? '引擎私网访问策略拒绝：页面从公网源去够更私密的地址。容器内访问宿主服务请确认页面 origin 与目标同层级（GET /status → networking.hostGateway 取宿主网关地址），勿从公网页直联宿主 localhost。'
+              : navigateHint(error, url))
+            : navigateHint(error, url)
+          if (!res.destroyed) send(res, error.status || statusOf(errorId), { ok: false, errorId, error: error.message, hint })
         }
         return
       }
@@ -1680,7 +1776,9 @@ export function routeSpecs(deps = {}) {
             send(res, 502, { ok: false, errorId: errorCode('dom.empty'), error: 'no engine page' })
             return
           }
+          const domT = performance.now()
           const result = await captureDom(session, base, deps)
+          if (res.__op) res.__op.phases = { domMs: Math.round(performance.now() - domT), bytes: result.bytes || 0 }
           if (result.error === 'empty') {
             send(res, 502, { ok: false, errorId: errorCode('dom.empty'), error: 'no serializable document' })
             return

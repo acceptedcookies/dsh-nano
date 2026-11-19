@@ -32,7 +32,26 @@ sandbox.operations {errorsOnly:true}                       # 失败 trace + erro
 sandbox.control  {action:"release"}
 ```
 
-### 5. 写反馈报告（结构化回执）
+### 5. 本地 dev 站调试（宿主 localhost → 容器）
+宿主上跑着 `next dev`/`vite`/`npm run dev` 之类的 localhost 服务时，容器内 `localhost` 是容器自己——**先用宿主网关地址把 URL 翻译成容器视角再开**：
+```bash
+# 1. 取容器宿主网关（运行时值，勿字面量化）
+GET /nano-local-sandbox/status            # → networking.hostGateway（如 "192.168.x.y"）
+# 2. 用它代替 localhost 导航（示例 hostGateway=G、dev 端口 3000）
+POST /nano-local-sandbox/open  {"url":"http://<hostGateway>:3000/home"}
+# 3. 白屏/应用坏：页面 committed 但 JS 未跑 → 先查 console 与失败请求，别怪引擎
+GET /nano-local-sandbox/console?level=exception,error&limit=20
+GET /nano-local-sandbox/network?failedOnly=true&limit=20
+GET /nano-local-sandbox/diagnostics        # hints 已把「页面加载但应用异常」派生出来
+```
+**本地 dev 特有的坑（负例见下表）**：
+- **http 非 secure-context**：宿主网关地址不是 `localhost` 字面量，页内 `ServiceWorker`/`crypto.subtle`/`clipboard`/`MediaDevices` 等 secure-only API 静默不可用——dev 站若依赖它们，行为差异不是引擎 bug。
+- **HMR/WebSocket**：`next dev` 的 `/_next/webpack-hmr`、`vite` 的 HMR socket 走同一网关地址即可达（同端口同源）；看不到热更新先看 `/network` 里该请求是否 `failed`/被 PNA 拦。
+- **PNA（Private Network Access）**：页面 origin 是公网时，页内向更私密地址（私网 IP/`localhost`）的子请求会被引擎拦（`x-kitesurf-blocked: private-network`）。本地 dev 站本身是私网源、页面又 fetch 公网 API，是**升向**（private→public）允许；反向（公网页面够宿主 localhost）被拦——用同源 dev 页面本身验证，不要让公网页面去够宿主 localhost。
+- **cookie 域**：`Set-Cookie` 写 host-only 域——`localhost:3000` 与 `<hostGateway>:3000` 是**两个域**。容器内打开的是后者，宿主浏览器里的登录态 cookie **不会**跟过来；需要登录态用 `POST /settings {cookies:[…]}` 显式种。
+- **地址写法**：`localhost:3000` 不带 scheme 时 `navigationUrl` 会补 `https://` 变 `https://localhost:3000`——容器内既错主机又错协议。**永远写全 `http://<hostGateway>:<port>`**。
+
+### 6. 写反馈报告（结构化回执）
 排障完成后按 `templates/feedback-report.md` 填：元信息（buildId/phase）→ 路由调用序列（/operations 摘，错误行带 `incidentId` 可与响应体回执互查）→ 观察到的现象 → 诊断摘录（hints/console/errorsOnly）→ 元素上下文（`/pick` 应答 + `/refs?ref=@N` 反查）→ errorId 对照 `/diagnostics` 的 `errorCatalog` → 下一步命令。结构化报告是可归档数据，不是散文。
 
 ## 正例
@@ -78,3 +97,7 @@ GET  /nano-local-sandbox/har                     # _format:'har-lite'，headers 
 | `POST /lifecycle {"action":"start"}` 当 running | 409 | 阶段错，不是引擎故障 |
 | `suspend` 中 `/pick` | 502 引擎连接失败 | 引擎已停 |
 | 黑洞地址 `/open` | 504 `navigate.egress` | 出站超时；先读 `/status` 的 `navigation.outcome`，仍是 `in-flight` 就不要重发 |
+| `POST /open {"url":"http://localhost:3000"}`（容器内） | 502 `navigate.failed` `ERR_CONNECTION_REFUSED` | 容器内 localhost 是容器自己；宿主 dev 站用 `networking.hostGateway` 地址（见配方 5） |
+| `POST /open {"url":"localhost:3000"}` | 400→502 链错 | 无 scheme 补成 `https://localhost:3000`——容器内双重错；写全 `http://<hostGateway>:<port>` |
+| `/open` 200 但页面白屏 | 不是导航失败 | 页面 committed 但应用 JS 报错/资源被拦；先 `/console?level=exception,error` + `/network?failedOnly=true`，见配方 5 第 3 步 |
+| 公网页面 fetch 宿主 localhost 子资源 | 403 `x-kitesurf-blocked:private-network` | PNA：公网源不可够更私密地址；用同源 dev 页本身调试 |

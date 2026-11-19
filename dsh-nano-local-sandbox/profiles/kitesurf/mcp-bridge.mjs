@@ -779,6 +779,16 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
   // in-flight write-class call ids, so a dropped socket frees the gate even
   // if the child never answers.
   const pendingWrites = new Set()
+  // Per-call timing: the bridge was the chain's only unobserved hop. Every
+  // tools/call (native or forwarded) lands in bridgeState.callRing with its
+  // round-trip ms, so /health and sandbox.bridge_health can say which tool
+  // class is slow instead of only "the route was slow".
+  const callStarted = new Map() // message.id -> {tool, startedMs}
+  const recordCall = (tool, startedMs, outcome) => {
+    bridgeState.callRing = bridgeState.callRing || []
+    bridgeState.callRing.push({ tool: String(tool || 'unknown').slice(0, 80), ms: Math.max(0, Math.round(performance.now() - startedMs)), outcome, at: new Date().toISOString() })
+    if (bridgeState.callRing.length > 64) bridgeState.callRing.shift()
+  }
 
   let stdout = ''
   // tools/list requests we forwarded to the child: when its reply comes back,
@@ -801,6 +811,13 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
         // stamp the pane-visible action record with the outcome.
         if (message.id != null && pendingWrites.has(message.id)) {
           pendingWrites.delete(message.id)
+          const started = callStarted.get(message.id)
+          if (started) {
+            callStarted.delete(message.id)
+            const toolErr = message.error ? true
+              : (typeof message.result?.content?.[0]?.text === 'string' && (message.result?.isError === true || /"ok"\s*:\s*false/.test(message.result.content[0].text)))
+            recordCall(started.tool, started.startedMs, toolErr ? 'error' : 'ok')
+          }
           // MCP tools/call reports failures as {result:{isError:true}} as well
           // as JSON-RPC {error} — the toast should mark both as not-ok.
           if (control.lastAction) {
@@ -851,8 +868,10 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
           if (message.method === 'tools/call' && typeof message.params?.name === 'string') {
             const toolName = message.params.name
             control.lastCallAt = new Date().toISOString()
+            const startedMs = performance.now()
             if (toolName.startsWith('sandbox.')) {
               const data = answerNativeTool(toolName, message.params.arguments || {}, bridgeState, { connId, clientName })
+              recordCall(toolName, startedMs, data?.ok === false ? 'error' : 'ok')
               sendText(socket, JSON.stringify(message.id == null
                 ? toolError(null, -32600, 'tools/call requires an id')
                 : toolResult(message.id, data)))
@@ -864,6 +883,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
               // annotating is never torn by a background agent's navigation.
               // A second writer is refused, not queued.
               if (control.humanHold?.active && clientName !== control.humanHold.owner) {
+                recordCall(toolName, startedMs, 'refused')
                 sendText(socket, JSON.stringify(message.id == null
                   ? toolError(null, -32600, 'tools/call requires an id')
                   : toolResult(message.id, {
@@ -874,6 +894,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
                   })))
                 handledLocally = true
               } else if (control.writer !== null && control.writer !== connId) {
+                recordCall(toolName, startedMs, 'refused')
                 sendText(socket, JSON.stringify(message.id == null
                   ? toolError(null, -32600, 'tools/call requires an id')
                   : toolResult(message.id, {
@@ -889,7 +910,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
                 control.ownerSince = control.ownerSince || new Date().toISOString()
                 control.lastWriteAt = new Date().toISOString()
                 control.lastAction = { tool: toolName.slice(0, 80), owner: clientName, at: control.lastWriteAt }
-                if (message.id != null) pendingWrites.add(message.id)
+                if (message.id != null) { pendingWrites.add(message.id); callStarted.set(message.id, { tool: toolName, startedMs }) }
               }
             }
           }
@@ -916,6 +937,22 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
   socket.setTimeout(IDLE_MS, () => { releaseAll(); teardown(1001) })
 }
 
+/** p50/p95 + per-tool summary of the callRing — /health and bridge_health surface it. */
+function callSummary(ring) {
+  const rows = Array.isArray(ring) ? ring : []
+  const ms = rows.map((r) => r.ms).sort((a, b) => a - b)
+  const at = (p) => (ms.length ? ms[Math.min(ms.length - 1, Math.floor((p / 100) * ms.length))] : 0)
+  const byTool = {}
+  for (const r of rows) {
+    const t = byTool[r.tool] || (byTool[r.tool] = { n: 0, totalMs: 0, errors: 0 })
+    t.n += 1
+    t.totalMs += r.ms
+    if (r.outcome !== 'ok') t.errors += 1
+  }
+  for (const t of Object.values(byTool)) t.avgMs = Math.round(t.totalMs / t.n)
+  return { count: rows.length, p50: at(50), p95: at(95), last: rows.slice(-10), byTool }
+}
+
 export function createBridge(port = PORT, env = process.env) {
   let conns = 0
   let accepted = 0
@@ -929,6 +966,7 @@ export function createBridge(port = PORT, env = process.env) {
     conns, accepted, rejected, uptimeMs: Date.now() - startedAt,
     control: controlSnapshot(control),
     cdp: cdpRelay.stats(),
+    calls: callSummary(bridgeState.callRing),
   })
   const bridgeState = {
     getDiagnostics: () => lastDiagnostics,
@@ -1099,9 +1137,9 @@ export function createBridge(port = PORT, env = process.env) {
     }
   })
 
-  // 0.0.0.0 INSIDE the container is required: Apple container publishes a
-  // host port onto the container's network IP (192.168.64.x), not its
-  // loopback. Binding to 127.0.0.1 here would make 127.0.0.1:8799 unreachable.
+  // 0.0.0.0 INSIDE the container is required: the container runtime publishes a
+  // host port onto the container's allocated network address, not its
+  // loopback. Binding to 127.0.0.1 here would make the published port unreachable.
   // The real boundary is the host-side loopback publish (createArgs), the
   // Origin allowlist on /mcp, and the no-Origin requirement on /diagnostics.
   server.listen(port, '0.0.0.0', () => {

@@ -6,7 +6,7 @@
 
 | 路由 | 作用 |
 |---|---|
-| `GET /nano-local-sandbox/diagnostics?limit=20` | 一击全量诊断 |
+| `GET /nano-local-sandbox/diagnostics` | 一击全量诊断（console/network/operations/history 各取尾部，无 limit 参数——`?limit=` 会被忽略） |
 | `GET /nano-local-sandbox/diagnostics?catalog=1` | 附带 DNLS 的错误目录（id→status→cause→next） |
 | `GET /nano-local-sandbox/operations?errorsOnly=true` | 只看失败的调用（errorId + 耗时 + 输入摘要） |
 | `POST /nano-local-sandbox/operations {"clear":true}` | 清空操作 trace |
@@ -54,9 +54,9 @@ console 采集走 DNLS 自己那条 CDP socket 的 `Runtime.consoleAPICalled` / 
 | `/settings extraHeaders` | ≤20 项，键 1..64、值 ≤200；禁用凭证类 | 输入 400 |
 | `/history delta` | 只能 `-1`/`+1` | 输入 400 |
 | `/evaluate expression` | ≤2000 字符；awaitPromise；结果 ≤4000 字符 | 输入 400 |
-| `/console limit`/`level` | limit 1..250；level 逗号分隔 | 输入 400 |
-| `/operations`/`/diagnostics limit` | 1..200 / 1..100 | 输入 400 |
-| `/snapshot maxNodes` | 1..500 | 默认 200 |
+| `/console limit`/`level` | limit 1..400；level 逗号分隔 | 输入 400 |
+| `/operations limit` | 1..200 | 输入 400 |
+| `/snapshot maxNodes` | 1..500 | 默认 120 |
 | body | 多数 4096B；edit 8192B | body 超限 413 |
 
 完整 errorId→status→cause→next 表只存在于 DNLS：`GET /diagnostics?catalog=1` 或 MCP `sandbox.error_catalog`。本包不复制目录。

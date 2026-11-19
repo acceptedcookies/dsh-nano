@@ -9,10 +9,9 @@ import { BINDING_TABLE } from '../lib/bindings.js'
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 
-const FRONTMATTER = {
-  'kitesurf-cdp': 'Collaborate on a frontend through the Kitesurf CDP endpoint. Use when the user points at a page, or asks to inspect or change what Kitesurf is rendering. Do not launch Chrome.',
-  'nano-kite': 'Start, resume, suspend, or restart the Kitesurf engine through the sandbox host. Use when the user types /nano-kite.',
-}
+// Descriptions read from the same source the build stamps, so this test
+// asserts generated output equals lib/skill.js — not a stale copy of it.
+const FRONTMATTER = { 'kitesurf-cdp': kitesurfSkill().description, 'nano-kite': nanoKiteSkill().description }
 
 const canonical = (text) => text.replace(/\r\n/g, '\n')
 
@@ -77,4 +76,21 @@ test('skill bodies carry the hard agentic constraints', () => {
   }
   assert.ok(nanoKiteSkill().content.includes('each text frame'))
   assert.equal(kitesurfSkill().resourceBase?.kind, 'directory')
+})
+
+// Route-doc drift guard: every `/nano-local-sandbox/<path>` the skill's
+// routes.md teaches must be a route DNLS actually registers. The check runs
+// only when the sibling DNLS source tree is present — DNK must stay
+// installable on its own, so a missing tree is a skip, never a failure.
+test('routes.md documents only routes DNLS routeSpecs registers (drift guard)', async (t) => {
+  const dnls = join(root, '..', 'dsh-nano-local-sandbox')
+  let exists = true
+  try { statSync(join(dnls, 'src', 'host', 'routes.js')) } catch { exists = false }
+  if (!exists) { t.skip('dsh-nano-local-sandbox source tree not present'); return }
+  const { routeSpecs } = await import(`file://${join(dnls, 'src', 'host', 'routes.js')}`)
+  const registered = new Set(routeSpecs({ session: {}, env: { DNLS_STATE_ROOT: '/tmp' } }).map((r) => r.path))
+  const doc = readFileSync(join(root, 'src', 'skill', 'kitesurf-cdp', 'references', 'routes.md'), 'utf8')
+  const documented = new Set([...doc.matchAll(/`(\/nano-local-sandbox\/[a-z-]+)`/g)].map((m) => m[1]))
+  const ghost = [...documented].filter((p) => !registered.has(p))
+  assert.deepEqual(ghost, [], `routes.md teaches routes DNLS never registers: ${ghost}`)
 })

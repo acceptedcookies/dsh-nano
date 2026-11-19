@@ -206,6 +206,21 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
 
   const log = (...args) => { if (debug) try { process.stderr.write(`[cdp-relay] ${args.join(' ')}\n`) } catch {} }
 
+  // Per-Cdp-command timing ring (cap 64): the relay was the only unobserved hop
+  // on the pane→engine path. Keyed by the namespaced upstream id so a reply
+  // lands the method+ms of its own command; surfaced via stats().cdp.
+  const cdpPending = new Map() // namespacedId -> {method, startedMs}
+  const cdpTimings = []
+  const recordCdp = (method, startedMs, outcome) => {
+    cdpTimings.push({ method: String(method || '?').slice(0, 60), ms: Math.max(0, Math.round(performance.now() - startedMs)), outcome, at: new Date().toISOString() })
+    if (cdpTimings.length > 64) cdpTimings.shift()
+  }
+  const cdpSummary = () => {
+    const ms = cdpTimings.map((r) => r.ms).sort((a, b) => a - b)
+    const at = (p) => (ms.length ? ms[Math.min(ms.length - 1, Math.floor((p / 100) * ms.length))] : 0)
+    return { count: cdpTimings.length, p50: at(50), p95: at(95), last: cdpTimings.slice(-8), pending: cdpPending.size }
+  }
+
   const broadcast = (text, except = null) => {
     for (const [socket] of clients) {
       if (socket === except) continue
@@ -259,6 +274,8 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
           // Namespaced response: un-prefix, deliver to its owner only.
           const slot = message.id >> SLOT_SHIFT
           const clientId = message.id & ((1 << SLOT_SHIFT) - 1)
+          const pending = cdpPending.get(message.id)
+          if (pending) { cdpPending.delete(message.id); recordCdp(pending.method, pending.startedMs, message.error ? 'error' : 'ok') }
           for (const [socket, row] of clients) {
             if (row.slot === slot) {
               try { sendText(socket, JSON.stringify({ ...message, id: clientId })) } catch { /* gone */ }
@@ -273,6 +290,8 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
           const sep = message.id.indexOf(':', 3)
           const slot = Number(message.id.slice(3, sep))
           const clientId = message.id.slice(sep + 1)
+          const pending = cdpPending.get(message.id)
+          if (pending) { cdpPending.delete(message.id); recordCdp(pending.method, pending.startedMs, message.error ? 'error' : 'ok') }
           for (const [socket, row] of clients) {
             if (row.slot === slot) {
               try { sendText(socket, JSON.stringify({ ...message, id: clientId })) } catch { /* gone */ }
@@ -290,6 +309,8 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
         shared.pageTargetId = null
         for (const [, settle] of relayInternal) settle.reject(new Error('cdp upstream lost'))
         relayInternal.clear()
+        for (const [, pending] of cdpPending) recordCdp(pending.method, pending.startedMs, 'upstream-lost')
+        cdpPending.clear()
         // The shared page just died; every client socket is now useless.
         for (const [socket] of [...clients]) dropClient(socket)
       }
@@ -349,12 +370,14 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
             return
           }
           message.id = (slot << SLOT_SHIFT) | (message.id & ((1 << SLOT_SHIFT) - 1))
+          cdpPending.set(message.id, { method: message.method, startedMs: performance.now() })
           text = JSON.stringify(message)
         } else if (message && typeof message === 'object' && typeof message.id === 'string' && message.method) {
           // String ids must be namespaced too: an unprefixed string reply is
           // indistinguishable from an event and would broadcast to every
           // client, cross-wiring whoever happens to poll first.
           message.id = `ks:${slot}:${message.id}`
+          cdpPending.set(message.id, { method: message.method, startedMs: performance.now() })
           text = JSON.stringify(message)
         }
         try { link.send(text) } catch (e) { log('send failed', e?.message); dropClient(socket, 'send-fail') }
@@ -370,7 +393,7 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
     socket.setTimeout(IDLE_MS, () => dropClient(socket, 'idle'))
   }
 
-  return { handle, clients, shared, stats: () => ({ clients: clients.size, upstreamAlive: upstream?.alive === true, pageTargetId: shared.pageTargetId }) }
+  return { handle, clients, shared, stats: () => ({ clients: clients.size, upstreamAlive: upstream?.alive === true, pageTargetId: shared.pageTargetId, cdpCalls: cdpSummary() }) }
 }
 
 /**

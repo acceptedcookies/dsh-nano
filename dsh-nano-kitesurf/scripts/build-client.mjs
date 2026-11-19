@@ -71,12 +71,11 @@ rmSync(body)
 // the SKILL.md files by hand; they drifted that way before (R18).
 // P0-6: kitesurf-cdp is a DIRECTORY skill — the entry is a ≤90-line index and
 // the topic bodies come from src/skill/kitesurf-cdp/{references,templates}.
-const { SKILL_BODIES } = await import(join(root, 'lib', 'skill.js'))
+const { SKILL_BODIES, kitesurfSkill, nanoKiteSkill } = await import(join(root, 'lib', 'skill.js'))
 const pkgMeta = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-const FRONTMATTER = {
-  'kitesurf-cdp': 'Collaborate on a frontend through the Kitesurf CDP endpoint. Use when the user points at a page, or asks to inspect or change what Kitesurf is rendering. Do not launch Chrome.',
-  'nano-kite': 'Start, resume, suspend, or restart the Kitesurf engine through the sandbox host. Use when the user types /nano-kite.',
-}
+// Descriptions come from the single source of truth in lib/skill.js — never
+// copy them here; a second string is exactly the drift the test guards.
+const FRONTMATTER = { 'kitesurf-cdp': kitesurfSkill().description, 'nano-kite': nanoKiteSkill().description }
 const buildDate = new Date().toISOString().slice(0, 10)
 for (const [name, text] of Object.entries(SKILL_BODIES)) {
   const dir = join(root, 'skills', name)

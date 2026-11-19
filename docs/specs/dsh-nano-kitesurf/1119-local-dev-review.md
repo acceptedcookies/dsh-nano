@@ -134,3 +134,18 @@
 | frontmatter/构建期校验改读 DNLS bindings | 合规 | 保留 |
 
 **正确模式**（对所有拓扑值通用）：**暴露运行时发现的拓扑字段，不字面量化**。网关地址属「容器网络命名空间的宿主」这一**角色**，其值随 backend（apple-container vz NAT / docker / cloud / 其他）而变——只能由 backend 实现按其拓扑语义返回，写入 `/status`/`/diagnostics`/`/ports` 既有文档面；SKILL 与 hint 只引用字段名，永不引用值。
+
+## 8. 落地回执（kitesurf-local-dev 分支，A 级验证后补记）
+
+已合入并在 `~/.dsh-dev` + `kitesurf-dev` live 验证的实现（commit `ffee4d3` 及后续）：
+
+| 主题 | 落地内容 | 证据等级 |
+|---|---|---|
+| A（localhost 拓扑失明） | `parseInspect` 提取 `status.networks[].ipv4Gateway` → `networking{hostGateway,containerAddress,network}`，透传 `/status`、`/diagnostics`、`/ports`；`navigateHint` 拓扑中立（loopback→指字段名，永不写值）；live `/status` 回报 `192.168.64.1`（运行时自发现） | A |
+| B（egress 谎报） | `driver.blockedDocument` 检测 `x-kitesurf-blocked` 头 + `kitesurf: ` body；`/open` 被拦文档回 `navigate.egress`(504)/`navigate.failed`(502)；检测器在 driver 非内核（no-business-core 回归约束） | A |
+| D（SKILL 空白+漂移） | `lib/skill.js` §3 容器地址空间规则；`recipes` 配方5（localhost 翻译/secure-context/HMR/PNA/cookie 域）；`playbook` +2 步；`emulation` 7 键+cookies；`probe.sh` 去硬编主机名；`error-catalog` https→http(s)；`level=navigation` console 行实发（frameNavigated）；routes.md↔routeSpecs 漂移守卫测试 | A |
+| E（链路观测） | `/shot`/`/dom` `phases`（targets/viewport/scroll/capture/identity/ms+bytes）；`session.cdpCalls` 每 CDP 命令计时（cap64）暴露于 `/diagnostics`；桥 `tools/call` per-call 计时 + `calls{p50,p95,last10,byTool}` 进 `/health`/`sandbox.bridge_health`；CDP relay per-method 计时环（`stats.cdpCalls`） | A |
+| F（审计上下文） | `/open` `argSummary` 记尝试 URL；导航 ledger `ms`/`error`；`send()` 记 `result.error`；`incidentId` 既有 | A |
+| 文档-实现漂移修复 | `/diagnostics?limit` 注明忽略、snapshot 默认 120、console 1..400、settings 7 键、`fixCall` 不存在注明、FRONTMATTER 改读 `lib/skill.js` 单一真源 | A |
+
+未落地（[业主] 门控扩约，等待 durable 登记）：`navigate.refused/dns/host-unreachable` 新 errorId、`selftest` 第 12 探针 origin-live、结构化 hint `{plane,errorId?,text,action}`、`sandbox.tool.failed` catalog 行、第 6 plane（origin 活性——按裁决归入 page.detail/hints 不新开 plane）。

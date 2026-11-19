@@ -519,6 +519,10 @@ async function acquireClient(session, httpBase, connect) {
         session.refs = {}
         session.lastSnapshot = null
         if (params.frame?.url && params.frame.url !== 'about:blank') session.pageUrl = params.frame.url
+        // Navigation drift is a first-class console level: GET /console?level=
+        // navigation shows every committed document hop without the noise of
+        // log/error rows — the skill's playbook already names this level.
+        pushConsole('navigation', `→ ${params.frame?.url || 'about:blank'}`, { source: 'navigation', url: params.frame?.url || '' })
       }
       recordNetworkEvent(session, message)
     })

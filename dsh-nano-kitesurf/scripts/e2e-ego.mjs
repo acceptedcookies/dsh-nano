@@ -60,6 +60,64 @@ async function setNav(page, target) {
   return page.evaluate(() => document.querySelector('[data-nks-nav]')?.dataset?.nksNavState)
 }
 
+// Center of the first visible element matching `selector` whose own text is
+// exactly `text` (or any match when text is null).
+function locate(page, selector, text) {
+  return page.evaluate(({ selector, text }) => {
+    const el = [...document.querySelectorAll(selector)].find((node) => {
+      const r = node.getBoundingClientRect()
+      if (r.width === 0 || r.height === 0) return false
+      if (text == null) return true
+      const own = node.cloneNode(true)
+      own.querySelectorAll('button').forEach((b) => b.remove())
+      return own.textContent.trim() === text
+    })
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }
+  }, { selector, text })
+}
+
+async function waitPane(page, ms) {
+  for (let waited = 0; waited < ms; waited += 250) {
+    if (await page.evaluate(() => Boolean(document.querySelector('[data-nano-kitesurf] .nks-toolbar')))) return true
+    await new Promise((r) => setTimeout(r, 250))
+  }
+  return false
+}
+
+async function openPane(page) {
+  if (await waitPane(page, 500)) return { ok: true, via: 'already-open' }
+  // A restarted host can come back with the workbench collapsed.
+  const sidebar = await locate(page, 'button[aria-label="打开右侧边栏"], button[aria-label="Open right sidebar"]', null)
+  if (sidebar) {
+    await page.mouse.click(sidebar.x, sidebar.y)
+    if (await waitPane(page, 3000)) return { ok: true, via: 'sidebar' }
+  }
+  const steps = [
+    ['tab', '[role="tab"]', 'Kitesurf'],
+    ['launcher', 'button', 'Kitesurf'],
+  ]
+  for (const [via, selector, text] of steps) {
+    const pos = await locate(page, selector, text)
+    if (pos) {
+      await page.mouse.click(pos.x, pos.y)
+      if (await waitPane(page, 8000)) return { ok: true, via }
+    }
+  }
+  const newTab = await locate(page, 'button[aria-label="新标签页"], button[aria-label="New tab"]', null)
+  if (newTab) {
+    await page.mouse.click(newTab.x, newTab.y)
+    await new Promise((r) => setTimeout(r, 800))
+    const pos = await locate(page, 'button', 'Kitesurf')
+    if (pos) {
+      await page.mouse.click(pos.x, pos.y)
+      if (await waitPane(page, 8000)) return { ok: true, via: 'new-tab-launcher' }
+    }
+  }
+  return { ok: false, via: 'no Kitesurf workbench entry found' }
+}
+
 async function main() {
   const task = await taskSpace(SPACE)
   // Page labels persist per space but a crashed run may have left a different
@@ -89,18 +147,11 @@ async function main() {
   })
   record('bundle-mounted', Boolean(rev), rev ? rev.split('rev=')[1] : 'no link tag')
 
-  // 2. open the pane
-  await page.mouse.click(1180, 24)
-  await new Promise((r) => setTimeout(r, 900))
-  const item = await page.evaluate(() => {
-    const el = Array.from(document.querySelectorAll('*')).find((e) => e.children.length === 0 && e.textContent?.trim() === 'Kitesurf' && e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().y > 60)
-    if (!el) return null
-    const r = el.getBoundingClientRect()
-    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }
-  })
-  if (item) await page.mouse.click(item.x, item.y)
-  await new Promise((r) => setTimeout(r, 6000))
-  record('pane-open', await page.evaluate(() => Boolean(document.querySelector('[data-nano-kitesurf]'))))
+  // 2. open the pane through the workbench entry, never by fixed coordinates:
+  // reuse an existing Kitesurf tab, else the launcher's Kitesurf entry, else
+  // open a new workbench tab and pick Kitesurf from its launcher.
+  const pane = await openPane(page)
+  record('pane-open', pane.ok, pane.via)
 
   // 2b. vertical tab drawer (DSH slide artwork): a toolbar toggle opens it,
   // the drawer slides in from the left edge and holds only the tab list.
@@ -425,49 +476,52 @@ async function main() {
   const spanCount = spanNames.reduce((sum, name) => sum + (ksSpans[name]?.n || 0), 0)
   record('perf-spans', spanCount > 0, `${spanCount} spans (${spanNames.join(',')}) ${Array.isArray(perf.host?.rows) ? 'host-read' : 'host-absent'}`)
 
-  // 13. P1-4 latency budget: host-side spans must report pre-aggregated stats
-  // and the hot-path p95 must stay under a sane ceiling. Budget is generous —
-  // the engine is a local container, network latency dominates; this catches
-  // regressions (e.g. a span suddenly taking seconds), not micro-optimisation.
+  // 13. P1-4 latency budget. This package has no host routes; every pane
+  // request is served by the sandbox host, whose route bundle reports one
+  // contract row per call. Budget is generous — the engine is a local
+  // container; this catches regressions (a call suddenly taking seconds),
+  // not micro-optimisation.
   const hostRows = Array.isArray(perf.host?.rows)
-    ? perf.host.rows.filter((row) => row.pluginId === 'nano-kitesurf' && row.kind !== 'contract')
+    ? perf.host.rows.filter((row) => row.pluginId === 'dsh-nano-local-sandbox' && row.kind === 'contract')
     : []
-  const shotSamples = hostRows.filter((row) => row.name === 'navigate').map((row) => row.ms).filter((ms) => typeof ms === 'number').sort((a, b) => a - b)
+  const shotSamples = hostRows.map((row) => row.ms).filter((ms) => typeof ms === 'number').sort((a, b) => a - b)
   const percentile = (p) => shotSamples.length === 0 ? null : shotSamples[Math.min(shotSamples.length - 1, Math.max(0, Math.ceil(p * shotSamples.length) - 1))]
   const shotStats = shotSamples.length === 0 ? null : {
     n: shotSamples.length, p50: percentile(0.5), p95: percentile(0.95),
-    max: shotSamples.at(-1), errors: hostRows.filter((row) => row.name === 'navigate' && row.err === true).length,
+    max: shotSamples.at(-1), errors: hostRows.filter((row) => row.outcome !== 'ok').length,
   }
   if (shotStats) {
     record('perf-stats-shape', typeof shotStats.p95 === 'number' && typeof shotStats.p50 === 'number',
-      `navigate p50=${shotStats.p50} p95=${shotStats.p95} max=${shotStats.max} errors=${shotStats.errors}`)
-    record('perf-budget-navigate-p95', shotStats.p95 != null && shotStats.p95 < 3000, `navigate p95=${shotStats.p95}ms < 3000ms`)
+      `sandbox host p50=${shotStats.p50.toFixed(1)} p95=${shotStats.p95.toFixed(1)} max=${shotStats.max.toFixed(1)} non-ok=${shotStats.errors} n=${shotStats.n}`)
+    record('perf-budget-host-p95', shotStats.p95 != null && shotStats.p95 < 3000, `sandbox host p95=${shotStats.p95.toFixed(1)}ms < 3000ms`)
   } else {
-    record('perf-stats-shape', false, 'navigate rows missing from the v2 host read view')
-    record('perf-budget-navigate-p95', false, 'no navigate rows')
+    record('perf-stats-shape', false, 'sandbox host contract rows missing from the v2 host read view')
+    record('perf-budget-host-p95', false, 'no sandbox host rows')
   }
-  // Each host row carries {ms,seq,err,at}; the event ring is optional.
-  const shotRows = hostRows.filter((row) => row.name === 'navigate')
-  const hasTriple = shotRows.length === 0 || shotRows.every((row) => typeof row.ms === 'number' && typeof row.at === 'string' && 'err' in row)
-  record('perf-event-triples', hasTriple, `${shotRows.length} rows, row shape ok=${hasTriple}`)
+  // Each contract row carries {seq,name,kind,outcome,ms}.
+  const hasTriple = hostRows.length > 0 && hostRows.every((row) => typeof row.ms === 'number' && typeof row.seq === 'number' && typeof row.outcome === 'string')
+  record('perf-event-triples', hasTriple, `${hostRows.length} rows, row shape ok=${hasTriple}`)
 
   // 14. P1-6 feedback-report: every field the template asks for must be
   // fetchable from a real route — buildId/phase (status), route sequence
   // (operations), hints+console+errors (diagnostics), element packet (/pick).
   const report = await page.evaluate(async () => {
-    const [status, ops, diag, pick] = await Promise.all([
+    // The full error catalog is opt-in (?catalog=1); the pick target is the
+    // first paragraph, which every test page renders.
+    const [status, ops, diag, catalog, pick] = await Promise.all([
       fetch('/nano-local-sandbox/status').then((r) => r.json()).catch(() => ({})),
       fetch('/nano-local-sandbox/operations?limit=5').then((r) => r.json()).catch(() => ({})),
       fetch('/nano-local-sandbox/diagnostics?limit=5').then((r) => r.json()).catch(() => ({})),
-      fetch('/nano-local-sandbox/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ selector: 'h1' }) }).then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-local-sandbox/diagnostics?catalog=1').then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-local-sandbox/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ selector: 'p' }) }).then((r) => r.json()).catch(() => ({})),
     ])
     return {
       buildId: status.buildId || status.plugin?.buildId || null,
       phase: status.lifecycle?.phase || status.plugin?.phase || null,
       opsCount: (ops.entries || []).length,
       hasHints: Array.isArray(diag.hints),
-      hasErrorCatalog: Array.isArray(diag.observability?.errorCatalog) && diag.observability.errorCatalog.length > 10,
-      pickPacket: Boolean(pick.element && pick.element.selector),
+      hasErrorCatalog: Array.isArray(catalog.errorCatalog) && catalog.errorCatalog.length > 10,
+      pickPacket: Boolean(pick.pick?.elements?.[0]?.selector),
     }
   })
   const reportOk = report.buildId && report.phase && report.hasHints && report.hasErrorCatalog && report.pickPacket

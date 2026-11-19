@@ -458,3 +458,26 @@ Lead：我已复核差异和回归用例。                  （对用户的答�
 **图标与可读性。** 入口用 `IconChecklistOutlineRegular` +「Fusion 评估」（强调验证，不复用代表压缩的水位环）；token 用 `IconDataOutlineRegular`，时长用 `IconClockOutlineRegular`，不明用 `IconWarningOutlineRegular`。图标取宿主 [catalog](../../../packages/dsh-nano-ui/catalog/icons.json)，继承 `currentColor`，使用工具栏同级尺寸；图标不承载精确数值、身份或结论。图表以可键盘访问的数值表为底：已对账为明确文字、估算为标注、缺失用破折号加原因；正负变化同时写“省/贵、升/降、快/慢”。宿主有 primitive 先用宿主，其次 nano-ui；若没有允许的图形 primitive，V1 保留完整比较表，不借用宿主私有 DOM，不自绘一个看似精确的仪表盘。遵循 [nano-ui 规范](../dsh-nano-ui/DESIGN.md)。
 
 **验收。** 用 §10.6 合成两臂数据导入时，费用/次显示 `$3.00 → $2.00`，费用/通过 `$6.00 → $4.00`，通过率 `50% → 50%`；并行示例墙钟 `10s`。零通过时费用/通过为“不可定义”，缺价格不显示 `$0`，重复回执不增 token。相同冻结包重复打开表值、覆盖分母、最差簇排序和导出的来源引用一致；窄屏用同行可展开明细而非仅 hover。截图应包括普通、退化、证据不足三态，并可回到支撑每个结论的样本。以上验收接回 §10.7，设计完成不等于 UI、宿主接口或 benchmark 已交付。
+
+## 12. [业主] 裁决：以 rc.5 上层适配，不扩约
+
+1. Fusion V1 的实现和测试以 [dsh] `0.2.2-rc.5` 为标准。先核对 `dsh-dev` 实际运行版本；三端升级留待合入后由 [业主] 另行安排，不在本次修改或部署范围内。
+2. 不改上游 pin、源码或发布包。只在 [DNMS] 家族的独立工作树内用 driver 或 overlay 组合公开能力；不把本地补丁混入 pin。
+3. 优先使用宿主命令、生命周期、Session journal 与只读 projection。配对、绑定、委派与裁决不得有第二份可写权威副本；不建 Fusion DB，不把缓存或消费回执用作恢复读源。
+4. 显性拒绝扩约或第二份真源；若现有公开能力不能满足已批准合同，立即通知 [业主]，保留普通 Lead 路径，不以替代载体默默改变合同。
+
+已批准的配置事实为 `plugin:nano-model-selector-fusion/fact`，由获会话授权的宿主命令写入，不复制 brief/result 正文。rc.5 的 `dsh-session` 文档明确禁止仓外插件调用 `appendPluginRecord`。`command/run` 是输入，`command/done` 是执行结果；后者可引用较早的权威事件，但二者均不会自动写出上述记录。未经另行裁决，不用命令文本、工具回显或 Team 任务顶替该记录。
+
+留出实验允许在 `dsh-dev` 实跑，不设费用上限。同 Lead 成本比的 95% 区间上界须 < 1，百分制质量差下界须 ≥ −2，成功任务 p95 墙钟比须 ≤ 1.20；另列超时、失败和退化簇。缺少可核对的样本、分母或基线时不作可行结论。未经 [业主] 明确审查和指令，不合并回 `main`。
+
+## 13. 执行裁决：以宿主命令生命周期承载配对事实（rc.5）
+
+[业主] 指示：执行中遇到障碍时登记工作与裁决并继续推进，不得停止 goal。据此由 Lead 作出以下实现裁决；本章取代 §12 末段关于“未经另行裁决不用命令记录顶替”的限制，其余 §12 条款不变。
+
+1. **配对事实载体。** 不写 `plugin:nano-model-selector-fusion/fact`（rc.5 禁止仓外插件调用 `appendPluginRecord`）。DNMSF 注册宿主命令 `/fusion`；宿主自身写入的 `command/run`（`name`、`args`）与按 `commandId` 配对的 `command/done`（`kind`）即配对事实。`success` = 已提交，`error` = 已拒绝，有 run 无 done = 结果未知（不显示为生效，不自动重试）。修订号取 `command/run` 的 seq。只读 projection 折叠根 journal 得到 desired/effective/pending/unknown，无新事件类型、无第二份可写副本，不扩约。
+2. **授权边界。** 命令处理器只接受 Session 已记录的 `subagent/model-selection-policy` 允许路由（无策略时仅父路由），并经 `llm.resolveCallConfig` 预检 effort；策略在会话创建时固定，V1 不改写它。候选不在策略内时命令返回 `error`，UI 如实显示“本会话未授权”。
+3. **Lead 可见性。** 已提交的配对修订由 pre-step 以带来源标注的 user message（`MessageSourceMap` 扩展，参照 `time-context`）注入一次，内容为 Sidekick 路由与 brief/回报协议；可从日志复原，满足 model-visible ⟺ logged。
+4. **委派与绑定。** Lead 使用宿主原生 `subagent` 工具以 continuable 模式、显式 provider/model 创建 Sidekick，后续用原生 `send_message` 续办。绑定 = 根 `subagentCatalog` 中第一个 continuable 直接子会话且其子 journal 的 `model/selection` 与已提交配对一致；不一致标“路由不符”，不计为 Fusion 执行。
+5. **Lead 裁决。** DNMSF 注册模型工具 `fusion_review`（`handoff`=子会话 ID，`verdict` ∈ `accepted|rework|reclaimed`，`note`）；其 `tool/call`+`tool/result` 即裁决事实，不复制 brief/result 正文。
+6. **呈现与计量。** [DNMS] 配置页提交 `/fusion` 命令并只读投影；[DNPR] 按会话身份（根 = Lead，绑定子会话 = Sidekick）区分。用量取根与子 journal 的逐次请求用量；benchmark 在 `dsh-dev` 经 ego-browser 实跑，结果导入 `lab/fusion/`。
+7. **剩余已知差距。** 会话中途不能扩大授权路由集合；若需要，须宿主另行提供，届时再报 [业主]。

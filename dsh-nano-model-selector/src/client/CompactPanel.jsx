@@ -7,8 +7,7 @@ import { CheckIcon, CloseIcon, CompactionIcon, WarningIcon } from './icons.jsx'
 import { fetchBundleState, fetchCompactState, postCompactSwitch, putCompactPolicy } from './compact.js'
 import { DEFAULT_SUMMARY_PROMPT } from '../../lib/compact-prompt.js'
 import { COMPACT_PRESETS, PRESET_EXTRA_REQUIREMENTS, presetActive, presetChanges } from './compact-presets.js'
-import { tok } from './history-format.js'
-import { WaterLine } from './WaterLine.jsx'
+import { pct, tok } from './history-format.js'
 
 const BUNDLE_NAME = 'dsh-nano-model-selector-compaction'
 /** The summary model must cover the largest upstream window; the official
@@ -48,11 +47,13 @@ function windowMark(contextWindow) {
 }
 
 /**
- * @param {{ copy: any, models: Array<{provider:string, model:string}>, sessionId?: string|null, onError: (text: string) => void, onSwitchDone?: () => void }} props
+ * @param {{ copy: any, models: Array<{provider:string, model:string}>, sessionId?: string|null, onError: (text: string) => void, onSwitchDone?: () => void, onOpenHistory?: () => void }} props
  * `models` = catalog (provider, model) pairs for the summary-model dropdown;
- * `sessionId` = the composer's session, whose fill/window the runtime box shows.
+ * `sessionId` = the composer's session, whose fill/window the runtime box shows;
+ * `onOpenHistory` closes the selector and mounts the history dialog — a
+ * main-window NanoDialog (layer 1000) would sit UNDER this 1200-layer panel.
  */
-export function CompactPanel({ copy, models, sessionId = null, onError, onSwitchDone }) {
+export function CompactPanel({ copy, models, sessionId = null, onError, onSwitchDone, onOpenHistory }) {
   const [state, setState] = React.useState(null) // GET payload (policy face)
   // The inventory is a SEPARATE, one-shot read: it is the only host read that
   // costs a full `pluginManager.listBundles()` (~0.9 s of blocking disk work),
@@ -75,6 +76,7 @@ export function CompactPanel({ copy, models, sessionId = null, onError, onSwitch
   // Confirmations draw inside the selector window: a main-window Modal sits on
   // the host modal band (1000), below the floating window (1200), and would be covered.
   const rootRef = React.useRef(null)
+
 
   // The injected directory's model objects carry no contextWindow; the host's
   // /catalog route does. Fetch it once to decorate the dropdown options.
@@ -260,6 +262,15 @@ export function CompactPanel({ copy, models, sessionId = null, onError, onSwitch
     <div className="nms-compact" ref={rootRef}>
       <div className="nms-group">
         <CompactionIcon className="nms-group-star" size={12} />{copy.compactTitle}
+        {sessionId !== null && typeof onOpenHistory === 'function' && (
+          <button
+            type="button"
+            className="nms-group-action"
+            onClick={onOpenHistory}
+          >
+            {copy.historyOpen}
+          </button>
+        )}
       </div>
 
       {/* Result chip: absolutely anchored to the panel's top-right strip — it
@@ -310,7 +321,9 @@ export function CompactPanel({ copy, models, sessionId = null, onError, onSwitch
         </div>
       )}
 
-      {/* Live state first: where this session's fill sits against the lines. */}
+      {/* Live state first: a slim fill readout. The water-line legend lives in
+          the history dialog (opened by the 异步压缩说明 button on the group
+          head) where there is room to explain the zones. */}
       {ready && (
         <Section title={copy.compactRuntimeTitle}>
           <div className="nms-compact-runtime">
@@ -318,14 +331,13 @@ export function CompactPanel({ copy, models, sessionId = null, onError, onSwitch
               <span className="nms-model-meta">{copy.compactRuntimeNoSession}</span>
             ) : (
               <>
-                <WaterLine
-                  fill={fill}
-                  health={policy.healthTargetAsync ?? 0.5}
-                  buffer={policy.bufferSizeAsync ?? 0.65}
-                  safety={policy.bufferSizeSafety ?? 0.9}
-                  copy={copy}
-                  windowTokens={runtime.window ?? null}
-                />
+                <div className="nms-compact-runtime-row">
+                  <span className="nms-compact-runtime-label">{copy.historyFillNow}</span>
+                  <span className="nms-compact-runtime-fill">{pct(fill)}</span>
+                  {fill !== null && typeof runtime.window === 'number' && runtime.window > 0 && (
+                    <span className="nms-compact-runtime-used">≈ {tok(fill * runtime.window)} / {tok(runtime.window)}</span>
+                  )}
+                </div>
                 {fill === null && (
                   <span className="nms-model-meta">
                     {meterDown
@@ -473,6 +485,7 @@ export function CompactPanel({ copy, models, sessionId = null, onError, onSwitch
           <PresetDiff copy={copy} policy={policy} preset={confirmPreset} />
         </NanoWindowDialog>
       )}
+
     </div>
   )
 }

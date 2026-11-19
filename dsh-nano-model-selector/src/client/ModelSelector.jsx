@@ -158,7 +158,7 @@ let lastCompactFace = null
  * @param {(text: any) => string} props.resolveText
  * @param {string} [props.sessionId] - the composer's session; the compaction panel reports its fill
  */
-export function ModelSelector({ locked, available, directory, load, select, language, resolveText, sessionId = null }) {
+export function ModelSelector({ locked, available, directory, load, select, language, resolveText, sessionId = null, onOpenHistory }) {
   const [copy, setCopy] = React.useState(() => copyFor(language.current()))
   const [open, setOpen] = React.useState(false)
   const [filter, setFilter] = React.useState('all')
@@ -956,12 +956,13 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                 )}
 
                 {filter === 'compact' && (
-                  <CompactPanel copy={copy} models={compactModelPairs} sessionId={typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null} onError={onCompactError} onSwitchDone={pullCompact} />
+                  <CompactPanel copy={copy} models={compactModelPairs} sessionId={typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null} onError={onCompactError} onSwitchDone={pullCompact}
+                    onOpenHistory={typeof onOpenHistory === 'function' ? () => { close(false); onOpenHistory() } : undefined} />
                 )}
 
                 {filter !== 'media' && filter !== 'compact' && visibleFavorites.length > 0 && (
                   <div>
-                    <div className="nms-group"><StarIcon className="nms-group-star" size={12} filled />{copy.favorites}<span className="nms-group-count">{copy.favoriteCount(visibleFavorites.length)}</span></div>
+                    <div className="nms-group"><StarIcon className="nms-group-star nms-group-star-fav" size={12} filled />{copy.favorites}<span className="nms-group-count">{copy.favoriteCount(visibleFavorites.length)}</span></div>
                     {visibleFavorites.map(item => renderModel(item, { reorderable: filter === 'favorites' }))}
                   </div>
                 )}

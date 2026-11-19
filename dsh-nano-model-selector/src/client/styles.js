@@ -79,7 +79,16 @@ export const STYLE = `${NANO_STYLES}
 .nms-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 6px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .035em; }
 .nms-group:first-child { margin-top: 4px; }
 .nms-group-count { font-weight: 400; color: var(--dsw-alias-label-tertiary); }
-.nms-group-star { color: #e6b84a; transform: translateY(-1px); }
+/* Group-head icon: sit on the flex baseline with the label — no manual
+   translateY nudge and no bespoke colour (owner review 2026-11-19: the icon
+   visibly floated above the text). The favorites header keeps its star tint
+   via the dedicated -fav modifier below. */
+.nms-group-star { flex: none; color: inherit; }
+.nms-group-star-fav { color: var(--dsw-alias-state-warn-primary); }
+.nms-group-action { margin-left: auto; height: 22px; padding: 0 10px; border: 0; border-radius: var(--dsw-radius-sm);
+  background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-weight: 400; letter-spacing: normal;
+  font-size: 11px; line-height: 22px; cursor: pointer; }
+.nms-group-action:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .nms-model-row { display: flex; align-items: stretch; gap: 0; width: 100%; height: 64px; box-sizing: border-box; min-width: 0; margin: 0 0 4px; border-radius: var(--dsw-radius-md); }
 .nms-model-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .nms-model-row[data-active="true"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-business-primary) 24%, transparent); }
@@ -187,6 +196,10 @@ select.nms-compact-input { flex: none; width: 210px; cursor: pointer; }
 .nms-compact-value:hover:not(:disabled) { border-color: var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); }
 .nms-compact-value:disabled { cursor: default; }
 .nms-compact-runtime { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); }
+.nms-compact-runtime-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.nms-compact-runtime-label { font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.nms-compact-runtime-fill { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary); }
+.nms-compact-runtime-used { font-size: 11px; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
 .nms-compact-meter-row { display: flex; align-items: center; gap: 10px; }
 .nms-compact-meter { position: relative; flex: 1; height: 5px; border-radius: 3px; background: var(--dsw-alias-interactive-bg-active); overflow: hidden; }
 .nms-compact-meter-fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--dsw-alias-state-business-primary); transition: width .3s; }

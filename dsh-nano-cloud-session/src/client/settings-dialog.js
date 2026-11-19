@@ -30,7 +30,8 @@ import { readPrefs, writePrefs } from './prefs.js'
 const { createElement: h, useEffect, useState } = React
 
 function field(label, control) {
-  return h('div', { className: 'dncs-field-row' },
+  /* label wraps the control so the accessible name is implicit. */
+  return h('label', { className: 'dncs-field-row' },
     h('span', { className: 'dncs-field-label' }, label),
     control)
 }
@@ -44,6 +45,8 @@ export function SettingsDialog({ face, onClose }) {
   const [profiles, setProfiles] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [security, setSecurity] = useState(null)
+  const [securityError, setSecurityError] = useState('')
+  const [sshError, setSshError] = useState('')
   const [sshKey, setSshKey] = useState(null)
   const [form, setForm] = useState({ id: null, label: '', orgId: '', secret: '', baseUrl: DEVIN_PRESET.auth.defaultBaseUrl })
   const [profileNotice, setProfileNotice] = useState('')
@@ -55,13 +58,23 @@ export function SettingsDialog({ face, onClose }) {
   const [removeTarget, setRemoveTarget] = useState(null)
   const [acknowledged, setAcknowledged] = useState(false)
 
+  const loadSecurity = async () => {
+    setSecurityError('')
+    try {
+      const sec = await api.config('security')
+      setSecurity(sec?.security ?? null)
+    } catch (cause) {
+      setSecurity(null)
+      setSecurityError(cause?.message ?? String(cause))
+    }
+  }
+
   const load = async () => {
     try {
       const status = await api.status()
       setProfiles(status.profiles ?? [])
       setActiveId(status.activeId ?? null)
-      const sec = await api.config('security').catch(() => null)
-      setSecurity(sec?.security ?? null)
+      void loadSecurity()
       setProfileError('')
     } catch (cause) {
       setProfileError(cause?.message ?? String(cause))
@@ -125,9 +138,9 @@ export function SettingsDialog({ face, onClose }) {
   }
 
   const makeSshKey = async () => {
-    setBusy(true); setProfileError('')
+    setBusy(true); setSshError('')
     try { setSshKey(await api.config('ssh-key')) }
-    catch (cause) { setProfileError(cause?.message ?? String(cause)) }
+    catch (cause) { setSshError(cause?.message ?? String(cause)) }
     finally { setBusy(false) }
   }
 
@@ -139,6 +152,15 @@ export function SettingsDialog({ face, onClose }) {
 
   const copy = { cancel: t('cancel'), confirm: t('save'), close: t('close') }
   const active = profiles.find(profile => profile.id === activeId) ?? null
+  const editing = form.id == null ? null : profiles.find(profile => profile.id === form.id) ?? null
+  /* Editing keeps the stored token unless the save target moved origins —
+   * a cross-origin baseUrl can never reuse the old secret silently. */
+  const crossOrigin = editing != null && (() => {
+    try {
+      return new URL(form.baseUrl || DEVIN_PRESET.auth.defaultBaseUrl).origin !== new URL(editing.baseUrl).origin
+    } catch { return form.baseUrl !== editing.baseUrl }
+  })()
+  const tokenHintText = () => editing == null ? t('tokenHint') : crossOrigin ? t('tokenReenter') : t('tokenKeep')
   const profileCards = profiles.length === 0
     ? null
     : profiles.map(profile => h('div', {
@@ -182,20 +204,19 @@ export function SettingsDialog({ face, onClose }) {
       h('div', { className: 'dncs-profile-head' },
         h(IconGlobeOutlineRegular, { size: 18 }),
         h('b', null, t(DEVIN_PRESET.labelKey)),
-        active == null ? h('span', { className: 'dncs-profile-meta' }, t('notConnected')) : h('span', { className: 'dncs-profile-meta' }, t('connected'))),
+        active == null ? h('span', { className: 'dncs-profile-meta' }, t('notConfigured')) : h('span', { className: 'dncs-profile-meta' }, t('configured'))),
       h('div', { className: 'dncs-profile-meta' }, t(DEVIN_PRESET.descriptionKey))),
     note(t('accessIntro')),
     guide,
     profileCards,
-    h('b', null, t('profileNew')),
+    h('b', null, form.id == null ? t('profileNew') : t('profileEdit')),
     field(t('label'), h(Input, { value: form.label, onChange: e => setForm({ ...form, label: e.currentTarget.value }) })),
     field(t('orgId'), h(Input, { value: form.orgId, onChange: e => setForm({ ...form, orgId: e.currentTarget.value }), placeholder: 'org-…' })),
     field(t('token'), h(Input, { type: 'password', value: form.secret, onChange: e => setForm({ ...form, secret: e.currentTarget.value }), placeholder: 'cog_…' })),
-    h('div', { className: 'dncs-profile-meta' }, active == null ? t('tokenHint') : t('tokenKeep')),
+    h('div', { className: 'dncs-profile-meta' }, tokenHintText()),
     field(t('baseUrl'), h(Input, { value: form.baseUrl, onChange: e => setForm({ ...form, baseUrl: e.currentTarget.value }), placeholder: DEVIN_PRESET.auth.defaultBaseUrl })),
     h('div', { className: 'dncs-profile-actions' },
-      h(Button, { variant: 'primary', onClick: save, disabled: busy }, t('saveAndConnect')),
-      active == null ? null : h(Button, { variant: 'primary', onClick: () => test(active.id), disabled: busy }, t('test'))),
+      h(Button, { variant: 'primary', onClick: save, disabled: busy }, t('saveProfile'))),
     profileError === '' ? null : note(profileError, 'error'),
     profileNotice === '' ? null : note(profileNotice),
     permissions,
@@ -215,7 +236,10 @@ export function SettingsDialog({ face, onClose }) {
 
   const securityPanel = h('div', { className: 'dncs-settings-panel' },
     h('div', { className: 'dncs-profile-head' }, h(IconShieldOutlineRegular, { size: 16 }), h('b', null, t('secTitle'))),
-    security == null ? note(t('loading')) : h('dl', { className: 'dncs-kv' },
+    securityError !== '' ? h(React.Fragment, null,
+      note(`${t('secLoadFailed')} · ${securityError}`, 'error'),
+      h(Button, { variant: 'outline', size: 'sm', onClick: () => void loadSecurity(), disabled: busy }, t('retry')))
+      : security == null ? note(t('loading')) : h('dl', { className: 'dncs-kv' },
       h('dt', null, t('secStore')), h('dd', { className: 'dncs-code' }, security.storePath),
       h('dt', null, t('secMode')), h('dd', null, security.storeMode ?? '—'),
       h('dt', null, t('secEnv')), h('dd', { className: 'dncs-code' }, `${security.seededFromEnv ? t('secSeeded') : t('secNotSeeded')} · ${security.envPath}`),
@@ -225,6 +249,7 @@ export function SettingsDialog({ face, onClose }) {
     h('div', { className: 'dncs-profile-head' }, h(IconCodeOutlineRegular, { size: 16 }), h('b', null, t('sshLane'))),
     note(t('sshNotApi')),
     h(Button, { variant: 'outline', size: 'sm', onClick: makeSshKey, disabled: busy }, t('genKey')),
+    sshError === '' ? null : note(sshError, 'error'),
     sshKey == null ? null : h('div', null,
       h('div', { className: 'dncs-profile-meta' }, t('pubkeyLabel')),
       h('div', { className: 'dncs-code' }, sshKey.publicKey),

@@ -12,4 +12,6 @@ export const BROWSER_BINDINGS = Object.freeze([
   Object.freeze({ id: "dncs.catalog", path: "/nano-cloud-session/catalog" }),
   Object.freeze({ id: "dncs.upload", path: "/nano-cloud-session/upload" }),
   Object.freeze({ id: "dncs.ssh", path: "/nano-cloud-session/ssh" }),
+  Object.freeze({ id: "dncs.workspace", path: "/nano-cloud-session/workspace" }),
+  Object.freeze({ id: "dncs.resources", path: "/nano-cloud-session/resources" }),
 ])

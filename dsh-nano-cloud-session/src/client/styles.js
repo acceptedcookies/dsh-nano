@@ -62,6 +62,10 @@ export const CLOUD_CSS = `
 /* Native session-row cadence: resting shows the time, the action slot only
  * appears on hover/focus and takes the time's place. */
 .dncs-session-actions { flex: none; display: none; align-items: center; }
+.dncs-filter-row { display: flex; gap: var(--nano-space-1); padding: 0 var(--nano-space-2) var(--nano-space-1); }
+.dncs-filter-row button[data-active="true"] { font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.dncs-manage-actions { display: flex; flex-direction: column; gap: var(--nano-space-2); margin-top: var(--nano-space-3); align-items: stretch; }
+.dncs-manage-danger { color: var(--dsw-alias-label-danger); }
 .dncs-session:hover .dncs-session-actions, .dncs-session:focus-within .dncs-session-actions { display: inline-flex; }
 .dncs-session:hover .dncs-session-time, .dncs-session:focus-within .dncs-session-time { display: none; }
 
@@ -113,4 +117,16 @@ export const CLOUD_CSS = `
 .dncs-spin { animation: dncs-spin .8s linear infinite; transform-origin: center; }
 @keyframes dncs-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .dncs-spin { animation: none; } }
+.dncs-attach-tab { display: flex; flex-direction: column; min-height: 0; padding: var(--nano-space-3) var(--nano-space-3); gap: var(--nano-space-2); }
+.dncs-attach-head { display: flex; align-items: center; justify-content: space-between; }
+.dncs-attach-title { font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+.dncs-attach-state { font-size: 12px; color: var(--dsw-alias-label-secondary); display: flex; align-items: center; gap: var(--nano-space-2); padding: var(--nano-space-2) 0; }
+.dncs-attach-state[role="alert"] { color: var(--dsw-alias-state-error-primary); }
+.dncs-attach-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dncs-attach-row { display: flex; align-items: center; gap: var(--nano-space-2); padding: var(--nano-space-2) 0; border-bottom: 1px solid var(--dsw-alias-line-l3); min-width: 0; }
+.dncs-attach-icon { flex: none; color: var(--dsw-alias-label-tertiary); }
+.dncs-attach-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--dsw-alias-label-primary); }
+.dncs-attach-type { flex: none; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+.dncs-attach-open { flex: none; display: inline-flex; color: var(--dsw-alias-label-secondary); }
+.dncs-attach-open:hover { color: var(--dsw-alias-label-primary); }
 `

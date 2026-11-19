@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "云端会话原生宿主",
+    "description": "dsh-nano-cloud-session 的宿主 overlay 伴生包：用带原生外部会话视图的构建替换原版会话、终端、工作区文件、对话与右侧工作台行，让云端会话在原生 Chat 与工作台中打开。",
+    "detail": "DETAIL.zh.md"
+  }
+}

@@ -2071,6 +2071,39 @@ function joinPath(parent, name2) {
   return `${trimmed}/${name2}`;
 }
 
+// src/host/execution-world.js
+function resolveExecutionWorld(ctx, sessionId, root) {
+  const owner = typeof ctx.get === "function" ? ctx.get("workspaceExecution") : ctx.workspaceExecution;
+  const binding = sessionId && owner && typeof owner.get === "function" ? owner.get(sessionId) : null;
+  if (binding != null) {
+    return {
+      kind: "remote",
+      identity: binding.identity ?? String(sessionId),
+      generation: binding.generation,
+      root: binding.root ?? root,
+      fs: binding.fs,
+      subprocess: binding.subprocess,
+      watch: binding.watch
+    };
+  }
+  return {
+    kind: "local",
+    identity: "local",
+    generation: "local",
+    root,
+    fs: ctx.fs,
+    subprocess: ctx.subprocess
+  };
+}
+function worldCacheKey(world, suffix = "") {
+  return `${world.kind}:${world.identity}:${world.generation}:${world.root ?? ""}:${suffix}`;
+}
+function assertBoundWorld(header, world) {
+  if (header?.executionWorld === "unbound-remote" && world.kind !== "remote") {
+    throw new Error("this session has no working directory");
+  }
+}
+
 // src/host/routes.js
 var PREFIX = "/nano-explorer-extra";
 var MAX_BODY_BYTES = 64 * 1024;
@@ -2101,7 +2134,13 @@ async function scopeOf(ctx, sessionId) {
   const live = ctx.get("sessions")?.get(sessionId);
   const header = live?.header ?? (await ctx.get("sessionPersistence")?.stat(sessionId))?.header;
   if (header === void 0 || header === null) throw new Error(`unknown session "${sessionId}"`);
-  const root = header.cwd ?? ctx.get("sandboxPolicy")?.workspaceRoot;
+  const world = resolveExecutionWorld(ctx, sessionId, header.cwd);
+  assertBoundWorld(header, world);
+  if (world.kind === "remote") {
+    const missing = ["fs", "subprocess", "watch"].filter((name2) => world[name2] == null);
+    throw new Error(missing.length ? `remote workspace binding is incomplete (missing ${missing.join("/")}); refusing to mix local fs/git/watch` : "remote workspace fs/git/watch consumption is not implemented; refusing to mix local surfaces");
+  }
+  const root = world.kind === "remote" ? world.root ?? header.cwd : header.cwd ?? ctx.get("sandboxPolicy")?.workspaceRoot;
   const livePolicy = live === void 0 ? void 0 : ctx.get("sandboxPolicy")?.resolve({ session: live });
   const policy = livePolicy ?? (root === void 0 ? void 0 : { ...ctx.get("sandboxPolicy")?.resolve({}), workspaceRoot: root });
   if (typeof root !== "string" || root === "") throw new Error("this session has no working directory");
@@ -2209,7 +2248,7 @@ function statsOptionsOf(config, url) {
   return { excludeGit, excludeIgnored, followSymlinks, key: `|g:${excludeGit}|i:${excludeIgnored}|s:${followSymlinks}` };
 }
 function scheduleStatsRefresh(ctx, config, review, root, policy, opts) {
-  const cacheKey = `${root}${opts.key}`;
+  const cacheKey = `${opts.worldKey ?? ""}${root}${opts.key}`;
   const cached = statsCache.get(cacheKey);
   const stale = cached === void 0 || Date.now() - cached.at >= STATS_FRESH_MS;
   const lastStart = statsLastStart.get(cacheKey) ?? 0;
@@ -2225,7 +2264,7 @@ function scheduleStatsRefresh(ctx, config, review, root, policy, opts) {
 }
 function startStatsPass(ctx, config, review, root, policy, opts, cacheKey) {
   statsLastStart.set(cacheKey, Date.now());
-  statsRefresh.set(cacheKey, Promise.resolve().then(() => review.hostSpan("stats", async () => statisticsOf(ctx.fs, root, {
+  statsRefresh.set(cacheKey, Promise.resolve().then(() => review.hostSpan("stats", async () => statisticsOf(opts.fs ?? ctx.fs, root, {
     maxDepth: config.statsMaxDepth,
     maxEntries: config.statsMaxEntries,
     excludeGit: opts.excludeGit,
@@ -2248,7 +2287,7 @@ function disposeRootWatchers() {
   watchTimers.clear();
 }
 function createRoutes(ctx, config) {
-  const fs = () => ctx.fs;
+  const fs = (sessionId, root) => resolveExecutionWorld(ctx, sessionId, root).fs;
   const external = (request) => runExternal(ctx, config, request);
   const review = ensurePerfReviewHost().hostJoin("nano-explorer-extra", {
     version: true ? "0.3.0" : void 0
@@ -2261,7 +2300,12 @@ function createRoutes(ctx, config) {
         const { root, policy } = await scopeOf(ctx, url.searchParams.get("sessionId") ?? "");
         watchRoot(root);
         if (url.searchParams.get("only") === "stats") {
-          const stats = scheduleStatsRefresh(ctx, config, review, root, policy, statsOptionsOf(config, url));
+          const world = resolveExecutionWorld(ctx, url.searchParams.get("sessionId") ?? "", root);
+          const stats = scheduleStatsRefresh(ctx, config, review, root, policy, {
+            ...statsOptionsOf(config, url),
+            worldKey: worldCacheKey(world),
+            fs: world.fs
+          });
           return stats;
         }
         let git = null;
@@ -2430,7 +2474,7 @@ function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req);
         const { root, policy } = await scopeOf(ctx, body.sessionId);
-        return createFile(fs(), {
+        return createFile(fs(body.sessionId, root), {
           workspaceRoot: root,
           directory: typeof body.directory === "string" ? body.directory : "",
           name: body.name,
@@ -2443,7 +2487,7 @@ function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req);
         const { session, root, policy } = await scopeOf(ctx, body.sessionId);
-        return createFolder(fs(), {
+        return createFolder(fs(body.sessionId, root), {
           workspaceRoot: root,
           directory: typeof body.directory === "string" ? body.directory : "",
           name: body.name,
@@ -2457,7 +2501,7 @@ function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req);
         const { session, root, policy } = await scopeOf(ctx, body.sessionId);
-        return rename(fs(), ctx, config, {
+        return rename(fs(body.sessionId, root), ctx, config, {
           workspaceRoot: root,
           path: body.path,
           name: body.name,
@@ -2473,7 +2517,7 @@ function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req);
         const { session, root, policy } = await scopeOf(ctx, body.sessionId);
-        const moved = await moveEntry(fs(), ctx, config, {
+        const moved = await moveEntry(fs(body.sessionId, root), ctx, config, {
           workspaceRoot: root,
           path: body.path,
           directory: body.directory,
@@ -2490,7 +2534,7 @@ function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req);
         const { session, root, policy } = await scopeOf(ctx, body.sessionId);
-        return removeEntry(fs(), {
+        return removeEntry(fs(body.sessionId, root), {
           workspaceRoot: root,
           path: body.path,
           kind: body.kind === "directory" ? "directory" : "file",
@@ -2515,7 +2559,7 @@ function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req);
         const { root } = await scopeOf(ctx, body.sessionId);
-        return listDirectory(fs(), {
+        return listDirectory(fs(body.sessionId, root), {
           workspaceRoot: root,
           path: typeof body.path === "string" ? body.path : "",
           allowOutsideWorkspace: body.allowOutsideWorkspace === true
@@ -2544,17 +2588,17 @@ function createRoutes(ctx, config) {
         if (!isLexicallyInside(root, requested) && body.allowOutsideWorkspace !== true) {
           throw new Error(`"${path}" is outside the workspace`);
         }
-        const target = await fs().resolve(requested);
-        const resolved = fs().processPath(target);
+        const target = await fs(body.sessionId, root).resolve(requested);
+        const resolved = fs(body.sessionId, root).processPath(target);
         if (!isLexicallyInside(root, resolved) && body.allowOutsideWorkspace !== true) {
           throw new Error(`"${path}" resolves outside the workspace`);
         }
-        const info = await fs().stat(target);
+        const info = await fs(body.sessionId, root).stat(target);
         if (info === void 0 || info === null) throw new Error(`"${path}" does not exist`);
         if (info.type !== "file") throw new Error(`"${path}" is not a file`);
         const limit = 1 * 1024 * 1024;
         if (info.size > limit) throw new Error(`"${path}" is larger than ${limit} bytes`);
-        const bytes = await fs().readByteRange(target, { offset: 0, length: limit });
+        const bytes = await fs(body.sessionId, root).readByteRange(target, { offset: 0, length: limit });
         try {
           new TextDecoder("utf-8", { fatal: true }).decode(bytes);
         } catch {

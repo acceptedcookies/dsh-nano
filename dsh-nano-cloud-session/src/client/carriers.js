@@ -1,26 +1,24 @@
-/** Declarative carrier presets. Devin is the first cloud-session carrier;
- *  a second carrier adds one object here (and a matching host adapter), not a
- *  second onboarding screen. */
+/** Declarative carrier presets. Display ids come from providers/devin/display.js
+ *  so this file is not a second provider identity or capability list. */
+import { DISPLAY, PROVIDER_KEY } from '../providers/devin/display.js'
+
 export const CARRIER_PRESETS = [
   {
     id: 'devin-cloud-session',
-    carrier: 'devin',
+    carrier: PROVIDER_KEY,
+    providerKey: PROVIDER_KEY,
     labelKey: 'carrierDevin',
     descriptionKey: 'carrierDevinDescription',
     auth: {
       kind: 'service-user-pat',
       tokenPrefix: 'cog_',
-      defaultBaseUrl: 'https://api.devin.ai',
+      defaultBaseUrl: DISPLAY.defaultBaseUrl,
     },
     docs: {
       api: 'https://app.devin.ai/settings/api',
       org: 'https://app.devin.ai/settings',
       ssh: 'https://app.devin.ai/settings/ssh',
     },
-    capabilities: [
-      'sessions', 'messages', 'attachments', 'upload', 'tags',
-      'insights', 'sleep', 'playbooks', 'secrets', 'knowledge', 'repositories',
-    ],
     onboardingSteps: ['guideStep1', 'guideStep2', 'guideStep3'],
   },
 ]

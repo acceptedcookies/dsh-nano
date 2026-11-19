@@ -352,6 +352,45 @@ function bareTermStamp(input) {
   return /^[0-9a-f]{8}$/i.test(input ?? "") ? input.toLowerCase() : null;
 }
 
+// src/host/execution-world.js
+function resolveExecutionWorld(ctx, sessionId) {
+  const owner = typeof ctx.get === "function" ? ctx.get("workspaceExecution") : ctx.workspaceExecution;
+  const binding = sessionId && owner && typeof owner.get === "function" ? owner.get(sessionId) : null;
+  if (sessionId && binding == null) {
+    const header = (typeof ctx.get === "function" ? ctx.get("sessions") : ctx.sessions)?.get?.(sessionId)?.header;
+    if (header?.executionWorld === "unbound-remote") {
+      return { kind: "remote", identity: String(sessionId), generation: "unbound", root: null, subprocess: null, signal: void 0, unbound: true };
+    }
+  }
+  if (binding != null) {
+    return {
+      kind: "remote",
+      identity: binding.identity ?? String(sessionId),
+      generation: binding.generation,
+      root: binding.root ?? null,
+      subprocess: binding.subprocess,
+      signal: binding.signal,
+      unbound: !(binding.subprocess && binding.generation)
+    };
+  }
+  return {
+    kind: "local",
+    identity: "local",
+    generation: "local",
+    root: null,
+    subprocess: ctx.subprocess,
+    signal: void 0
+  };
+}
+var REMOTE_ENV_ALLOW = /* @__PURE__ */ new Set(["TERM", "LANG", "LC_ALL", "COLORTERM"]);
+function remoteChildEnv(baseEnv) {
+  const env = {};
+  for (const key of REMOTE_ENV_ALLOW) {
+    if (typeof baseEnv[key] === "string") env[key] = baseEnv[key];
+  }
+  return env;
+}
+
 // ../packages/dsh-interface/src/contracts/jsonOutcome.js
 var FAILURE_KIND = Object.freeze({
   /** signal aborted; issued-before cancellation makes no server-side claim. */
@@ -996,11 +1035,24 @@ var SessionRegistry = class {
       replayBytes: this.replayBytes,
       registry: this
     });
-    record.env = { ...spec.env ?? {}, ...agentEnv(record, this.apiBase) };
-    const handle = await hostSpan("dnt-spawn", () => this.ctx.subprocess.spawnTerminal({
+    const world = resolveExecutionWorld(this.ctx, spec.sessionId);
+    if (world.kind === "remote" && (!world.subprocess || !world.generation || world.unbound || !world.root || world.signal?.aborted)) {
+      throw err(KIND.SPAWN_FAILED, "remote execution binding is unavailable; refusing local spawn");
+    }
+    record.generation = world.generation;
+    record.worldKind = world.kind;
+    record.remoteIdentity = world.kind === "remote" ? world.identity : null;
+    if (world.kind === "remote") record.keep = false;
+    const envBase = { ...spec.env ?? {}, ...agentEnv(record, this.apiBase) };
+    record.env = world.kind === "remote" ? remoteChildEnv(envBase) : envBase;
+    const subprocess = world.subprocess ?? this.ctx.subprocess;
+    const handle = await hostSpan("dnt-spawn", () => subprocess.spawnTerminal({
       argv,
-      cwd,
+      cwd: world.root ?? cwd,
       env: record.env,
+      /* The binding's own abort signal retires this handle: a revoked or
+       * expired remote scope terminates its own terminal, nothing else. */
+      signal: world.signal,
       rows: Math.min(Math.max(spec.rows || 24, 2), 512),
       cols: Math.min(Math.max(spec.cols || 80, 2), 512),
       terminalType: "xterm-256color",
@@ -1044,10 +1096,24 @@ var SessionRegistry = class {
           registry: this
         });
         rec.parent = t.parent ? this.resolve(t.parent)?.id ?? null : null;
-        rec.pending = true;
-        rec.phase = "live";
-        rec.env = agentEnv(rec, this.apiBase);
+        rec.worldKind = t.worldKind ?? "local";
+        rec.remoteIdentity = t.remoteIdentity ?? null;
+        rec.generation = t.generation ?? "local";
         rec.preservedScreen = this.persist.screenFor(t.id);
+        if (rec.worldKind === "remote") {
+          rec.pending = false;
+          rec.phase = "exited";
+          rec.exited = { code: null, reason: "remote-binding-ended" };
+          rec.keep = false;
+          if (rec.preservedScreen?.length) {
+            rec.push(rec.preservedScreen);
+            rec.mirror?.write(rec.preservedScreen);
+          }
+        } else {
+          rec.pending = true;
+          rec.phase = "live";
+        }
+        rec.env = agentEnv(rec, this.apiBase);
         rec.gate.restore(t.gate);
         this.sessions.set(t.id, rec);
         if (t.name && !this.names.has(t.name) && !parseCtxRef(t.name) && !bareTermStamp(t.name)) {
@@ -1065,7 +1131,7 @@ var SessionRegistry = class {
    * next attach retries instead of bricking the session.
    */
   async spawnPending(rec) {
-    if (!rec.pending) return;
+    if (!rec.pending || rec.worldKind === "remote") return;
     if (rec.pendingSpawn) return rec.pendingSpawn;
     rec.pendingSpawn = this.#spawnPendingOnce(rec);
     try {
@@ -1289,6 +1355,10 @@ var SessionRecord = class {
     if (this.closed) return;
     const { shell, cwd } = this.meta;
     try {
+      if (this.worldKind === "remote") {
+        this.phase = "exited";
+        throw err(KIND.SPAWN_FAILED, "keep-respawn is forbidden for a remote execution world");
+      }
       const handle = await this.registry.ctx.subprocess.spawnTerminal({
         argv: [shell, "-i"],
         // fresh shell — never reruns the lost command

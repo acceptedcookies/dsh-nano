@@ -31,6 +31,7 @@
 [DNLS] = dsh-nano-local-sandbox, macOS 本地沙箱宿主，容器特权只在这里;
 [DNCS] = dsh-nano-cloud-session, cloud-session 客户端（carrier 抽象），首个 carrier 为 devin-cloud-session;
 [DNPR] = dsh-nano-progress-report, 将chat-interface的模型与用户对话的心流，拆分成为任务执行视图, 并在未来被压缩时序, fusion 等功能消费;
+[DNCSH] = dsh-nano-cloud-session-host, [DNCS] 的 host overlay companion（原生外部会话补丁的派生构建，锁 dsh 0.2.2-rc.5 基线）;
 
 ---
 # 核心工作原则

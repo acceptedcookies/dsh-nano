@@ -6,10 +6,10 @@ import { NanoDialog } from 'dsh-nano-ui'
 import { Button, Input, IconGlobeOutlineRegular, IconPlusOutlineRegular, IconRefreshOutlineRegular, IconPaperclipOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { api } from './api.js'
 import { readPrefs } from './prefs.js'
+import { formToCreateInput } from '../providers/devin/profile-codec.js'
 
 const { createElement: h, useEffect, useRef, useState } = React
 
-const split = value => String(value ?? '').split(',').map(item => item.trim()).filter(Boolean)
 const lines = value => String(value ?? '').split('\n').map(item => item.trim()).filter(Boolean)
 
 function field(label, control, hint) {
@@ -35,6 +35,10 @@ function Picker({ title, items, selected, onToggle, labelOf }) {
 export function NewSessionDialog({ face, onClose, onCreated }) {
   const t = face.t
   const prefs = readPrefs()
+  /* The carrier profile is frozen when the dialog opens: catalog, create,
+   * uploads and the post-create open all target the same profile even if the
+   * sidebar selection changes mid-dialog. */
+  const [boundProfile] = useState(() => face.current?.activeId ?? null)
   const [form, setForm] = useState({
     prompt: '',
     title: '',
@@ -53,6 +57,7 @@ export function NewSessionDialog({ face, onClose, onCreated }) {
     bypassApproval: '',
     memoryEnabled: '',
     sessionLinks: '',
+    securityProfileMode: 'inherit',
     securityProfileId: '',
     structuredOutputSchema: '',
     structuredOutputRequired: '',
@@ -75,7 +80,7 @@ export function NewSessionDialog({ face, onClose, onCreated }) {
   useEffect(() => {
     let alive = true
     const resources = ['playbooks', 'knowledge', 'secrets', 'repositories']
-    Promise.all(resources.map(resource => api.catalog(resource, { first: 100 }).catch(cause => ({ ok: false, message: cause?.message }))))
+    Promise.all(resources.map(resource => api.catalog(resource, { first: 100, ...(boundProfile == null ? {} : { profileId: boundProfile }) }).catch(cause => ({ ok: false, message: cause?.message }))))
       .then(results => {
         if (!alive) return
         const next = {}
@@ -118,7 +123,7 @@ export function NewSessionDialog({ face, onClose, onCreated }) {
       const bytes = new Uint8Array(await file.arrayBuffer())
       let binary = ''
       for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
-      const result = await api.upload(file.name, file.type, btoa(binary))
+      const result = await api.upload(file.name, file.type, btoa(binary), boundProfile == null ? {} : { profileId: boundProfile })
       const url = result?.attachment?.url
       if (url) setForm({ ...form, attachmentUrls: [...new Set([...form.attachmentUrls, url])] })
     } catch (cause) { setError(cause?.message ?? String(cause)) }
@@ -129,40 +134,11 @@ export function NewSessionDialog({ face, onClose, onCreated }) {
     if (form.prompt.trim() === '' || busy) return
     setBusy(true); setError('')
     try {
-      let sessionSecrets
-      if (form.sessionSecrets.trim() !== '') {
-        try { sessionSecrets = JSON.parse(form.sessionSecrets) } catch { throw new Error(t('invalidSessionSecrets')) }
-      }
-      let structuredOutputSchema
-      if (form.structuredOutputSchema.trim() !== '') {
-        try { structuredOutputSchema = JSON.parse(form.structuredOutputSchema) } catch { throw new Error(t('invalidStructuredOutput')) }
-      }
-      const result = await api.create({
-        prompt: form.prompt,
-        title: form.title || undefined,
-        repos: lines(form.repos),
-        tags: split(form.tags),
-        devin_mode: form.devinMode || undefined,
-        max_acu_limit: form.maxAcuLimit ? Number(form.maxAcuLimit) : undefined,
-        resumable: form.resumable !== 'false',
-        playbook_id: form.playbookId || undefined,
-        knowledge_ids: form.knowledgeIds.length ? form.knowledgeIds : undefined,
-        secret_ids: form.secretIds.length ? form.secretIds : undefined,
-        attachment_urls: form.attachmentUrls.length ? form.attachmentUrls : undefined,
-        create_as_user_id: form.createAsUserId || undefined,
-        child_playbook_id: form.childPlaybookId || undefined,
-        platform: form.platform || undefined,
-        bypass_approval: form.bypassApproval === '' ? undefined : form.bypassApproval === 'true',
-        memory_enabled: form.memoryEnabled === '' ? undefined : form.memoryEnabled === 'true',
-        session_links: split(form.sessionLinks),
-        security_profile: form.securityProfileId ? { profile_id: form.securityProfileId } : undefined,
-        structured_output_schema: structuredOutputSchema,
-        structured_output_required: form.structuredOutputRequired === '' ? undefined : form.structuredOutputRequired === 'true',
-        session_secrets: sessionSecrets,
-      })
+      const input = formToCreateInput(form)
+      const result = await api.create(boundProfile == null ? input : { ...input, profileId: boundProfile })
       const id = result.session_id ?? result.id
       face.refresh()
-      if (id != null) onCreated?.(id)
+      if (id != null) onCreated?.(id, { profileId: boundProfile })
       else onClose()
     } catch (cause) { setError(cause?.message ?? String(cause)) }
     finally { setBusy(false) }
@@ -175,7 +151,7 @@ export function NewSessionDialog({ face, onClose, onCreated }) {
     h('div', { className: 'dncs-profile-head' }, h(IconGlobeOutlineRegular, { size: 16 }), h('b', null, t('carrierDevin'))),
     field(`${t('prompt')} *`, h('textarea', { className: 'dncs-textarea', value: form.prompt, placeholder: t('promptPlaceholder'), onChange: set('prompt') })),
     field(t('titleField'), h(Input, { value: form.title, onChange: set('title') })),
-    field(t('repos'), h(Input, { value: form.repos, placeholder: 'owner/repo（每行一个）', onChange: set('repos') })),
+    field(t('repos'), h('textarea', { className: 'dncs-textarea', value: form.repos, placeholder: 'owner/repo（每行一个）', onChange: set('repos') })),
     field(t('tags'), h(Input, { value: form.tags, placeholder: 'tag-a, tag-b', onChange: set('tags') })),
     field(t('devinMode'), h(Input, { value: form.devinMode, placeholder: 'normal / fast / lite / ultra / fusion', onChange: set('devinMode') })),
     field(t('maxAcu'), h(Input, { type: 'number', value: form.maxAcuLimit, onChange: set('maxAcuLimit') })),
@@ -202,7 +178,16 @@ export function NewSessionDialog({ face, onClose, onCreated }) {
     field(t('bypassApproval'), h(Input, { value: form.bypassApproval, placeholder: 'true / false', onChange: set('bypassApproval') })),
     field(t('memoryEnabled'), h(Input, { value: form.memoryEnabled, placeholder: 'true / false', onChange: set('memoryEnabled') })),
     field(t('sessionLinks'), h(Input, { value: form.sessionLinks, placeholder: 'url-a, url-b', onChange: set('sessionLinks') })),
-    field(t('securityProfile'), h(Input, { value: form.securityProfileId, placeholder: 'profile-…', onChange: set('securityProfileId') })),
+    field(t('securityProfile'), h('div', { className: 'dncs-inline' },
+      ['inherit', 'custom', 'none'].map(mode => h(Button, {
+        key: mode,
+        variant: form.securityProfileMode === mode ? 'primary' : 'outline',
+        size: 'sm',
+        onClick: () => setForm({ ...form, securityProfileMode: mode }),
+      }, t(`securityProfile_${mode}`))),
+      form.securityProfileMode === 'custom'
+        ? h(Input, { value: form.securityProfileId, placeholder: 'profile-…', onChange: set('securityProfileId') })
+        : null)),
     field(t('structuredOutputSchema'), h('textarea', { className: 'dncs-textarea', value: form.structuredOutputSchema, placeholder: 'JSON Schema Draft 7', onChange: set('structuredOutputSchema') })),
     field(t('structuredOutputRequired'), h(Input, { value: form.structuredOutputRequired, placeholder: 'true / false', onChange: set('structuredOutputRequired') })),
     field(t('sessionSecrets'), h('textarea', { className: 'dncs-textarea', value: form.sessionSecrets, placeholder: '[{"key":"…","value":"…","sensitive":true}]', onChange: set('sessionSecrets') })))

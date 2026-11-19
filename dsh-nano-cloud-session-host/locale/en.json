@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Cloud session native host",
+    "description": "Host overlay companion for dsh-nano-cloud-session. Replaces the stock session, terminal, workspace-file, conversation and right-sidebar rows with a build that carries native external-session views, so cloud sessions open in the native chat and workbench.",
+    "detail": "DETAIL.en.md"
+  }
+}

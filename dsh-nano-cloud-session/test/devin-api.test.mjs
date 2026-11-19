@@ -156,3 +156,21 @@ test('uploadAttachment posts multipart FormData with bearer', async () => {
   assert.equal(cap.init.headers['content-type'], undefined)
   assert.ok(cap.init.body instanceof FormData)
 })
+
+test('caller abort propagates through the real request path, not as unreachable', async () => {
+  const ctl = new AbortController()
+  const api = createDevinApi({ fetchImpl: async (_url, init) => {
+    await new Promise(resolve => setTimeout(resolve, 20))
+    init.signal?.throwIfAborted?.()
+    return { ok: true, status: 200, text: async () => '{}' }
+  } })
+  const pending = api.getMessages({ secret: 'x', orgId: 'o', baseUrl: 'https://api.devin.ai' }, 'devin-1', { signal: ctl.signal })
+  ctl.abort()
+  await assert.rejects(pending, /aborted/i)
+
+  const pre = new AbortController()
+  pre.abort()
+  await assert.rejects(
+    () => api.getMessages({ secret: 'x', orgId: 'o', baseUrl: 'https://api.devin.ai' }, 'devin-1', { signal: pre.signal }),
+    error => error?.name === 'AbortError' || /aborted/i.test(error?.message ?? ''))
+})

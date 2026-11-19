@@ -8,6 +8,7 @@ import { checkoutBranch, commitAll, fetchAll, ignoredAmong, ignoredPathsOf, list
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
+import { resolveExecutionWorld, worldCacheKey, assertBoundWorld } from './execution-world.js'
 
 /** Route prefix owned by this plugin. */
 export const PREFIX = '/nano-explorer-extra'
@@ -68,7 +69,21 @@ async function scopeOf(ctx, sessionId) {
   // resolves cold sessions instead of reading `undefined` (review-01 R5).
   const header = live?.header ?? (await ctx.get('sessionPersistence')?.stat(sessionId))?.header
   if (header === undefined || header === null) throw new Error(`unknown session "${sessionId}"`)
-  const root = header.cwd ?? ctx.get('sandboxPolicy')?.workspaceRoot
+  const world = resolveExecutionWorld(ctx, sessionId, header.cwd)
+  assertBoundWorld(header, world)
+  /* Consumer-side fail-closed: a remote-bound session is refused outright
+   * before any local watch/cache/Git touches the path — mixing a remote fs
+   * with host-local git and fs.watch would silently operate on the wrong
+   * machine. Refusing a formally bound remote without its complete
+   * fs/git/watch combo is the only honest answer until the explorer can
+   * consume remote surfaces end to end. */
+  if (world.kind === 'remote') {
+    const missing = ['fs', 'subprocess', 'watch'].filter(name => world[name] == null)
+    throw new Error(missing.length
+      ? `remote workspace binding is incomplete (missing ${missing.join('/')}); refusing to mix local fs/git/watch`
+      : 'remote workspace fs/git/watch consumption is not implemented; refusing to mix local surfaces')
+  }
+  const root = world.kind === 'remote' ? (world.root ?? header.cwd) : (header.cwd ?? ctx.get('sandboxPolicy')?.workspaceRoot)
   // A cold Session has no live header to resolve from, so the policy is rebuilt around the root the
   // stored header names; without it `resolve({})` would fall back to the launch directory and every
   // write would be fenced away from the workspace the user is actually browsing.
@@ -273,7 +288,7 @@ function statsOptionsOf(config, url) {
  * @returns `{ root, stats, statsPending }` — stats is the last finished walk or null.
  */
 function scheduleStatsRefresh(ctx, config, review, root, policy, opts) {
-  const cacheKey = `${root}${opts.key}`
+  const cacheKey = `${opts.worldKey ?? ''}${root}${opts.key}`
   const cached = statsCache.get(cacheKey)
   const stale = cached === undefined || Date.now() - cached.at >= STATS_FRESH_MS
   const lastStart = statsLastStart.get(cacheKey) ?? 0
@@ -300,7 +315,7 @@ function scheduleStatsRefresh(ctx, config, review, root, policy, opts) {
 function startStatsPass(ctx, config, review, root, policy, opts, cacheKey) {
   statsLastStart.set(cacheKey, Date.now())
   statsRefresh.set(cacheKey, Promise.resolve()
-    .then(() => review.hostSpan('stats', async () => statisticsOf(ctx.fs, root, {
+    .then(() => review.hostSpan('stats', async () => statisticsOf(opts.fs ?? ctx.fs, root, {
       maxDepth: config.statsMaxDepth,
       maxEntries: config.statsMaxEntries,
       excludeGit: opts.excludeGit,
@@ -324,7 +339,7 @@ export function disposeRootWatchers() {
 }
 
 export function createRoutes(ctx, config) {
-  const fs = () => ctx.fs
+  const fs = (sessionId, root) => resolveExecutionWorld(ctx, sessionId, root).fs
   const external = request => runExternal(ctx, config, request)
   // perf-review: hostSpan names stay inside the spec's v1 set — git-status / list / stats.
   // The disabled path is an identity wrapper, so the spans cost nothing by default.
@@ -346,7 +361,12 @@ export function createRoutes(ctx, config) {
         if (url.searchParams.get('only') === 'stats') {
           // Never block on the walk: answer from the cache (or `statsPending` on a cold start)
           // and let the background sampler do the counting at its own pace.
-          const stats = scheduleStatsRefresh(ctx, config, review, root, policy, statsOptionsOf(config, url))
+          const world = resolveExecutionWorld(ctx, url.searchParams.get('sessionId') ?? '', root)
+          const stats = scheduleStatsRefresh(ctx, config, review, root, policy, {
+            ...statsOptionsOf(config, url),
+            worldKey: worldCacheKey(world),
+            fs: world.fs,
+          })
           return stats
         }
         let git = null
@@ -493,7 +513,7 @@ export function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req)
         const { root, policy } = await scopeOf(ctx, body.sessionId)
-        return createFile(fs(), {
+        return createFile(fs(body.sessionId, root), {
           workspaceRoot: root,
           directory: typeof body.directory === 'string' ? body.directory : '',
           name: body.name,
@@ -506,7 +526,7 @@ export function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req)
         const { session, root, policy } = await scopeOf(ctx, body.sessionId)
-        return createFolder(fs(), {
+        return createFolder(fs(body.sessionId, root), {
           workspaceRoot: root,
           directory: typeof body.directory === 'string' ? body.directory : '',
           name: body.name,
@@ -520,7 +540,7 @@ export function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req)
         const { session, root, policy } = await scopeOf(ctx, body.sessionId)
-        return rename(fs(), ctx, config, {
+        return rename(fs(body.sessionId, root), ctx, config, {
           workspaceRoot: root,
           path: body.path,
           name: body.name,
@@ -536,7 +556,7 @@ export function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req)
         const { session, root, policy } = await scopeOf(ctx, body.sessionId)
-        const moved = await moveEntry(fs(), ctx, config, {
+        const moved = await moveEntry(fs(body.sessionId, root), ctx, config, {
           workspaceRoot: root,
           path: body.path,
           directory: body.directory,
@@ -554,7 +574,7 @@ export function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req)
         const { session, root, policy } = await scopeOf(ctx, body.sessionId)
-        return removeEntry(fs(), {
+        return removeEntry(fs(body.sessionId, root), {
           workspaceRoot: root,
           path: body.path,
           kind: body.kind === 'directory' ? 'directory' : 'file',
@@ -580,7 +600,7 @@ export function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req)
         const { root } = await scopeOf(ctx, body.sessionId)
-        return listDirectory(fs(), {
+        return listDirectory(fs(body.sessionId, root), {
           workspaceRoot: root,
           path: typeof body.path === 'string' ? body.path : '',
           allowOutsideWorkspace: body.allowOutsideWorkspace === true,
@@ -612,17 +632,17 @@ export function createRoutes(ctx, config) {
         // `resolve` answers a target object `{targetKey, displayPath}`; `stat`/`readByteRange`
         // read `targetKey`/`displayPath` off it, so the object itself goes through — passing the
         // processPath string instead made `stat(undefined)` throw "path must be string/Buffer/URL".
-        const target = await fs().resolve(requested)
-        const resolved = fs().processPath(target)
+        const target = await fs(body.sessionId, root).resolve(requested)
+        const resolved = fs(body.sessionId, root).processPath(target)
         if (!isLexicallyInside(root, resolved) && body.allowOutsideWorkspace !== true) {
           throw new Error(`"${path}" resolves outside the workspace`)
         }
-        const info = await fs().stat(target)
+        const info = await fs(body.sessionId, root).stat(target)
         if (info === undefined || info === null) throw new Error(`"${path}" does not exist`)
         if (info.type !== 'file') throw new Error(`"${path}" is not a file`)
         const limit = 1 * 1024 * 1024
         if (info.size > limit) throw new Error(`"${path}" is larger than ${limit} bytes`)
-        const bytes = await fs().readByteRange(target, { offset: 0, length: limit })
+        const bytes = await fs(body.sessionId, root).readByteRange(target, { offset: 0, length: limit })
         try { new TextDecoder('utf-8', { fatal: true }).decode(bytes) }
         catch { throw new Error(`"${path}" is not UTF-8 text`) }
         return { ok: true, content: new TextDecoder('utf-8').decode(bytes) }

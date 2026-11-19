@@ -67,6 +67,9 @@ const ctxDir = args[args.indexOf('--context') + 1] ??
 // yaml is resolved from the context checkout's node_modules (it is a vendored
 // dep of the app); fall back to the asar extraction used for the P0 spikes.
 const yamlCandidates = [
+  ...(process.env.DNMSC_YAML_DIR ? [process.env.DNMSC_YAML_DIR] : []),
+  // the globally installed dsh CLI vendors yaml next to the running node
+  join(dirname(process.execPath), '..', 'lib/node_modules/@deepseek-ai/dsh/node_modules/yaml'),
   join(process.env.HOME ?? '', 'Documents/dsh-plugins/context/deepseek-harness/node_modules/yaml'),
   '/tmp/dnms01-asar/dsh/node_modules/yaml',
   join(process.env.HOME ?? '', '.dsh-dev/profiles/web/node_modules/yaml'),

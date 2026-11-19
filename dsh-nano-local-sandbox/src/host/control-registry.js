@@ -37,7 +37,7 @@ const MAX_PATH = 4096
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const KNOWN_STATES = new Set(['running', 'stopped', 'missing'])
 const DOC_KEYS = ['version', 'envId', 'sandboxes']
-const ROW_KEYS = ['sandboxId', 'name', 'profileId', 'principal', 'recipeRef', 'origin', 'stateVolume', 'binding', 'ports', 'managedAt', 'desiredRevision', 'appliedRevision', 'operations', 'terminals', 'removed']
+const ROW_KEYS = ['sandboxId', 'name', 'profileId', 'principal', 'recipeRef', 'origin', 'stateVolume', 'binding', 'ports', 'managedAt', 'idleTimeoutMs', 'desiredRevision', 'appliedRevision', 'operations', 'terminals', 'removed']
 const PORT_KEYS = ['serviceId', 'containerPort', 'hostPort', 'protocol', 'hostAddress']
 const HOST_ADDRS = new Set(['127.0.0.1', '::1'])
 const PORT_PROTOS = new Set(['tcp', 'udp'])
@@ -194,6 +194,8 @@ function validateStoredTerminal(terminal, sandboxId) {
 }
 
 function validateStoredRow(row, rootPath, seen) {
+  if (row && !Object.hasOwn(row, 'idleTimeoutMs')) row.idleTimeoutMs = null
+  if (row?.idleTimeoutMs !== null && (!Number.isSafeInteger(row?.idleTimeoutMs) || row.idleTimeoutMs < 0)) throw conflict('invalid idle timeout')
   exactKeys(row, ROW_KEYS, 'stored sandbox row')
   for (const key of ROW_KEYS) if (row[key] === undefined && key !== 'terminals') throw conflict(`stored row missing ${key}`)
   if (!UUID_PATTERN.test(row.sandboxId)) throw conflict('stored sandboxId is not a canonical UUID')
@@ -386,6 +388,7 @@ export function openControlRegistry({ root, envId } = {}) {
         binding: { locator: row.binding.locator, generation: row.binding.generation },
         ports: row.ports.map((port) => structuredClone(port)),
         managedAt: row.managedAt,
+        idleTimeoutMs: row.idleTimeoutMs,
         desiredRevision: structuredClone(row.desiredRevision),
         appliedRevision: structuredClone(row.appliedRevision),
         operations: row.operations.map((operation) => structuredClone(operation)),
@@ -454,6 +457,14 @@ export function openControlRegistry({ root, envId } = {}) {
     return clone(rows.filter((row) => row.removed !== true))
   }
 
+  function checkCapacity(profileId, limit) {
+    if (limit === undefined) return
+    if (!Number.isSafeInteger(limit) || limit < 1) throw conflict('invalid profile capacity')
+    if (rows.filter(r => !r.removed && r.profileId === profileId).length >= limit) {
+      throw registryError('sandbox.quota', 'profile capacity is fully reserved')
+    }
+  }
+
   /** Shared row construction: one shape for reserve, adopt and create intent. */
   function newRow(input, overrides) {
     const sandboxId = randomUUID()
@@ -463,6 +474,7 @@ export function openControlRegistry({ root, envId } = {}) {
       stateVolume: join(rootPath, input.profileId, sandboxId),
       ports: [],
       managedAt: Date.now(),
+      idleTimeoutMs: null,
       desiredRevision: null,
       appliedRevision: null,
       operations: [],
@@ -559,7 +571,7 @@ export function openControlRegistry({ root, envId } = {}) {
    * persists its reservation AND its accepted operation in one publish,
    * before any privileged action runs.
    */
-  function accept({ principal, requestId, action, sandboxId, createIntent, fingerprint, portPlan, argsJson = null } = {}) {
+  function accept({ principal, requestId, action, sandboxId, createIntent, fingerprint, portPlan, maxInstances, argsJson = null } = {}) {
     assertLive()
     for (const [key, value] of [['principal', principal], ['requestId', requestId], ['action', action], ['fingerprint', fingerprint]]) {
       if (!boundedText(value)) throw conflict(`accept ${key} is required`)
@@ -578,6 +590,7 @@ export function openControlRegistry({ root, envId } = {}) {
     if (action === 'create') {
       if (sandboxId !== null && sandboxId !== undefined) throw conflict('create takes no object selector')
       const input = checkedIntent(createIntent)
+      checkCapacity(input.profileId, maxInstances)
       if (rows.some((entry) => entry.name === input.name)) throw nameTaken(`sandbox name already registered: ${input.name}`)
       // The port plan is trusted profile/env config, never untrusted params;
       // the whole set reserves synchronously before any backend dispatch.
@@ -751,7 +764,7 @@ export function openControlRegistry({ root, envId } = {}) {
    * path. Re-adopting the same verified binding returns the same row; a
    * conflicting owner, profile or name is rejected.
    */
-  function adopt(intent, observation, ports = []) {
+  function adopt(intent, observation, ports = [], maxInstances) {
     assertLive()
     const input = checkedIntent(intent)
     const obs = checkedObservation(observation, ['locator', 'generation', 'stateVolume'], 'adoption observation')
@@ -771,6 +784,7 @@ export function openControlRegistry({ root, envId } = {}) {
       }
       return clone(existing)
     }
+    checkCapacity(input.profileId, maxInstances)
     if (rows.some((row) => row.name === input.name)) throw nameTaken(`sandbox name already registered: ${input.name}`)
     if (rows.some((row) => row.stateVolume === obs.stateVolume)) {
       throw conflict('another object already uses this physical state volume')
@@ -796,6 +810,7 @@ export function openControlRegistry({ root, envId } = {}) {
       binding: { locator: obs.locator, generation: obs.generation },
       ports: adoptedPorts,
       managedAt: Date.now(),
+      idleTimeoutMs: null,
       desiredRevision: null,
       appliedRevision: null,
       operations: [],
@@ -905,6 +920,16 @@ export function openControlRegistry({ root, envId } = {}) {
     return clone(row)
   }
 
+  function setIdlePolicy(sandboxId, idleTimeoutMs) {
+    assertLive()
+    const row = findVisible(sandboxId)
+    if (!row || row.operations.some(op => OP_PENDING.has(op.state))) throw conflict('object unavailable')
+    if (!Number.isSafeInteger(idleTimeoutMs) || idleTimeoutMs < 0 || idleTimeoutMs > 30 * 86400000) throw conflict('idle timeout out of range')
+    row.idleTimeoutMs = idleTimeoutMs
+    publish()
+    return { sandboxId, idleTimeoutMs }
+  }
+
   function close() {
     if (closed) return
     closed = true
@@ -916,5 +941,5 @@ export function openControlRegistry({ root, envId } = {}) {
     db.close()
   }
 
-  return { get, list, reserve, adopt, rename, confirm, reconcile, accept, transition, operation, dedupe, reserveTerminal, transitionTerminal, saveRevision, close }
+  return { get, list, reserve, adopt, rename, confirm, reconcile, accept, transition, operation, dedupe, reserveTerminal, transitionTerminal, saveRevision, setIdlePolicy, close }
 }

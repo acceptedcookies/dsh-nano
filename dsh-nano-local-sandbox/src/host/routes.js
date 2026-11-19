@@ -29,6 +29,10 @@ export const SNAPSHOT_ROUTE = '/nano-local-sandbox/snapshot'
 export const REFS_ROUTE = '/nano-local-sandbox/refs'
 export const CONTROL_ROUTE = '/nano-local-sandbox/control'
 export const CONTRACT_ROUTE = '/nano-local-sandbox/contract'
+export const FLEET_ROUTE = '/nano-local-sandbox/fleet'
+export const SANDBOXES_ROUTE = '/nano-local-sandbox/sandboxes'
+export const INSPECT_ROUTE = '/nano-local-sandbox/inspect'
+export const PROCESSES_ROUTE = '/nano-local-sandbox/processes'
 
 import { request as httpRequest } from 'node:http'
 import { createHash } from 'node:crypto'
@@ -430,6 +434,7 @@ async function observeOnce(session, deps) {
   if (!inspectFailed) session.backendError = null
   const engineRow = publicationFor(info, host.engineContainerPort)
   const bridgeRow = publicationFor(info, host.bridgeContainerPort)
+  trackBridge(session, bridgeControlBase(bridgeRow))
   const httpBase = bridgeControlBase(engineRow)
   const httpUp = await engineHttpUp(httpBase, deps)
   const cdpUp = await probeCdp(session, httpBase, httpUp, deps)
@@ -1017,6 +1022,7 @@ async function ensureBase(session, deps) {
   try {
     const inspected = await deps.backend.inspect(containerNameFor(session, deps.env || process.env))
     const info = parseInspect(inspected?.raw ?? inspected, envHostPorts(deps.env || process.env).engineContainerPort)
+    trackBridge(session, bridgeControlBase(publicationFor(info, envHostPorts(deps.env || process.env).bridgeContainerPort)))
     const base = bridgeControlBase(publicationFor(info, envHostPorts(deps.env || process.env).engineContainerPort))
     if (!base) return null
     if (session.phase === 'idle') session.phase = 'running'
@@ -1024,6 +1030,11 @@ async function ensureBase(session, deps) {
   } catch {
     return null
   }
+}
+
+function trackBridge(session, base) {
+  if (session.cdp && session.bridgeBase !== undefined && session.bridgeBase !== base) resetClient(session)
+  session.bridgeBase = base
 }
 
 /**

@@ -54,12 +54,13 @@ const TERMINAL_DIR = join(PACKAGE_ROOT, 'profiles', 'terminal')
 
 /**
  * Package-owned guest helpers baked into every recipe — never host mounts,
- * never user-writable. Only these two flat names resolve outside the
+ * never user-writable. Only these flat names resolve outside the
  * profile dir; no other recipe member may leave it.
  */
 const PACKAGE_RECIPE = new Map([
   ['pty-entry.mjs', join(TERMINAL_DIR, 'pty-entry.mjs')],
   ['pty-worker.py', join(TERMINAL_DIR, 'pty-worker.py')],
+  ['public-health.mjs', join(TERMINAL_DIR, 'public-health.mjs')],
 ])
 
 /**

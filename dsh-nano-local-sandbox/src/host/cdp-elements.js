@@ -464,7 +464,10 @@ async function acquireClient(session, httpBase, connect) {
   if (session.cdp) resetClient(session)
   session.console = session.console || []
   session.network = session.network || []
-  const client = connect.length >= 2 ? await connect(httpBase, {}) : await connect(httpBase)
+  if (connect === connectCdp && !session.bridgeBase) throw new Error('verified CDP bridge publication unavailable')
+  const client = connect === connectCdp
+    ? await connect(httpBase, { relayUrl: `${session.bridgeBase.replace(/^http/, 'ws')}/cdp` })
+    : await connect(httpBase, {})
   client.__session = session
   session.cdp = client
   client.probedAt = Date.now()
@@ -567,21 +570,9 @@ async function acquireClient(session, httpBase, connect) {
 /** Optional transport and budgets are a local test seam, not an HTTP setting. */
 export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket, timeouts = {}, relayUrl } = {}) {
   const budgets = { ...CDP_TIMEOUTS, ...timeouts }
-  // The service's /cdp relay multiplexes every downstream client onto ONE
-  // upstream socket — the only way another client and this socket share the
-  // same page (the engine makes every connection own a private page). Connect
-  // to the relay first; a service without the relay falls back to the direct
-  // socket. The relay lives on the bridge port, declared as the engine port + 1
-  // by every profile that ships one.
+  // A failed shared-page relay must not silently open a different page.
   const direct = `${String(httpBase).replace(/^http/, 'ws')}/devtools/browser`
-  const relay = relayUrl ?? `${String(httpBase).replace(/^http/, 'ws').replace(/:(\d+)(\/|$)/, (m, port, tail) => `:${Number(port) + 1}${tail}`)}/cdp`
-  const urls = relay ? [relay, direct] : [direct]
-  return tryUrls(urls, 0)
-
-  function tryUrls(list, index) {
-    return openSocket(list[index], index === 0 && list.length > 1 ? 'relay' : 'direct')
-      .catch((error) => (index + 1 < list.length ? tryUrls(list, index + 1) : Promise.reject(error)))
-  }
+  return openSocket(relayUrl || direct, relayUrl ? 'relay' : 'direct')
 
   function openSocket(wsUrl, via) {
     const ws = new Socket(wsUrl)

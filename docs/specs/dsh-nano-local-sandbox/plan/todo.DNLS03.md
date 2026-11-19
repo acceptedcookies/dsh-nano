@@ -47,8 +47,8 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - [x] **P6-03** 单写者分钟库；三个窗口共用一份槽，断段不插值（`DNLS03-T52`）。
 
 ### Phase 7
-- [ ] **P7-01** fleet 投影 — `routes.js` 新只读路由；`observe.js:34` 不得升格为恢复真源；窄行不含正文/路径/凭证；进程默认 50、上限 200（`DNLS03-T60`）
-- [ ] **P7-02** 计额与只停 — `instance-registry.js:42,91-98`；`control-registry.js`；创建/接管先原子占位；两 session 只占一格；stop 后台账行还在（`DNLS03-T61`）
+- [x] **P7-01** fleet 窄行、按需进程与已验证发布者的公开健康投影（`DNLS03-T60`）。宿主没有提供来源就不发现其他 env；没有健康证据就是 unknown。
+- [x] **P7-02** 同一台账原子判额；连续空闲窗只 stop，保留行、端口和卷（`DNLS03-T61`）。实际 kitesurf driver 没有持续空闲证明，不自动回收。
 
 ### Phase 8
 - [ ] **P8-01** 管理出口 — `package.json:12-30`；`src/client/`（新，仅在有宿主槽位时）；无槽位则显式宿主依赖，不覆盖宿主命令（`DNLS03-T70`）
@@ -57,7 +57,7 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 
 ### 收口测试与工作方法收尾
 - [ ] **DNLS03-T80** mega — `test/dnls03-journey.mega.test.mjs`：公开面同切，从发现到 attach 的夹具旅程，中间无 v1、无 session 主键（Phase 8 出口）
-- [ ] **DNLS03-T81** soak N=20 — `test/registry-race.soak.test.mjs`：两写者交错 + 空闲 stop 与新 attach 竞态，N=20 顺序稳定（P1-03 + P7-02）
+- [x] **DNLS03-T81** N=20 受控屏障：第二写者被拒、过期复核时新使用或新 PTY 登记成功，未发 stop。此项不替代 WS upgrade 测试。
 - [ ] **STEP.5** — 以 `工作日志模板` 创建 [工作日志] 并回填至执行计划文档底部
 - [ ] **STEP.6** — 以 `closure模板` 输出 closure 至 `../closure/DNLS03-closure.md`
 - [ ] **STEP.7** — 三路独立审查（真相层对账 / 工作完成度 / 防测试假绿·防业务侧载），PROMPT 与报告落盘 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`
@@ -88,7 +88,14 @@ Phase 5 提交 `b7f3d34`。Phase 6 内核验证完成；下游待 Phase 7 与 Ph
 - T51：2026-11-19T18:28:54Z，`node --test dsh-nano-local-sandbox/test/{environment-owner,term-bridge,managed-revision,lifecycle-operation,service-ports}.test.mjs`，50 pass / 0 fail / 0 skip。实际 profile 与 MCP 路由组合；保存不调 backend，第二次用旧修订返回 409；实测资源不符保留最后回执。较早的 47 项仅是内核夹具，不作为端到端证明。
 - T52：2026-11-19T18:24:20Z，`node --test dsh-nano-local-sandbox/test/usage-minutes.test.mjs`，2 pass / 0 fail / 0 skip。删除临时库中的一分钟后，CPU 不跨缺口；第二写者被拒，读窗口不采样。
 
-当前节点 Phase 7；审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`，closure 存放 `../closure/DNLS03-closure.md`。
+Phase 6 提交 `3f87460`。Phase 7 内核测试（基线 `3f87460`，提交以本文件所在 Phase 7 提交为准）：
+
+- T60：2026-11-19T18:37:29Z，`node --test dsh-nano-local-sandbox/test/{fleet-projection,environment-owner,route-scan-coverage}.test.mjs`，24 pass / 0 fail。无权或访问中换代时不返回 PID，进程字段有白名单；宿主未配置的 env 不计数。
+- T60：2026-11-19T18:47:10Z，`node --test dsh-nano-local-sandbox/test/{bridge-projection,environment-owner,profile-load}.test.mjs`，16 pass / 0 fail。桥的 HTTP 端不能发布；宿主使用只读镜像助手，更新顺序或身份不符不改旧投影。镜像配方 digest `sha256:6c62ed8a7153ab40bc59ba2434c83cac667e2c27391502b7a381e337bcba7f4b`，未构建或部署镜像。
+- T61/T81：2026-11-19T18:44:54Z，`node --test dsh-nano-local-sandbox/test/{quota-idle,lifecycle.spike,registry-race.soak}.test.mjs`，23 pass / 0 fail / 0 skip（含 20 个竞态子例）。
+- T50 补证：2026-11-19T18:41:19Z，`node --test dsh-nano-local-sandbox/test/{cdp-transport,loop3-gaps,dom-health-routes,page-routes}.test.mjs`，32 pass / 0 fail。Phase 6 只证实 `/control`，复查另发现 CDP transport 有相邻端口推断；已移除该推断及 relay 失败后的直连。
+
+当前节点 Phase 8；审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`，closure 存放 `../closure/DNLS03-closure.md`。入口未同切前，内核 PASS 不等于公开面 PASS。
 
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。

@@ -88,16 +88,6 @@ export function createInstanceRegistry({ backend, profile, volumeFor, now = () =
     return instance.phase
   }
 
-  async function sweep() {
-    const timeout = profile.lifecycle.idleTimeoutMs
-    for (const instance of [...instances.values()]) {
-      if (instance.attached) continue
-      if (now() - instance.lastAttach < timeout) continue
-      await backend.stop(instance.containerName)
-      instances.delete(instance.instanceId)
-    }
-  }
-
   function recordHistory(instanceId, row) {
     return appendHistory(instances.get(instanceId).stateVolume, row)
   }
@@ -116,7 +106,7 @@ export function createInstanceRegistry({ backend, profile, volumeFor, now = () =
     }))
   }
 
-  return { ensure, reconcile, sweep, recordHistory, list, instances }
+  return { ensure, reconcile, recordHistory, list, instances }
 }
 
 /**
@@ -125,7 +115,7 @@ export function createInstanceRegistry({ backend, profile, volumeFor, now = () =
  * The ledger row is the physical identity; a use only records that one
  * session consumes it, so a session ending never deletes the object.
  */
-export function createUseBindings(registry) {
+export function createUseBindings(registry, onUse = () => {}) {
   const uses = new Map()
 
   const usableId = (value) => typeof value === 'string' && value.length > 0 && value.length <= 256
@@ -134,6 +124,8 @@ export function createUseBindings(registry) {
     if (!usableId(sandboxId) || !usableId(sessionId)) return { ok: false, status: 400 }
     const sandbox = registry.get(sandboxId)
     if (!sandbox) return { ok: false, status: 404 }
+    if (sandbox.operations.some(op => ['accepted', 'running', 'indeterminate'].includes(op.state))) return { ok: false, status: 409, errorId: 'sandbox.state_conflict' }
+    onUse(sandboxId)
     const tuple = tupleFromPolicy({ ...policy, sessionId })
     const fingerprint = policyFingerprint(tuple)
     let bySession = uses.get(sandboxId)

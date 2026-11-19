@@ -296,6 +296,7 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
       createIntent: createIntent ?? null,
       fingerprint,
       portPlan,
+      maxInstances: profile?.maxInstances,
       argsJson: action === 'recreate' ? JSON.stringify({ expectedRevision: params.expectedRevision ?? null, interruptTerminals: params.interruptTerminals === true, preserveVolume: params.preserveVolume === true }) : null,
     })
     auditSafe({ principal: principal.key, sandboxId: operation.sandboxId, action, result: isNew ? 'accepted' : 'duplicate', operationId: operation.operationId })
@@ -373,7 +374,7 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
     }
   }
 
-  async function runOperation(operationId, peer) {
+  async function runOperation(operationId, peer, idleCheck) {
     let operation
     try {
       operation = registry.transition(operationId, 'accepted', { state: 'running', step: 'dispatch' })
@@ -400,6 +401,11 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
     // Live authority is rechecked with the same original peer right before
     // every privileged dispatch, after each awaited observation.
     const stillAuthorized = async () => {
+      if (idleCheck) {
+        if (operation.action === 'stop' && await idleCheck(operationId)) return true
+        done('failed', { step: 'idle-proof-lost' })
+        return false
+      }
       const outcome = authorized(peer, operation.action, sandboxId)
       if (outcome.failure || outcome.principal?.operator !== true ||
           outcome.principal.key !== operation.principal) {
@@ -574,6 +580,13 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
 
   const WRITE_CAP = /^sandbox\.instance\.(create|start|stop|restart|recreate|remove)$/
 
+  async function stopIfIdle(row, requestId, idleCheck) {
+    if (!await idleCheck()) return
+    const { operation, isNew } = registry.accept({ principal: 'policy:idle', requestId, action: 'stop',
+      sandboxId: row.sandboxId, fingerprint: fingerprintOf('stop', row.sandboxId, { generation: row.binding.generation, requestId }) })
+    if (isNew) await runOperation(operation.operationId, null, idleCheck)
+  }
+
   async function execute({ capability, sandboxId, peer, req, args }) {
     if (capability === 'sandbox.lifecycle') {
       const action = args?.action
@@ -593,6 +606,7 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
 
   return {
     submit,
+    stopIfIdle,
     read,
     cancel,
     drain: async () => {

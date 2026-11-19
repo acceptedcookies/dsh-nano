@@ -107,15 +107,21 @@ test('sendText writes a FIN text frame', () => {
 // accepts takeover/release. The write gate itself lives in attach() which needs
 // a spawned agent-browser child; the HTTP endpoints need no child, so they are
 // the unit-testable surface of the contract.
-test('POST /control takeover then release toggles humanHold visible on /health', async () => {
+test('POST /control takeover then release toggles humanHold visible on /control', async () => {
   const { createBridge } = await import('../profiles/kitesurf/mcp-bridge.mjs')
   const port = 19000 + Math.floor(Math.random() * 900)
   const server = createBridge(port, { ...process.env, DNLS_MCP_PORT: String(port) })
   await new Promise((r) => setTimeout(r, 150))
   try {
+    const control0 = await fetch(`http://127.0.0.1:${port}/control`).then((r) => r.json())
+    assert.equal(control0.control.humanHold.active, false)
+    assert.equal(control0.control.lastAction, null)
+    // /health is the public face: only the nonrestricted health summary,
+    // never the control owner/lastAction detail.
     const health0 = await fetch(`http://127.0.0.1:${port}/health`).then((r) => r.json())
-    assert.equal(health0.control.humanHold.active, false)
-    assert.equal(health0.control.lastAction, null)
+    assert.equal(health0.ok, true)
+    assert.equal('control' in health0, false)
+    assert.equal('calls' in health0, false)
 
     const take = await fetch(`http://127.0.0.1:${port}/control`, {
       method: 'POST',

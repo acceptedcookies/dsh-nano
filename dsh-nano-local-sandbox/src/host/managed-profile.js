@@ -179,6 +179,8 @@ export function createManagedProfileSource(deps = {}) {
       services,
       portPool: [...pool],
       maxInstances: manifest.lifecycle.maxInstances,
+      idleTimeoutMs: manifest.lifecycle.idleTimeoutMs,
+      idleEvidence: typeof result.driver.idleEvidence === 'function' ? result.driver.idleEvidence.bind(result.driver) : null,
       resourceLimits: bounds.limits,
       validateOverrides: values => checkOverrides(values, bounds),
       defaults: bounds.defaults,
@@ -213,9 +215,13 @@ export function createManagedProfileSource(deps = {}) {
         })
         const cpus = effective.cpus ?? bounds.defaults.cpus
         const memoryBytes = effective.memoryBytes ?? parseMemory(bounds.defaults.memory)
+        // Deployment identity the guest uses to authenticate the host
+        // owner's health channel (/proc/1/environ vs the published doc).
+        if (typeof row.sandboxId !== 'string' || !row.sandboxId) throw configError('sandboxId required')
         return {
           containerName: row.binding.locator,
           image: manifest.build.image,
+          managedIdentity: { envId: tag, sandboxId: row.sandboxId },
           mounts,
           resources: { cpus, memory: memoryArg(memoryBytes), memoryBytes },
           ports: (row.ports ?? []).map((port) => ({

@@ -99,3 +99,7 @@
 | `/nano-cloud-session/resources` | — | `dncs.resources` | http | exact |
 | `/nano-notepad/perf-review/host` | — | `dnn.perf-review.host` | http | exact |
 | `/nano-model-selector/perf-review/host` | — | `dnms.perf-review.host` | http | exact |
+| `/nano-local-sandbox/fleet` | — | `dnls.fleet` | http | exact |
+| `/nano-local-sandbox/sandboxes` | — | `dnls.sandboxes` | http | exact |
+| `/nano-local-sandbox/inspect` | — | `dnls.inspect` | http | exact |
+| `/nano-local-sandbox/processes` | — | `dnls.processes` | http | exact |

@@ -56,6 +56,35 @@ const CLI_TIMEOUT_MS = Number(process.env.DNLS_CLI_TIMEOUT_MS || 15000)
 const SESSION_OUTPUT_MAX = 1 << 20
 
 /**
+ * The constant guest probe behind backend.processes (P7). A single fixed
+ * `-c` program: enumerate numeric /proc entries, take pid/comm/state/ppid
+ * from stat (comm may contain spaces or parens — split on the last `)`)
+ * and VmRSS from status. Anything unreadable is skipped, never faked.
+ * Output is pid-sorted `pid\tppid\tstate\tname\trssBytes`, capped before
+ * it ever reaches the CLI. No caller input reaches this string.
+ */
+const PROCESSES_MAX = 201
+// Deployment identity serialized into the guest as env vars: only these
+// two values, validated before they ever touch argv.
+const ENV_ID = /^[a-z0-9][a-z0-9-]{0,31}$/
+const SANDBOX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PROCESSES_PROGRAM = `import os
+rows=[]
+for e in os.listdir("/proc"):
+ if not e.isdigit():continue
+ try:
+  s=open("/proc/"+e+"/stat").read()
+  r=s.rfind(")")
+  t=s[r+2:].split()
+  rss=0
+  for l in open("/proc/"+e+"/status"):
+   if l.startswith("VmRSS:"):rss=int(l.split()[1])*1024;break
+  rows.append((int(s[:s.find("(")]),int(t[1]),t[0],s[s.find("(")+1:r].replace("\\t"," ").replace("\\n"," "),rss))
+ except Exception:pass
+rows.sort()
+for x in rows[:${PROCESSES_MAX}]:print("%d\\t%d\\t%s\\t%s\\t%d"%x)`
+
+/**
  * Interactive `container exec -i`: the request goes over stdin, the answer
  * over stdout — typed input never rides argv or CLI logs. `io.execSession`
  * is the test seam.
@@ -208,6 +237,14 @@ export function createAppleBackend(spec = {}, io = {}) {
         args.push('--mount', mount.arg)
       }
       for (const port of instance.ports ?? []) args.push('-p', port.publish)
+      if (instance.managedIdentity != null) {
+        const { envId, sandboxId } = instance.managedIdentity
+        if (typeof envId !== 'string' || !ENV_ID.test(envId) ||
+            typeof sandboxId !== 'string' || !SANDBOX_UUID.test(sandboxId)) {
+          throw new Error('invalid managed identity')
+        }
+        args.push('--env', `DNLS_ENV_ID=${envId}`, '--env', `DNLS_SANDBOX_ID=${sandboxId}`)
+      }
       args.push(instance.image)
       await run(bound, args)
       return { id: instance.containerName, started: true }
@@ -274,6 +311,33 @@ export function createAppleBackend(spec = {}, io = {}) {
       return JSON.parse(text)
     },
     /**
+     * Read-only guest process table (P7): one constant program reads
+     * /proc/[0-9]+/stat and /status — never argv, env or caller options.
+     * Returns pid-sorted `{pid,ppid,name,state,rssBytes}` entries, bounded
+     * at PROCESSES_MAX so a caller can still see the table was truncated.
+     */
+    async processes(name) {
+      const text = await runFile(bound, ['exec', name, '/usr/bin/python3', '-I', '-c', PROCESSES_PROGRAM])
+      const out = []
+      for (const line of String(text ?? '').split('\n')) {
+        if (!line.trim()) continue
+        const [pid, ppid, state, pname, rss] = line.split('\t')
+        const entry = {
+          pid: Number(pid), ppid: Number(ppid),
+          state: typeof state === 'string' && state.length === 1 ? state : null,
+          name: typeof pname === 'string' && pname.length > 0 && pname.length <= 64 && !pname.includes('\0') ? pname : null,
+          rssBytes: Number(rss),
+        }
+        if (!Number.isInteger(entry.pid) || entry.pid < 1 || !Number.isInteger(entry.ppid) || entry.ppid < 0 ||
+            entry.state === null || entry.name === null || !Number.isInteger(entry.rssBytes) || entry.rssBytes < 0) {
+          throw cliError(['exec', name], { code: 1, stderr: 'malformed process table row' })
+        }
+        out.push(entry)
+      }
+      out.sort((a, b) => a.pid - b.pid)
+      return out.slice(0, PROCESSES_MAX)
+    },
+    /**
      * Managed terminal broker control: one JSON request to the baked
      * `pty-entry.mjs` inside the named container, over stdin/stdout — never
      * argv, never a shell. `create` spawns the guest worker explicitly;
@@ -304,6 +368,31 @@ export function createAppleBackend(spec = {}, io = {}) {
       }
       if (reply?.ok !== true) throw bad()
       if (verb === 'create' && reply.terminalId !== request?.terminalId) throw bad()
+      return reply
+    },
+    /**
+     * Authenticated bridge health publication (dnls.control/1): the doc goes
+     * over stdin to the root-baked /opt/dnls/public-health.mjs helper —
+     * never argv, never the published HTTP port, and never the node-writable
+     * /mcp-bridge.mjs path. `env -i` strips the guest environment so Node
+     * options cannot be smuggled in; the guest verifies the deployment IDs
+     * against /proc/1/environ itself. A missing helper is an honest error.
+     */
+    async publishHealth(locator, doc) {
+      const args = [
+        'exec', '-i', '--user', '0:0', '--workdir', '/', locator,
+        '/usr/bin/env', '-i', 'PATH=/usr/local/bin:/usr/bin:/bin',
+        '/usr/local/bin/node', '/opt/dnls/public-health.mjs',
+      ]
+      const text = await runSession(bound, args, { input: JSON.stringify(doc ?? {}) })
+      const line = String(text).split('\n').find((row) => row.trim())
+      let reply
+      try {
+        reply = JSON.parse(line ?? '{}')
+      } catch {
+        reply = null
+      }
+      if (reply?.ok !== true) throw new Error(`publishHealth ${locator}: refused`)
       return reply
     },
     /** Remove a container so it can be recreated at a different size. */

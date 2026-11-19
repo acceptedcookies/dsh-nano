@@ -12,8 +12,10 @@
  */
 import { spawn } from 'node:child_process'
 import { webcrypto } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { connect as netConnect } from 'node:net'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PORT = Number(process.env.DNLS_MCP_PORT || 8791)
@@ -39,6 +41,28 @@ const IDLE_MS = Number(process.env.DNLS_MCP_IDLE_MS || 20 * 60 * 1000)
 // clients send no Origin and are allowed. Comma-separated env overrides.
 const ALLOWED_HOSTS = (process.env.DNLS_MCP_ORIGINS || 'localhost,127.0.0.1,[::1]')
   .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+
+/**
+ * Read-only projection of the host-owned dnls.control/1 health document.
+ * The writer lives in the root-baked /opt/dnls/public-health.mjs helper —
+ * this node-writable file only ever READS the published file and returns
+ * the public summary, never the private identity.
+ */
+const HEALTH_DIR = '/run'
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/
+
+export function readHealth(dir = HEALTH_DIR) {
+  let doc = null
+  try {
+    const parsed = JSON.parse(readFileSync(join(dir, 'dnls-public-health.json'), 'utf8'))
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) doc = parsed
+  } catch { /* absent or unreadable */ }
+  if (!doc) return null
+  const { contractVersion, state, health, observedAt } = doc
+  if (contractVersion !== 'dnls.control/1' || state !== 'running' || health !== 'unknown' ||
+      typeof observedAt !== 'string' || !ISO_TIME.test(observedAt)) return null
+  return { contractVersion, state, health, observedAt }
+}
 
 export async function acceptKey(key) {
   const data = new TextEncoder().encode(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
@@ -475,9 +499,9 @@ export function createFrameDecoder({ onMessage, onPing, onClose, maxFrame = MAX_
 /**
  * Kitesurf-native MCP tools. The bridge is a byte pipe to `agent-browser mcp`,
  * whose 33 core tools know nothing about the host plugin's execution state.
- * These are answered LOCALLY from the diagnostics snapshot the host pushes to
- * POST /diagnostics, so an agent using only MCP can still answer "what did the
- * plugin just do, and which errorId fired?" — the gap the owner called out.
+ * Snapshot-backed tools once read a host-pushed diagnostics POST; that
+ * channel is gone (POST /diagnostics is a hard 403), so they answer the
+ * stale error honestly rather than fabricating an empty success.
  */
 const KITESURF_TOOLS = [
   {
@@ -577,7 +601,7 @@ const KITESURF_TOOLS = [
   },
   {
     name: 'sandbox.bridge_health',
-    description: 'MCP bridge liveness: conns, accepted, rejected, uptimeMs and when the last host diagnostics snapshot was pushed.',
+    description: 'MCP bridge public health: the host-owned dnls.control/1 summary (state, health, observedAt) or null until the owner publishes.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
 ]
@@ -610,10 +634,11 @@ function toolError(id, code, message) {
 function answerNativeTool(name, args, bridgeState, self = {}) {
   const snap = bridgeState.getDiagnostics()
   if (name === 'sandbox.bridge_health') {
-    return { ok: true, ...bridgeState.stats(), diagnosticsPushedAt: snap?.at || null }
+    const health = bridgeState.getHealth()
+    return { ok: true, health, observedAt: health?.observedAt ?? null }
   }
   if (!snap) {
-    return { ok: false, errorId: 'kitesurf.diag.stale', error: 'host has not pushed a diagnostics snapshot yet; retry in a few seconds', hint: 'GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push' }
+    return { ok: false, errorId: 'kitesurf.diag.stale', error: 'no diagnostics snapshot is available on this bridge', hint: 'GET /nano-local-sandbox/diagnostics on the authenticated host' }
   }
   if (name === 'sandbox.diagnostics') return snap
   if (name === 'sandbox.console') {
@@ -980,9 +1005,8 @@ export function createBridge(port = PORT, env = process.env) {
   let conns = 0
   let accepted = 0
   let rejected = 0
-  let lastDiagnostics = null
-  let diagnosticsPushedAt = null
   const startedAt = Date.now()
+  const healthDir = env.DNLS_HEALTH_DIR || HEALTH_DIR
   const control = makeControl()
   const cdpRelay = makeCdpRelay({ upstreamUrl: env.KITESURF_CDP_UPSTREAM || CDP_UPSTREAM, debug: env.MCP_BRIDGE_DEBUG })
   const stats = () => ({
@@ -992,14 +1016,22 @@ export function createBridge(port = PORT, env = process.env) {
     calls: callSummary(bridgeState.callRing),
   })
   const bridgeState = {
-    getDiagnostics: () => lastDiagnostics,
+    // The old host→bridge diagnostics push is gone (POST /diagnostics is a
+    // hard 403 now); snapshot-backed tools stay honest and answer
+    // kitesurf.diag.stale rather than fabricating success.
+    getDiagnostics: () => null,
+    getHealth: () => readHealth(healthDir),
     stats,
     control,
   }
   const server = createServer((req, res) => {
     if (req.url === '/health') {
+      // Shared readers get only the nonrestricted health summary — no call
+      // ring, control owner/lastAction, or tool bodies. Private liveness
+      // detail belongs to authenticated host routes, not this port.
+      const health = readHealth(healthDir)
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify({ ok: true, mcp: '/mcp', cdp: '/cdp', ...stats(), diagnosticsPushedAt }))
+      res.end(JSON.stringify({ ok: true, health, observedAt: health?.observedAt ?? null }))
       return
     }
     // HITL control endpoint: the DSH pane reaches this through the host's
@@ -1053,62 +1085,18 @@ export function createBridge(port = PORT, env = process.env) {
       })
       return
     }
-    // Host → bridge push. The dsh host is on the same loopback; the port is
-    // only published on 127.0.0.1. Reject browser-shaped requests (Origin)
-    // and bound the payload so this endpoint cannot be used to grow memory.
-    if (req.url === '/diagnostics' && (req.method === 'POST' || req.method === 'GET')) {
+    // Public health projection. The only writer is the trusted host owner
+    // over `container exec` (dnls.control/1, /run/dnls-public-health.json) —
+    // never the published HTTP port. POST is refused outright with zero
+    // mutation: no writer election, no history merge, no accepted flag.
+    if (req.url === '/diagnostics') {
       if (req.method === 'GET') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ ok: true, pushedAt: diagnosticsPushedAt, diagnostics: lastDiagnostics }))
+        res.end(JSON.stringify({ ok: true, health: readHealth(healthDir) }))
         return
       }
-      if (req.headers.origin || (req.headers['content-type'] || '').indexOf('application/json') === -1) {
-        res.writeHead(403)
-        res.end()
-        return
-      }
-      let body = ''
-      req.on('data', (chunk) => {
-        body += chunk
-        if (body.length > 512 * 1024) { req.destroy() }
-      })
-      req.on('end', () => {
-        try {
-          const parsed = JSON.parse(body)
-          if (!parsed || typeof parsed !== 'object') throw new Error('not an object')
-          // Two hosts can push to one engine (desktop + a dev profile). Keep the
-          // richest history instead of letting an older host erase it.
-          const prev = lastDiagnostics?.history
-          const next = parsed?.history
-          if (prev && (!next || (next.entries?.length || 0) < (prev.entries?.length || 0))) parsed.history = prev
-          // Writer election: two dsh hosts share one container bridge (desktop +
-          // a dev profile). Both may report the same httpBase and engineAlive —
-          // the peer auto-adopts the container — so rank by kite ownership:
-          // the host that started the kite reports phase:"running" and drives
-          // the page; a peer that merely probes the engine stays "idle". Sender
-          // identity is storePath (unique per host install), not httpBase.
-          const rankOf = (d) => {
-            const phase = d?.plugin?.phase
-            const own = phase === 'running' ? 2 : phase === 'suspended' ? 1 : 0
-            const alive = (d?.engine?.engineAlive === true || d?.engine?.ok === true) ? 1 : 0
-            return own * 2 + alive
-          }
-          const senderId = String(parsed?.plugin?.storePath || parsed?.plugin?.httpBase || '?')
-          const prevSenderId = String(lastDiagnostics?.plugin?.storePath || lastDiagnostics?.plugin?.httpBase || '')
-          const wins = lastDiagnostics == null
-            || rankOf(parsed) > rankOf(lastDiagnostics)
-            || (rankOf(parsed) === rankOf(lastDiagnostics) && senderId === prevSenderId)
-          if (wins) {
-            lastDiagnostics = parsed
-            diagnosticsPushedAt = new Date().toISOString()
-          }
-          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-          res.end(JSON.stringify({ ok: true, at: diagnosticsPushedAt, writer: prevSenderId || null, accepted: wins }))
-        } catch (error) {
-          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
-          res.end(JSON.stringify({ ok: false, error: String(error?.message || error) }))
-        }
-      })
+      res.writeHead(403)
+      res.end()
       return
     }
     res.writeHead(404)

@@ -1448,6 +1448,70 @@
       "id": "dnms.perf-review.host",
       "channel": "http",
       "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/fleet",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "FLEET_ROUTE (P7) — dnls.control/1 read projection: per-env {envId,complete,rows} of visible managed sandboxes. Visibility filtered before any probe; unproven rows report generation:null and state unknown. No paths, credentials or bodies.",
+      "id": "dnls.fleet",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/sandboxes",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "SANDBOXES_ROUTE (P7) — dnls.control/1 paged flat list of visible managed sandbox projections (declared page/limit/offset/envId query keys only). Rows filtered by principal visibility before count/sort/page; stable order.",
+      "id": "dnls.sandboxes",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/inspect",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "INSPECT_ROUTE (P7) — dnls.control/1 single-object detail via ?sandboxId=: allowlisted projection plus actual service publications and scoped usage summary (operator, history-granted). No executable payload, mounts or env.",
+      "id": "dnls.inspect",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/processes",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "PROCESSES_ROUTE (P7) — dnls.control/1 operator+canUse process table via ?sandboxId=: verified running locator+generation+volume before AND after one constant in-guest /proc reader; returns pid/ppid/name/state/rssBytes sorted, bounded, accurate truncated flag. Non-running states distinguish unknown/stopped/missing.",
+      "id": "dnls.processes",
+      "channel": "http",
+      "match": "exact"
     }
   ]
 }

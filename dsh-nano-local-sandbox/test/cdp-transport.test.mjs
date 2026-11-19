@@ -37,6 +37,15 @@ test('production command budgets preserve slow navigation and screenshot work', 
   assert.deepEqual(CDP_TIMEOUTS, { connect: 4000, call: 20000, navigate: 45000, screenshot: 30000 })
 })
 
+test('a withdrawn non-adjacent relay cannot redirect CDP to the adjacent listener or a private page', async () => {
+  const { Socket, sockets } = socketFixture(() => {}, { open: false })
+  const connecting = connectCdp('http://127.0.0.1:40000', { WebSocket: Socket, relayUrl: 'ws://127.0.0.1:40002/cdp' })
+  sockets[0].fail()
+  await assert.rejects(connecting)
+  assert.deepEqual(sockets.map(s => s.url), ['ws://127.0.0.1:40002/cdp'])
+  await assert.rejects(ensureClient({}, 'http://127.0.0.1:40000'), /verified CDP bridge/)
+})
+
 test('method-aware transport budgets allow delayed navigation and screenshots', async (t) => {
   const { Socket, sockets } = socketFixture((frame, socket) => socket.replyAfter(frame, { method: frame.method }, 20))
   const client = await connectCdp('http://fixture.invalid', {

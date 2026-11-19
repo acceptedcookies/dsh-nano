@@ -1,0 +1,24 @@
+{
+  "schema": "dnpr.declaration/1",
+  "plugin": "nano-progress-report",
+  "keys": {
+    "spans": [
+      "progress-subscribe",
+      "row-render"
+    ],
+    "tracks": [],
+    "usage": [
+      "tab-open",
+      "filter-apply",
+      "row-expand",
+      "load-older"
+    ],
+    "hostSpans": []
+  },
+  "buckets": [
+    {
+      "attr": "data-npr",
+      "bucket": "progress-row"
+    }
+  ]
+}

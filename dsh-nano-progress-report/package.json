@@ -1,0 +1,56 @@
+{
+  "name": "dsh-nano-progress-report",
+  "version": "0.1.0",
+  "description": "Per-session Progress workbench tab: execution timeline, type/status filter, tasks and jobs tracking.",
+  "type": "module",
+  "icon": "./icon.svg",
+  "main": "./index.js",
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "AGENTS.md",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "lib/host.js",
+    "lib/client.js",
+    "lib/perf-declaration.js"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.5 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-job-controller"
+      ]
+    }
+  },
+  "devDependencies": {
+    "esbuild": "0.25.0",
+    "dsh-performance-review": "file:../packages/dsh-performance-review",
+    "dsh-interface": "file:../packages/dsh-interface"
+  }
+}

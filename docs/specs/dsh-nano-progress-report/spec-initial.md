@@ -11,10 +11,10 @@
 | 包名 | `dsh-nano-progress-report` |
 | 插件 id | `nano-progress-report` |
 | 缩写 | `[DNPR]` |
-| 类型 | dsh overlay 插件，**client-only**（无宿主路由、无宿主状态） |
+| 类型 | [dsh] overlay：浏览器进度视图 + 宿主只读摘要；无宿主路由 |
 | 平台 | web（desktop 同页面体系自动跟随，不单独声明） |
-| dsh 引擎 | `>=0.2.2-rc.1 <0.3.0`（与仓库活跃包对齐，以 `package.json` 为准） |
-| 挂载面 | `sidebar.right.pane.tab`（右侧工作台 page tab，kind=`progress`） |
+| dsh 引擎 | `>=0.2.2-rc.5 <0.3.0`（以 `package.json` 为准） |
+| 挂载面 | `conversation.view` 主入口、会话头部动作和 `sidebar.right.pane.tab`（kind=`progress`） |
 | 数据面 | `uiConversation.events/views` 注册自建 view target `'progress'`；`session.projections.faceOf('todos')`；`ctx.jobs` |
 | 视图前缀 | CSS/类名前缀 `npr-`；根标记 `data-nano-progress-report="1"` |
 
@@ -47,14 +47,14 @@ devin-cloud-session 的 Progress 视图（用户提供的两张 session 截图�
 | R4 Tasks/todo 面板 | 插件（client） | `session.projections.faceOf('todos')` 官方投影已带 turn 清零语义与 counts，零成本只读 |
 | R5 Jobs（后台任务）面板 | 插件（client） | `ctx.jobs`（`dsh-api-job-controller`）是第三方可读服务面：`watchRows(sessionId)` + `state.rows` |
 | R6 事件数据本身 | **宿主（不得碰）** | 会话事件流是唯一真源；插件只投影，不复制、不写、不重放 |
-| R7 页面组合/宿主路由 | **宿主（上层建筑归host）** | DNPR 无宿主路由、无宿主状态文件；`index.js` 为空宿主壳 |
+| R7 页面组合/宿主路由 | **宿主（上层建筑归host）** | [DNPR] 不开路由或自建状态文件；宿主摘要独立于页面，见 §9 |
 | R8 工具呈现组件复用 | 槽位 `tool.call.toolview` | 工具行展开详情时按 keyed slot 复用宿主 toolview，不自绘参数/结果面板 |
 
 被否决的路径（登记，防回摆）：
 
 - **读 trajectory target 的快照**：`target('trajectory')` 的 `ConversationViewSnapshotMap` 键是 TS 合并类型，跨包消费等于把渲染绑定在另一插件的私有结构上；且 trajectory 未启用时无数据。**否决**，自建 `'progress'` target。
 - **从 chat DOM / tool row DOM 反向采集**：违反 [UI 宿主优先] 禁条（不得嫁接宿主内部 DOM）。**否决**。
-- **宿主路由 + 服务端投影**：事件已在 client 装配引擎内，服务端再投影是双重真源 + 双份序列化。**否决**。
+- **宿主路由 + 服务端重建浏览器时间线**：事件已在 client 装配引擎内，不再复制一份面向浏览器的时间线。§9 的宿主摘要不回送客户端。
 - **自建 IndexedDB/localStorage 事件副本**：违反 [单一真源]——允许落盘的只有 consumption receipt（过滤词、折叠态这类纯视图态）。**否决**。
 - **改写/接管 builtin kind**：`progress` 是全新 kind，不接管 `files`/`guide`/`terminal`。
 
@@ -251,11 +251,12 @@ token 组合为 AND；无 token 时纯文本检索。
 ```
 dsh-nano-progress-report/
 ├─ package.json            name/engines.dsh/files/dsh.client.inject/"test":"node --test test/*.mjs"
-├─ index.js                空宿主壳：export const name='nano-progress-report'; apply(ctx){}
+├─ index.js                宿主入口，导出 lib/host.js
 ├─ cordis.patch.yml        name: dsh-nano-progress-report，插入插件 id
 ├─ icon.svg
 ├─ locale/en.json zh.json
-├─ scripts/build-client.mjs esbuild：src/client → lib/client.js（IIFE+ModuleLoader 包装）
+├─ scripts/build-client.mjs esbuild：src/host → lib/host.js；src/client → lib/client.js（IIFE+ModuleLoader 包装）
+├─ src/host/               宿主私有投影、摘要与 PromptContext
 ├─ src/client/
 │  ├─ index.js             inject/apply：locale→view target+definitions→tab type+body→guide→menu item
 │  ├─ i18n.js  styles.js   npr- 前缀样式与令牌（--npr-* 映射 --dsw-*）
@@ -338,7 +339,7 @@ node test/live/tab.live.mjs
 
 - `scripts/check-ui-rules.mjs` `PLUGINS` 表登记 `{abbr:'npr', dir:'dsh-nano-progress-report', src:'src/client', prefixes:['npr-']}`——自动受 U1–U10（禁 `[class*=`、`:has()` 嫁接、禁手绘控件、令牌校验）。
 - `scripts/test-all.mjs` 自动收 `npm test`。
-- `npm pack --dry-run` 逐项核 `files`（`index.js`/`cordis.patch.yml`/`icon.svg`/`locale`/`lib/client.js`/`src`/`test`/`AGENTS.md`）。
+- `npm pack --dry-run` 核对 `files`：`index.js`、`cordis.patch.yml`、`icon.svg`、`locale`、`lib/{client,host,perf-declaration}.js`、`AGENTS.md`；`src` 和 `test` 不进包。
 
 ## 8. 风险与未决
 
@@ -351,7 +352,16 @@ node test/live/tab.live.mjs
 | `tool.call.toolview` 无注册的工具展开 | GenericToolCard 兜底 + 原始 JSON 只读视图（`textOf`） |
 | ego-browser 在 CI/无头环境不可用 | live 测试全部 skip 化（`exit 0`），不进 test-all gate |
 
-## 9. 不做（范围外）
+## 9. 单会话宿主摘要与进度锚（P1/P2）
+
+2026-11-19 按 [业主] 前序 TODO 继续：保留 P0，先做 P1 只读宿主投影，再做 P2 模型可见进度锚并把本包下限抬至 rc.5；随后验证与收口。P3 保持暂缓。
+
+- **P1**：复用宿主 `todos` 投影、goal 服务和 jobs 服务。通过私有 `sessionProjections` 单元，从本会话已提交的事件补充最近的文件工具变更和尚无匹配成功重试的 Bash 工具失败。不读磁盘历史、不由浏览器时间线反推、不复制原始命令或输出。失败仅指宿主标记的工具失败，不猜测退出码；同命令、同工作目录请求的后续前台结果明确成功时清除。只汇总归本会话的活动 job 以及直接委派的活跃子代理数量，不读取子会话内容。上游 journal 是真源，投影 checkpoint 只是可以丢弃重建的宿主缓存。
+- **P1 限额**：记住最近 8 个去重路径、8 个未恢复的去重失败，以及最多 64 个尚未配对的工具调用；不会补列 Bash 写文件、未配对或缺路径元数据的历史结果。Bash 对照只存调用参数的指纹，不存命令原文；文件路径超过 192 UTF-8 字节就跳过。忽略 fork 继承段的工具事实。
+- **P2**：安装后以宿主可抑制的 `systemPrompt.context()` 可选贡献提供当前组装会话的事实。无 agent 或无进度就不贡献；只写任务数量、goal 阶段/轮次、文件路径、未解决失败数量和活动数，不注入 goal/todo 原文、命令、结果、relay 或其他会话的内容。文件路径作为数据编码；完整贡献最多 600 UTF-8 字节。宿主负责去重、留档和压缩移除后的重新投影，[DNMSC] 与原生压缩都不加专用接线。
+- **P3 暂缓**：跨会话 team/lead 摘要、`progress_status`、HTTP/MCP、跨插件服务和写入重叠告警均不实现。出现具体消费者与权限边界后，另请 [业主] 裁决；不改变 [DNMSC] 切点或台账。
+
+## 10. 不做（范围外）
 
 - 不做 canonical 状态副本、不做事件日志写盘、不做跨 session 聚合；
 - 不做 Devin 侧的 `IDE`/`Watch live`/artifact 预览；

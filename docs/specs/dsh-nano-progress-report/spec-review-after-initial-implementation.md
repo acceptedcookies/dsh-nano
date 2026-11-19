@@ -3,6 +3,8 @@
 > 评审稿，2026-11-19。对象是 [DNPR]（`dsh-nano-progress-report`）初版实现（工作树 `.agents/worktrees/npr-progress-report`，分支 `npr-progress-report`，提交 `e950d9b` / `ba8424f` / `0d8b6f1`）。
 > 问题来自 [业主]：DNPR 目前没有实际消费者，只是给人看的另一种进度视图。能否 (1) 和 async-compact 结合，为截断提供上下文依据；(2) 做成 MCP 或接口服务，让其他插件或 [dsh] 本体读到进度视图；(3) 在 [dsh] 新版的 agent-team 里以上下文的形式出现，给不同成员同步准确的执行进度。
 > 本文先给出带 `file:line` 的事实，再给判断，最后记录本轮的取舍：推进了什么，暂缓了什么，以及暂缓项的 re-open 条件。本文**不是**改约登记。凡标「需 [业主] 裁决」的项，都要等 [业主] 的决定落成 durable 登记后才生效。
+>
+> §0–7 保留初版评审的版本基线与当时的状态；后续执行和验收见 §8，范围以 [spec-initial §9](spec-initial.md#9-单会话宿主摘要与进度锚p1p2) 为准。
 
 ## 0. 结论
 
@@ -37,7 +39,7 @@
 | compaction-basic | — | rc.1 → rc.5 只改了 `summarizer.ts:201` 一处（`LlmError.fromFailure`） | 压缩接缝没有变化，[DNMSC] 不受影响 |
 | team / todo / subagent 文档 | — | `[CTX]` → `[EV5]` 之间这些包的 README、`docs/subsystems/{subagent,compaction,session-query}.md` 逐字节相同（只有 `package.json` 和测试不同） | 下文引用 `[EV5]` 行号，同样适用于 rc.2 / rc.3 |
 
-**兼容性要求**：本仓插件的 `engines.dsh` 是 `>=0.2.2-rc.1 <0.3.0`（`[NPR]/package.json` 的 `engines`），所以任何新能力都必须在 rc.1 上也能退化运行。agent-team 在 rc.1 是 experimental，生产 profile 没有挂载它。因此依赖 `ctx.agentTeams` 的功能只能做成可选（`ctx.get('agentTeams')`，参见 `[EV5]/packages/AGENTS.md`「Optional services use `ctx.get(name)`」）。
+**初版兼容性基线**：当时 `[NPR]/package.json` 的 `engines.dsh` 为 `>=0.2.2-rc.1 <0.3.0`，所以当时评审要求新能力能在 rc.1 退化。agent-team 在 rc.1 是 experimental，生产 profile 没有挂载它。后续 P2 只把 [DNPR] 的下限抬到了 rc.5（§8），没有引入 `ctx.agentTeams` 依赖。
 
 ## 2. DNPR 初版的事实画像
 
@@ -165,7 +167,7 @@ lead 会话 `session-60e08fea…`（56,403 个事件，221 个 turn）的统计�
 
 必须守住的边界：不唤醒成员、不代发消息（尊重 `agent-team/README.md:81`）；不造共享 todo（尊重 `tool-todo/README.md:169`）；不写 `team/task`、不复制任务板；只读本 team 树内的会话。
 
-## 6. 裁决汇总
+## 6. 初版评审时的裁决汇总
 
 | 项 | 状态 | 依据 |
 |---|---|---|
@@ -182,7 +184,7 @@ lead 会话 `session-60e08fea…`（56,403 个事件，221 个 turn）的统计�
 
 附带的仓库事务（不在本轮处理范围内）：根 `AGENTS.md` 的插件缩写表还没有登记 [DNPR]；`npr-progress-report` 分支还没合回 main；main 下有一份未跟踪的 `dsh-nano-progress-report/` 副本，它是 [业主] 的工作区内容，本轮没有动它。
 
-## 7. 本轮执行记录
+## 7. 初版评审时的执行记录
 
 两项都在 `.agents/worktrees/` 下的语义分支上完成并提交，**都还没有合回 main**，等 [业主] 指定合并目标。没有重启或安装任何 dsh 实例。
 
@@ -226,4 +228,20 @@ lead 会话 `session-60e08fea…`（56,403 个事件，221 个 turn）的统计�
 ### 7.3 待 [业主] 处理
 
 - 两个分支的合并目标和时机，以及合并后删除 `dnmsc-relay-verbatim` worktree。
-- §6 里标为「等 [业主] 裁决」的两项（单会话进度锚、team 成员上下文与 lead 成员摘要）。
+- §6 里当时待裁决的两项，后续分别进入 P2 和 P3，见 §8。
+
+## 8. 后续执行：保留 P0，完成 P1/P2，P3 暂缓
+
+本轮只在 `npr-progress-report` 工作树推进 [DNPR]。保留 P0 的时间线、会话内 Progress 标签和右侧 [dsh工作台] 入口；不改 [DNMSC]，不动生产实例。
+
+| 阶段 | 已落地的行为 |
+|---|---|
+| P1 | 宿主私有投影从当前会话已提交事件归约近期文件工具变更和未恢复的 Bash 工具失败，忽略 fork 继承段。与宿主 todo、goal、归属本会话的活动 job 和直接委派的活跃子代理计数合并。不读其他会话的 journal；宿主 checkpoint 可丢弃重建，不是第二份真源。 |
+| P2 | 注册可由宿主抑制的 `nano-progress-report:progress` PromptContext，无事实时不注入。单次贡献最多 600 UTF-8 字节，不含原始命令、输出、任务文字或 relay 正文。[DNPR] 的 `engines.dsh` 提为 `>=0.2.2-rc.5 <0.3.0`；不修改任何压缩器。 |
+| P3 | **暂缓**跨会话 team/lead 摘要、`progress_status`、HTTP/MCP、跨插件服务和观测写入重叠告警。各项只有在确认具体消费者、明确可读范围及权限边界，并由 [业主] 另行裁决后才重开。§3.4 的压缩切点和台账也没有变更。 |
+
+验收记录：
+
+- 包构建与单测 **129/129** 通过，覆盖投影重放、checkpoint、会话隔离和上下文限额。UI 规则的 [DNPR] 行零告警；client、clean-lib、feature-contract 和 route-sensitivity 检查通过。打包预览为 10 个文件，包含 host、client 和 perf 声明，无作者树。
+- 在独立 `DSH_HOME` 的 [dsh] `0.2.2-rc.5` Web profile 安装实际 tarball。宿主探针验证了实时 todo、会话隔离、可选贡献抑制、未变化去重和变化后重发；显式替换 journal 的模型可见消息面后，验证宿主重新发出带替代说明的快照。没有调用模型服务，也没有运行完整压缩流程。
+- 浏览器确认加载了客户端包，可从右侧 [dsh工作台] 的 guide 打开 Progress，看到时间线、过滤框与 Tasks/Jobs 抽屉。探针会话未进入可验收的独立会话视图，所以没有验证会话内 Progress 标签和头部动作的端到端行为。

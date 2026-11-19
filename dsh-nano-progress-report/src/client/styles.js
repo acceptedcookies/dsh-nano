@@ -29,7 +29,7 @@ export const PROGRESS_CSS = `
 .npr-toolbar-icon {
   position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
   display: inline-flex; color: var(--dsw-alias-label-tertiary);
-  pointer-events: none; z-index: 1;
+  pointer-events: none; z-index: var(--nano-layer-local1);
 }
 /* Keep the host field as the host draws it (border, fill, focus ring); this
    sheet only lets it take the toolbar's free width. */

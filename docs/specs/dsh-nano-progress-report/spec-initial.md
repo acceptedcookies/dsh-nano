@@ -188,24 +188,25 @@ export const inject = [
 
 ```
 [dsh工作台] tab（标题由宿主 tab 条渲染；插件不自绘 head）
-└─ [data-nano-progress-report][data-npr=root]        bg-base，flex column（根无自有类）
-   ├─ .npr-toolbar  34px，border-bottom l3
-   │   ├─ IconSearchOutlineRegular 14px（label-tertiary）
-   │   ├─ host Input[type=search]  .npr-search（26px；边框/底色/焦点由宿主字段原生绘制；放大镜在字段内，左/右 inset 10/6px 对齐 tab 条）
+└─ [data-nano-progress-report][data-npr=root]        bg-base，flex column
+   ├─ .npr-toolbar  38px，border-bottom l3
+   │   ├─ 过滤 Button + host Menu（工作条左端，左 inset 10px；状态/类型多选，选中打勾）
+   │   ├─ host Input[type=search]  .npr-search（26px，放大镜在字段内、紧跟过滤按钮；边框/底色/焦点由宿主字段绘制）
    │   ├─ 清除 Button（ghost，仅有过滤文本时）
-│   ├─ 过滤 Button + host Menu（状态/类型多选，选中打勾，计数在右侧）
    │   └─ .npr-stats（仅有过滤文本时：`n/total`）
    ├─ .npr-flow  flex:1，滚动
    │   ├─ .npr-older（hasMore：host Button ghost sm「Load older」，11px tertiary）
-   │   └─ host AnimatedRows(.npr-rows) → .npr-row*（data-row-key）
-   │        └─ host DisclosureRow（leading glyph / title / headerAccessory=56px 右对齐时间列 + 失败告警）
-│   ├─ .npr-turn  人类 prompt 在左缘（level 0）
-│   └─ .npr-turn-body  该轮全部步骤右移 18px，左边一条 0.5px 引线（level 1）
-   │             └─ 展开：.npr-detail（11px mono，左 0.5px 引线；args/result/error/reasoning/耗时/子调用）
+   │   ├─ .npr-turns（无过滤时）
+   │   │   └─ .npr-turn
+   │   │        ├─ opener Row（level 0，人类 prompt 在左缘）
+   │   │        └─ .npr-turn-body（右移 18px，左侧 0.5px 引线）
+   │   │             └─ Row（level 1）→ host DisclosureRow（glyph / title / 56px 右对齐时间列 + 失败告警）
+   │   │                  └─ 展开：.npr-detail（11px mono，左 0.5px 引线）
+   │   └─ host AnimatedRows(.npr-rows)（有过滤时，扁平列表）
    └─ .npr-taskbar  顶边可拖拽；bg-layer-1 + 上边框
         ├─ .npr-grip  6px，role=separator，cursor row-resize，88px … 60%vh
-        ├─ host DisclosureRow 头部 30px：checklist 图标 + `Tasks` + 右侧 56×3px meter + `N/M done` + `Jobs N` 文本开关（仅有 job）
-        └─ .npr-taskbar-body：TasksView（24px 行：绿勾/spinner/空心圈 + `#n` + 12px 文本）/ JobsView
+        ├─ host DisclosureRow 头部 30px：checklist + `Tasks` + 右侧 56×3px meter + `N/M done` + `Jobs N`（仅有 job）
+        └─ .npr-taskbar-body：TasksView（26px 行：绿勾/spinner/空心圈 + `#n` + 12px 文本 + 完成时间）/ JobsView
 ```
 
 ### 4.1 行型 → 视觉语义

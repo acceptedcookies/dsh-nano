@@ -163,8 +163,10 @@ async function main() {
     return {
       root: { x: Math.round(root.x), y: Math.round(root.y), right: Math.round(root.right), bottom: Math.round(root.bottom) },
       tabBottom: tablist ? Math.round(tablist.getBoundingClientRect().bottom) : null,
-      searchLeft: Math.round(wrap?.getBoundingClientRect().left ?? 0),
+      filterLeft: Math.round(filter?.getBoundingClientRect().left ?? 0),
       filterRight: Math.round(filter?.getBoundingClientRect().right ?? 0),
+      searchLeft: Math.round(wrap?.getBoundingClientRect().left ?? 0),
+      searchRight: Math.round(wrap?.getBoundingClientRect().right ?? 0),
       viewportH: window.innerHeight,
       barH: Math.round(bar?.getBoundingClientRect().height ?? 0),
       searchH: Math.round(wrap?.getBoundingClientRect().height ?? 0),
@@ -183,11 +185,11 @@ async function main() {
       && chrome.inputType === 'search'
       && chrome.searchBorder !== '0px none' && chrome.searchBg !== 'rgba(0, 0, 0, 0)',
     JSON.stringify(chrome).slice(0, 150))
-  record('toolbar/search/filter obey the tab-bar insets',
-    Boolean(chrome) && chrome.barH === 38 && chrome.searchLeft === chrome.root.x + 10
-      && chrome.filterRight === chrome.root.right - 6 && chrome.root.y === chrome.tabBottom
-      && chrome.root.bottom === chrome.viewportH,
-    chrome ? JSON.stringify({ barH: chrome.barH, searchLeft: chrome.searchLeft, filterRight: chrome.filterRight, rootY: chrome.root.y, tabBottom: chrome.tabBottom, bottom: chrome.root.bottom, vh: chrome.viewportH }) : '')
+  record('filter sits at the left inset and the search keeps the right inset',
+    Boolean(chrome) && chrome.barH === 38 && chrome.filterLeft === chrome.root.x + 10
+      && chrome.searchLeft === chrome.filterRight + 6 && chrome.searchRight === chrome.root.right - 6
+      && chrome.root.y === chrome.tabBottom && chrome.root.bottom === chrome.viewportH,
+    chrome ? JSON.stringify({ barH: chrome.barH, filterLeft: chrome.filterLeft, filterRight: chrome.filterRight, searchLeft: chrome.searchLeft, searchRight: chrome.searchRight, rootX: chrome.root.x, rootRight: chrome.root.right, rootY: chrome.root.y, tabBottom: chrome.tabBottom, bottom: chrome.root.bottom, vh: chrome.viewportH }) : '')
   record('no goal band, group heads or status strip',
     Boolean(chrome) && !chrome.goal && !chrome.groups && !chrome.status && !chrome.drawer,
     chrome ? `goal=${chrome.goal} groups=${chrome.groups} status=${chrome.status}` : '')

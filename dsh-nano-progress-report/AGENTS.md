@@ -106,7 +106,7 @@ dsh plugin --profile web add <spec>
 
 宿主优先，不自造风格。三份参照：
 
-1. **宿主 primitive**：行用 `DisclosureRow`（28px 行、hover 换色、running shimmer、折叠 chevron），搜索用 `Input`（38px 工具条里 26px 宿主字段，放大镜在字段内，边框/底色/焦点不重画；左侧 10px、右侧 6px 与上方 tab 条一致），清空/加载更早/Jobs 切换用 `Button`（ghost），过滤按钮打开宿主 `Menu`（状态/类型多选，选中项打勾），回合结构用 `Turn`（prompt level 0 + 18px 缩进的 level 1 步骤，左引线），Tasks 状态用 `StateDot` + catalog 的 `IconCheckCircleFillRegular` / `IconCheckCircleOutlineRegular`，动态列表用 `AnimatedRows`，相对时间用 `relativeTime`，全部图标取 `Icon*` catalog。
+1. **宿主 primitive**：行用 `DisclosureRow`（28px 行、hover 换色、running shimmer、折叠 chevron），过滤按钮在工具条左端（左 inset 10px），搜索用 `Input`（38px 工具条里 26px 宿主字段，放大镜在字段内、紧跟过滤按钮，右缘 6px；边框/底色/焦点不重画），清空/加载更早/Jobs 切换用 `Button`（ghost），过滤按钮打开宿主 `Menu`（状态/类型多选，选中项打勾），回合结构用 `Turn`（prompt level 0 + 18px 缩进的 level 1 步骤，左引线），Tasks 状态用 `StateDot` + catalog 的 `IconCheckCircleFillRegular` / `IconCheckCircleOutlineRegular`，动态列表用 `AnimatedRows`，相对时间用 `relativeTime`，全部图标取 `Icon*` catalog。
 2. **devin Progress 的阅读顺序**：搜索行 → 回合（人类 prompt 在左缘，该轮步骤右移 18px 并带一条 0.5px 引线）→ Tasks 区（整条 30px 头部都是折叠命中区）。回合之间没有卡片/色块/计数头；没有 goal banner、状态带或抽屉分段控件。
 3. **右侧时间 gutter**：相对时间不是标题后缀——每行尾部预留 56px 固定列，右对齐、`tabular-nums`、`margin-left:auto` 推到面板右缘，形成一条时间轴；失败告警 glyph 放在时间左侧，不影响列的右缘。
 4. **安静的文字层级**：12px 常规字重，人类输入/agent 文本 `label-primary`，机器步骤 `label-secondary`，边界（turn/job/wait）`label-tertiary`，lifecycle `label-dimmed`；失败行只把标题和 glyph 换成 `state-error`，不加底色、不加左条。shell 命令与展开的 payload 用 `--dsh-font-family-code`，detail 11px、左侧 0.5px 引线，无卡片底色。

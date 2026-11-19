@@ -159,6 +159,29 @@ export default function ProgressBody(props) {
 
   return h('div', { 'data-nano-progress-report': '1', 'data-npr': 'root' },
     h('div', { className: 'npr-toolbar', 'data-npr': 'toolbar' },
+      h(Menu, {
+        open: filterOpen,
+        anchor: h(Button, {
+          variant: 'ghost',
+          size: 'sm',
+          className: 'npr-filter',
+          'data-npr': 'filter-toggle',
+          'aria-label': t('filter.button'),
+          'aria-expanded': filterOpen ? 'true' : 'false',
+          icon: h(IconSlidersTwoOutlineRegular, { size: 14 }),
+          onClick: () => setFilterOpen(open => !open),
+        }),
+        items: menuItems,
+        selectedIds: selectedTokens,
+        selection: 'check',
+        align: 'start',
+        side: 'bottom',
+        onSelect: (id) => {
+          if (id === 'clear') { onQuery(''); return }
+          onQuery(toggleMenuToken(query, id))
+        },
+        onClose: () => setFilterOpen(false),
+      }),
       h('div', { className: 'npr-search-wrap' },
         h('span', { className: 'npr-toolbar-icon', 'aria-hidden': 'true' },
           h(IconSearchOutlineRegular, { size: 14 })),
@@ -179,30 +202,7 @@ export default function ProgressBody(props) {
           onClick: () => onQuery(''),
         })
         : null,
-      stats !== '' ? h('span', { className: 'npr-stats', 'data-npr': 'stats' }, stats) : null,
-      h(Menu, {
-        open: filterOpen,
-        anchor: h(Button, {
-          variant: 'ghost',
-          size: 'sm',
-          className: 'npr-filter',
-          'data-npr': 'filter-toggle',
-          'aria-label': t('filter.button'),
-          'aria-expanded': filterOpen ? 'true' : 'false',
-          icon: h(IconSlidersTwoOutlineRegular, { size: 14 }),
-          onClick: () => setFilterOpen(open => !open),
-        }),
-        items: menuItems,
-        selectedIds: selectedTokens,
-        selection: 'check',
-        align: 'end',
-        side: 'bottom',
-        onSelect: (id) => {
-          if (id === 'clear') { onQuery(''); return }
-          onQuery(toggleMenuToken(query, id))
-        },
-        onClose: () => setFilterOpen(false),
-      })),
+      stats !== '' ? h('span', { className: 'npr-stats', 'data-npr': 'stats' }, stats) : null),
 
     h('div', { className: 'npr-flow', 'data-npr': 'flow' },
       hasMore

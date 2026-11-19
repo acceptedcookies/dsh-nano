@@ -1986,6 +1986,18 @@ test('T17 step compensation: host notices skipped, header honest, request carrie
   goal.append('user/message', { content: [{ type: 'text', text: '<goal_round>do it</goal_round>' }], source: { kind: 'goal' } })
   assert.equal(currentTurnOpeningRequest(goal), '<goal_round>do it</goal_round>')
 
+  const relay = makeSession('s-verbatim-relay')
+  relay.append('turn/start', { turn: 't-1' })
+  relay.append('user/message', { content: [{ type: 'text', text: 'The working directory changed.' }], source: { kind: 'working-directory' } })
+  relay.append('user/message', { content: [{ type: 'text', text: 'Agent worker-2 finished.' }], source: { kind: 'subagent-settled', form: 'notice', senderSessionId: 'c-2' } })
+  relay.append('user/message', { content: [{ type: 'text', text: 'Agent lead sent a message:\n修复登录页' }], source: { kind: 'agent-message', form: 'relay', senderSessionId: 'lead' } })
+  assert.equal(currentTurnOpeningRequest(relay), 'Agent lead sent a message:\n修复登录页')
+
+  const settledOnly = makeSession('s-verbatim-settled')
+  settledOnly.append('turn/start', { turn: 't-1' })
+  settledOnly.append('user/message', { content: [{ type: 'text', text: 'Agent worker-2 finished.' }], source: { kind: 'subagent-settled', form: 'notice', senderSessionId: 'c-2' } })
+  assert.equal(currentTurnOpeningRequest(settledOnly), undefined)
+
   const { instructionText } = await import('../lib/compact-region.js')
   const text = instructionText({ verbatimRequest: 'ASK' })
   assert.equal(text.includes('preserved verbatim'), false, 'the request is replaced, not preserved')

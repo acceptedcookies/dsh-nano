@@ -555,14 +555,20 @@ export function selectCompactableRange(session, measurement, options) {
   return null
 }
 
-/** Sources that carry what the user actually asked for in a turn. */
-const USER_INTENT_SOURCES = new Set(['user', 'goal'])
+/**
+ * Sources that carry what was actually asked for in a turn. `agent-message`
+ * is a relay from another agent in the same subagent tree (`send_message`);
+ * in team sessions it is often the only request that opens a turn.
+ * `subagent-settled` is a completion notice, not a request, and stays out.
+ */
+const USER_INTENT_SOURCES = new Set(['user', 'goal', 'agent-message'])
 
 /**
  * The current turn's opening user request, verbatim (-03⑤/P4-02c): the first
  * `user/message` after the latest `turn/start` that the user authored (no
- * `source`, or source kind `user` / `goal`). Host-injected notices such as
- * working-directory changes, runtime context, or skill catalogs are skipped. Echoed into the instruction
+ * `source`, or source kind `user` / `goal`) or that another agent relayed
+ * (`agent-message`). Host-injected notices such as working-directory changes,
+ * runtime context, skill catalogs, or subagent completion notices are skipped. Echoed into the instruction
  * only when the selector lands on a step boundary — the summarizer needs to
  * know that text is shadowed from the model but preserved in the retained
  * tail, and it must never fabricate it.

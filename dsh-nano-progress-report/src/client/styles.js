@@ -157,6 +157,7 @@ export const PROGRESS_CSS = `
     color-mix(in srgb, var(--dsw-alias-link) 40%, transparent) 0 2px,
     transparent 2px);
 }
+.npr-taskbar-head-wrap { flex: none; cursor: pointer; }
 .npr-taskbar-head [data-disclosure-row] { flex: 1 1 auto; min-height: 30px; padding: 0 10px; }
 .npr-taskbar-head [data-disclosure-header] { padding-right: 10px; }
 .npr-taskbar-icon { color: var(--dsw-alias-label-tertiary); }

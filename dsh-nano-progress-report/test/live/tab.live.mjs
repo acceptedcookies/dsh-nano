@@ -380,6 +380,14 @@ async function main() {
     }
     record('jobs switch only when jobs exist', panel?.jobsSwitch === false, 'session has no jobs')
 
+    // A previous run may have left the footer collapsed; the drag sequence
+    // below assumes an expanded body.
+    await page.evaluate(src => {
+      const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
+      if (bar?.dataset.collapsed === 'true') bar.querySelector('[data-npr="tasks-head"]')?.click()
+    }, PANE_SRC)
+    await new Promise(res => setTimeout(res, 300))
+
     // Drag the top edge: floor -> 200 -> +70 -> ceiling -> back.
     const drag = await page.evaluate(async src => {
       const root = eval(src)
@@ -436,6 +444,42 @@ async function main() {
       collapse ? JSON.stringify(collapse) : '')
     record('re-open restores the previous height',
       Boolean(collapse) && collapse.reopenedH === 200, collapse ? `${collapse.collapsedH} -> ${collapse.reopenedH}` : '')
+
+    // The hit target is the whole 30px strip, not just the title text: click
+    // the far-right end (over the count/progress accessory) with a real pointer.
+    const stripPoint = await page.evaluate(src => {
+      const head = eval(src)?.querySelector('[data-npr="tasks-head"]')
+      if (!head) return null
+      const r = head.getBoundingClientRect()
+      return { x: Math.round(r.right - 28), y: Math.round(r.top + r.height / 2) }
+    }, PANE_SRC)
+    if (stripPoint) {
+      await page.mouse.click(stripPoint.x, stripPoint.y)
+      await new Promise(res => setTimeout(res, 300))
+      const stripClosed = await page.evaluate(src => {
+        const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
+        return { collapsed: bar?.dataset.collapsed, h: Math.round(bar?.getBoundingClientRect().height ?? 0) }
+      }, PANE_SRC)
+      // The footer shrank, so the header moved: measure it again before the
+      // second click or the pointer lands in the timeline.
+      const reopenPoint = await page.evaluate(src => {
+        const head = eval(src)?.querySelector('[data-npr="tasks-head"]')
+        if (!head) return null
+        const r = head.getBoundingClientRect()
+        return { x: Math.round(r.right - 28), y: Math.round(r.top + r.height / 2) }
+      }, PANE_SRC)
+      if (reopenPoint) await page.mouse.click(reopenPoint.x, reopenPoint.y)
+      await new Promise(res => setTimeout(res, 300))
+      const stripOpen = await page.evaluate(src => {
+        const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
+        return { collapsed: bar?.dataset.collapsed, h: Math.round(bar?.getBoundingClientRect().height ?? 0) }
+      }, PANE_SRC)
+      record('clicking the empty end of the strip toggles the footer',
+        stripClosed.collapsed === 'true' && stripOpen.collapsed === 'false' && stripOpen.h === 200,
+        JSON.stringify({ closed: stripClosed, open: stripOpen }))
+    } else {
+      record('whole-strip click — skipped', true, 'no task header wrapper')
+    }
     await snap(page, 'footer')
   }
 

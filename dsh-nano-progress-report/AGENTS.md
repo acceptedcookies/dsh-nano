@@ -68,7 +68,7 @@ dsh plugin --profile web add <spec>
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
 2. 重启并刷新后，页面里能找到本包的 client 模块（包名）。找不到说明 client 没进页面。
 3. 打开会话内的「Progress」得到 `[data-nano-progress-report]` 根节点；会话头部动作打开右侧同一会话的进度视图。右栏 guide 与 tab 菜单入口仍可用。
-4. 已运行过 tool 调用的会话在 Progress 里能看到按回合缩进的事件流（人类 prompt 在左缘，该轮步骤右移 18px 并在同一条 0.5px 引线内；提示、shell、文件、工具、todo、turn 按时间排序）：行高 28px、无底色、无 600 字重；glyph 统一三级色，失败行只有红字 + 告警 glyph；人类输入 `label-primary`、机器步骤 `label-secondary`、边界行 `label-tertiary`。底部 Tasks 区头部 30px，可拖拽（下限 88px、上限 60% 视口）、点击头部折叠；Tasks 与 `session.projections.faceOf('todos')` 同步，`N/M done` 与进度条一致。
+4. 已运行过 tool 调用的会话在 Progress 里能看到按回合缩进的事件流（人类 prompt 在左缘，该轮步骤右移 18px 并在同一条 0.5px 引线内；提示、shell、文件、工具、todo、turn 按时间排序）：行高 28px、无底色、无 600 字重；glyph 统一三级色，失败行只有红字 + 告警 glyph；人类输入 `label-primary`、机器步骤 `label-secondary`、边界行 `label-tertiary`。底部 Tasks 区头部 30px，可拖拽（下限 88px、上限 60% 视口）、**整条头部**可点击折叠；Tasks 与 `session.projections.faceOf('todos')` 同步，`N/M done` 与进度条一致。
 
 ## 初次运行
 
@@ -86,7 +86,7 @@ dsh plugin --profile web add <spec>
 | `type:subagent` | subagent 调用行，加上别的 agent 发来的消息（`Agent <name> sent a message:` 开头）与后台 subagent 结束通知；结束通知记录了非 `completed` 的结束原因时算失败 |
 | 点击行 | 就地展开 detail（args 原文、result、耗时、subagent 的 PTC 子调用）；再点收起 |
 | 拖拽 Tasks 区上沿 | 抬升/下移，下限 88px，上限 60% 视口；高度按会话记忆 |
-| 点击 Tasks 头部 | 折叠到只剩 30px 头部；再点回到原高度 |
+| 点击 Tasks 整条头部 | 整条 30px 横条（含右侧计数/进度条）都是命中区；折叠到只剩 30px 头部，再点回到原高度。Jobs 开关自身 stopPropagation |
 | Tasks / Jobs | Tasks 读 `todos` 投影（宿主在 turn 开始时清零，历史仍留在时间线的 `Task list` 行）；Jobs 读 `ctx.jobs`，只有存在 job 时头部才出现 `Jobs N` 文本开关 |
 | 「Load older」 | 调 `session.loadOlder()`，时间线向前翻页 |
 
@@ -106,7 +106,7 @@ dsh plugin --profile web add <spec>
 宿主优先，不自造风格。三份参照：
 
 1. **宿主 primitive**：行用 `DisclosureRow`（28px 行、hover 换色、running shimmer、折叠 chevron），搜索用 `Input`（34px 工具条里 26px 宿主字段，边框/底色/焦点不重画），清空/加载更早/Jobs 切换用 `Button`（ghost），回合结构用 `Turn`（prompt level 0 + 18px 缩进的 level 1 步骤，左引线），Tasks 状态用 `StateDot` + catalog 的 `IconCheckCircleFillRegular` / `IconCheckCircleOutlineRegular`，动态列表用 `AnimatedRows`，相对时间用 `relativeTime`，全部图标取 `Icon*` catalog。
-2. **devin Progress 的阅读顺序**：搜索行 → 回合（人类 prompt 在左缘，该轮步骤右移 18px 并带一条 0.5px 引线）→ Tasks 区。回合之间没有卡片/色块/计数头；没有 goal banner、状态带或抽屉分段控件。
+2. **devin Progress 的阅读顺序**：搜索行 → 回合（人类 prompt 在左缘，该轮步骤右移 18px 并带一条 0.5px 引线）→ Tasks 区（整条 30px 头部都是折叠命中区）。回合之间没有卡片/色块/计数头；没有 goal banner、状态带或抽屉分段控件。
 3. **安静的文字层级**：12px 常规字重，人类输入/agent 文本 `label-primary`，机器步骤 `label-secondary`，边界（turn/job/wait）`label-tertiary`，lifecycle `label-dimmed`；失败行只把标题和 glyph 换成 `state-error`，不加底色、不加左条。shell 命令与展开的 payload 用 `--dsh-font-family-code`，detail 11px、左侧 0.5px 引线，无卡片底色。
 
 Tasks 区是 devin 的 footer：`bg-layer-1` + 上边框，30px 头部（`DisclosureRow`：checklist 图标 + `Tasks` + 右侧 56×3px 进度条 + `N/M done`），任务行 26px（完成绿勾 / 进行中宿主 spinner / 待办空心圈 + `#n` + 12px 文本 + 右侧完成时间）。完成时间取自事件流中该任务首次以 `completed` 出现在 `todo/write` 快照的时间；窗口内没有就只写 `完成`，不伪造。进度条是唯一本地 primitive，已在 [DESIGN §10](../../docs/specs/dsh-nano-ui/DESIGN.md) 登记 `nano-ui-exempt`。

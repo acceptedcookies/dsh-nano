@@ -75,7 +75,11 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
         className: 'npr-taskbar-jobs',
         'data-npr': 'tasks-view',
         'aria-pressed': active === 'jobs',
-        onClick: () => onView(active === 'jobs' ? 'tasks' : 'jobs'),
+        onClick: (event) => {
+          // The whole header toggles; the Jobs switch is its own action.
+          event.stopPropagation()
+          onView(active === 'jobs' ? 'tasks' : 'jobs')
+        },
       }, active === 'jobs'
         ? t('drawer.tasks')
         : `${t('drawer.jobs')} ${String(jobs.length)}`)
@@ -97,6 +101,14 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
     'aria-label': t('drawer.resize'),
     onPointerDown: startResize,
   }),
+  // The whole 30px strip is the hit target, not just the title text: the
+  // wrapper handles pointer clicks, the host row's leading button keeps the
+  // keyboard path (and stops propagation), and the Jobs switch opts out.
+  h('div', {
+    className: 'npr-taskbar-head-wrap',
+    'data-npr': 'tasks-head',
+    onClick: () => onCollapsed(!collapsed),
+  },
   h(DisclosureRow, {
     icon: h('span', { className: 'npr-icon npr-taskbar-icon', 'aria-hidden': 'true' },
       h(IconChecklistOutlineRegular, { size: 14 })),
@@ -104,14 +116,15 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
     open: !collapsed,
     expandable: true,
     onToggle: () => onCollapsed(!collapsed),
-    expandOnRowClick: true,
+    expandOnRowClick: false,
     className: 'npr-taskbar-head',
     contentClassName: 'npr-taskbar-title-wrap',
     titleClassName: 'npr-taskbar-title',
     chevronClassName: 'npr-taskbar-chev',
     headerAccessory: h('span', { className: 'npr-taskbar-meta', 'data-npr': 'taskbar-meta' }, meta),
-  }, collapsed
+  })),
+  collapsed
     ? null
     : h('div', { className: 'npr-taskbar-body', 'data-npr': 'tasks-body' },
-      active === 'jobs' ? h(JobsView, { jobs, t }) : h(TasksView, { todos, taskTimes, t }))))
+      active === 'jobs' ? h(JobsView, { jobs, t }) : h(TasksView, { todos, taskTimes, t })))
 }

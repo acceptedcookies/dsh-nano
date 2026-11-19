@@ -232,7 +232,7 @@ export const inject = [
 ### 4.2 Tasks 区行为
 
 - 高度 `88px … round(innerHeight × 0.6)`，`box-sizing: border-box`（含上边框），拖拽走 pointer capture。
-- 点击头部（host `DisclosureRow`）折叠到 30px 头，body 从 DOM 移除；再点回到折叠前高度。
+- 点击**整条 30px 头部**（host `DisclosureRow` 的 row + 右侧 accessory 都在命中区内）折叠到 30px 头，body 从 DOM 移除；再点回到折叠前高度。Jobs 文本开关自行 `stopPropagation`，不会误折叠。
 - 状态 `{height, collapsed, view}` 落 `localStorage['dsh-nano-progress-report:tasks']`——纯视图态，不进宿主。
 - **Tasks**：读 `session.projections.faceOf('todos')`（`TodoItem[] | null`）。行 = 状态 glyph（完成 `IconCheckCircleFillRegular` 绿、进行中 `StateDot` spinner、待办 `IconCheckCircleOutlineRegular` 三级色）+ `#n` + 12px 文本 + 右侧完成时间；头部 `N/M done` + 3px meter。完成时间不是投影字段，而是从事件流里该任务首次以 `completed` 出现在 `todo/write` 快照的事件时间得出（窗口内没有则只写 `完成`，不编造）。`TodoItem` 只有 `content`/`status`，**不伪造完成时间或 id**。投影在 `turn/start` 被宿主清零——历史仍留在时间线的 `Task list` 行，这是宿主语义，不是丢数据。
 - **Jobs**：读 `ctx.jobs`（先 `watchRows`）；只有存在 job 时头部才出现 11px 文本开关，无 job 时不渲染该开关。

@@ -119,7 +119,7 @@ describe('official primitives drive the chrome', () => {
   })
 
   it('the task bar is a host DisclosureRow over a pointer-resizable grip', () => {
-    expect('src/client/view/TasksSection.jsx', ['DisclosureRow', "role: 'separator'", 'setPointerCapture', "'progressbar'"])
+    expect('src/client/view/TasksSection.jsx', ['DisclosureRow', "role: 'separator'", 'setPointerCapture', "'progressbar'", "'tasks-head'", 'expandOnRowClick: false', 'stopPropagation'])
     // No segmented control: the footer is one list, with a text switch only
     // when the host actually reports jobs.
     assert.ok(!read('src/client/view/TasksSection.jsx').includes('SegmentedControl'))

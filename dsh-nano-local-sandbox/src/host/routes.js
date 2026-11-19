@@ -3,6 +3,7 @@ export const OPEN_ROUTE = '/nano-local-sandbox/open'
 export const SHOT_ROUTE = '/nano-local-sandbox/shot'
 export const HISTORY_ROUTE = '/nano-local-sandbox/history'
 export const PICK_ROUTE = '/nano-local-sandbox/pick'
+export const LAST_ROUTE = '/nano-local-sandbox/last'
 export const EDIT_ROUTE = '/nano-local-sandbox/edit'
 export const SETTINGS_ROUTE = '/nano-local-sandbox/settings'
 export const KITE_ROUTE = '/nano-local-sandbox/kite'
@@ -30,19 +31,20 @@ export const REFS_ROUTE = '/nano-local-sandbox/refs'
 export const CONTROL_ROUTE = '/nano-local-sandbox/control'
 
 import { request as httpRequest } from 'node:http'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { BINDING_TABLE } from '../../lib/bindings.js'
 import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
-import { ensureClient, evaluatePage, navigate, queueNavigation, readElements, resetClient, withPage } from './cdp-elements.js'
+import { ensureClient, evaluatePage, navigate, navigationLedger, queueNavigation, readElements, resetClient, withPage } from './cdp-elements.js'
 import { answerNativeTool, toolsList } from './mcp-sandbox.js'
 import { listProfiles } from './profile-registry.js'
 import { kitesurfImage, kitesurfMounts, kitesurfRecipe, kitesurfRuntimeRoot, profilesRootFor } from './kitesurf-runtime.js'
 import { inspectedRecipe, recipeDrift, recreatePorts } from './kitesurf-reconciliation.js'
 import { createBrowserHistoryAdapter, navigateHistory } from './browser-history-adapter.js'
-import { applyBrowserSettings, applyViewport, browserSettings } from './browser-settings-adapter.js'
+import { applyBrowserSettings, applyViewport, browserSettings, capabilityNotes } from './browser-settings-adapter.js'
 import { createInstanceRegistry } from './instance-registry.js'
 import { policyFingerprint, tupleFromPolicy } from './policy-adapter.js'
 import { ERROR_CATALOG, statusOf } from './error-catalog.js'
@@ -100,6 +102,73 @@ function writeLastPage(deps, url) {
     mkdirSync(stateDirFor(deps), { recursive: true })
     writeFileSync(lastPagePath(deps), JSON.stringify({ url, at: new Date().toISOString() }, null, 2) + '\n')
   } catch { /* a read-only home only costs the restore, not the browse */ }
+}
+
+/** Durable browser state on the instance state volume (the container's mount). */
+function browserStatePath(deps) {
+  return join(stateDirFor(deps), 'browser-state.json')
+}
+
+/**
+ * The single durable copy of history/settings/state-snapshots. Written
+ * atomically (tmp + rename) after every mutation; loaded lazily once per
+ * session so a host restart resumes the same browser, per the owner-approved
+ * persistence decision (1119 G22).
+ */
+function persistBrowserState(session, deps) {
+  try {
+    mkdirSync(stateDirFor(deps), { recursive: true })
+    const doc = {
+      v: 1,
+      at: new Date().toISOString(),
+      history: (session.history || []).slice(-400),
+      settings: {
+        viewport: session.viewport ?? null,
+        userAgent: session.userAgent ?? '',
+        media: session.media ?? null,
+        extraHeaders: session.extraHeaders ?? null,
+        locale: session.locale ?? null,
+        geolocation: session.geolocation ?? null,
+        colorScheme: session.colorScheme ?? null,
+        cookies: session.cookies ?? '',
+        // What the driver actually wrote into the jar — without this the
+        // post-restart clearAppliedCookies can't delete names it no longer
+        // remembers, and stale cookies outlive the settings that set them.
+        cookiesApplied: Array.isArray(session.cookiesApplied) ? session.cookiesApplied : [],
+      },
+      stateSnapshots: session.stateSnapshots || {},
+      kite: { httpBase: session.kiteHttpBase ?? null, mcpPort: session.kiteMcpPort ?? null },
+    }
+    const tmp = `${browserStatePath(deps)}.tmp`
+    writeFileSync(tmp, JSON.stringify(doc, null, 2) + '\n')
+    renameSync(tmp, browserStatePath(deps))
+    session.__browserStateDirty = false
+  } catch { /* persistence is best-effort; the session copy stays correct */ }
+}
+
+/** Load the durable copy once. Settings replay on the next attach/navigation. */
+function restoreBrowserState(session, deps) {
+  if (session.__browserStateLoaded === true) return
+  session.__browserStateLoaded = true
+  try {
+    const doc = JSON.parse(readFileSync(browserStatePath(deps), 'utf8'))
+    if (doc?.v !== 1) return
+    if (Array.isArray(doc.history) && (!Array.isArray(session.history) || session.history.length === 0)) session.history = doc.history
+    const s = doc.settings || {}
+    for (const key of ['viewport', 'userAgent', 'media', 'extraHeaders', 'locale', 'geolocation', 'colorScheme', 'cookies']) {
+      if (s[key] !== undefined && s[key] !== null) session[key] = s[key]
+    }
+    if (Array.isArray(s.cookiesApplied)) session.cookiesApplied = s.cookiesApplied
+    // Rebuild with a null prototype: a durable doc carrying a 'constructor'
+    // key would otherwise leave prototype keys reachable from load lookups.
+    if (doc.stateSnapshots && typeof doc.stateSnapshots === 'object' && !Array.isArray(doc.stateSnapshots)) {
+      const clean = Object.create(null)
+      for (const [key, value] of Object.entries(doc.stateSnapshots)) clean[key] = value
+      session.stateSnapshots = clean
+    }
+    if (doc.kite?.httpBase) session.kiteHttpBase = doc.kite.httpBase
+    if (Number.isInteger(doc.kite?.mcpPort)) session.kiteMcpPort = doc.kite.mcpPort
+  } catch { /* no durable copy yet — fresh environment */ }
 }
 
 /**
@@ -346,18 +415,31 @@ async function observeOnce(session, deps) {
   const name = containerNameFor(session, deps.env || process.env)
   const host = envHostPorts(deps.env || process.env)
   let info = null
+  let inspectFailed = null
   try {
     const inspected = await deps.backend?.inspect?.(name)
     info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort)
-  } catch { info = null }
+  } catch (error) {
+    info = null
+    // A daemon-level inspect failure is NOT "container missing" — that used
+    // to collapse a broken backend into a healthy-looking 'missing'.
+    inspectFailed = error?.errorId || error?.message || 'inspect failed'
+    session.backendError = inspectFailed
+  }
+  // A successful inspect retires the stuck backendError — a recovered daemon
+  // used to keep reporting its earlier failure forever.
+  if (!inspectFailed) session.backendError = null
   const engineRow = info?.ports?.find((p) => p.containerPort === host.engineContainerPort) || null
   const bridgeRow = info?.ports?.find((p) => p.containerPort === host.bridgeContainerPort) || null
   const derived = engineRow ? `http://${engineRow.hostAddress === '0.0.0.0' ? '127.0.0.1' : engineRow.hostAddress}:${engineRow.hostPort}` : null
-  const httpBase = derived || session.httpBase || null
+  // A repointed engine (kite configure) is the authoritative observation
+  // target too — otherwise the pane operates one engine while /status and
+  // /diagnostics keep reading the container's.
+  const httpBase = session.kiteHttpBase || derived || session.httpBase || null
   const httpUp = await engineHttpUp(httpBase, deps)
   const cdpUp = await probeCdp(session, httpBase, httpUp, deps)
-  const state = info?.state || 'missing'
-  const bridgeBase = bridgeControlBase({ httpBase })
+  const state = info?.state || (inspectFailed ? 'unknown' : 'missing')
+  const bridgeBase = bridgeControlBase({ httpBase, kiteMcpPort: session.kiteMcpPort })
   const pageRaw = await probePage(session, httpBase, httpUp && cdpUp, deps)
   const pageUrl = pageRaw.ok ? (pageRaw.detail || '') : ''
   const page = !pageRaw.ok
@@ -494,14 +576,20 @@ async function runSelftest(session, deps) {
       const dom = await probeDom(session, snap.effective.httpBase, deps)
       blank = dom.skipped === true ? false : true
       const cap = await withPage(client, (sessionId) => client.send('Page.captureScreenshot', { format: 'png' }, sessionId))
-      shot = typeof cap?.data === 'string' && cap.data.length > 0
+      // The pin answers a failed capture in-band: {data: TINY_PNG, error}.
+      // A non-empty data string with an error attached is NOT a real frame.
+      shot = typeof cap?.data === 'string' && cap.data.length > 0 && !cap?.error
+      if (cap?.error) shot = { error: String(cap.error).slice(0, 120) }
     } catch { /* each probe reports its own failure below */ }
   }
   push('engine-version', Boolean(version), version || 'unavailable')
   push('page-not-blank', blank === true, blank === null ? 'no page' : blank ? 'has document' : 'about:blank')
-  push('shot-capturable', shot === true, shot === null ? 'no engine' : shot ? 'non-empty frame' : 'empty frame')
+  // A passing shot used to print "engine error: undefined" — the object-shape
+  // branch only fired when cap.error was truthy, but the detail line read the
+  // object regardless. Say what the frame actually is.
+  push('shot-capturable', shot === true, shot === null ? 'no engine' : shot === false ? 'empty frame' : shot === true ? 'frame captured' : `engine error: ${shot.error}`)
 
-  const bridgeBase = bridgeControlBase({ httpBase: snap.effective.httpBase })
+  const bridgeBase = bridgeControlBase({ httpBase: snap.effective.httpBase, kiteMcpPort: session.kiteMcpPort })
   if (snap.checks.bridge?.ok) {
     try {
       const response = await probeHttp(`${bridgeBase}/health`, 900)
@@ -536,12 +624,21 @@ async function prepareEnvironment(session, deps) {
   const image = kitesurfImage(recipe, env)
   let action = 'noop'
   let info = null
+  let inspectFailed = false
   const canInspect = typeof deps.backend?.inspect === 'function'
   if (canInspect) {
     try {
       const inspected = await deps.backend.inspect(name)
       info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort)
-    } catch { info = null }
+      // A running/real container that inspect can't parse is NOT "missing" —
+      // routing it to create() would collide "already exists" the moment the
+      // daemon recovers. Three-way: missing / inspectable / unknown.
+      if (!info && inspected !== undefined && inspected !== null) inspectFailed = true
+    } catch { inspectFailed = true }
+  }
+  if (inspectFailed) {
+    session.lastError = { errorId: 'kitesurf.backend.cli', error: 'container inspect failed or returned unparseable output', at: new Date().toISOString() }
+    return { action: 'blocked', inspectFailed: true, healthy: false, httpBase: null, phase: session.phase }
   }
   if (!info && !canInspect) {
     // Fixture-grade backend without inspect: preserve the legacy "start it"
@@ -624,6 +721,8 @@ async function prepareEnvironment(session, deps) {
   return { action, ...snap }
 }
 
+export const STORAGE_OPS = Object.freeze(['read', 'set', 'delete', 'clear'])
+
 function storageExpression(opts) {
   const scope = opts.scope === 'session' ? 'sessionStorage' : opts.scope === 'cookie' ? 'cookie' : 'localStorage'
   const op = opts.op || 'read'
@@ -635,7 +734,10 @@ function storageExpression(opts) {
   if (op === 'read') return `(()=>{const s=${scope};const m={};for(let i=0;i<s.length;i++){const k=s.key(i);m[k]=s.getItem(k)}return{entries:m}})()`
   if (op === 'set') return `(()=>{${scope}.setItem(${JSON.stringify(String(opts.name || ''))},${JSON.stringify(String(opts.value ?? ''))});return{ok:true}})()`
   if (op === 'delete') return `(()=>{${scope}.removeItem(${JSON.stringify(String(opts.name || ''))});return{ok:true}})()`
-  return `(()=>{${scope}.clear();return{ok:true}})()`
+  if (op === 'clear') return `(()=>{${scope}.clear();return{ok:true}})()`
+  // Unknown ops must never reach the page — callers 400 them first; a reach
+  // here is a bug, and returning clear() would silently wipe the storage.
+  throw Object.assign(new Error(`unknown storage op '${op}'`), { status: 400, errorId: 'kitesurf.storage.op' })
 }
 
 function interactExpression(body) {
@@ -647,11 +749,17 @@ function interactExpression(body) {
     text: body.text ?? body.value ?? '',
     key: body.key || '',
     option: body.option ?? '',
+    x: Number.isFinite(Number(body.x)) ? Number(body.x) : null,
+    y: Number.isFinite(Number(body.y)) ? Number(body.y) : null,
   })
   return `(()=>{
     const a=${arg};
-    const el=document.querySelector(a.selector);
-    if(!el)return{ok:false,errorId:'kitesurf.interact.miss',error:'no element matches '+a.selector};
+    // Coordinate targeting uses elementFromPoint — the route guard's
+    // {x,y} promise is a real target, not a dropped field.
+    const el=a.x!==null||a.y!==null
+      ? document.elementFromPoint(a.x||0,a.y||0)
+      : document.querySelector(a.selector);
+    if(!el)return{ok:false,errorId:'kitesurf.interact.miss',error:a.x!==null?('no element at '+a.x+','+a.y):('no element matches '+a.selector)};
     try{el.scrollIntoView({block:'center',inline:'center'})}catch{}
     const r=el.getBoundingClientRect();
     const cx=r.left+r.width/2,cy=r.top+r.height/2;
@@ -684,18 +792,89 @@ function stateSaveExpression() {
 }
 
 function stateLoadExpression(state) {
-  return `(()=>{const put=(s,o)=>{for(const [k,v] of Object.entries(o||{}))s.setItem(k,v)};put(localStorage,${JSON.stringify(state.localStorage || {})});put(sessionStorage,${JSON.stringify(state.sessionStorage || {})});return{ok:true}})()`
+  // Load replaces the named stores and clears keys the snapshot did not have —
+  // restoring must not leave stale keys from the live page behind.
+  // The saved record also carries `cookie` (document.cookie string) and `url`
+  // (the snapshot's origin): restore the cookie pairs the origin allows and
+  // report the saved url so the caller can decide to navigate back.
+  const cookiePairs = typeof state.cookie === 'string' && state.cookie
+    ? state.cookie.split(';').map((pair) => pair.trim()).filter(Boolean).slice(0, 100)
+    : []
+  return `(()=>{const put=(s,o)=>{const keep=new Set(Object.keys(o||{}));const dead=[];for(let i=0;i<s.length;i++){const k=s.key(i);if(!keep.has(k))dead.push(k)}dead.forEach(k=>s.removeItem(k));for(const [k,v] of Object.entries(o||{}))s.setItem(k,v)};put(localStorage,${JSON.stringify(state.localStorage || {})});put(sessionStorage,${JSON.stringify(state.sessionStorage || {})});const pairs=${JSON.stringify(cookiePairs)};let cookieSet=0;for(const p of pairs){try{document.cookie=p;cookieSet++}catch{}};return{ok:true,url:location.href,cookieSet}})()`
 }
 
-function snapshotExpression() {
-  return `(()=>({url:location.href,title:document.title,count:document.querySelectorAll('*').length,tree:(document.body&&document.body.innerText||'').slice(0,500),refs:{},truncated:false}))()`
+/**
+ * Snapshot yields a numbered ref table — the shared handle pane and agent
+ * both dereference (@N → CSS selector). Refs cover interactable + semantic
+ * elements with a deterministic CSS path so /pick/@N, /edit/@N and
+ * /interact/@N all land on the same node a human sees.
+ */
+function snapshotExpression(maxNodes = 120) {
+  const cap = Math.max(1, Math.min(Number(maxNodes) || 120, 500))
+  return `(()=>{
+    const path=(el)=>{if(!el||el.nodeType!==1)return'';if(el.id)return'#'+CSS.escape(el.id);const parts=[];let n=el;while(n&&n.nodeType===1&&n.tagName!=='HTML'){const tag=n.tagName.toLowerCase();const cls=(typeof n.className==='string'?n.className.trim():'').split(/\\s+/).filter(Boolean).slice(0,2).map(c=>'.'+CSS.escape(c)).join('');let sel=tag+cls;const p=n.parentElement;if(p){const sib=[...p.children].filter(c=>c.tagName===n.tagName);if(sib.length>1)sel+=':nth-of-type('+String(sib.indexOf(n)+1)+')'}parts.unshift(sel);n=p}return parts.join('>')};
+    const wanted='a,button,input,textarea,select,label,[role],[onclick],[contenteditable=true],h1,h2,h3,h4,nav,main,article,section,form,summary';
+    const out={};let i=0;
+    document.querySelectorAll(wanted).forEach((el)=>{if(i>=${cap})return;const r=el.getBoundingClientRect();const ref='@'+(++i);out[ref]={selector:path(el),tag:el.tagName.toLowerCase(),id:el.id||null,cls:typeof el.className==='string'?el.className.trim().slice(0,80):null,text:(el.innerText||el.value||el.getAttribute('aria-label')||'').trim().slice(0,80),role:el.getAttribute('role'),type:el.tagName==='INPUT'?(el.type||'text'):null,href:el.tagName==='A'?(el.getAttribute('href')||null):null,box:{x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.width),h:Math.round(r.height)}}});
+    return{url:location.href,title:document.title,count:document.querySelectorAll('*').length,tree:(document.body&&document.body.innerText||'').slice(0,4000),refs:out,truncated:i>=${cap},capturedAt:new Date().toISOString()}
+  })()`
+}
+
+/**
+ * `@N`, a bare number, or a selector resolve through the last /snapshot's ref
+ * table. The table is page-generation-scoped: refs are dropped on navigate so
+ * a stale handle can't write into a different document.
+ */
+function resolveTarget(session, body = {}) {
+  const ref = body.ref ?? body.target
+  if (ref !== undefined && ref !== null && ref !== '') {
+    const asText = String(ref)
+    // @N / bare number goes through the ref table; a non-numeric string is a
+    // selector, not a ref — the old code 404'd every plain selector sent as
+    // `target`/`ref`.
+    const isRefShape = /^@?\d+$/.test(asText)
+    if (isRefShape) {
+      const key = asText.startsWith('@') ? asText : `@${asText}`
+      // The table is stamped with the page generation that produced it. A
+      // generation check backstops the frameNavigated invalidation so an
+      // event the engine swallowed can't leak a stale handle through.
+      const live = session.refsGen === (session.pageGen || 0) ? session.refs : null
+      const hit = live?.[key]
+      if (hit?.selector) return { selector: hit.selector, ref: key }
+      return { ref: key, miss: true }
+    }
+    return { selector: asText }
+  }
+  // @N carried in the selector field resolves too — the skill contract says
+  // @N is legal in any selector-taking body (wait/pick/edit/evaluate).
+  if (typeof body.selector === 'string' && /^@\d+$/.test(body.selector.trim())) {
+    const key = body.selector.trim()
+    const live = session.refsGen === (session.pageGen || 0) ? session.refs : null
+    const hit = live?.[key]
+    if (hit?.selector) return { selector: hit.selector, ref: key }
+    return { ref: key, miss: true }
+  }
+  if (body.selector) return { selector: String(body.selector) }
+  if (Number.isFinite(Number(body.x)) || Number.isFinite(Number(body.y))) return { coords: { x: Number(body.x) || 0, y: Number(body.y) || 0 } }
+  return {}
 }
 
 /** Browser address input accepts a bare hostname, but CDP requires an
  * absolute HTTP(S) URL. Keep this normalization at the navigation boundary. */
 function navigationUrl(raw) {
   const text = typeof raw === 'string' ? raw.trim() : ''
-  const absolute = /^[a-z][a-z\d+.-]*:/i.test(text) ? text : `https://${text}`
+  // 'example.com:8080/x' parses as scheme 'example.com' — a bare host:port
+  // must not be refused as a bad scheme. Heuristic: a scheme carries '://';
+  // a colon before dots or followed by digits is host:port, prepend https.
+  const schemeMatch = /^([a-z][a-z\d+.-]*):/i.exec(text)
+  let absolute
+  if (!schemeMatch) absolute = `https://${text}`
+  else if (text.startsWith(`${schemeMatch[0]}//`)) absolute = text
+  else {
+    const afterColon = text.slice(schemeMatch[0].length)
+    const bareHost = schemeMatch[1].includes('.') || /^\d/.test(afterColon)
+    absolute = bareHost ? `https://${text}` : text
+  }
   let url
   try { url = new URL(absolute) } catch {
     throw Object.assign(new Error('Enter a valid HTTP(S) address'), { errorId: 'kitesurf.url.scheme', status: 400 })
@@ -706,14 +885,41 @@ function navigationUrl(raw) {
   return url.href
 }
 
-async function readJson(req) {
-  if (req?.body && typeof req.body === 'object') return req.body
+async function readJson(req, limit = 0) {
+  const checkShape = (parsed) => {
+    // Every consumer treats the body as an options object. A JSON array or
+    // scalar is valid JSON but lands as a *write with empty options* (the
+    // /state [1,2] → save-with-side-effects class of bug) — reject it here.
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
+    if (parsed === undefined) return {}
+    throw Object.assign(new Error('request body must be a JSON object'), { status: 400, errorId: 'kitesurf.body.json' })
+  }
+  if (req?.body !== undefined && req?.body !== null) {
+    if (limit > 0 && Buffer.byteLength(JSON.stringify(req.body)) > limit) {
+      throw Object.assign(new Error(`request body exceeds ${limit} bytes`), { status: 413, errorId: 'kitesurf.body.toolarge' })
+    }
+    return checkShape(req.body)
+  }
   const chunks = []
+  let size = 0
   if (req && typeof req[Symbol.asyncIterator] === 'function') {
-    for await (const chunk of req) chunks.push(Buffer.from(chunk))
+    for await (const chunk of req) {
+      size += chunk.length
+      if (limit > 0 && size > limit) {
+        throw Object.assign(new Error(`request body exceeds ${limit} bytes`), { status: 413, errorId: 'kitesurf.body.toolarge' })
+      }
+      chunks.push(Buffer.from(chunk))
+    }
   }
   if (!chunks.length) return {}
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') } catch { return {} }
+  const text = Buffer.concat(chunks).toString('utf8')
+  let parsed
+  try { parsed = JSON.parse(text) } catch {
+    // Malformed JSON must never become an empty patch — an empty patch
+    // silently wiped settings (the 2026-11-18 audit defect).
+    throw Object.assign(new Error('request body is not valid JSON'), { status: 400, errorId: 'kitesurf.body.json' })
+  }
+  return checkShape(parsed)
 }
 
 /**
@@ -741,6 +947,37 @@ async function restoreLastPage(session, deps) {
 }
 
 async function ensureBase(session, deps) {
+  // A repointed engine (kite configure) wins; it was reachability-verified
+  // when stored and is the session's own authoritative pointer. A pointer
+  // restored from the state volume after a host restart must be re-probed
+  // once: the remote engine may have died or the port been reassigned while
+  // we were down — trusting it blindly re-splits "the page the pane sees" and
+  // "the engine every route operates".
+  if (session.kiteHttpBase) {
+    if (session.kiteHttpBaseVerified !== true) {
+      // A repoint is a deliberate config, not a probe artifact: one 900ms
+      // miss must not erase it. Two probing rounds (2.5s budget each) then a
+      // recorded drop — a remote engine deserves the room a transient does.
+      let up = await engineHttpUp(session.kiteHttpBase, deps, 2500).catch(() => false)
+      if (!up) up = await engineHttpUp(session.kiteHttpBase, deps, 2500).catch(() => false)
+      if (!up) {
+        const dead = session.kiteHttpBase
+        delete session.kiteHttpBase
+        delete session.httpBase
+        session.lastError = { errorId: 'kitesurf.engine.connect', error: `configured engine ${dead} did not answer /json/list twice`, at: new Date().toISOString() }
+        // A dead repoint must not resurrect from the state volume on every
+        // restart — forgetting it is only durable if the delete is persisted.
+        persistBrowserState(session, deps)
+      } else {
+        session.kiteHttpBaseVerified = true
+      }
+    }
+    if (session.kiteHttpBase) {
+      session.httpBase = session.kiteHttpBase
+      if (session.phase === 'idle') session.phase = 'running'
+      return session.kiteHttpBase
+    }
+  }
   if (session.httpBase) return session.httpBase
   if (!deps.backend?.inspect) return null
   try {
@@ -755,9 +992,71 @@ async function ensureBase(session, deps) {
   }
 }
 
+/**
+ * Capture the live document, stamp the page-generation-scoped version fields,
+ * and refresh session.lastDom (the record the bridge's sandbox.dom serves).
+ * Returns {url, srcdoc, bytes, stripped, capturedAt, domSeq, generation} or
+ * {error:'empty'|'blank'} so route and push-tick callers share one truth.
+ */
+async function captureDom(session, base, deps) {
+  const client = await clientFor(session, base, deps)
+  const page = await withPage(client, async (sessionId) => {
+    const result = await client.send('Runtime.evaluate', {
+      expression: '(()=>({url:location.href,html:document.documentElement?document.documentElement.outerHTML:""}))()',
+      returnByValue: true,
+    }, sessionId)
+    return result?.result?.value
+  })
+  if (!page?.html) return { error: 'empty' }
+  if (page.url === 'about:blank') return { error: 'blank' }
+  const built = buildSrcDoc({ url: page.url, html: page.html })
+  // domSeq is the pane's staleness cursor: it must only advance when the
+  // captured document actually changed — bumping it on every read makes the
+  // pane's "same-version" guard never hit and rewrites the iframe
+  // (scroll/selection lost) every poll tick.
+  const hash = createHash('sha1').update(`${built.url}\n${page.html}`).digest('hex').slice(0, 12)
+  if (hash !== session.domHash) {
+    session.domHash = hash
+    session.domSeq = (session.domSeq || 0) + 1
+    // capturedAt is the CONTENT's last-change stamp, not this read's clock —
+    // a per-poll timestamp makes the pane's version signature differ every
+    // tick and rewrites the iframe even though nothing changed.
+    session.domCapturedAt = new Date().toISOString()
+  }
+  const generation = session.pageGen || 0
+  const record = { url: built.url, srcdoc: built.srcdoc, bytes: built.bytes, stripped: built.stripped, capturedAt: session.domCapturedAt, domSeq: session.domSeq, generation }
+  // The bridge's sandbox.dom tool serves the pushed copy of this record.
+  session.lastDom = { url: record.url, bytes: record.bytes, preview: page.html.slice(0, 4000), capturedAt: record.capturedAt, domSeq: record.domSeq, generation }
+  return record
+}
+
+let opSeq = 0
 function send(res, status, body) {
+  // res.__op links the response to the operations row opened in the handler,
+  // so /operations carries status/errorId/duration instead of presence only.
+  if (res.__op) {
+    res.__op.status = status
+    // JSON-RPC failures ride HTTP 200 — body.error.code is the real outcome,
+    // not the transport status.
+    const rpcErr = body?.error && typeof body.error === 'object' ? body.error : null
+    const rpcFail = rpcErr !== null || body?.result?.isError === true
+    res.__op.ok = status < 400 && !rpcFail
+    res.__op.errorId = body?.errorId ?? body?.result?.errorId ?? (rpcErr ? `jsonrpc:${rpcErr.code}` : null)
+    // A clean answer retires the pane's last-error line; only real failures
+    // keep it lit.
+    if (res.__op.ok && res.__session) res.__session.lastError = null
+    res.__op.durationMs = Date.now() - res.__op.startedMs
+    // Errors get a correlatable incidentId — the diagnostic "this route call
+    // failed" receipt an agent can grep in the ops ring (same shape the perf
+    // span events carry). It is echoed BACK on the response so the caller can
+    // find its own row in /operations.
+    if ((status >= 400 || rpcFail) && !res.__op.incidentId) {
+      res.__op.incidentId = `op-${Date.now().toString(36)}-${(++opSeq).toString(36)}`
+      if (body && typeof body === 'object' && !Array.isArray(body)) body.incidentId = res.__op.incidentId
+    }
+  }
   res.statusCode = status
-  res.end(JSON.stringify(body))
+  res.end(body === null || body === undefined ? undefined : JSON.stringify(body))
 }
 
 /**
@@ -767,11 +1066,23 @@ function send(res, status, body) {
  * /nano-local-sandbox/control proxies it: GET merges bridge /health control
  * state, POST {action:takeover|release} toggles the sticky human override.
  */
-function bridgeControlBase(session) {
-  const httpBase = session.httpBase || ''
-  const m = /^https?:\/\/([^:]+):(\d+)/.exec(httpBase)
-  if (!m) return null
-  return `http://${m[1]}:${Number(m[2]) + 1}`
+// Exported for the unit suite: the IPv6 double-bracket bug is invisible to
+// black-box route tests because bridgeFetch swallows the base into network
+// errors — the mapping itself needs a direct assertion.
+export function bridgeControlBase(session) {
+  const httpBase = session?.kiteHttpBase || session?.httpBase || ''
+  // URL() handles [::1] bracketed hosts that the old [^:]+ regex split
+  // mid-address — a real bug once an agent configures an IPv6 httpBase.
+  let parsed
+  try { parsed = new URL(httpBase) } catch { return null }
+  const portNum = Number(parsed.port)
+  if (!Number.isInteger(portNum) || portNum <= 0) return null
+  // A configured mcpPort is authoritative — it only made sense as "stored
+  // but unread" while it was dead config. engine+1 stays the default.
+  const port = Number.isInteger(session?.kiteMcpPort) ? session.kiteMcpPort : portNum + 1
+  // parsed.hostname already carries [] for IPv6 literals — wrapping again
+  // produced http://[[::1]]:8801 and broke every bridge call.
+  return `${parsed.protocol}//${parsed.hostname}:${port}`
 }
 
 async function bridgeFetch(session, pathname, { method = 'GET', body = null, timeoutMs = 2500 } = {}) {
@@ -790,6 +1101,68 @@ async function bridgeFetch(session, pathname, { method = 'GET', body = null, tim
     try { return { status: res.status, data: JSON.parse(text) } } catch { return { status: res.status, data: { ok: false, error: text.slice(0, 200) } } }
   } finally {
     clearTimeout(timer)
+  }
+}
+
+/**
+ * The one diagnostics document. GET /diagnostics, sandbox.diagnostics and the
+ * bridge push all serve this — the "MCP sees an empty world" defect came from
+ * a second, synthetic copy.
+ */
+async function diagnosticsPayload(session, deps, { withCatalog = false } = {}) {
+  const snap = await envSnapshot(session, deps)
+  let targetInfos = []
+  let engineError = null
+  if (snap.engineAlive && snap.httpBase) {
+    try {
+      const client = await clientFor(session, snap.httpBase, deps)
+      const targets = await client.send('Target.getTargets')
+      targetInfos = targets?.targetInfos || []
+    } catch (error) { engineError = error?.errorId || error?.message || 'targets unreachable' }
+  }
+  const hints = []
+  if (snap.container.state === 'missing') hints.push('容器缺失：点「一键准备环境」或 POST /kite {action:start} 创建')
+  else if (snap.container.state !== 'running') hints.push(`容器状态 ${snap.container.state}：一键准备环境启动它`)
+  if (snap.container.state === 'unknown') hints.push(`容器后台不可达：${session.backendError || 'inspect failed'} — 不是"缺失"，先查 daemon`)
+  if (!snap.engineAlive) hints.push('引擎未应答 CDP：容器 running 但引擎僵死时重试 /recover 或重启容器')
+  if (engineError) hints.push(`引擎探测失败：${engineError}`)
+  if (targetInfos.length === 0 && snap.engineAlive) hints.push('无 page target：先 POST /open 打开一个页面')
+  if (snap.checks.page?.ok && snap.checks.dom && !snap.checks.dom.ok) hints.push(`DOM 不可渲染（${snap.checks.dom.detail}）：面板会退回截图模式`)
+  if (snap.checks.bridge && !snap.checks.bridge.ok) hints.push(`MCP 桥不可达（${snap.checks.bridge.detail}）：HITL 控制态与 agent 工具会失败`)
+  const summary = summaryOf(snap)
+  const text = [
+    `Kitesurf 环境诊断 · ${snap.healthy ? '正常' : '异常'}`,
+    `实例 ${snap.containerName} · 容器 ${snap.container.state}`,
+    `引擎 ${snap.effective.httpBase || '—'} · 桥 ${snap.effective.bridgePort || '—'}`,
+    ...summary.map((row) => `${row.skipped ? '○' : row.ok ? '✓' : '✗'} ${row.label}：${row.detail || '—'}`),
+    ...(hints.length ? ['', '建议：', ...hints.map((hint) => `· ${hint}`)] : []),
+  ].join('\n')
+  return {
+    ...snap,
+    ok: true,
+    httpBase: snap.httpBase,
+    // Same resolution order as /status: a configured mcpPort wins over the
+    // inspect-derived bridge port, or /status and /diagnostics disagree.
+    kite: { phase: session.phase, httpBase: snap.effective?.httpBase ?? '', mcpPort: session.kiteMcpPort ?? snap.effective?.bridgePort ?? null },
+    container: snap.container,
+    containerName: snap.containerName,
+    effective: snap.effective,
+    ports: snap.ports,
+    engineAlive: snap.engineAlive,
+    checks: snap.checks,
+    healthy: snap.healthy,
+    summary,
+    text,
+    navigation: navigationLedger(session),
+    targets: targetInfos.map((t) => ({ targetId: t.targetId, type: t.type, url: t.url, title: t.title })),
+    console: (session.console || []).slice(-10),
+    network: (session.network || []).slice(-10),
+    operations: collapseOperations(session.operations || []),
+    history: (session.history || []).slice(-10),
+    settings: browserSettings(session),
+    capabilities: { unsupported: capabilityNotes(session) },
+    ...(withCatalog ? { errorCatalog: ERROR_CATALOG.map((row) => ({ errorId: row.example, status: row.status, cause: row.cause, next: row.next })) } : {}),
+    hints,
   }
 }
 
@@ -861,15 +1234,60 @@ function buildOwners(session, deps) {
     },
     // observability plane — the live session snapshot the routes mutate.
     state: session,
-    // page / cdp planes — the real engine face (null when no page).
+    // diagnostics reads the SAME document GET /diagnostics serves. A null or
+    // {ok:true, data:null} here used to be a silent "everything is empty" lie.
+    diagnostics: { read: async () => diagnosticsPayload(session, deps) },
+    // page / cdp planes — the real engine face, same answer as the HTTP rows.
     page: {
-      dom: async () => { const base = await ensureBase(session, deps); return base ? { url: base } : null },
-      elements: async () => null,
+      dom: async () => {
+        const base = await ensureBase(session, deps)
+        if (!base) return { ok: false, errorId: 'kitesurf.dom.empty', error: 'no engine page' }
+        const client = await clientFor(session, base, deps)
+        return withPage(client, async (sessionId) => {
+          const result = await client.send('Runtime.evaluate', {
+            expression: '(()=>({url:location.href,bytes:document.documentElement?document.documentElement.outerHTML.length:0,root:!!document.documentElement}))()',
+            returnByValue: true,
+          }, sessionId)
+          const value = result?.result?.value
+          if (!value?.root) return { ok: false, errorId: 'kitesurf.dom.empty', error: 'no serializable document' }
+          return { url: value.url, bytes: value.bytes, capturedAt: new Date().toISOString() }
+        })
+      },
+      elements: async ({ limit, selector } = {}) => {
+        const base = await ensureBase(session, deps)
+        if (!base) return { ok: false, errorId: 'kitesurf.elements.empty', error: 'no engine page' }
+        const client = await clientFor(session, base, deps)
+        const read = await readElements(client, { depth: 4, selector })
+        const nodes = (read.nodes || []).slice(0, Math.max(1, Math.min(Number(limit) || 40, 220)))
+        return { count: nodes.length, nodes, selector: read.selector || '', matched: read.matched || null }
+      },
     },
-    targets: { list: async () => (session.httpBase ? [{ url: session.httpBase }] : []) },
+    targets: {
+      list: async () => {
+        const base = await ensureBase(session, deps)
+        if (!base) return []
+        const client = await clientFor(session, base, deps)
+        const targets = await client.send('Target.getTargets')
+        return (targets?.targetInfos || []).map((row) => ({ targetId: row.targetId, type: row.type, url: row.url, title: row.title }))
+      },
+    },
     ports: { list: async () => envSnapshot(session, deps) },
     selftest: { run: async () => runSelftest(session, deps) },
-    recovery: { plan: async () => [] },
+    // The plan mirrors what /diagnostics would recommend for THIS snapshot —
+    // an empty array here used to hide every recoverable fault.
+    recovery: {
+      plan: async () => {
+        const snap = await envSnapshot(session, deps)
+        const steps = []
+        if (snap.container?.state === 'missing') steps.push({ step: 'create container', command: "POST /nano-local-sandbox/kite {action:'start'}", state: snap.container.state })
+        else if (snap.container?.state !== 'running') steps.push({ step: 'start container', command: "POST /nano-local-sandbox/recover {}", state: snap.container?.state })
+        if (snap.container?.state === 'running' && !snap.engineAlive) steps.push({ step: 'restart engine', command: "POST /nano-local-sandbox/recover {}", state: 'engine down' })
+        // /recover is the real route — /kite has no 'restart' action and the
+        // old step taught the agent a self-defeating command.
+        if (snap.checks?.bridge && !snap.checks.bridge.ok) steps.push({ step: 'recover container to revive MCP bridge', command: "POST /nano-local-sandbox/recover {}", state: 'bridge down' })
+        return steps
+      },
+    },
     bridge: { health: async () => { try { const r = await bridgeFetch(session, '/health'); return { ok: r.status === 200, status: r.status } } catch (e) { return { ok: false, errorId: 'kitesurf.control.bridge', error: e.message } } } },
   }
 }
@@ -943,9 +1361,23 @@ export function routeSpecs(deps = {}) {
     bodyLimit: row.bodyLimit,
     async handler(req, res) {
       deps.onHandler?.()
+      // Durable history/settings/state live on the instance state volume;
+      // restore once so a host restart sees the same browser truth.
+      restoreBrowserState(session, deps)
+      // The trace row records outcome, not just presence: /operations is the
+      // agent's only "did my last call fail and why" source, so status, errorId
+      // and duration are captured by wrapping send().
       session.operations = session.operations || []
-      session.operations.push({ path: row.path, method: req.method, at: new Date().toISOString() })
+      const op = { path: row.path, method: req.method, at: new Date().toISOString(), status: null, errorId: null, durationMs: null, startedMs: Date.now() }
+      session.operations.push(op)
       if (session.operations.length > 200) session.operations.shift()
+      res.__op = op
+      res.__session = session
+      // A client that disconnects mid-handler never calls send() — the row
+      // would sit status:null forever, unsearchable even by errorsOnly.
+      res.on?.('close', () => {
+        if (op.status === null && res.destroyed) op.status = 'cancelled'
+      })
       if (row.path.endsWith('/shot')) {
         // Real implementation: the page-ready stub (deps.pageReady) was a
         // scaffold nobody ever wired — shot has a route row but no body. Drive
@@ -953,14 +1385,29 @@ export function routeSpecs(deps = {}) {
         // no letterbox), optional scroll, then Page.captureScreenshot. Empty
         // capture is the contract's kitesurf.shot.empty (502), not a stub.
         try {
-          const body = await readJson(req)
+          const body = await readJson(req, row.bodyLimit)
           const base = await ensureBase(session, deps)
           if (!base) {
             send(res, 502, { ok: false, errorId: 'kitesurf.shot.empty', error: 'no engine page' })
             return
           }
           const client = await clientFor(session, base, deps)
-          const format = typeof body.format === 'string' && ['png', 'jpeg', 'webp'].includes(body.format) ? body.format : 'webp'
+          // Validate instead of silently defaulting: the contract's shot.*
+          // negative examples must be reachable, not dead ids.
+          if (body.format !== undefined && !['png', 'jpeg', 'webp'].includes(body.format)) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.shot.format', error: 'format must be png|jpeg|webp' })
+            return
+          }
+          const format = typeof body.format === 'string' ? body.format : 'webp'
+          if (body.quality !== undefined && (!Number.isInteger(Number(body.quality)) || Number(body.quality) < 1 || Number(body.quality) > 100)) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.shot.format', error: 'quality must be an integer 1..100' })
+            return
+          }
+          const quality = body.quality !== undefined ? Math.trunc(Number(body.quality)) : 82
+          if (body.scroll !== undefined && body.scroll !== null && (!Number.isFinite(Number(body.scroll)) || Math.abs(Number(body.scroll)) > 4000)) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.shot.scroll', error: 'scroll must be a finite number within ±4000' })
+            return
+          }
           const fit = body.fit && typeof body.fit === 'object' ? body.fit : null
           const scroll = Number(body.scroll) || 0
           const targets = await client.send('Target.getTargets')
@@ -970,7 +1417,7 @@ export function routeSpecs(deps = {}) {
             if (scroll) {
               await client.send('Runtime.evaluate', { expression: `window.scrollBy(0, ${scroll})`, returnByValue: true }, sessionId)
             }
-            const params = format === 'png' ? { format } : { format, quality: 80 }
+            const params = format === 'png' ? { format } : { format, quality }
             const cap = await client.send('Page.captureScreenshot', params, sessionId)
             // Frame identity rides with the shot so the pane's pick-drift check
             // compares a pick's identity against the frame it's drawn over.
@@ -981,6 +1428,13 @@ export function routeSpecs(deps = {}) {
             return { ...cap, identity: info?.result?.value, viewport }
           })
           const data = shot?.data
+          // G32: an engine-side capture error travels back in-band at this pin
+          // (cap.error alongside an empty/placeholder data). Never report it
+          // as a successful frame.
+          if (shot?.error) {
+            send(res, 502, { ok: false, errorId: 'kitesurf.shot.empty', error: `screenshot failed: ${shot.error}` })
+            return
+          }
           if (typeof data !== 'string' || data.length === 0) {
             send(res, 502, { ok: false, errorId: 'kitesurf.shot.empty', error: 'engine returned empty screenshot' })
             return
@@ -1010,11 +1464,69 @@ export function routeSpecs(deps = {}) {
           restoreLastPage(session, deps).catch(() => {})
         }
         const snap = await envSnapshot(session, deps)
-        send(res, 200, { ...snap, ok: true, ...browserSettings(session), kite: { phase: session.phase }, lastPage: readLastPage(deps) })
+        const nav = navigationLedger(session)
+        // engineMismatch: an origin that answers /json/list but is NOT a
+        // Kitesurf engine must be flagged to the pane and skill — attaching
+        // blindly would drive a foreign browser. Best-effort probe only.
+        let engineMismatch = false
+        if (snap.effective?.httpBase && snap.engineAlive) {
+          try {
+            const version = await probeHttp(`${snap.effective.httpBase}/json/version`, 800)
+            const fingerprint = JSON.stringify(version?.data || {})
+            // The pin marks itself "@kitesurf" in Browser.getVersion's
+            // revision — /json/version carries the same field. A foreign
+            // engine (Chrome/Edge/Playwright) never carries that marker.
+            engineMismatch = Boolean(version?.ok && fingerprint && !/@?kitesurf/i.test(fingerprint))
+          } catch { engineMismatch = false }
+        }
+        send(res, 200, {
+          ...snap,
+          ok: true,
+          ...browserSettings(session),
+          // The socket agents attach to — surfaced at top level per the
+          // skill contract (jq -r .cdp) as well as inside kite.
+          cdp: (session.kiteMcpPort ?? snap.effective?.bridgePort)
+            ? `ws://${(() => { try { return new URL(snap.effective?.httpBase || 'http://127.0.0.1').hostname } catch { return '127.0.0.1' } })()}:${session.kiteMcpPort ?? snap.effective?.bridgePort}/cdp`
+            : null,
+          via: session.cdp?.via || null, // relay | direct — a silent direct fallback would hide a private page
+          engineMismatch,
+          lastError: session.lastError || null,
+          kite: {
+            phase: session.phase,
+            httpBase: snap.effective?.httpBase ?? '',
+            // A configured mcpPort wins over the inspect-derived one — the
+            // status ad must name the port /control and connectCdp actually
+            // dial, not one that only the container knows.
+            mcpPort: session.kiteMcpPort ?? snap.effective?.bridgePort ?? null,
+            // The browser-level CDP socket (not the relay): the field used to
+            // be a permanently-empty placeholder. Agents that need the engine
+            // directly get a real URL; agents that want the pane's shared page
+            // use kite.cdp.
+            engineUrl: snap.effective?.httpBase
+              ? `ws://${(() => { try { return new URL(snap.effective.httpBase).host } catch { return '' } })()}/devtools/browser`
+              : '',
+            // The CDP socket agents attach to — the relay on the bridge, so
+            // their page IS the pane's page. `ws://<host>:<mcpPort>/cdp`.
+            cdp: (() => {
+              try {
+                const port = session.kiteMcpPort ?? snap.effective?.bridgePort
+                return port ? `ws://${new URL(snap.effective?.httpBase || 'http://127.0.0.1').hostname}:${port}/cdp` : null
+              } catch { return null }
+            })(),
+          },
+          navigating: Boolean(nav && nav.outcome === 'in-flight') || session.cdp?.navigating === true,
+          navigation: nav,
+          capabilities: { unsupported: capabilityNotes(session) },
+          lastPage: readLastPage(deps),
+        })
         return
       }
       if (row.path.endsWith('/kite')) {
-        const body = await readJson(req)
+        let body
+        try { body = await readJson(req, row.bodyLimit) } catch (error) {
+          send(res, error.status || 400, { ok: false, errorId: error.errorId || 'kitesurf.body.json', error: error.message })
+          return
+        }
         const action = body.action
         const name = containerNameFor(session, deps.env || process.env)
         if (action === 'suspend' && session.phase === 'running') {
@@ -1023,7 +1535,9 @@ export function routeSpecs(deps = {}) {
           send(res, 200, { ok: true, phase: session.phase })
           return
         }
-        if (action === 'resume' || action === 'start') {
+        if (action === 'resume' || action === 'start' || action === 'init') {
+          // init is the bindings contract's create-if-missing: same ensure
+          // path as start, so a cold pane lands on a usable engine either way.
           // Prepare self-heals: adopt running / start stopped / create missing —
           // resume and start both land on "environment usable", the pane's ask.
           const snap = await prepareEnvironment(session, deps)
@@ -1031,11 +1545,65 @@ export function routeSpecs(deps = {}) {
           send(res, 200, { ok: true, phase: session.phase, action: snap.action, healthy: snap.healthy })
           return
         }
+        if (action === 'configure') {
+          // Repoint at another engine/bridge endpoint (bindings contract).
+          // The pane must not claim "saved" for an endpoint that can't serve:
+          // a repoint is verified against the engine's /json/list first, and
+          // a refused repoint is an error, not a stored dead value.
+          const httpBase = typeof body.httpBase === 'string' ? body.httpBase.trim() : ''
+          if (httpBase) {
+            let parsed
+            try { parsed = new URL(httpBase) } catch { parsed = null }
+            if (!parsed || !/^https?:$/.test(parsed.protocol) || parsed.username || parsed.password) {
+              send(res, 400, { ok: false, errorId: 'kitesurf.body.json', error: 'httpBase must be an http(s) URL without credentials' })
+              return
+            }
+            const reachable = await engineHttpUp(parsed.origin, deps).catch(() => false)
+            if (!reachable) {
+              send(res, 409, { ok: false, errorId: 'kitesurf.kite.state', error: `engine unreachable at ${parsed.origin}; repoint refused` })
+              return
+            }
+            // Reachable ≠ Kitesurf: a loopback Chrome devtools also answers
+            // /json/list, and silently repointing at it makes every pane read
+            // someone else's engine. engineMismatch was display-only; the
+            // repoint now refuses a non-Kitesurf fingerprint outright.
+            const version = await probeHttp(`${parsed.origin}/json/version`, 900).catch(() => ({ ok: false }))
+            const product = String(version?.data?.Browser || version?.data?.Product || '')
+            if (!/kitesurf/i.test(product)) {
+              send(res, 409, { ok: false, errorId: 'kitesurf.engine.mismatch', error: `${parsed.origin} answers devtools but is not a Kitesurf engine (Browser: ${product || 'unknown'}); repoint refused` })
+              return
+            }
+            session.kiteHttpBase = parsed.origin
+            // In-session repoint just proved reachability — no re-probe.
+            session.kiteHttpBaseVerified = true
+            // Drop the stale derived pointer too — observation and operation
+            // must read the same engine, not one each.
+            session.httpBase = parsed.origin
+            resetClient(session)
+          }
+          if (body.mcpPort !== undefined && body.mcpPort !== null) {
+            const port = Number(body.mcpPort)
+            if (!Number.isInteger(port) || port < 1 || port > 65535) {
+              send(res, 400, { ok: false, errorId: 'kitesurf.body.json', error: 'mcpPort must be an integer 1..65535' })
+              return
+            }
+            session.kiteMcpPort = port
+          }
+          // A repoint must outlive a host restart — the durable doc carries
+          // kite.{httpBase,mcpPort} on the instance state volume.
+          persistBrowserState(session, deps)
+          send(res, 200, { ok: true, phase: session.phase, httpBase: session.kiteHttpBase || null, mcpPort: session.kiteMcpPort ?? null })
+          return
+        }
         send(res, 409, { ok: false, errorId: 'kitesurf.kite.state', phase: session.phase })
         return
       }
       if (row.path.endsWith('/open')) {
-        const body = await readJson(req)
+        let body
+        try { body = await readJson(req, row.bodyLimit) } catch (error) {
+          send(res, error.status || 400, { ok: false, errorId: error.errorId || 'kitesurf.body.json', error: error.message })
+          return
+        }
         try {
           const url = navigationUrl(body.url)
           // Explicit navigation wins over startup restoration. Never replay a
@@ -1043,15 +1611,25 @@ export function routeSpecs(deps = {}) {
           restoreAttempted = true
           const base = await ensureBase(session, deps)
           if (!base) throw Object.assign(new Error('Kitesurf engine is unavailable'), { errorId: 'kitesurf.engine.connect' })
-          // Page.navigate replies after page-script work, not on receipt. Do
-          // not swallow its timeout/error and report a fictitious success.
-          session.pageUrl = url
-          await navigate(session, base, url, deps.connect, {
+          // Do NOT pre-write session.pageUrl: a failed navigation leaves the
+          // recorded address at a page the engine never reached, and
+          // cookieScope() would then write cookies onto the wrong origin.
+          // frameNavigated stamps pageUrl on the real commit.
+          session.refs = {}
+          session.refsGen = -1 // frameNavigated re-stamps on the next /snapshot
+          const result = await navigate(session, base, url, deps.connect, {
             isCancelled: () => req.aborted === true || res.destroyed === true,
           })
-          browserHistory.recordHistory(url)
-          writeLastPage(deps, url)
-          if (!res.destroyed) send(res, 200, { ok: true, url })
+          // Commit succeeded: stamp the OBSERVED url (frameNavigated may have
+          // done it already; engines without the event still need pageUrl).
+          session.pageUrl = result?.url || url
+          browserHistory.recordHistory(result?.url || url)
+          writeLastPage(deps, result?.url || url)
+          persistBrowserState(session, deps)
+          // navigate() stamps session.lastArrival from the OBSERVED document
+          // just before returning, so on success this IS this nav's landing —
+          // never the previous open's. On failure this line is unreachable.
+          if (!res.destroyed) send(res, 200, { ok: true, url: result?.url || url, landed: session.lastArrival || null })
         } catch (error) {
           const errorId = error.errorId || 'kitesurf.navigate.failed'
           if (!res.destroyed) send(res, error.status || statusOf(errorId), { ok: false, errorId, error: error.message })
@@ -1062,6 +1640,7 @@ export function routeSpecs(deps = {}) {
         // 11 real probes, matching profiles/kitesurf/profile.yaml `health.selftest`.
         try {
           const result = await runSelftest(session, deps)
+          session.lastSelftest = { ...result, at: new Date().toISOString() }
           send(res, 200, result)
         } catch (error) {
           send(res, 502, { ok: false, errorId: error.errorId || 'kitesurf.engine.connect', error: error.message })
@@ -1072,7 +1651,12 @@ export function routeSpecs(deps = {}) {
         // Engine output exists only inside the container. Without this the
         // pane can say "engine down" but never why.
         const url = new URL(req.url, 'http://localhost')
-        const tail = Math.max(20, Math.min(2000, Number(url.searchParams.get('tail')) || 200))
+        const tailRaw = url.searchParams.get('tail')
+        if (tailRaw !== null && tailRaw !== '' && !Number.isFinite(Number(tailRaw))) {
+          send(res, 400, { ok: false, errorId: 'kitesurf.query.tail', error: 'tail must be a number' })
+          return
+        }
+        const tail = Math.max(20, Math.min(2000, Number(tailRaw) || 200))
         const name = containerNameFor(session, deps.env || process.env)
         try {
           if (typeof deps.backend?.logs !== 'function') {
@@ -1089,14 +1673,21 @@ export function routeSpecs(deps = {}) {
       if (row.path.endsWith('/browse-history')) {
         try {
           const query = new URL(req.url, 'http://localhost').searchParams
+          const limitRaw = query.get('limit')
+          if (limitRaw !== null && limitRaw !== '' && !Number.isFinite(Number(limitRaw))) {
+            throw Object.assign(new Error('limit must be a number'), { status: 400, errorId: 'kitesurf.query.limit' })
+          }
           let changed = {}
           if (req.method === 'DELETE') changed = browserHistory.removeHistory({ url: query.get('url'), id: query.get('id') })
           else if (req.method === 'POST') {
-            const body = await readJson(req)
+            const body = await readJson(req, row.bodyLimit)
             if (body.clear !== true) throw Object.assign(new Error('history body must be {clear:true}'), { status: 400, errorId: 'kitesurf.history.body' })
             changed = browserHistory.clearHistory()
           }
-          send(res, 200, { ok: true, ...browserHistory.listHistory({ q: query.get('q') || '', limit: query.get('limit') || 100 }), ...changed, source: 'plugin-store' })
+          // Mutations persist to the instance state volume — the route's
+          // `source` field now tells the truth about where history lives.
+          if (req.method === 'DELETE' || req.method === 'POST') persistBrowserState(session, deps)
+          send(res, 200, { ok: true, ...browserHistory.listHistory({ q: query.get('q') || '', limit: query.get('limit') || 100 }), ...changed, source: 'instance-state' })
         } catch (error) {
           send(res, error.status || 400, { ok: false, errorId: error.errorId || 'kitesurf.history.body', error: error.message })
         }
@@ -1112,24 +1703,16 @@ export function routeSpecs(deps = {}) {
             send(res, 502, { ok: false, errorId: 'kitesurf.dom.empty', error: 'no engine page' })
             return
           }
-          const client = await clientFor(session, base, deps)
-          const page = await withPage(client, async (sessionId) => {
-            const result = await client.send('Runtime.evaluate', {
-              expression: '(()=>({url:location.href,html:document.documentElement?document.documentElement.outerHTML:""}))()',
-              returnByValue: true,
-            }, sessionId)
-            return result?.result?.value
-          })
-          if (!page?.html) {
+          const result = await captureDom(session, base, deps)
+          if (result.error === 'empty') {
             send(res, 502, { ok: false, errorId: 'kitesurf.dom.empty', error: 'no serializable document' })
             return
           }
-          if (page.url === 'about:blank') {
+          if (result.error === 'blank') {
             send(res, 502, { ok: false, errorId: 'kitesurf.dom.blank', error: 'page is still about:blank' })
             return
           }
-          const built = buildSrcDoc({ url: page.url, html: page.html })
-          send(res, 200, { ok: true, url: built.url, srcdoc: built.srcdoc, bytes: built.bytes, stripped: built.stripped })
+          send(res, 200, { ok: true, ...result })
         } catch (error) {
           send(res, error.status || 502, { ok: false, errorId: error.errorId || 'kitesurf.engine.connect', error: error.message })
         }
@@ -1137,6 +1720,11 @@ export function routeSpecs(deps = {}) {
       }
       if (row.path.endsWith('/elements')) {
         const url = new URL(req.url ?? '/', 'http://localhost')
+        const depthRaw = url.searchParams.get('depth')
+        if (depthRaw !== null && depthRaw !== '' && !Number.isFinite(Number(depthRaw))) {
+          send(res, 400, { ok: false, errorId: 'kitesurf.query.depth', error: 'depth must be a number' })
+          return
+        }
         try {
           const data = await (deps.captureElements ?? (async (base, options) => {
             base = base || await ensureBase(session, deps)
@@ -1152,11 +1740,12 @@ export function routeSpecs(deps = {}) {
             selector: url.searchParams.get('selector') || '',
             depth: Number(url.searchParams.get('depth') || 4),
           })
-          res.statusCode = 200
-          res.end(JSON.stringify({ ok: true, ...data }))
+          session.lastElements = { ...data, capturedAt: new Date().toISOString() }
+          // send() is the only writer that stamps the /operations row; raw
+          // res.end() left this route's op with status:null forever.
+          send(res, 200, { ok: true, ...data })
         } catch (error) {
-          res.statusCode = error.status || 502
-          res.end(JSON.stringify({ ok: false, errorId: error.errorId || 'kitesurf.elements.empty', error: error.message }))
+          send(res, error.status || 502, { ok: false, errorId: error.errorId || 'kitesurf.elements.empty', error: error.message })
         }
         return
       }
@@ -1164,7 +1753,7 @@ export function routeSpecs(deps = {}) {
         try {
           await ensureBase(session, deps)
           if (req.method === 'POST') {
-            const body = await readJson(req)
+            const body = await readJson(req, row.bodyLimit)
             const { status, data } = await bridgeFetch(session, '/control', { method: 'POST', body })
             send(res, status === 200 ? 200 : (status || 502), data?.ok ? data : { ok: false, errorId: data?.errorId || 'kitesurf.control.bridge', error: data?.error || 'bridge refused' })
             return
@@ -1177,11 +1766,51 @@ export function routeSpecs(deps = {}) {
         return
       }
       if (row.path.endsWith('/mcp')) {
-        const rpc = deps.rpc ?? await readJson(req)
+        // Real JSON-RPC 2.0, not the old "every method is a 200 tools-count".
+        // Notifications (no id) get 204 and NO body — answering them used to
+        // break strict MCP clients. Unknown methods are -32601 in-band while
+        // the HTTP status stays 200, the correct split for a request/response
+        // transport that lacks its own error channel.
+        let rpc
+        try { rpc = deps.rpc ?? await readJson(req, row.bodyLimit) } catch (error) {
+          // 413 (body too large) is an HTTP-level rejection, not a JSON-RPC
+          // parse failure — a strict client must see the real status.
+          if (error.status === 413) {
+            send(res, 413, { ok: false, errorId: 'kitesurf.body.toolarge', error: error.message })
+            return
+          }
+          send(res, 200, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } })
+          return
+        }
+        const isNotification = rpc && typeof rpc === 'object' && !Array.isArray(rpc) && !('id' in rpc) && typeof rpc.method === 'string'
+        if (!rpc || typeof rpc !== 'object' || Array.isArray(rpc) || rpc.jsonrpc !== '2.0' || typeof rpc.method !== 'string') {
+          send(res, 200, { jsonrpc: '2.0', id: null, error: { code: -32600, message: 'invalid request' } })
+          return
+        }
+        const rpcError = (code, message) => send(res, 200, { jsonrpc: '2.0', id: rpc.id ?? null, error: { code, message } })
+        const rpcResult = (result) => send(res, 200, { jsonrpc: '2.0', id: rpc.id, result })
+        if (rpc.method === 'initialize') {
+          if (isNotification) { send(res, 204, null); return }
+          rpcResult({
+            protocolVersion: typeof rpc.params?.protocolVersion === 'string' ? rpc.params.protocolVersion : '2025-03-26',
+            capabilities: { tools: { listChanged: false } },
+            serverInfo: { name: 'dsh-nano-local-sandbox', version: BUILD_ID.split('@')[0] || '0' },
+          })
+          return
+        }
+        if (rpc.method.startsWith('notifications/')) {
+          send(res, 204, null)
+          return
+        }
+        if (rpc.method === 'ping') {
+          if (isNotification) { send(res, 204, null); return }
+          rpcResult({})
+          return
+        }
+        if (isNotification) { send(res, 204, null); return }
         if (rpc.method === 'tools/list') {
-          const term = TERM_TOOLS.map((tool) => ({ name: tool.name, description: tool.name, inputSchema: tool.inputSchema }))
-          res.statusCode = 200
-          res.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id ?? null, result: { tools: [...toolsList(), ...term] } }))
+          const term = TERM_TOOLS.map((tool) => ({ name: tool.name, description: tool.description || tool.name, inputSchema: tool.inputSchema }))
+          rpcResult({ tools: [...toolsList(), ...term] })
           return
         }
         if (rpc.method === 'tools/call') {
@@ -1192,21 +1821,22 @@ export function routeSpecs(deps = {}) {
             : await answerNativeTool(name, buildOwners(session, deps), session, args)
           const failed = answer?.ok === false
           const payload = failed ? answer : (answer?.data !== undefined ? answer.data : answer)
-          res.statusCode = failed ? (answer.status ?? (answer.errorId ? statusOf(answer.errorId) : 400)) : 200
-          res.end(JSON.stringify({
+          // HTTP carries the business status (callers assert it); the JSON-RPC
+          // body stays a result with isError per MCP, plus ok/data for hosts
+          // that read the flat shape.
+          send(res, failed ? (answer.status ?? (statusOf(answer.errorId) || 400)) : 200, {
             jsonrpc: '2.0',
-            id: rpc.id ?? null,
+            id: rpc.id,
             result: {
               ...answer,
               isError: failed,
               structuredContent: payload,
               content: [{ type: 'text', text: JSON.stringify(payload) }],
             },
-          }))
+          })
           return
         }
-        res.statusCode = 200
-        res.end(JSON.stringify({ ok: true, tools: toolsList().length }))
+        rpcError(-32601, `method not found: ${rpc.method}`)
         return
       }
       if (row.path.endsWith('/storage') || row.path.endsWith('/interact') || row.path.endsWith('/state') || row.path.endsWith('/snapshot')) {
@@ -1217,20 +1847,31 @@ export function routeSpecs(deps = {}) {
             return
           }
           const client = await clientFor(session, base, deps)
-          const body = await readJson(req)
+          const body = await readJson(req, row.bodyLimit)
           if (row.path.endsWith('/storage')) {
             const scope = body.scope || new URL(req.url ?? '/', 'http://localhost').searchParams.get('scope') || 'local'
             const op = req.method === 'POST' ? (body.op || 'read') : 'read'
+            // Whitelist first: a typo'd op used to fall through to .clear()
+            // and wipe the whole storage scope.
+            if (!STORAGE_OPS.includes(op)) {
+              send(res, 400, { ok: false, errorId: 'kitesurf.storage.op', error: `op must be one of ${STORAGE_OPS.join('/')}` })
+              return
+            }
             const value = await evaluatePage(client, storageExpression({ ...body, scope, op }))
             send(res, 200, { ok: true, scope, op, result: value })
             return
           }
           if (row.path.endsWith('/interact')) {
-            if (!body.selector && !body.target) {
-              send(res, 400, { ok: false, errorId: 'kitesurf.interact.selector', error: 'target selector is required' })
+            const target = resolveTarget(session, body)
+            if (target.miss) {
+              send(res, 404, { ok: false, errorId: 'kitesurf.ref.miss', error: `no element ref ${target.ref}; run /snapshot first` })
               return
             }
-            const value = await evaluatePage(client, interactExpression(body))
+            if (!target.selector && !target.coords) {
+              send(res, 400, { ok: false, errorId: 'kitesurf.interact.selector', error: 'target selector, ref or coords is required' })
+              return
+            }
+            const value = await evaluatePage(client, interactExpression({ ...body, selector: target.selector ?? body.selector ?? '', x: target.coords?.x, y: target.coords?.y }))
             if (value && value.ok === false) {
               send(res, 400, { ok: false, errorId: value.errorId || 'kitesurf.interact.fail', error: value.error || 'interact failed' })
               return
@@ -1240,12 +1881,68 @@ export function routeSpecs(deps = {}) {
           }
           if (row.path.endsWith('/state')) {
             const action = body.action === 'load' ? 'load' : 'save'
-            const value = await evaluatePage(client, action === 'save' ? stateSaveExpression() : stateLoadExpression(body.state || {}))
-            send(res, 200, { ok: true, action, state: action === 'save' ? value : undefined, restored: action === 'load' ? value : undefined })
+            const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 80) : null
+            if (name === '__last__') {
+              // Reserved for the implicit slot — a user-named snapshot would
+              // squat it, dodge the cap, and shadow the unnamed save path.
+              send(res, 400, { ok: false, errorId: 'kitesurf.state.name', error: "'__last__' is reserved" })
+              return
+            }
+            if (action === 'save') {
+              // The snapshot lives on the instance state volume so it survives
+              // a host restart; name→record in session.stateSnapshots.
+              const value = await evaluatePage(client, stateSaveExpression())
+              // null-prototype: 'constructor'/'toString'/'__proto__' names must
+              // never hit Object.prototype — a load by a prototype key used to
+              // run stateLoadExpression({}) which CLEARS localStorage.
+              if (!session.stateSnapshots || session.stateSnapshots.__proto__ !== null) {
+                session.stateSnapshots = Object.assign(Object.create(null), session.stateSnapshots || {})
+              }
+              const record = { name, at: new Date().toISOString(), url: session.pageUrl || '', state: value }
+              if (name) session.stateSnapshots[name] = record
+              else session.stateSnapshots.__last__ = record
+              // Bound the map: a loop of named saves must not grow the durable
+              // doc (or the host's memory) without limit. Oldest-first eviction;
+              // __last__ is the implicit slot and is exempt from the cap.
+              const names = Object.keys(session.stateSnapshots).filter((key) => key !== '__last__')
+                .sort((a, b) => String(session.stateSnapshots[a].at || '').localeCompare(String(session.stateSnapshots[b].at || '')))
+              while (names.length > 32) delete session.stateSnapshots[names.shift()]
+              persistBrowserState(session, deps)
+              send(res, 200, { ok: true, action, name, state: value })
+              return
+            }
+            // `load` accepts either a persisted snapshot name OR an inline
+            // `state` object in the shape /state save returns — the binding
+            // contract promises `state|name`, so an inline body must not fall
+            // into the named-snapshot 404 path.
+            let record
+            if (body.state && typeof body.state === 'object' && !Array.isArray(body.state)) {
+              record = { name: name || null, state: body.state, url: body.state.url || null }
+            } else {
+              const key = name || '__last__'
+              // hasOwn: a plain-object map would let 'constructor'/'toString'
+              // find Object.prototype and wipe the page's storage.
+              record = session.stateSnapshots && Object.hasOwn(session.stateSnapshots, key) ? session.stateSnapshots[key] : undefined
+            }
+            if (!record) {
+              send(res, 404, { ok: false, errorId: 'kitesurf.state.miss', error: name ? `no snapshot named ${name}` : 'no saved snapshot' })
+              return
+            }
+            const value = await evaluatePage(client, stateLoadExpression(record.state || {}))
+            send(res, 200, { ok: true, action, name: record.name ?? name, restored: value, savedUrl: record.url || record.state?.url || null })
             return
           }
-          const snap = await evaluatePage(client, snapshotExpression())
+          // Snapshot builds the shared ref table every interact consumer reads:
+          // @N resolves through session.refs (written here, read by /refs,
+          // /pick, /edit, /interact) so pane and agent point at one selector.
+          // GET-only route: maxNodes arrives as a query param, not a body
+          // (bindings declare no POST, so body.maxNodes is never reachable).
+          const snapParams = new URL(req.url ?? '/', 'http://localhost').searchParams
+          const snap = await evaluatePage(client, snapshotExpression(snapParams.get('maxNodes')))
           session.refs = snap?.refs || {}
+          session.refsGen = session.pageGen || 0
+          session.refsUrl = snap?.url || session.pageUrl || ''
+          session.lastSnapshot = snap ? { url: snap.url, refs: snap.refs, count: snap.count, capturedAt: snap.capturedAt } : null
           send(res, 200, { ok: true, ...(snap || {}) })
         } catch (error) {
           send(res, error.status || 502, { ok: false, errorId: error.errorId || 'kitesurf.engine.connect', error: error.message })
@@ -1274,18 +1971,12 @@ export function routeSpecs(deps = {}) {
           response: { status: item.failed ? 0 : (item.status || 0), statusText: item.error || '', content: { size: item.size ?? 0, mimeType: item.mimeType || '' } },
           _dnk: { type: item.type || 'Other', cached: item.cached === true },
         }))
-        send(res, 200, { ok: true, log: { version: '1.2', creator: { name: 'dsh-nano-local-sandbox', version: '0' }, entries } })
-        return
-      }
-      if (row.path.endsWith('/evaluate')) {
-        const expression = deps.expression ?? ''
-        const result = await keeper.evaluate(deps.instanceId, expression, deps.execute)
-        res.statusCode = result.status
-        res.end(JSON.stringify({ ok: result.ok, errorId: result.errorId ?? null, dom: result.dom }))
+        // HAR-lite, declared: timings/bodies are approximations of the network
+        // ring, not a full capture — the field name says so, no silent pretend.
+        send(res, 200, { ok: true, _format: 'har-lite', log: { version: '1.2', creator: { name: 'dsh-nano-local-sandbox', version: BUILD_ID.split('@')[0] || '0' }, comment: 'har-lite: request/response headers and bodies are not captured', entries } })
         return
       }
       const pageUrl = new URL(req.url ?? '/', 'http://localhost')
-      const pageBody = req.method === 'GET' || req.method === 'HEAD' ? {} : await readJson(req)
       const page = async () => {
         const base = await ensureBase(session, deps)
         if (!base) {
@@ -1297,113 +1988,224 @@ export function routeSpecs(deps = {}) {
         return clientFor(session, base, deps)
       }
       try {
+        // readJson sits inside the try so a body error maps to its declared
+        // 400/413 through the shared catch, not the guard's 500 fallback.
+        const pageBody = req.method === 'GET' || req.method === 'HEAD' ? {} : await readJson(req, row.bodyLimit)
+        // Input summary on the ops row — "which selector/name/tool failed"
+        // is the first question /operations has to answer; bound it so a
+        // 4000-char expression can't bloat the ring.
+        if (res.__op && pageBody && typeof pageBody === 'object') {
+          const pick = {}
+          for (const key of ['url', 'selector', 'action', 'name', 'delta', 'op', 'scope', 'preview', 'timeoutMs', 'load', 'format', 'scroll', 'ref']) {
+            if (pageBody[key] !== undefined) pick[key] = String(pageBody[key]).slice(0, 120)
+          }
+          if (Object.keys(pick).length) res.__op.argSummary = JSON.stringify(pick).slice(0, 300)
+        }
         if (row.path.endsWith('/history')) {
           const delta = Number(pageBody.delta || 0)
-          const value = await queueNavigation(session, async () => navigateHistory(await page(), delta), {
-            isCancelled: () => req.aborted === true || res.destroyed === true,
-          })
-          if (!res.destroyed) send(res, 200, { ok: true, ...(value || {}) })
+          // Same invariants as /open: ledger the intent (one intent = one
+          // navigation row the pane can read) and die-stamp the @N table —
+          // frameNavigated is a UDP event; a missed commit must not leave
+          // last-generation refs pointing at a new document.
+          session.navigation = { intent: `hist:${delta > 0 ? '+' : ''}${delta}`, outcome: 'in-flight', startedAt: new Date().toISOString() }
+          session.refs = {}
+          session.refsGen = -1
+          session.lastPick = null
+          try {
+            const value = await queueNavigation(session, async () => navigateHistory(await page(), delta), {
+              isCancelled: () => req.aborted === true || res.destroyed === true,
+            })
+            session.navigation = { ...session.navigation, outcome: 'committed', settledAt: new Date().toISOString(), url: value?.url || null }
+            if (!res.destroyed) send(res, 200, { ok: true, ...(value || {}) })
+          } catch (error) {
+            session.navigation = { ...session.navigation, outcome: 'failed', errorId: error.errorId || null, error: String(error.message || error).slice(0, 200), settledAt: new Date().toISOString() }
+            throw error
+          }
           return
         }
         if (row.path.endsWith('/pick')) {
           const client = await page()
-          const selector = pageBody.selector || ''
-          const expression = selector
-            ? `(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)return{ok:false,errorId:'kitesurf.pick.miss'};const r=el.getBoundingClientRect();return{ok:true,tag:el.tagName.toLowerCase(),text:(el.innerText||'').slice(0,80),box:{x:r.x,y:r.y,width:r.width,height:r.height}}})()`
-            : `(()=>{const el=document.elementFromPoint(${Number(pageBody.x)||0},${Number(pageBody.y)||0});if(!el)return{ok:false,errorId:'kitesurf.pick.miss'};return{ok:true,tag:el.tagName.toLowerCase(),text:(el.innerText||'').slice(0,80)}})()`
-          const value = await evaluatePage(client, expression)
-          if (value && value.ok === false) {
-            send(res, 404, value)
+          const target = resolveTarget(session, pageBody)
+          if (target.miss) {
+            send(res, 404, { ok: false, errorId: 'kitesurf.ref.miss', error: `no element ref ${target.ref}; run /snapshot first` })
             return
           }
-          send(res, 200, value || { ok: true })
+          // The contract is {pick:{elements:[elementPacket]}} — pane hover,
+          // inspector, ↑↓ parent/child navigation and the composer inject all
+          // read fields OFF the packet, so a flat tag/text answer starves
+          // every one of them. preview:true hovers must not land as lastPick.
+          if (!target.selector && !target.coords) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.pick.point', error: 'pick needs {x,y} or {selector}' })
+            return
+          }
+          if (target.coords) {
+            const cx = Number(target.coords.x); const cy = Number(target.coords.y)
+            if (!Number.isFinite(cx) || !Number.isFinite(cy) || cx < 0 || cy < 0 || cx > 10000 || cy > 10000) {
+              send(res, 400, { ok: false, errorId: 'kitesurf.pick.point', error: 'x,y must be finite numbers in 0..10000' })
+              return
+            }
+          } else if (String(pageBody.selector).length > 320) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.pick.selector', error: 'selector exceeds 320 chars' })
+            return
+          }
+          const finder = target.selector
+            ? `document.querySelector(${JSON.stringify(target.selector)})`
+            : `document.elementFromPoint(${Number(target.coords?.x) || 0},${Number(target.coords?.y) || 0})`
+          const expression = `(()=>{
+            const el=${finder};
+            if(!el)return{ok:false,errorId:'kitesurf.pick.miss',error:'no element at target'};
+            const path=(el)=>{if(!el||el.nodeType!==1)return'';if(el.id)return'#'+CSS.escape(el.id);const parts=[];let n=el;while(n&&n.nodeType===1&&n.tagName!=='HTML'){const tag=n.tagName.toLowerCase();const cls=(typeof n.className==='string'?n.className.trim():'').split(/\\s+/).filter(Boolean).slice(0,2).map(c=>'.'+CSS.escape(c)).join('');let sel=tag+cls;const p=n.parentElement;if(p){const sib=[...p.children].filter(c=>c.tagName===n.tagName);if(sib.length>1)sel+=':nth-of-type('+String(sib.indexOf(n)+1)+')'}parts.unshift(sel);n=p}return parts.join('>')};
+            const r=el.getBoundingClientRect();
+            const cs=getComputedStyle(el);
+            // componentStack is the React fiber chain when the page carries it —
+            // element.__reactFiber$*/__reactContainer$* walk + fiber type name,
+            // not a DOM ancestor list (docs promise component names).
+            const stack=[];
+            let fiber=null;
+            for(const k of Object.keys(el)){if(k.startsWith('__reactFiber$')||k.startsWith('__reactContainer$')){fiber=el[k];break}}
+            let hop=0;
+            while(fiber&&stack.length<8&&hop++<64){
+              const t=fiber.type;
+              const name=typeof t==='string'?null:(t&&(t.displayName||t.name))||null;
+              if(name)stack.push(name);
+              fiber=fiber.return;
+            }
+            let best=null;
+            for(const node of el.children||[]){
+              const b=node.getBoundingClientRect();
+              if(b.width*b.height>(best?best.area:0)&&b.width>4&&b.height>4)best={sel:path(node),area:b.width*b.height};
+            }
+            const parentSel=el.parentElement?path(el.parentElement):null;
+            return{ok:true,element:{
+              tag:el.tagName.toLowerCase(),
+              id:el.id||null,
+              className:typeof el.className==='string'?el.className.slice(0,120):null,
+              text:(el.innerText||el.textContent||'').slice(0,200),
+              box:{x:r.x,y:r.y,width:r.width,height:r.height},
+              // The snapshot walker's path() gives the @N ref table a selector
+              // that can match — a bare 'div' never can, and coords-only picks
+              // used to ship selector:undefined.
+              selector:path(el)||undefined,
+              style:{color:cs.color,fontSize:cs.fontSize,fontFamily:cs.fontFamily,display:cs.display,position:cs.position,backgroundColor:cs.backgroundColor,border:cs.border.slice(0,80)},
+              attrs:{role:el.getAttribute('role'),href:el.getAttribute('href'),type:el.getAttribute('type'),alt:el.getAttribute('alt')},
+              componentStack:stack.length?stack:null,
+              parentSel,childSel:best?best.sel:null,
+            },url:location.href,scrollY:window.scrollY||0};
+          })()`
+          const value = await evaluatePage(client, expression)
+          if (!value || value.ok === false) {
+            const body = value && value.ok === false
+              ? { ...value, error: value.error ?? 'no element at target' }
+              : { ok: false, errorId: 'kitesurf.pick.miss', error: 'no element at target' }
+            send(res, 404, body)
+            return
+          }
+          const element = value.element || {}
+          // Ref-stamp the packet so @N exchange keys carry into the composer
+          // payload when this element was minted by /snapshot's walker.
+          if (!pageBody.preview) {
+            const lastPick = { element, at: new Date().toISOString(), url: value.url }
+            session.lastPick = lastPick
+            if (!element.ref) {
+              const refs = session.refs || {}
+              const hit = Object.entries(refs).find(([, row]) => row.selector === element.selector)
+              if (hit) element.ref = hit[0]
+            }
+          }
+          send(res, 200, {
+            ok: true,
+            pick: {
+              elements: [element],
+              url: value.url || '',
+              scrollY: value.scrollY || 0,
+              targetId: client.pageTargetId || '',
+            },
+          })
+          return
+        }
+        if (row.path === LAST_ROUTE) {
+          // The pane's "last pick" contract — element packet + page identity,
+          // or pick:null. Server-side it's session memory by design (documented
+          // in the AGENTS contract: point results don't persist).
+          send(res, 200, { ok: true, pick: session.lastPick || null })
           return
         }
         if (row.path.endsWith('/edit')) {
           const client = await page()
-          const value = await evaluatePage(client, `(()=>{const el=document.querySelector(${JSON.stringify(pageBody.selector || '')});if(!el)return{ok:false,errorId:'kitesurf.edit.miss'};el.textContent=${JSON.stringify(String(pageBody.text || ''))};return{ok:true,tag:el.tagName.toLowerCase()}})()`)
+          const target = resolveTarget(session, pageBody)
+          if (target.miss) {
+            send(res, 404, { ok: false, errorId: 'kitesurf.ref.miss', error: `no element ref ${target.ref}; run /snapshot first` })
+            return
+          }
+          if (!target.selector) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.edit.miss', error: 'edit requires a selector or @ref' })
+            return
+          }
+          // Contract bounds: selector ≤320 like pick's, text 1..4000 chars.
+          if (String(pageBody.selector || '').length > 320) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.edit.selector', error: 'selector exceeds 320 chars' })
+            return
+          }
+          const editText = String(pageBody.text ?? '')
+          if (editText.length < 1 || editText.length > 4000) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.edit.badtext', error: 'text must be 1..4000 characters' })
+            return
+          }
+          const value = await evaluatePage(client, `(()=>{const el=document.querySelector(${JSON.stringify(target.selector)});if(!el)return{ok:false,errorId:'kitesurf.edit.miss'};el.textContent=${JSON.stringify(editText)};return{ok:true,tag:el.tagName.toLowerCase(),id:el.id||null}})()`)
           send(res, value && value.ok === false ? 404 : 200, value || { ok: true })
           return
         }
         if (row.path.endsWith('/settings')) {
-          if (req.method === 'GET' || req.method === 'HEAD') {
-            send(res, 200, { ok: true, ...browserSettings(session) })
-          } else {
-            const settings = await applyBrowserSettings(session, await page(), pageBody)
-            send(res, 200, { ok: true, ...settings })
-          }
+          // POST-only per the binding table: the old GET branch was dead code
+          // the guard never reached, so "is settings readable" lied two ways.
+          const settings = await applyBrowserSettings(session, await page(), pageBody)
+          persistBrowserState(session, deps)
+          send(res, 200, { ok: true, ...settings, capabilities: { unsupported: capabilityNotes(session) } })
           return
         }
         if (row.path.endsWith('/console')) {
-          if (pageBody.clear === true) session.console = []
+          if (pageBody.clear === true) { session.console = []; session.consoleSeq = 0 }
           const level = pageUrl.searchParams.get('level')
-          const rows = (session.console || []).filter((item) => !level || item.level === level)
-          send(res, 200, { ok: true, entries: rows.slice(-100) })
+          const levels = level ? level.split(',').map((s) => s.trim()).filter(Boolean) : null
+          const sinceSeqRaw = pageUrl.searchParams.get('sinceSeq')
+          const sinceRaw = pageUrl.searchParams.get('since')
+          const limitRaw = pageUrl.searchParams.get('limit')
+          for (const [name, value] of [['sinceSeq', sinceSeqRaw], ['since', sinceRaw], ['limit', limitRaw]]) {
+            if (value !== null && value !== '' && !Number.isFinite(Number(value))) {
+              throw Object.assign(new Error(`${name} must be a number`), { status: 400, errorId: `kitesurf.query.${name}` })
+            }
+          }
+          const sinceSeq = Number(sinceSeqRaw) || 0
+          const since = Number(sinceRaw) || 0
+          let rows = (session.console || [])
+          if (levels) rows = rows.filter((item) => levels.includes(item.level))
+          if (sinceSeq) rows = rows.filter((item) => (item.seq || 0) > sinceSeq)
+          else if (since) rows = rows.filter((item) => Date.parse(item.at || 0) > since)
+          const limit = Math.max(1, Math.min(Number(limitRaw) || 100, 400))
+          const entries = rows.slice(-limit)
+          send(res, 200, { ok: true, entries, lastSeq: entries.length ? entries[entries.length - 1].seq : (session.consoleSeq || 0) })
           return
         }
         if (row.path.endsWith('/operations')) {
           if (pageBody.clear === true) session.operations = []
-          send(res, 200, { ok: true, entries: (session.operations || []).slice(-100) })
+          const errorsOnly = pageUrl.searchParams.get('errorsOnly') === 'true'
+          const opsLimitRaw = pageUrl.searchParams.get('limit')
+          if (opsLimitRaw !== null && opsLimitRaw !== '' && !Number.isFinite(Number(opsLimitRaw))) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.query.limit', error: 'limit must be a number' })
+            return
+          }
+          const opsLimit = Math.max(1, Math.min(Number(opsLimitRaw) || 100, 200))
+          let rows = (session.operations || [])
+          // errorsOnly also keeps 'cancelled' — a status:null row the client
+          // dropped mid-flight is still a failed call.
+          if (errorsOnly) rows = rows.filter((item) => item.ok === false || (item.status && (item.status === 'cancelled' || item.status >= 400)))
+          send(res, 200, { ok: true, entries: rows.slice(-opsLimit) })
           return
         }
         if (row.path.endsWith('/diagnostics')) {
-          // Two audiences, one endpoint:
-          //  - agents read the full JSON (state + trace + catalog + hints);
-          //  - humans read `text`, a short report they can paste into a chat.
-          // The catalog is reference data, not diagnostic state, so it is only
-          // included on request (?catalog=1) — it used to be ~half the payload.
-          // Operations are collapsed: /control polling every 1.5s drowned the
-          // rows that actually explain a failure.
           const query = new URL(req.url ?? '/', 'http://localhost').searchParams
           const withCatalog = query.get('catalog') === '1'
-          const snap = await envSnapshot(session, deps)
-          let targetInfos = []
-          let engineError = null
-          if (snap.engineAlive && snap.httpBase) {
-            try {
-              const client = await clientFor(session, snap.httpBase, deps)
-              const targets = await client.send('Target.getTargets')
-              targetInfos = targets?.targetInfos || []
-            } catch (error) { engineError = error?.errorId || error?.message || 'targets unreachable' }
-          }
-          const hints = []
-          if (snap.container.state === 'missing') hints.push('容器缺失：点「一键准备环境」或 POST /kite {action:start} 创建')
-          else if (snap.container.state !== 'running') hints.push(`容器状态 ${snap.container.state}：一键准备环境启动它`)
-          if (!snap.engineAlive) hints.push('引擎未应答 CDP：容器 running 但引擎僵死时重试 /recover 或重启容器')
-          if (engineError) hints.push(`引擎探测失败：${engineError}`)
-          if (targetInfos.length === 0 && snap.engineAlive) hints.push('无 page target：先 POST /open 打开一个页面')
-          if (snap.checks.page?.ok && snap.checks.dom && !snap.checks.dom.ok) hints.push(`DOM 不可渲染（${snap.checks.dom.detail}）：面板会退回截图模式`)
-          if (snap.checks.bridge && !snap.checks.bridge.ok) hints.push(`MCP 桥不可达（${snap.checks.bridge.detail}）：HITL 控制态与 agent 工具会失败`)
-          const summary = summaryOf(snap)
-          const text = [
-            `Kitesurf 环境诊断 · ${snap.healthy ? '正常' : '异常'}`,
-            `实例 ${snap.containerName} · 容器 ${snap.container.state}`,
-            `引擎 ${snap.effective.httpBase || '—'} · 桥 ${snap.effective.bridgePort || '—'}`,
-            ...summary.map((row) => `${row.skipped ? '○' : row.ok ? '✓' : '✗'} ${row.label}：${row.detail || '—'}`),
-            ...(hints.length ? ['', '建议：', ...hints.map((hint) => `· ${hint}`)] : []),
-          ].join('\n')
-          send(res, 200, {
-            ...snap,
-            ok: true,
-            httpBase: snap.httpBase,
-            kite: { phase: session.phase },
-            container: snap.container,
-            containerName: snap.containerName,
-            effective: snap.effective,
-            ports: snap.ports,
-            engineAlive: snap.engineAlive,
-            checks: snap.checks,
-            healthy: snap.healthy,
-            summary,
-            text,
-            targets: targetInfos.map((t) => ({ targetId: t.targetId, type: t.type, url: t.url, title: t.title })),
-            console: (session.console || []).slice(-10),
-            network: (session.network || []).slice(-10),
-            operations: collapseOperations(session.operations || []),
-            history: (session.history || []).slice(-10),
-            ...(withCatalog ? { errorCatalog: ERROR_CATALOG.map((row) => ({ errorId: row.example, status: row.status, cause: row.cause, next: row.next })) } : {}),
-            hints,
-          })
+          send(res, 200, await diagnosticsPayload(session, deps, { withCatalog }))
           return
         }
         if (row.path.endsWith('/ports')) {
@@ -1478,12 +2280,22 @@ export function routeSpecs(deps = {}) {
             })
             return
           }
-          const limit = Math.max(1, Math.min(Number(query.get('limit')) || 100, 200))
+          const limitRaw = query.get('limit')
+          const sinceRaw = query.get('since')
+          for (const [name, value] of [['limit', limitRaw], ['since', sinceRaw]]) {
+            if (value !== null && value !== '' && !Number.isFinite(Number(value))) {
+              throw Object.assign(new Error(`${name} must be a number`), { status: 400, errorId: `kitesurf.query.${name}` })
+            }
+          }
+          const limit = Math.max(1, Math.min(Number(limitRaw) || 100, 200))
           const failedOnly = query.get('failedOnly') === 'true'
-          const since = Number(query.get('since')) || 0
+          const since = Number(sinceRaw) || 0
           let entries = (session.network || []).filter((item) => item && !item.gap)
           if (failedOnly) entries = entries.filter((item) => item.failed || (item.status && item.status >= 400))
-          if (since) entries = entries.filter((item) => Number(item.startedAt) > since)
+          // `since` is an update cursor, not a birth cursor: pending → failed
+          // moves updatedAt and must re-emit the row or the pane keeps `0ms`
+          // forever.
+          if (since) entries = entries.filter((item) => Number(item.updatedAt || item.startedAt) > since)
           entries = entries.slice(-limit).map(({ requestHeaders, responseHeaders, postData, ...rest }) => rest)
           send(res, 200, { ok: true, entries })
           return
@@ -1494,23 +2306,132 @@ export function routeSpecs(deps = {}) {
           send(res, 200, { ok: true, targetInfos: targets.targetInfos || [] })
           return
         }
-        if (row.path.endsWith('/wait')) {
-          const client = await page()
-          const selector = String(pageBody.selector || 'body')
-          let found = null
-          for (let attempt = 0; attempt < 4; attempt += 1) {
-            found = await evaluatePage(client, `(()=>{const el=document.querySelector(${JSON.stringify(selector)});return el?{ok:true,tag:el.tagName.toLowerCase()}:{ok:false}})()`)
-            if (found && found.ok) break
-          }
-          if (!found || found.ok !== true) {
-            send(res, 504, { ok: false, errorId: 'kitesurf.wait.timeout', error: `selector did not match: ${selector}` })
+        if (row.path.endsWith('/evaluate')) {
+          // Real expression evaluation against the live page. The old handler
+          // read deps.expression (always '') and returned a 400 — the audit's
+          // most-cited dead route.
+          const expression = String(pageBody.expression || '')
+          if (!expression) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.evaluate.empty', error: 'expression is required' })
             return
           }
-          send(res, 200, found)
+          // The contract caps expressions at 2000 chars (error catalog + skill
+          // doc + DNK AGENTS.md all say so); the old 8192 was dead code — the
+          // 4096-byte bodyLimit already 413'd everything it would have caught.
+          if (expression.length > 2000) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.evaluate.toolong', error: 'expression exceeds 2000 characters' })
+            return
+          }
+          const client = await page()
+          const result = await withPage(client, async (sessionId) => {
+            const out = await client.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: pageBody.awaitPromise === true }, sessionId)
+            // Runtime.evaluate: {result: RemoteObject, exceptionDetails?}
+            if (out?.exceptionDetails) {
+              return { ok: false, errorId: 'kitesurf.evaluate.threw', error: out.exceptionDetails.text || 'expression threw', exception: out.exceptionDetails.exception?.description?.slice(0, 4000) || null }
+            }
+            const r = out?.result || {}
+            // Contract caps results at 4000 chars — a string value returned
+            // raw used to sail past it untouched.
+            const raw = r.value !== undefined ? r.value : (r.description ?? null)
+            const value = typeof raw === 'string' && raw.length > 4000 ? `${raw.slice(0, 4000)}…` : raw
+            return { ok: true, type: r.type, subtype: r.subtype, value, objectId: r.objectId || null }
+          })
+          send(res, result?.ok === false ? 400 : 200, result || { ok: false, errorId: 'kitesurf.evaluate.threw', error: 'no result' })
+          return
+        }
+        if (row.path.endsWith('/wait')) {
+          // Contract: exactly one of selector|text|url|fn + optional load mode.
+          // @N in the selector field resolves through the same ref table as
+          // pick/edit — the contract names wait among the @N consumers.
+          const hasSelector = typeof pageBody.selector === 'string' && pageBody.selector !== ''
+          const hasText = typeof pageBody.text === 'string' && pageBody.text !== ''
+          const hasUrl = typeof pageBody.url === 'string' && pageBody.url !== ''
+          const hasFn = typeof pageBody.fn === 'string' && pageBody.fn !== ''
+          const modes = [hasSelector, hasText, hasUrl, hasFn].filter(Boolean).length
+          if (modes !== 1) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.wait.query', error: 'wait needs exactly one of selector|text|url|fn' })
+            return
+          }
+          // fn runs INSIDE the page — same unbounded-JS class as /evaluate, so
+          // it inherits the 2000-char cap the contract places on that lane.
+          if (hasFn && String(pageBody.fn).length > 2000) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.wait.query', error: 'fn exceeds 2000 characters' })
+            return
+          }
+          const load = pageBody.load ?? 'commit'
+          if (!['commit', 'domcontentloaded', 'load', 'networkidle'].includes(load)) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.wait.query', error: `load must be commit|domcontentloaded|load|networkidle` })
+            return
+          }
+          let expression
+          if (hasSelector) {
+            const target = resolveTarget(session, { selector: pageBody.selector })
+            if (target.miss) {
+              send(res, 404, { ok: false, errorId: 'kitesurf.ref.miss', error: `no element ref ${target.ref}; run /snapshot first` })
+              return
+            }
+            const selector = target.selector || String(pageBody.selector || 'body')
+            expression = `(()=>{const el=document.querySelector(${JSON.stringify(selector)});return el?{ok:true,tag:el.tagName.toLowerCase(),text:(el.innerText||'').slice(0,80)}:{ok:false}})()`
+          } else if (hasText) {
+            expression = `(()=>{const t=${JSON.stringify(pageBody.text)};return (document.body?.innerText||'').includes(t)?{ok:true,text:t}:{ok:false}})()`
+          } else if (hasUrl) {
+            expression = `(()=>{const u=${JSON.stringify(pageBody.url)};return location.href.includes(u)?{ok:true,url:location.href}:{ok:false}})()`
+          } else {
+            // fn is a truthy page expression, not a function to invoke —
+            // "document.querySelector('a')" / "document.title.includes('x')".
+            expression = `(()=>{try{const v=(${pageBody.fn});return v?{ok:true,result:v}:{ok:false}}catch(e){return {ok:false,error:String(e&&e.message||e)}}})()`
+          }
+          const client = await page()
+          // Honor the requested timeout instead of the old fixed 4 tries:
+          // an agent asking for 500ms gets 500ms, and 15000ms actually waits.
+          const timeoutRaw = pageBody.timeoutMs ?? pageBody.timeout
+          if (timeoutRaw !== undefined && timeoutRaw !== null && timeoutRaw !== '' && !Number.isFinite(Number(timeoutRaw))) {
+            send(res, 400, { ok: false, errorId: 'kitesurf.query.timeoutMs', error: 'timeoutMs must be a number' })
+            return
+          }
+          const timeoutMs = Math.max(0, Math.min(Number(timeoutRaw ?? 3000), 30000))
+          const deadline = Date.now() + timeoutMs
+          // `load` is real, not a validated-then-dropped knob: commit skips
+          // the gate; domcontentloaded/load gate on document.readyState;
+          // networkidle additionally requires the host's network ring to sit
+          // quiet for ~600ms. All of it stays inside the same timeout budget.
+          if (load !== 'commit') {
+            const want = load === 'domcontentloaded' ? 'interactive' : 'complete'
+            let quietSince = null
+            do {
+              try {
+                const rs = await evaluatePage(client, '(()=>({rs:document.readyState}))()')
+                const ready = rs?.rs === 'complete' || (want === 'interactive' && rs?.rs === 'interactive')
+                if (ready && (load !== 'networkidle' || quietSince === null)) {
+                  const pending = (session.network || []).filter((r) => r && !r.gap && r.status == null && !r.failed).length
+                  if (load !== 'networkidle' || pending === 0) {
+                    if (load !== 'networkidle') break
+                    if (quietSince === null) quietSince = Date.now()
+                    else if (Date.now() - quietSince >= 600) break
+                  } else quietSince = null
+                }
+              } catch { /* mid-navigation evaluate throws — keep polling per load semantics */ }
+              if (Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 250))
+            } while (Date.now() < deadline)
+          }
+          let found = null
+          do {
+            try { found = await evaluatePage(client, expression) } catch { found = null /* nav churn: retry within budget */ }
+            if (found && found.ok) break
+            if (Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 250))
+          } while (Date.now() < deadline)
+          if (!found || found.ok !== true) {
+            send(res, 504, { ok: false, errorId: 'kitesurf.wait.timeout', error: `condition did not hold within ${timeoutMs}ms` })
+            return
+          }
+          send(res, 200, { ok: true, matched: found })
           return
         }
         send(res, 404, { ok: false, errorId: 'kitesurf.tool.unknown', error: row.path })
       } catch (error) {
+        // lastError is a live field the pane actually renders — it was
+        // declared in /status but nothing ever wrote it.
+        session.lastError = { errorId: error.errorId || 'kitesurf.engine.connect', error: String(error.message || error).slice(0, 300), at: new Date().toISOString(), path: row.path }
         send(res, error.status || 502, { ok: false, errorId: error.errorId || 'kitesurf.engine.connect', error: error.message })
       }
     },
@@ -1526,6 +2447,65 @@ export function acceptUpgrade(req, socket, requestRejection, onHandshake) {
   }
   onHandshake(req, socket)
   return { handshake: true, handled: true }
+}
+
+/**
+ * Push the diagnostics document the bridge's sandbox.* tools serve. The host
+ * is the only process with the session truth; without this loop every
+ * agent-side sandbox.* call answered kitesurf.diag.stale forever.
+ * Best-effort, unref'd: a dead bridge costs a 2.5s probe per interval.
+ */
+export function startDiagnosticsPush(session, deps, { intervalMs = 15000 } = {}) {
+  if (session.__diagPushTimer) return session.__diagPushTimer
+  const tick = async () => {
+    try {
+      const base = await ensureBase(session, deps)
+      if (!base) return
+      const snap = await envSnapshot(session, deps)
+      // WS sandbox.dom must never be a dead letter: if nobody has captured a
+      // DOM yet — or the pushed copy belongs to a previous page generation —
+      // recapture here so the doc carries THIS page, not a permanent stale.
+      const domStale = !session.lastDom
+        || session.lastDom.generation !== (session.pageGen || 0)
+      if (domStale && snap.checks?.page?.ok && snap.checks?.page?.detail && snap.checks.page.detail !== 'about:blank') {
+        try { await captureDom(session, base, deps) } catch { /* serve stale next tick */ }
+      }
+      const doc = {
+        at: new Date().toISOString(),
+        // The doc ships to the bridge's agent-facing diagnostics surface —
+        // publish the store's identity (basename), not the host's absolute
+        // path.
+        plugin: { phase: session.phase, storePath: basename(stateDirFor(deps)), httpBase: session.httpBase || '' },
+        engine: {
+          engineAlive: snap.engineAlive === true,
+          kite: { phase: session.phase },
+          targets: {
+            count: snap.checks?.page?.ok ? 1 : 0,
+            // The page check's detail IS the url (probePage puts it there) —
+            // reading a nonexistent `.url` left every pushed doc targets-empty.
+            targets: snap.checks?.page?.ok && snap.checks?.page?.detail ? [{ url: snap.checks.page.detail, targetId: snap.checks.page.targetId || null }] : [],
+          },
+          targetsError: null,
+        },
+        console: { entries: (session.console || []).slice(-50), total: session.consoleSeq || (session.console || []).length, counts: {} },
+        operations: { entries: (session.operations || []).slice(-50), total: (session.operations || []).length, dropped: 0 },
+        network: { entries: (session.network || []).filter((row) => row && !row.gap).slice(-50), total: (session.network || []).filter((row) => row && !row.gap).length },
+        history: { total: (session.history || []).length, entries: (session.history || []).slice(-30) },
+        observability: { errorCatalog: ERROR_CATALOG.map((row) => ({ errorId: row.example, status: row.status, cause: row.cause, next: row.next })) },
+        ports: { effective: snap.effective, ports: snap.ports, configured: { httpBase: session.kiteHttpBase || null }, container: snap.container },
+        dom: session.lastDom || null,
+        elements: session.lastElements || null,
+        snapshot: session.lastSnapshot || null,
+        selftest: session.lastSelftest || null,
+      }
+      await bridgeFetch(session, '/diagnostics', { method: 'POST', body: doc })
+    } catch { /* push is opportunistic */ }
+  }
+  const timer = setInterval(tick, intervalMs)
+  timer.unref?.()
+  session.__diagPushTimer = timer
+  tick().catch(() => {})
+  return timer
 }
 
 export { keeper }

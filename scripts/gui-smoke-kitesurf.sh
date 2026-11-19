@@ -50,10 +50,23 @@ const api = async (path, body) => {
   return JSON.parse(res.body || '{}');
 };
 
-// Expand the right workspace pane. The Kitesurf tab carries its aria-label.
+// Expand the right workspace pane. Kitesurf opens from the "开始" (start)
+// launcher card, not a pinned tab — a closed tab is removed from the strip.
+// Fall back to a pinned tab if one is still pinned.
 await page.evaluate(() => {
-  const hit = [...document.querySelectorAll('button,[role=tab]')]
-    .find(n => /kitesurf/i.test(n.getAttribute('aria-label') || n.title || ''));
+  const pinned = [...document.querySelectorAll('button,[role=tab]')]
+    .find(n => /kitesurf/i.test(n.getAttribute('aria-label') || n.title || n.textContent || ''));
+  if (pinned) { pinned.click(); return; }
+  // Host-DOM graft ([class*=_addTab]) violates the workspace rule: hash-class
+  // discovery couples the smoke to host internals. Accessible-name lookup only.
+  const add = [...document.querySelectorAll('button,[role=tab]')]
+    .find(b => /新标签页|new tab/i.test(b.getAttribute('aria-label') || b.title || b.textContent || ''));
+  if (add) add.click();
+});
+await page.waitForTimeout(1200);
+await page.evaluate(() => {
+  const hit = [...document.querySelectorAll('*')]
+    .find(n => (n.textContent || '').trim() === 'Kitesurf');
   if (hit) hit.click();
 });
 await page.waitForSelector('[data-nano-kitesurf="1"]', { timeout: 15000 }).catch(() => {});
@@ -96,7 +109,9 @@ const failing = (selftest.checks || []).filter(c => !c.ok).map(c => c.id);
 const allowedEmpty = new Set(['page-not-blank', 'dom-renderable']);
 console.log('      selftest: ' + (selftest.failed ?? '?') + '/' + (selftest.total ?? '?') + ' fails=' + JSON.stringify(failing));
 report('5. /selftest runs 11 real checks',
-  selftest.total === 11 && failing.every(id => allowedEmpty.has(id)));
+  selftest.total === 11
+    && Array.isArray(selftest.checks) && selftest.checks.length === 11
+    && failing.every(id => allowedEmpty.has(id)));
 
 try { await api('/nano-local-sandbox/open', { url: 'https://example.com' }); } catch { /* reported below */ }
 await page.waitForTimeout(4000);

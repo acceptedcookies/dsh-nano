@@ -15,7 +15,7 @@
 | 平台 | 仅 web |
 | 宿主入口 | `index.js` |
 | 浏览器入口 | `lib/client.js` |
-| 宿主 inject | `webServer`、`connection`、`skills` |
+| 宿主 inject | `skills`（不注册页面路由、不拿 connection/webServer——页面面在 DNLS 宿主路由上） |
 
 ## 交付物
 
@@ -110,18 +110,18 @@ dsh plugin --profile web add <spec>
 | GET | `见 QNA targets` | 引擎 `Target.getTargets`（page target id/url、当前附着页） |
 | POST | `见 QNA evaluate` | `{expression}` 在引擎页面执行有界 JS（≤2000 字符，returnByValue，结果 ≤4000 字符） |
 
-错误一律 `{ok:false,errorId,error}` 并按 `lib/diagnostics.js` 的 `ERROR_CATALOG` 映射真实状态码（唯一真源，index.js 与技能文档都从它派生）：输入类 400、未命中 404、阶段错 409、body 超限 413、引擎故障 502、`navigate.egress` 504。`/diagnostics` 会把「errorId → status → 原因 → 下一步命令」整表交给 agent；完整 id 表也在 `/kitesurf-cdp` 技能 §5。
+错误一律 `{ok:false,errorId,error,incidentId?}` 并按 `lib/diagnostics.js` 的 `ERROR_CATALOG` 映射真实状态码。**发射侧真源在 DNLS `src/host/error-catalog.js`**（host 发射什么码），本目录是 agent 面镜像，两边 id/status 必须一致（DNLS delivery-guard 对账）：输入类 400、未命中 404、阶段错 409、body 超限 413、引擎故障 502、`navigate.egress`/`wait.timeout` 504。`/diagnostics` 会把「errorId → status → 原因 → 下一步命令」整表交给 agent；完整 id 表也在 `/kitesurf-cdp` 技能 §5。
 
 ## 拓扑（workerd 内的浏览器代理）
 
 浏览器代理不在宿主里，而在容器内的 workerd：Kitesurf 引擎自己就是那个代理，它把渲染器包成 CDP server 并从容器端口暴露出来。
 
 ```
-DSH 宿主 (plugin/index.js)
-  └─ lib/engine.js  ── CDP over WS ──▶  ws://127.0.0.1:8798/devtools/browser
-                                          └─ 容器内 workerd + Kitesurf 渲染器
+DSH 宿主 (DNLS src/host/routes.js)
+  └─ in-process CDP socket ──▶  ws://127.0.0.1:8798/devtools/browser
+                                   └─ 容器内 workerd + Kitesurf 渲染器
 MCP 客户端
-  └─ ws://127.0.0.1:8799/mcp ──▶ runtime/mcp-bridge.mjs ──▶ agent-browser mcp ──▶ 同一 CDP
+  └─ ws://127.0.0.1:8799/mcp ──▶ mcp-bridge.mjs ──▶ CDP relay (/cdp) ──▶ 同一 CDP（共享页）
 ```
 
 因此「浏览器代理」= `browserSocketUrl(httpBase)` 指向的 CDP 端点；宿主只做协议转发与诊断，不启动任何浏览器进程。`GET /selftest` 里的 `engine` / `engine-identity` / `targets` 三项就是这条链路的健康证据。

@@ -116,7 +116,8 @@ test('a handshake deadline closes the unopened socket and rejects promptly', asy
 
 test('a close before the handshake finishes rejects without waiting for its deadline', async () => {
   const { Socket, sockets } = socketFixture(undefined, { open: false })
-  const connected = connectCdp('http://fixture.invalid', { WebSocket: Socket })
+  // Transport contract test: pin the socket to the direct path (relayUrl '').
+  const connected = connectCdp('http://fixture.invalid', { WebSocket: Socket, relayUrl: '' })
   sockets[0].close()
   await assert.rejects(connected, /cdp socket closed/)
 })

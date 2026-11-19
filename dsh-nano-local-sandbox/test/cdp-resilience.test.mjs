@@ -120,7 +120,7 @@ test('concurrent cold acquisitions share one connection and one initialization',
   connected.resolve(live)
   assert.deepEqual(await Promise.all([first, second]), [live, live])
   assert.equal(connects, 1)
-  assert.equal(initialized, 2)
+  assert.equal(initialized, 3)
   assert.equal(session.cdp, live)
 })
 

@@ -1,6 +1,6 @@
 # emulation — `/settings` 浏览器伪装
 
-全部字段可选，`null` 清除该项。值只在内存，下一次导航前生效；`GET /status` → `emulation` 回显整组。
+全部字段可选，`null` 清除该项。值只在内存，下一次导航前生效；`GET /status` 把这组字段**平铺**在顶层（`viewport/userAgent/media/extraHeaders/locale/geolocation/colorScheme/cookies`），能力差距在 `capabilities.unsupported`，不存在 `emulation` 键。
 
 ```bash
 POST /nano-local-sandbox/settings {

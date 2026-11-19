@@ -176,6 +176,10 @@ const STYLE = `
 .nks-hitl-primary:hover{background:var(--dsw-alias-link);filter:brightness(1.08)}
 .nks-act{position:absolute;left:50%;top:34px;transform:translateX(-50%);z-index:var(--nano-layer-local4);padding:4px 10px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary);white-space:nowrap;pointer-events:none;animation:nks-act-in .18s ease-out}
 .nks-act[data-ok="false"]{color:var(--dsw-alias-state-error-primary)}
+/* last-good/导航仍在执行提示条：与 .nks-act 同款小药丸，悬停在画面顶部。 */
+.nks-stale{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:var(--nano-layer-local4);max-width:calc(100% - 32px);padding:4px 10px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 94%,transparent);border:.5px solid var(--dsw-alias-state-warn-primary);border-radius:var(--dsw-radius-sm);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:auto}
+.nks-stale[data-nks-nav-busy="1"]{top:34px;border-color:var(--dsw-alias-border-l2)}
+.nks-dom-tag{position:absolute;right:8px;top:8px;z-index:var(--nano-layer-local4);padding:2px 7px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 88%,transparent);border:.5px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);pointer-events:none;user-select:none}
 @keyframes nks-act-in{from{opacity:0;transform:translateX(-50%) translateY(-4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .nks-note-actions{display:flex;gap:2px;align-items:center}
 .nks-note-form{display:flex;gap:4px;align-items:center}
@@ -304,6 +308,7 @@ const STYLE = `
 .nks-env-row b{font-weight:500;color:var(--dsw-alias-label-secondary);flex:none}
 .nks-env-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;unicode-bidi:plaintext}
 .nks-env-ok{color:var(--dsw-alias-state-success-primary)}
+.nks-env-wait{color:var(--dsw-alias-label-tertiary)}
 .nks-env-legacy{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);margin-left:6px}
 .nks-logs{margin:0;max-height:380px;overflow:auto;white-space:pre-wrap;word-break:break-all;font:11px/1.45 ui-monospace,Menlo,monospace;color:var(--dsw-alias-label-secondary)}
 .nks-env-bad{color:var(--dsw-alias-state-error-primary)}
@@ -454,6 +459,9 @@ function resourceTypeLabel(row) {
 }
 
 function formatSize(bytes) {
+  // null/undefined 是「引擎没报」，不是 0：渲染成 0b/0ms 会把 pending 请求
+  // 伪装成已完成的空响应。0 本身是合法大小，照常显示。
+  if (bytes == null) return '—'
   const n = Number(bytes)
   if (!Number.isFinite(n) || n < 0) return ''
   if (n < 1024) return `${n}b`
@@ -462,6 +470,7 @@ function formatSize(bytes) {
 }
 
 function formatDuration(ms) {
+  if (ms == null) return '—'
   const n = Number(ms)
   if (!Number.isFinite(n) || n < 0) return ''
   return n < 1000 ? `${Math.round(n)}ms` : `${(n / 1000).toFixed(2)}s`
@@ -540,33 +549,37 @@ function DevTools({ copy, open, onClose }) {
     if (!open) return undefined
     let alive = true
     let since = null
+    let sinceSeq = null
     setRows([])
     const merge = (fresh, keyOf) => setRows((prev) => {
       if (!Array.isArray(fresh) || fresh.length === 0) return prev
       const seen = new Set(prev.map(keyOf))
       const extra = fresh.filter((r) => !seen.has(keyOf(r)))
-      if (extra.length === 0) return prev
-      // Rows that changed state (pending → finished) share the key; let the
-      // newer copy win so status/duration/waterfall update in place.
+      // 状态变化的行（pending → failed/finished）共用同一个 key：先按键做
+      // 原位更新（新行胜出），再追加本轮新行。就算没有新行也要应用更新——
+      // 否则一条 pending 之后的 failed 永远落不到界面上。
       const merged = prev.map((r) => fresh.find((f) => keyOf(f) === keyOf(r)) || r).concat(extra)
       return merged.slice(-400)
     })
     const load = async () => {
       try {
         if (tab === 'console') {
-          const url = since ? `${CONSOLE}?limit=200&since=${encodeURIComponent(since)}` : `${CONSOLE}?limit=200`
+          // 后端按稳定 seq 供给增量：只带 sinceSeq 游标，首次全量。
+          const url = sinceSeq != null ? `${CONSOLE}?limit=200&sinceSeq=${encodeURIComponent(sinceSeq)}` : `${CONSOLE}?limit=200`
           const data = await fetch(url).then((r) => r.json())
           if (alive && Array.isArray(data.entries)) {
-            merge(data.entries, (r) => `c${r.seq}`)
-            const last = data.entries[data.entries.length - 1]
-            if (last?.at) since = last.at
+            merge(data.entries, (r) => `c${r.seq ?? r.at}`)
+            const lastSeq = data.entries.reduce((m, r) => Math.max(m, Number(r.seq) || 0), 0)
+            if (lastSeq) sinceSeq = lastSeq
           }
         } else if (tab === 'network') {
+          // since 语义是「updatedAt 之后的行」：游标取本批最大更新时间，
+          // 同一 id 的 pending→failed 更新才会被下一批带回。
           const url = `${NETWORK}?limit=200${since ? `&since=${encodeURIComponent(since)}` : ''}`
           const data = await fetch(url).then((r) => r.json())
           if (alive && Array.isArray(data.entries)) {
             merge(data.entries, (r) => `n${r.id}`)
-            const lastStart = data.entries.reduce((m, r) => Math.max(m, Number(r.startedAt) || 0), 0)
+            const lastStart = data.entries.reduce((m, r) => Math.max(m, Number(r.updatedAt || r.startedAt) || 0), 0)
             if (lastStart) since = String(lastStart)
           }
         } else {
@@ -816,7 +829,7 @@ function DevTools({ copy, open, onClose }) {
           h('span', { className: 'nks-dt-msg' }, `${row.id ? '#' + row.id : ''}${row.cls ? '.' + String(row.cls).split(/\s+/).slice(0, 2).join('.') : ''}`),
           h('span', { className: 'nks-dt-dur' }, row.childNodeCount ? String(row.childNodeCount) : ''))
         : tab === 'console'
-        ? h('div', { className: 'nks-dt-row', key: `c${row.seq || index}`, 'data-level': row.level },
+        ? h('div', { className: 'nks-dt-row', key: `c${row.seq ?? row.at ?? index}`, 'data-level': row.level },
           h('span', { className: 'nks-dt-time' }, String(row.at || '').slice(11, 19)),
           h('span', { className: 'nks-dt-lv', 'data-lv': row.level }, row.level),
           h('span', { className: 'nks-dt-msg' }, row.text),
@@ -872,6 +885,9 @@ function wfBar(row, rows) {
 function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   const [status, setStatus] = React.useState(null)
   const statusDown = status != null && (status.ok === false || status.ready === false)
+  // 引擎真源：超时返回的 /open 不等于导航被取消。读不到该字段的旧宿主
+  // 自然落到 false，一切照旧。
+  const engineNavigating = status?.navigating === true
   const [pageUrl, setPageUrl] = React.useState('')
   const [draftUrl, setDraftUrl] = React.useState('')
   const [history, setHistory] = React.useState([])
@@ -902,6 +918,12 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   // picker is bound after document.write (which wipes listeners).
   const [nativeHtml, setNativeHtml] = React.useState(true)
   const [domDoc, setDomDoc] = React.useState(null)
+  // last-good 标记：导航/刷新失败时保留上一帧画面，并在画面上叠加
+  // 「显示上次成功画面 …」提示；新导航成功后清除。
+  const [staleNav, setStaleNav] = React.useState(false)
+  // 最近写入 iframe 的 DOM 版本签名（domSeq/capturedAt/generation；旧宿主
+  // 回退为 srcdoc 内容），轮询到同一版本就不再重写，保住滚动位置。
+  const domVersionRef = React.useRef('')
   const [vp, setVp] = React.useState(null)
   const [vpCustom, setVpCustom] = React.useState(false)
   const domFrameRef = React.useRef(null)
@@ -1099,11 +1121,24 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   React.useEffect(() => {
     if (!beat) { setBeatSec(0); return undefined }
     const started = Date.now()
+    let ticks = 0
     const timer = window.setInterval(() => {
+      ticks += 1
       setBeatSec(Math.max(1, Math.floor((Date.now() - started) / 1000)))
+      // 等 /open 回复的窗口里顺便盯引擎的 navigating 标志：心跳只能报
+      // 「本地等了 N 秒」，是否还在导航是引擎才答得出的问题。
+      if (ticks % 2 === 0) refreshStatus().catch(() => {})
     }, 1000)
     return () => window.clearInterval(timer)
   }, [beat])
+
+  // 引擎自己说还在导航（/open 已超时返回，但引擎没有停）：保持低频轮询，
+  // 让「引擎仍在执行」标记能如实消失。
+  React.useEffect(() => {
+    if (!engineNavigating) return undefined
+    const timer = window.setInterval(() => { refreshStatus().catch(() => {}) }, 3000)
+    return () => window.clearInterval(timer)
+  }, [engineNavigating])
 
   // An agent can /open a page behind the pane. Re-shoot on focus so the
   // human is never staring at a stale frame with a disabled refresh button.
@@ -1117,6 +1152,22 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   // screenshot; once a frame exists, upgrade to native HTML.
   React.useEffect(() => {
     if (nativeHtml && shot && !domDoc) loadDom().catch(() => {})
+  }, [shot, nativeHtml])
+
+  // DOM 预览是静态快照，但页面自己会异步变化（SPA 挂载、agent edit、延时
+  // 脚本）。打开页面且启用原生 HTML 时每 3s 拉一次 /dom：只有 domSeq /
+  // capturedAt / generation（旧宿主回退 srcdoc 内容）变化才重写 iframe，
+  // 同一版本不重写能保住滚动位置和选中态。连续失败 3 次后停等下次导航，
+  // 避免引擎死了还一直打。
+  React.useEffect(() => {
+    if (!nativeHtml || !shot) return undefined
+    let alive = true
+    let fails = 0
+    const poll = () => {
+      loadDom().then((ok) => { fails = ok ? 0 : fails + 1 }).catch(() => { fails += 1 })
+    }
+    const timer = window.setInterval(() => { if (alive && fails < 3) poll() }, 3000)
+    return () => { alive = false; clearInterval(timer) }
   }, [shot, nativeHtml])
 
   React.useEffect(() => {
@@ -1271,6 +1322,9 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     } catch (cause) {
       // A deadline is not proof that navigation stopped. Only an explicit
       // user retry may issue another Page.navigate.
+      // 导航类操作失败：画面还停在上一帧——它是 last-good，不是当前页。
+      // 打 stale 标记，banner 会把「这是上次成功画面」告诉用户。
+      if (opts.nav) setStaleNav(true)
       if (opts.dialog) showOpenError(cause, opts.url)
       else showError(cause)
     } finally {
@@ -1317,7 +1371,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   }
 
   function openPage(url) {
-    return run(() => navigate(url), { beat: true, dialog: true, url })
+    return run(() => navigate(url), { beat: true, dialog: true, url, nav: true })
   }
 
   function remember(url) {
@@ -1334,6 +1388,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     setShot(shotPayload.data)
     setShotMime(shotPayload.mimeType || 'image/webp')
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
+    // 新导航真的落了帧：上次失败的 stale 标记清掉，画面重新代表当前页。
+    setStaleNav(false)
     await loadDom()
     setPick(null)
     remember(shotPayload.url)
@@ -1367,12 +1423,28 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     try {
       const data = await fetch(DOM).then((r) => r.json())
       if (data?.ok && data.srcdoc) {
-        setDomDoc({ srcdoc: data.srcdoc, url: data.url, at: Date.now() })
+        // 版本签名优先用后端给的 domSeq/capturedAt/generation；旧宿主一个
+        // 都没有时退化为 srcdoc 内容+URL，免得 3s 轮询每轮都重写 iframe
+        // 把滚动位置打飞。
+        const sig = (data.domSeq ?? data.capturedAt ?? data.generation) != null
+          ? `v:${data.domSeq ?? ''}:${data.capturedAt ?? ''}:${data.generation ?? ''}:${data.url ?? ''}`
+          : `s:${data.srcdoc}:${data.url ?? ''}`
+        // 比对只走 ref：domDoc 是渲染闭包里的旧值，3s 轮询拿不到最新。
+        if (sig && sig === domVersionRef.current) return true
+        domVersionRef.current = sig
+        setDomDoc({
+          srcdoc: data.srcdoc,
+          url: data.url,
+          at: Date.now(),
+          capturedAt: data.capturedAt ?? null,
+          domSeq: data.domSeq ?? null,
+          generation: data.generation ?? null,
+        })
         if (data.url && data.url !== 'about:blank') setPageUrl(data.url)
         return true
       }
     } catch { /* fall back to the screenshot */ }
-    if (!options.keep) setDomDoc(null)
+    if (!options.keep) { setDomDoc(null); domVersionRef.current = '' }
     return false
   }
 
@@ -1387,6 +1459,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     setShotMime(shotPayload.mimeType || 'image/webp')
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
     if (shotPayload.url && shotPayload.url !== 'about:blank') setPageUrl(shotPayload.url)
+    // 一帧成功的新截图同样证明画面回到「当前页」，stale 标记可以撤了。
+    setStaleNav(false)
     // A re-shoot for a layout change must NOT drop the note the human is
     // writing. Only an explicit navigation clears the selection.
     if (options.keepPick !== true) setPick(null)
@@ -1569,7 +1643,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     if (!shot || busyRef.current || dragRef.current) return
     const delta = event.deltaY
     if (Math.abs(delta) < 8) return
-    run(() => reloadShot(delta))
+    // 滚动重截属于「刷新画面」：失败也要标 stale，不把旧帧当成当前页。
+    run(() => reloadShot(delta), { nav: true })
   }
 
   function onDoubleClick(event) {
@@ -1881,6 +1956,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
    */
   function EnvPanel() {
     const [snap, setSnap] = React.useState(null)
+    const [probeMisses, setProbeMisses] = React.useState(0)
     const [diag, setDiag] = React.useState(null)
     const copyRawDiag = React.useRef(false)
     const [busyLocal, setBusyLocal] = React.useState(false)
@@ -1891,11 +1967,12 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       let seen = null
       const load = () => fetch(PORTS).then((r) => r.json()).then((data) => {
         if (!alive || !data) return
+        setProbeMisses(0)
         const sig = `${data.v ?? ''}:${data.epoch ?? ''}:${data.ready ?? ''}`
         if (sig === seen) return
         seen = sig
         setSnap(data)
-      }).catch(() => {})
+      }).catch(() => { if (alive) setProbeMisses((n) => n + 1) })
       load()
       const period = () => (document.visibilityState === 'hidden' ? 12000 : 1500)
       let timer = window.setInterval(load, period())
@@ -1983,11 +2060,17 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     const contractMismatch = snap != null && Number.isFinite(snap.v) && snap.v !== 1
     const legacyHost = snap != null && !Number.isFinite(snap.v)
     const rows = planeRows(snap, copy)
-    const healthy = !contractMismatch && snap?.ready === true
+    // snap===null 只是「还没拿到第一次观测」，不是环境挂了：亮中性灰点
+    // 「检测中…」，等快照回来再判定。只有拿到快照且明确失败才是 envBad，
+    // 否则加载中的设置页会闪现一片红色「异常 + 全 —」。
+    // snap===null is "first probe hasn't answered yet" for the first couple of
+    // ticks only — a port that keeps failing is unreachable, not still probing.
+    const probing = snap == null && probeMisses < 3
+    const healthy = !probing && !contractMismatch && snap?.ready === true
     return h('div', { className: 'nks-env', 'data-nks-env': '1' },
       h('div', { className: 'nks-env-title' }, copy.envTitle,
-        h('span', { className: healthy ? 'nks-env-ok' : 'nks-env-bad', title: legacyHost ? copy.legacyHostTitle : undefined },
-          contractMismatch ? copy.contractNewer : healthy ? `● ${copy.envOk}` : `● ${copy.envBad}`),
+        h('span', { className: healthy ? 'nks-env-ok' : probing ? 'nks-env-wait' : 'nks-env-bad', title: legacyHost ? copy.legacyHostTitle : undefined },
+          probing ? `○ ${copy.envProbing}` : contractMismatch ? copy.contractNewer : healthy ? `● ${copy.envOk}` : `● ${copy.envBad}`),
         legacyHost ? h('span', { className: 'nks-env-legacy', 'data-nks-legacy': '1' }, copy.legacyHost) : null),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envPlugin), h('span', null, snap?.buildId || copy.envUnknown)),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envEngine), h('span', null, engine)),
@@ -2330,8 +2413,26 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         if (nextPort && nextPort !== String(current.mcpPort)) kitePatch.mcpPort = nextPort
         if (Object.keys(kitePatch).length) await post(KITE, { action: 'configure', ...kitePatch })
         close()
-        showToast(copy.saved)
-        refreshStatus()
+        // 「已保存」必须以引擎 status 回读为准：POST 200 只说明请求被收下，
+        // 不代表字段真的落了库。逐项核对刚提交的 patch——只报「没生效的」，
+        // 全对上了才说已保存。
+        const fresh = await refreshStatus().catch(() => null)
+        const bs = (fresh && typeof fresh === 'object' && fresh.browserSettings && typeof fresh.browserSettings === 'object')
+          ? fresh.browserSettings : fresh
+        const unconfirmed = []
+        for (const [key, want] of Object.entries(settingsPatch)) {
+          const got = bs?.[key]
+          const same = key === 'viewport'
+            ? ((want == null) === (got == null) && (want == null || (got?.width === want.width && got?.height === want.height)))
+            : key === 'geolocation'
+              ? ((want == null) === (got == null) && (want == null || (got?.latitude === want.latitude && got?.longitude === want.longitude)))
+              : String(want ?? '') === String(got ?? '')
+          if (!same) unconfirmed.push(key)
+        }
+        for (const [key, want] of Object.entries(kitePatch)) {
+          if (String(fresh?.kite?.[key] ?? '') !== String(want)) unconfirmed.push(`kite.${key}`)
+        }
+        showToast(unconfirmed.length ? `${copy.savedUnconfirmed} (${unconfirmed.join(', ')})` : copy.saved)
       })
     }
 
@@ -2387,8 +2488,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       // Navigation trio shares the host strip's 8px pitch with the
       // trailing cluster — one rhythm across the whole toolbar.
       h('div', { className: 'nks-toolbar-nav' },
-        h('button', { type: 'button', className: 'nks-tool', 'data-nks-back': '1', 'aria-label': copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1), { beat: true, dialog: true }) }, glyph('back')),
-        h('button', { type: 'button', className: 'nks-tool', 'data-nks-forward': '1', 'aria-label': copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1), { beat: true, dialog: true }) }, glyph('forward')),
+        h('button', { type: 'button', className: 'nks-tool', 'data-nks-back': '1', 'aria-label': copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1), { beat: true, dialog: true, nav: true }) }, glyph('back')),
+        h('button', { type: 'button', className: 'nks-tool', 'data-nks-forward': '1', 'aria-label': copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1), { beat: true, dialog: true, nav: true }) }, glyph('forward')),
         h('button', { type: 'button', className: 'nks-tool', 'data-nks-reload': '1', 'aria-label': copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph('refresh'))),
       h('span', { className: 'nks-address-box', 'data-address-short': copy.addressShort, 'data-dirty': draftUrl ? 'true' : 'false', 'data-loading': beat ? 'true' : 'false', 'aria-busy': beat ? 'true' : 'false' },
         h('input', {
@@ -2408,11 +2509,13 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           'data-nks-beat': '1',
           'data-nks-loading': '1',
           role: 'status',
-          'aria-label': copy.opening,
-          title: copy.opening,
+          'aria-label': engineNavigating ? copy.navigating : copy.opening,
+          // N 秒是本地计时，「导航中」是引擎上报的真阶段；旧宿主没有
+          // navigating 字段时维持只报计时。
+          title: engineNavigating ? `${copy.navigating} · ${copy.opening} ${beatSec}s` : `${copy.opening} ${beatSec}s`,
         },
           h('i', { className: 'nks-spin', 'aria-hidden': true }),
-          beatSec > 0 ? h('span', { 'data-nks-beat-sec': String(beatSec) }, `${beatSec}s`) : null) : null,
+          engineNavigating || beatSec > 0 ? h('span', { 'data-nks-beat-sec': String(beatSec) }, engineNavigating ? `${copy.navigating}${beatSec > 0 ? ` ${beatSec}s` : ''}` : `${beatSec}s`) : null) : null,
         h('button', { type: 'submit', className: 'nks-tool nks-go', 'aria-label': copy.go, disabled: busy }, glyph('go'))),
       // Trailing cluster mirrors the host's three icon buttons (分栏 /
       // 全屏 / 侧栏): same 28×28 seats at an 8px pitch, so each of ours
@@ -2548,6 +2651,29 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length
           ? h('span', { 'data-nks-stack': '1', title: pick.elements[0].componentStack.join(' → ') },
               `⚛ ${pick.elements[0].componentStack.slice(-3).join(' → ')}`) : null) : null,
+      // last-good 画面叠加提示：导航/刷新失败但画面还是旧的，地址栏和
+      // 画面不能各说各话。新导航/重截成功会自动撤掉。
+      staleNav ? h('div', {
+        className: 'nks-stale',
+        'data-nks-stale': '1',
+        role: 'status',
+        onPointerDown: (event) => event.stopPropagation(),
+        onClick: (event) => event.stopPropagation(),
+      }, fill(copy.staleBanner, { url: shotMeta?.url || '' })) : null,
+      // 引擎仍说自己在导航（/open 已超时返回）：超时≠取消，不能恢复成功态。
+      !beat && engineNavigating ? h('div', {
+        className: 'nks-stale',
+        'data-nks-nav-busy': '1',
+        role: 'status',
+        title: fill(copy.engineBusyTitle, { url: status?.navigation?.url || status?.navigation?.intent || '' }),
+      }, copy.engineBusy) : null,
+      // srcdoc 是剥离脚本的静态投影，不是活页：角落标出来，别让人以为
+      // 在里面点按钮会触发真实交互。
+      nativeHtml && domDoc ? h('span', {
+        className: 'nks-dom-tag',
+        'data-nks-dom-tag': '1',
+        title: copy.staticPreview,
+      }, copy.staticPreview) : null,
       nativeHtml && domDoc ? h('iframe', {
         className: 'nks-dom',
         title: 'Kitesurf page',

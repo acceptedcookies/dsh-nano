@@ -18,11 +18,18 @@ test('tools/list sandbox set is exactly the frozen twenty and does not wait for 
   assert.deepEqual([...frozen].filter((name) => !listed.has(name)), [])
   assert.equal(listed.size, 20)
   assert.deepEqual(SANDBOX_TOOL_NAMES.filter((name) => name.startsWith('kitesurf' + '_')), [])
-  // P3-03: a real owner read, not the retired uniform digest.
-  const owners = { state: { diagnostics: { phase: 'idle' } } }
+  // P3-03: the real owner is diagnostics.read — a fixture that only feeds
+  // state.diagnostics tests the fallback, not the main path.
+  let readCalls = 0
+  const owners = { diagnostics: { read: () => { readCalls += 1; return { phase: 'idle', read: true } } } }
   const answer = await answerNativeTool('sandbox.diagnostics', owners, {})
   assert.equal(answer.ok, true)
-  assert.deepEqual(answer.data, { phase: 'idle' })
+  assert.equal(readCalls, 1)
+  assert.deepEqual(answer.data, { phase: 'idle', read: true })
+  // No owner at all is the stale-path the contract declares.
+  const stale = await answerNativeTool('sandbox.diagnostics', {}, {})
+  assert.equal(stale.ok, false)
+  assert.equal(stale.errorId, 'kitesurf.diag.stale')
 })
 
 test('every tool advertises a non-empty additionalProperties:false inputSchema (no {properties:{}} stub)', () => {

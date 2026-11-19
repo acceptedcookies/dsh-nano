@@ -23,16 +23,17 @@ GET  /nano-local-sandbox/console?level=log&limit=10                      # 取�
 ```
 
 ### 4. MCP-only 排障（无 host 路由时）
+宿主 HTTP `/nano-local-sandbox/mcp` 的 `tools/call` 工具名是 `sandbox.*`（宿主 MCP 前缀即该名，勿用其他前缀）：
 ```
-kitesurf_control  {action:"claim"}            # 单写者
-kitesurf_bridge_health                        # 桥/引擎/conns
-kitesurf_diagnose {withTargets:true}          # hints: sparse/空快照/stale/engine
-kitesurf_operations {errorsOnly:true}         # 失败 trace + errorId
-kitesurf_control {action:"release"}
+sandbox.control  {action:"takeover",owner:"agent-name"}   # 请求写锁（claim 已废弃）
+sandbox.bridge_health                                      # 桥/引擎/conns
+sandbox.diagnostics                                        # 一击诊断（hints/console/ops/catalog）
+sandbox.operations {errorsOnly:true}                       # 失败 trace + errorId + incidentId
+sandbox.control  {action:"release"}
 ```
 
 ### 5. 写反馈报告（结构化回执）
-排障完成后按 `templates/feedback-report.md` 填：元信息（buildId/phase）→ 路由调用序列（/operations 摘）→ 观察到的现象 → 诊断摘录（hints/console/errorsOnly）→ 元素上下文（/last + `/context?id=` 若引用 composer ref `⟦kitesurf:N⟧`）→ errorId 对照 `error-catalog.md` → 下一步命令。结构化报告是可归档数据，不是散文。
+排障完成后按 `templates/feedback-report.md` 填：元信息（buildId/phase）→ 路由调用序列（/operations 摘，错误行带 `incidentId` 可与响应体回执互查）→ 观察到的现象 → 诊断摘录（hints/console/errorsOnly）→ 元素上下文（/last + `/refs?ref=@N` 反查）→ errorId 对照 `error-catalog.md` → 下一步命令。结构化报告是可归档数据，不是散文。
 
 ## 正例
 

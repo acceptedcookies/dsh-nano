@@ -57,7 +57,7 @@ test('kite suspend and resume follow the running session and history stays off w
   assert.equal(after.body.kite.phase, 'running')
   assert.equal(after.body.ok, true)
   assert.deepEqual(stops, ['dnls-a', 'start:dnls-a'])
-  assert.equal(history.body.source, 'plugin-store')
+  assert.equal(history.body.source, 'instance-state')
   assert.equal(history.body.entries.length, 1)
   // /selftest is 11 real probes now (profile.yaml `health.selftest: 11`).
   // This fixture has no container and no engine, so it must report failures

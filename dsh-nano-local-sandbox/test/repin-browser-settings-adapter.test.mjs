@@ -21,9 +21,10 @@ test('simulation settings are projected without changing the legacy defaults', (
   assert.equal(values.cookies, 'nks_demo=1')
   assert.deepEqual(Object.keys(browserSettings({})), ['viewport', 'userAgent', 'media', 'extraHeaders'])
 })
-const settingsError = error => error.status === 400 && error.errorId === 'kitesurf.body.json' && statusOf(error.errorId) === 400
+const settingsError = error => error.status === 400 && /^kitesurf\.settings\./.test(error.errorId || '') && statusOf(error.errorId) === 400
 const fitError = error => error.status === 400 && error.errorId === 'kitesurf.shot.fit'
-const writes = fixture => fixture.calls.filter(row => !row.method.startsWith('Target.'))
+// Page.enable at attach is subscription plumbing, not a settings write.
+const writes = fixture => fixture.calls.filter(row => !row.method.startsWith('Target.') && row.method !== 'Page.enable')
 
 // Pure memory driver sample: a failed command can mutate before its reply is lost.
 function cdpFixture({ state = {}, onSend, attached = true, page = true } = {}) {
@@ -34,6 +35,7 @@ function cdpFixture({ state = {}, onSend, attached = true, page = true } = {}) {
     calls.push(call)
     if (method === 'Target.getTargets') return { targetInfos: page ? [{ type: 'page', targetId: 'page', ...(attached ? { sessionId: 'owner' } : {}) }] : [] }
     if (method === 'Target.attachToTarget') return { sessionId: 'owner' }
+    if (method === 'Page.enable') return {}
     assert.equal(sessionId, 'owner', 'settings always use the owning flattened page session')
     if (method === 'Emulation.setDeviceMetricsOverride') engine.viewport = structuredClone(params)
     else if (method === 'Network.setUserAgentOverride') engine.userAgent = params.userAgent

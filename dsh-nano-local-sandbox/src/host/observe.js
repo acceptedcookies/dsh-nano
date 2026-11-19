@@ -35,7 +35,9 @@ export function projectSnapshot(input) {
   const terminalState = input.terminal?.state || 'absent'
   const containerRunning = input.containerState === 'running'
   const planes = {
-    container: { plane: 'container', state: containerRunning ? 'running' : input.containerState === 'missing' ? 'missing' : 'stopped', ok: containerRunning },
+    // 'unknown' survives as its own plane state: a backend that can't answer
+    // is not 'stopped' and must not read as a clean missing either.
+    container: { plane: 'container', state: containerRunning ? 'running' : input.containerState === 'missing' ? 'missing' : input.containerState === 'unknown' ? 'unknown' : 'stopped', ok: containerRunning },
     engine: { plane: 'engine', state: engineState, ok: engineState === 'cdp', httpBase: input.effective?.httpBase ?? null, cdpGeneration: input.cdpGeneration || 0 },
     page: { plane: 'page', state: pageState, ok: pageState === 'open' || pageState === 'blank', url: input.page?.url ?? null, detail: input.page?.detail ?? '' },
     dom: { plane: 'dom', state: domState, ok: domState === 'ready' || domState === 'skipped', detail: input.dom?.detail ?? '', skipped: domState === 'skipped' },

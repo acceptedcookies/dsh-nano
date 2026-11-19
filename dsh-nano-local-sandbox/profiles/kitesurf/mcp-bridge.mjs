@@ -13,13 +13,24 @@
 import { spawn } from 'node:child_process'
 import { webcrypto } from 'node:crypto'
 import { createServer } from 'node:http'
+import { connect as netConnect } from 'node:net'
 import { fileURLToPath } from 'node:url'
 
 const PORT = Number(process.env.DNLS_MCP_PORT || 8791)
-const CDP = process.env.AGENT_BROWSER_CDP || ''
+// The agent-browser children used to point at AGENT_BROWSER_CDP verbatim, or
+// at whatever default agent-browser picks when it is unset — either way each
+// child opened its OWN engine socket, and at this pin every engine connection
+// owns a private about:blank page (engine connection.ts:314). Default them to
+// this bridge's /cdp relay instead: one upstream socket, one shared page.
+const CDP = process.env.AGENT_BROWSER_CDP || `ws://127.0.0.1:${PORT}/cdp`
+// Upstream engine socket the relay multiplexes every /cdp client onto.
+const CDP_UPSTREAM = process.env.KITESURF_CDP_UPSTREAM || 'ws://127.0.0.1:8787/devtools/browser'
 const MAX_FRAME = Number(process.env.DNLS_MCP_MAX_FRAME || 1_048_576)
 const MAX_MESSAGE = Number(process.env.DNLS_MCP_MAX_MESSAGE || 1_048_576)
-const MAX_CONNS = Number(process.env.DNLS_MCP_MAX_CONNS || 8)
+// /mcp and /cdp share this ceiling: the host's own relay socket permanently
+// holds one slot, and every agent-browser child takes another — 8 squeezed a
+// real workload, so the cap reflects the actual audience.
+const MAX_CONNS = Number(process.env.DNLS_MCP_MAX_CONNS || 16)
 // 20 minutes, not hours: a quiet but healthy MCP session is minutes, and a
 // half-open zombie must not hold a conn slot for hours.
 const IDLE_MS = Number(process.env.DNLS_MCP_IDLE_MS || 20 * 60 * 1000)
@@ -76,6 +87,291 @@ const sendClose = (socket, code = 1000) => {
   sendFrame(socket, 0x8, body)
 }
 const sendPong = (socket, payload) => sendFrame(socket, 0xA, payload)
+
+/** Client→server frames must be masked (RFC 6455 §5.3). Server frames must not be. */
+function sendClientFrame(socket, opcode, payload = Buffer.alloc(0)) {
+  const body = Buffer.isBuffer(payload) ? payload : Buffer.from(payload)
+  // webcrypto.getRandomValues returns a Uint8Array — no .copy(); wrap it.
+  const mask = Buffer.from(webcrypto.getRandomValues(new Uint8Array(4)))
+  let header
+  if (body.length < 126) {
+    header = Buffer.alloc(6)
+    header[1] = body.length
+  } else if (body.length < 65536) {
+    header = Buffer.alloc(8)
+    header[1] = 126
+    header.writeUInt16BE(body.length, 2)
+  } else {
+    header = Buffer.alloc(14)
+    header[1] = 127
+    header.writeBigUInt64BE(BigInt(body.length), 2)
+  }
+  header[0] = 0x80 | opcode
+  header[1] |= 0x80
+  mask.copy(header, header.length - 4)
+  const masked = Buffer.from(body)
+  for (let i = 0; i < masked.length; i++) masked[i] ^= mask[i % 4]
+  socket.write(Buffer.concat([header, masked]))
+}
+const sendClientText = (socket, text) => sendClientFrame(socket, 0x1, text)
+const sendClientClose = (socket, code = 1000) => {
+  const body = Buffer.alloc(2)
+  body.writeUInt16BE(code)
+  sendClientFrame(socket, 0x8, body)
+}
+
+/**
+ * Minimal WebSocket client for the engine's /devtools/browser. The container's
+ * node:22 has globalThis.WebSocket, but the relay needs a raw socket that also
+ * works on older runtimes, so the handshake + frames stay in one place.
+ * @returns {Promise<{socket, onMessage(fn), onClose(fn), send(text), close()}>}
+ */
+function connectUpstreamWs(wsUrl, { timeoutMs = 5000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(wsUrl)
+    const port = Number(url.port || 80)
+    const host = url.hostname
+    const key = Buffer.from(webcrypto.getRandomValues(new Uint8Array(16))).toString('base64')
+    const path = `${url.pathname || '/'}${url.search || ''}`
+    const socket = netConnect({ host, port })
+    let opened = false
+    let httpBuf = Buffer.alloc(0)
+    const listeners = { message: new Set(), close: new Set() }
+    const emit = (kind, arg) => { for (const fn of listeners[kind]) try { fn(arg) } catch { /* listener bug */ } }
+    const decode = createFrameDecoder({
+      onMessage: (text) => emit('message', text),
+      onPing: (payload) => { try { sendClientFrame(socket, 0xA, payload) } catch { /* gone */ } },
+      onClose: () => { emit('close'); try { socket.destroy() } catch { /* gone */ } },
+      maxFrame: 16 * 1024 * 1024,
+      maxMessage: 32 * 1024 * 1024,
+    })
+    const timer = setTimeout(() => {
+      if (!opened) { socket.destroy(); reject(new Error('upstream ws handshake timeout')) }
+    }, timeoutMs)
+    socket.on('data', (chunk) => {
+      if (!opened) {
+        httpBuf = Buffer.concat([httpBuf, chunk])
+        const end = httpBuf.indexOf('\r\n\r\n')
+        if (end < 0) return
+        const head = httpBuf.subarray(0, end).toString('utf8')
+        if (!/^HTTP\/1\.1 101/.test(head)) {
+          clearTimeout(timer); socket.destroy(); reject(new Error(`upstream ws rejected: ${head.split('\r\n')[0]}`)); return
+        }
+        opened = true
+        clearTimeout(timer)
+        const rest = httpBuf.subarray(end + 4)
+        resolve({
+          socket,
+          onMessage: (fn) => listeners.message.add(fn),
+          onClose: (fn) => listeners.close.add(fn),
+          send: (text) => sendClientText(socket, text),
+          close: () => { try { sendClientClose(socket) } catch { /* gone */ } try { socket.destroy() } catch { /* gone */ } },
+        })
+        if (rest.length) decode(rest)
+        return
+      }
+      decode(chunk)
+    })
+    socket.on('error', (error) => {
+      clearTimeout(timer)
+      if (!opened) reject(error)
+      emit('close')
+    })
+    socket.on('close', () => { clearTimeout(timer); emit('close') })
+    socket.write(
+      `GET ${path} HTTP/1.1\r\nHost: ${host}:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`,
+    )
+  })
+}
+
+/**
+ * The /cdp relay — the single-upstream answer to "one page, many clients".
+ * At the pinned engine, EVERY browser-socket connection gets a private
+ * BrowserState and unconditionally creates its own about:blank page, so the
+ * host plugin and every agent-browser child used to drive different pages.
+ * Here all /cdp clients share ONE upstream connection (and therefore one
+ * page). Command ids are namespaced per client (slot << 20) and rewritten on
+ * the way out/in; events broadcast to every client (each carries its own
+ * sessionId). Target.createTarget('about:blank') is answered locally with
+ * the shared page's targetId — the page-creation contract survives while the
+ * private page does not.
+ */
+export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.MCP_BRIDGE_DEBUG } = {}) {
+  const SLOT_SHIFT = 20
+  const clients = new Map() // socket -> {slot}
+  let freeSlot = 1
+  let upstream = null           // {send, close, alive}
+  let upstreamConnect = null    // in-flight Promise
+  const shared = { pageTargetId: null }
+
+  const log = (...args) => { if (debug) try { process.stderr.write(`[cdp-relay] ${args.join(' ')}\n`) } catch {} }
+
+  const broadcast = (text, except = null) => {
+    for (const [socket] of clients) {
+      if (socket === except) continue
+      try { sendText(socket, text) } catch { /* gone */ }
+    }
+  }
+
+  const dropClient = (socket, why = '') => {
+    const row = clients.get(socket)
+    if (!row) return
+    clients.delete(socket)
+    log(`dropClient ${why} slot=${row.slot}`)
+    try { sendClose(socket) } catch { /* gone */ }
+    try { socket.destroy() } catch { /* gone */ }
+    // The shared upstream outlives one client — the page is the engine's
+    // BrowserState on that socket, and closing it would kill everyone's page.
+  }
+
+  const ensureUpstream = async () => {
+    if (upstream?.alive) return upstream
+    if (upstreamConnect) return upstreamConnect
+    upstreamConnect = (async () => {
+      const link = await connectUpstreamWs(upstreamUrl)
+      const handle = { alive: true, send: link.send, close: link.close }
+      // Resolve the shared page once, so Target.createTarget(about:blank) can
+      // be answered locally and /diagnostics can report it.
+      let seqBase = 0x70000000
+      const callUpstream = (method, params = {}, sessionId = null) => new Promise((resolve, reject) => {
+        const id = ++seqBase
+        const frame = { id, method, params }
+        if (sessionId) frame.sessionId = sessionId
+        relayInternal.set(id, { resolve, reject })
+        link.send(JSON.stringify(frame))
+      })
+      const relayInternal = new Map()
+      link.onMessage((text) => {
+        let message
+        try { message = JSON.parse(text) } catch { return }
+        // Internal calls (relay's own housekeeping) answer first.
+        if (typeof message.id === 'number' && relayInternal.has(message.id)) {
+          const settle = relayInternal.get(message.id)
+          relayInternal.delete(message.id)
+          if (message.error) settle.reject(new Error(message.error.message || 'upstream error'))
+          else settle.resolve(message.result ?? {})
+          return
+        }
+        // about:blank createTarget is answered locally BEFORE forwarding, so
+        // a namespaced upstream reply always belongs to a forwarded command —
+        // no dead "pending create" table is needed to swallow replies.
+        if (typeof message.id === 'number') {
+          // Namespaced response: un-prefix, deliver to its owner only.
+          const slot = message.id >> SLOT_SHIFT
+          const clientId = message.id & ((1 << SLOT_SHIFT) - 1)
+          for (const [socket, row] of clients) {
+            if (row.slot === slot) {
+              try { sendText(socket, JSON.stringify({ ...message, id: clientId })) } catch { /* gone */ }
+              break
+            }
+          }
+          return
+        }
+        if (typeof message.id === 'string' && message.id.startsWith('ks:')) {
+          // String ids carry an explicit ks:<slot>:<id> namespace — numeric
+          // bit-packing can't hold a string, so the prefix is the only route.
+          const sep = message.id.indexOf(':', 3)
+          const slot = Number(message.id.slice(3, sep))
+          const clientId = message.id.slice(sep + 1)
+          for (const [socket, row] of clients) {
+            if (row.slot === slot) {
+              try { sendText(socket, JSON.stringify({ ...message, id: clientId })) } catch { /* gone */ }
+              break
+            }
+          }
+          return
+        }
+        // Events broadcast: sessionId already distinguishes who cares.
+        broadcast(text)
+      })
+      const onDead = () => {
+        handle.alive = false
+        upstream = null
+        shared.pageTargetId = null
+        for (const [, settle] of relayInternal) settle.reject(new Error('cdp upstream lost'))
+        relayInternal.clear()
+        // The shared page just died; every client socket is now useless.
+        for (const [socket] of [...clients]) dropClient(socket)
+      }
+      link.onClose(onDead)
+      upstream = handle
+      // Find the shared page the engine created for this connection.
+      try {
+        const targets = await callUpstream('Target.getTargets')
+        const page = (targets?.targetInfos || []).find((t) => t.type === 'page')
+        shared.pageTargetId = page?.targetId || null
+        log('upstream ready pageTarget=' + (shared.pageTargetId || 'none'))
+      } catch { log('upstream ready, getTargets failed') }
+      return handle
+    })().finally(() => { upstreamConnect = null })
+    return upstreamConnect
+  }
+
+  const handle = async (socket) => {
+    let link
+    try { link = await ensureUpstream() } catch (error) {
+      log('upstream unavailable:', error?.message || error)
+      try { sendClose(socket, 1011) } catch { /* gone */ }
+      try { socket.destroy() } catch { /* gone */ }
+      return
+    }
+    // Pick a slot that is NOT in use — a wrapped freeSlot used to hand an
+    // occupied slot to a second client, and both would then receive each
+    // other's replies. Slots are small positive ints; slot 0 stays reserved
+    // because ids < 2^20 encode slot 0 for un-namespaced frames.
+    const used = new Set([...clients.values()].map((row) => row.slot))
+    let slot = 0
+    for (let candidate = 1; candidate <= 2047; candidate += 1) {
+      slot = ((freeSlot + candidate - 1) % 2047) + 1
+      if (!used.has(slot)) break
+      if (candidate === 2047) slot = 0
+    }
+    freeSlot = slot + 1
+    if (!slot) {
+      log('no free slot')
+      try { sendClose(socket, 1013) } catch { /* gone */ }
+      try { socket.destroy() } catch { /* gone */ }
+      return
+    }
+    clients.set(socket, { slot })
+    const decode = createFrameDecoder({
+      onMessage: (text) => {
+        let message
+        try { message = JSON.parse(text) } catch (e) { log('bad json', e?.message); return }
+        if (message && typeof message === 'object' && typeof message.id === 'number' && message.method) {
+          // about:blank creation is the engine's per-connection page contract;
+          // answer it with the shared page so a client's own blank never
+          // exists. Any OTHER createTarget is a real intent and forwards.
+          const isBlankCreate = message.method === 'Target.createTarget'
+            && (!message.params?.url || message.params.url === 'about:blank')
+          if (isBlankCreate && shared.pageTargetId) {
+            sendText(socket, JSON.stringify({ id: message.id, result: { targetId: shared.pageTargetId } }))
+            return
+          }
+          message.id = (slot << SLOT_SHIFT) | (message.id & ((1 << SLOT_SHIFT) - 1))
+          text = JSON.stringify(message)
+        } else if (message && typeof message === 'object' && typeof message.id === 'string' && message.method) {
+          // String ids must be namespaced too: an unprefixed string reply is
+          // indistinguishable from an event and would broadcast to every
+          // client, cross-wiring whoever happens to poll first.
+          message.id = `ks:${slot}:${message.id}`
+          text = JSON.stringify(message)
+        }
+        try { link.send(text) } catch (e) { log('send failed', e?.message); dropClient(socket, 'send-fail') }
+      },
+      onPing: (payload) => { try { sendPong(socket, payload) } catch { /* gone */ } },
+      onClose: (code) => dropClient(socket, `decoder-close-${code}`),
+      maxFrame: MAX_FRAME,
+      maxMessage: MAX_MESSAGE,
+    })
+    socket.on('data', decode)
+    socket.on('close', () => dropClient(socket, 'sock-close'))
+    socket.on('error', (e) => dropClient(socket, `sock-error-${e?.code||''}`))
+    socket.setTimeout(IDLE_MS, () => dropClient(socket, 'idle'))
+  }
+
+  return { handle, clients, shared, stats: () => ({ clients: clients.size, upstreamAlive: upstream?.alive === true, pageTargetId: shared.pageTargetId }) }
+}
 
 /**
  * RFC 6455 decoder. Handles fragmentation (0x0), ping (0x9 → pong), pong,
@@ -381,11 +677,14 @@ function answerNativeTool(name, args, bridgeState, self = {}) {
     })
     if (action === 'status') return state()
     if (action === 'claim') {
+      // state() returns ok:true — spread it FIRST so the refusal's ok:false
+      // and errorId survive; `...state()` after `ok:false` silently flipped
+      // busy/held answers to {ok:true, errorId:busy} (self-contradicting).
       if (c.humanHold?.active && self.clientName !== c.humanHold.owner) {
-        return { ok: false, errorId: 'kitesurf.control.held', error: `a human (${c.humanHold.owner}) holds the page via takeover`, ...state() }
+        return { ...state(), ok: false, errorId: 'kitesurf.control.held', error: `a human (${c.humanHold.owner}) holds the page via takeover` }
       }
       if (c.writer !== null && c.writer !== me) {
-        return { ok: false, errorId: 'kitesurf.control.busy', error: `another writer (${c.owner || 'unknown'}) holds the page`, ...state() }
+        return { ...state(), ok: false, errorId: 'kitesurf.control.busy', error: `another writer (${c.owner || 'unknown'}) holds the page` }
       }
       c.writer = me
       c.owner = self.clientName || c.owner || 'agent'
@@ -403,7 +702,7 @@ function answerNativeTool(name, args, bridgeState, self = {}) {
       if (c.writer === me) { c.writer = null; c.owner = null; c.ownerSince = null }
       return { ok: true, released: c.writer !== me, ...state() }
     }
-    return { ok: false, errorId: 'kitesurf.control.query', error: `unknown action ${action}; use status|claim|release|takeover`, ...state() }
+    return { ...state(), ok: false, errorId: 'kitesurf.control.query', error: `unknown action ${action}; use status|claim|release|takeover` }
   }
   return { ok: false, errorId: 'kitesurf.tool.unknown', error: `unknown native tool ${name}` }
 }
@@ -625,9 +924,11 @@ export function createBridge(port = PORT, env = process.env) {
   let diagnosticsPushedAt = null
   const startedAt = Date.now()
   const control = makeControl()
+  const cdpRelay = makeCdpRelay({ upstreamUrl: env.KITESURF_CDP_UPSTREAM || CDP_UPSTREAM, debug: env.MCP_BRIDGE_DEBUG })
   const stats = () => ({
     conns, accepted, rejected, uptimeMs: Date.now() - startedAt,
     control: controlSnapshot(control),
+    cdp: cdpRelay.stats(),
   })
   const bridgeState = {
     getDiagnostics: () => lastDiagnostics,
@@ -637,7 +938,7 @@ export function createBridge(port = PORT, env = process.env) {
   const server = createServer((req, res) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify({ ok: true, mcp: '/mcp', ...stats(), diagnosticsPushedAt }))
+      res.end(JSON.stringify({ ok: true, mcp: '/mcp', cdp: '/cdp', ...stats(), diagnosticsPushedAt }))
       return
     }
     // HITL control endpoint: the DSH pane reaches this through the host's
@@ -754,7 +1055,9 @@ export function createBridge(port = PORT, env = process.env) {
   })
 
   server.on('upgrade', async (req, socket) => {
-    if (req.url !== '/mcp'
+    const isMcp = req.url === '/mcp'
+    const isCdp = req.url === '/cdp'
+    if ((!isMcp && !isCdp)
         || typeof req.headers['sec-websocket-key'] !== 'string'
         || !originAllowed(req.headers.origin)) {
       rejected += 1
@@ -778,7 +1081,14 @@ export function createBridge(port = PORT, env = process.env) {
         'Connection: Upgrade\r\n' +
         `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
       )
-      attach(socket, env, bridgeState)
+      if (isCdp) {
+        // CDP relay: one upstream engine socket, one shared page. /cdp clients
+        // bypass the MCP writer lock by design — the host plugin's own CDP
+        // work is trusted the same way the engine's direct port already is.
+        cdpRelay.handle(socket)
+      } else {
+        attach(socket, env, bridgeState)
+      }
     } catch (error) {
       // acceptKey/attach threw after we counted the conn — destroy() may not
       // emit 'close' on a socket never fully opened, so release the slot here

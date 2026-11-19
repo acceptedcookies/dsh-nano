@@ -10,7 +10,9 @@ MCP-over-WS：**每个文本帧一条完整 JSON-RPC**，无 `\n` 终止符（�
 
 ## `sandbox.*` 原生工具（33 个 `agent_browser_*` 之外）
 
-宿主每 30s（失败时立即）把诊断快照推给桥，工具读这份推送。
+宿主每 15s（失败时立即）把诊断快照推给桥，工具读这份推送。
+
+> **面划分（真源）**：WS 桥暴露读/诊断 + 写锁共 15 个 `sandbox.*`（`sandbox.control` 的 status/claim/release/takeover 都在 WS 上）。**没有的是容器/实例管理面**——`sandbox.instance.ensure`、`sandbox.profile.*`、`sandbox.state`、`sandbox.evaluate`、`sandbox.settings` 等宿主 HTTP MCP 工具 **不在 WS 上**，要走宿主的鉴权 HTTP 路由 `/nano-local-sandbox/*`（或宿主 HTTP MCP）。同名工具语义一致（读同一份推送文档），目录大小不同是刻意的：WS agent 没有容器/实例管理权。写页面行为统一走 `agent_browser_*`（click/type/navigate/eval/…），受写锁约束；`sandbox.interact` 只在写锁判定里出现，不是可调用工具。
 
 | 工具 | 作用 |
 |---|---|
@@ -22,7 +24,6 @@ MCP-over-WS：**每个文本帧一条完整 JSON-RPC**，无 `\n` 终止符（�
 | `sandbox.history` | 持久浏览历史最近 30 条 |
 | `sandbox.dom` | 最后抓取的 DOM 文本（推送，非 live） |
 | `sandbox.elements` | 最后抓取的元素列表（推送） |
-| `sandbox.interact` | 页内交互（click/type/scroll…，写所有权持有者） |
 | `sandbox.snapshot` | a11y-lite 树 + `@N` ref 表 + treePreview（推送，`liveSnapshot`/`resolveRef` 指 host 路由） |
 | `sandbox.control` | 写所有权 `{action:status|claim|release|takeover}`（`self={connId,clientName}`） |
 | `sandbox.selftest` | 引擎健康自检结果 |

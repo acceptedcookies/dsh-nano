@@ -26,6 +26,8 @@ this skill's directory — \`references/<topic>.md\`.
 ## 1. Get the socket — never guess it
 \`GET /nano-local-sandbox/status\`：\`kite.cdp\`=agent-browser \`--cdp\` 的浏览器 socket（顶层也回显 \`cdp\`）；\`kite.mcpPort\`=容器内 MCP 桥端口 \`ws://<host>:<mcpPort>/mcp\`；\`kite.phase\`=\`idle\`/\`running\`/\`suspended\`，仅 running 时 attach。宿主重启后自动 re-adopt 引擎，phase 跟现实。\`engineMismatch:true\`=该 origin 应 \`/health\` 但不是 Kitesurf——不要 attach，报它。
 
+**同一页**：桥中继 \`ws://<host>:<mcpPort>/cdp\` 把宿主 pane 的 CDP 与你 attach 的 socket 复用到**同一条上游引擎连接**——engine 每连接只造一页，走 relay 你看到的页面与人看到的**是同一页**，不再是各自的 \`about:blank\`。优先用 \`kite.cdp\`（已是 relay）；绕开 relay 直连 \`/devtools/browser\` 会落进自己的私有页。
+
 ## 2. Drive it — attach, never launch
 \`\`\`bash
 agent-browser --cdp "$(curl -s .../nano-local-sandbox/status | jq -r .kite.cdp)" snapshot -i
@@ -49,7 +51,7 @@ agent-browser --cdp "$(curl -s .../nano-local-sandbox/status | jq -r .kite.cdp)"
 |---|---|
 | \`references/routes.md\` | 查路由/参数/方法全表（ROUTE_TABLE 对账） |
 | \`references/observability.md\` | 状态模型、幂等/重试、perf span、取值域 |
-| \`references/mcp-bridge.md\` | 15 个 \`sandbox.*\` MCP 工具、帧、写所有权 |
+| \`references/mcp-bridge.md\` | 15 个 \`sandbox.*\` MCP 工具（读/诊断+写锁；容器/实例面在宿主 HTTP）、帧、写所有权 |
 | \`references/element-packets.md\` | 点选包、手势、shot/open/history 细节 |
 | \`references/emulation.md\` | \`/settings\` UA/viewport/media/headers |
 | \`references/recipes.md\` | 正例 + 负例（预测结果，不靠猜） |

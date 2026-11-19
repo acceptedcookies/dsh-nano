@@ -1402,6 +1402,22 @@
       "id": "dnms.perf-review.host",
       "channel": "http",
       "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/last",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "LAST_ROUTE — the pane/agent contract's last-pick read (AGENTS.md route table + recipes.md). Host-memory read of session.lastPick; no engine call.",
+      "id": "dnls.last",
+      "channel": "http",
+      "match": "exact"
     }
   ]
 }

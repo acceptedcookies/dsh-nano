@@ -262,8 +262,17 @@ async function main() {
   })
   if (dt) await page.mouse.click(dt.x, dt.y)
   await new Promise((r) => setTimeout(r, 2500))
-  const consoleRows = await page.evaluate(() => document.querySelectorAll('[data-nks-devtools] .nks-dt-row').length)
-  record('devtools-console', consoleRows > 0, `${consoleRows} rows`)
+  const consoleRows = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('[data-nks-devtools] .nks-dt-row')]
+    return {
+      count: rows.length,
+      // A row that renders nothing is a shell — the review's rows>0 gap.
+      textRows: rows.filter((row) => (row.textContent || '').trim().length > 0).length,
+      leveled: rows.filter((row) => /log|warn|error|info|debug/i.test(row.textContent || '')).length,
+    }
+  })
+  record('devtools-console', consoleRows.count > 0 && consoleRows.textRows === consoleRows.count && consoleRows.leveled > 0,
+    `${consoleRows.count} rows · ${consoleRows.textRows} with text · ${consoleRows.leveled} leveled`)
   const netTab = await page.evaluate(() => {
     // The view switch is the host SegmentedControl (no per-option data attribute):
     // find the head's option whose text is the Network label.
@@ -276,8 +285,18 @@ async function main() {
   })
   if (netTab) await page.mouse.click(netTab.x, netTab.y)
   await new Promise((r) => setTimeout(r, 2000))
-  const netRows = await page.evaluate(() => document.querySelectorAll('[data-nks-devtools] .nks-dt-row').length)
-  record('devtools-network', netRows > 0, `${netRows} rows`)
+  const netRows = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('[data-nks-devtools] .nks-dt-row')]
+    return {
+      count: rows.length,
+      // Each row must carry a method+target or a status — a count alone
+      // accepted empty shells before (review: incremental assertions).
+      shaped: rows.filter((row) => /GET|POST|PUT|DELETE|PATCH|HEAD|https?:|wss?:/.test(row.textContent || '')).length,
+      statused: rows.filter((row) => /\b[1-5]\d\d\b|pending|failed|cancelled/i.test(row.textContent || '')).length,
+    }
+  })
+  record('devtools-network', netRows.count > 0 && netRows.shaped > 0,
+    `${netRows.count} rows · ${netRows.shaped} method/url · ${netRows.statused} statused`)
   await page.screenshot({ path: `/tmp/dnk-e2e-${++shot}-devtools.png` })
 
   // 8. Elements tab (DOM tree) and computed styles
@@ -389,7 +408,7 @@ async function main() {
 
   // 11. history is served from the workerd KV
   const history = await page.evaluate(() => fetch('/nano-local-sandbox/browse-history?limit=5').then((r) => r.json()))
-  record('history-kv', history.ok === true && (history.entries || []).length > 0 && history.source === 'workerd-kv', `${(history.entries || []).length} entries · ${history.source}`)
+  record('history-kv', history.ok === true && (history.entries || []).length > 0 && history.source === 'instance-state', `${(history.entries || []).length} entries · ${history.source}`)
 
   // 12. perf-review instrumentation: pane actions must be recorded as spans.
   // Read the collector's local report — the host copy only updates on the
@@ -475,7 +494,10 @@ async function main() {
     const rd = await fetch('/nano-local-sandbox/storage?scope=local').then(J)
     return { savedOk: saved.ok === true, restored: loaded.restored, readBack: rd.result?.entries?.['e2e-k'] }
   })
-  record('storage-state-roundtrip', st.savedOk && st.restored >= 1 && st.readBack === 'e2e-v', JSON.stringify(st))
+  // loaded.restored is the /state restored OBJECT ({ok,url,cookieSet}), not a
+  // count — >=1 silently compared NaN and made the check lie. ok:true is the
+  // real contract.
+  record('storage-state-roundtrip', st.savedOk && st.restored?.ok === true && st.readBack === 'e2e-v', JSON.stringify(st))
 
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`)

@@ -41,28 +41,22 @@ let droppedConsole = 0
 export const ERROR_CATALOG = [
   { match: '^kitesurf\\.body\\.toolarge$', example: 'kitesurf.body.toolarge', status: 413, cause: '请求体超过该路由上限（shot/pick/settings/history 4096B，edit 8192B）', next: '拆小请求；/edit text ≤4000 字符；不要整页 HTML 塞进 body' },
   { match: '^kitesurf\\.body\\.', example: 'kitesurf.body.json', status: 400, cause: 'body 不是 JSON 对象、JSON 截断或为空', next: '确认 content-type: application/json 与合法 JSON 对象；空 body 视为 {}' },
-  { match: '^kitesurf\\.url\\.', example: 'kitesurf.url.scheme', status: 400, cause: '地址为空/超长/非 http(s)/带用户名密码', next: '用完整 https:// 地址；去掉 user:pass@；长度 ≤2000' },
-  { match: '^kitesurf\\.pick\\.(point|selector)$', example: 'kitesurf.pick.point', status: 400, cause: '坐标非有限数/越界，或选择器语法错', next: '坐标取画面内容区域（注意 letterbox 黑边）；selector 用合法 CSS' },
-  { match: '^kitesurf\\.pick\\.badpoint$', example: 'kitesurf.pick.badpoint', status: 400, cause: 'selector 缺失或含控制字符', next: '传 {selector:"h1"} 或先 /pick {x,y}' },
+  { match: '^kitesurf\\.url\\.', example: 'kitesurf.url.scheme', status: 400, cause: '地址为空/超长/非 http(s)/带用户名密码', next: '用完整 https:// 地址或裸 host[:port][/path]（自动补 https）；去掉 user:pass@；长度 ≤2000' },
+  { match: '^kitesurf\\.pick\\.(point|selector|badpoint)$', example: 'kitesurf.pick.point', status: 400, cause: '坐标非有限数/越界，或选择器非法/含控制字符', next: '坐标取画面内容区域（注意 letterbox 黑边）；selector 用合法 CSS' },
   { match: '^kitesurf\\.pick\\.miss$', example: 'kitesurf.pick.miss', status: 404, cause: '坐标下没有元素，或选择器未命中（输入侧未命中，不是引擎故障）', next: '重新 /shot 拿最新画面；换 selector；确认页面已 /open' },
-  { match: '^kitesurf\\.pick\\.failed$', example: 'kitesurf.pick.failed', status: 502, cause: '引擎侧元素探针异常', next: 'GET /status 看 engineMismatch；POST /kite {action:"resume"}' },
-  { match: '^kitesurf\\.edit\\.(badtext|badpoint|selector)$', example: 'kitesurf.edit.badtext', status: 400, cause: 'text 为空/超 4000，或 selector 缺失非法', next: '/edit 必须同时给 selector 与 1..4000 字符 text' },
-  { match: '^kitesurf\\.edit\\.miss$', example: 'kitesurf.edit.miss', status: 404, cause: '改字目标选择器未命中', next: '重新 /pick 取 selector；页面若已导航需重选' },
+  { match: '^kitesurf\\.edit\\.(badtext|selector)$', example: 'kitesurf.edit.badtext', status: 400, cause: 'text 非 1..4000 字符，或 selector 超 320 字符', next: '/edit 必须同时给 selector 与 1..4000 字符 text' },
+  { match: '^kitesurf\\.edit\\.miss$', example: 'kitesurf.edit.miss', status: 400, cause: '改字目标缺 selector/@N，或选择器页内未命中（DNLS 发射均为 400）', next: 'POST /edit {selector,text}；页面若已导航需重选' },
   { match: '^kitesurf\\.shot\\.(scroll|format|fit)$', example: 'kitesurf.shot.scroll', status: 400, cause: 'scroll 非有限数/超 ±4000，format 不是 png/jpeg/webp，或 fit 不是 {width,height}', next: 'POST /shot {scroll: ±整数, format:\"webp\", quality:1..100, fit:{width,height}}' },
   { match: '^kitesurf\\.settings\\.', example: 'kitesurf.settings.viewport', status: 400, cause: 'userAgent/viewport/media/extraHeaders 形状非法或值越界（视口 320..3840 × 240..2160；dsf 1/2/3；media screen|print；header 名禁用凭证类）', next: 'POST /settings {"viewport":{"width":1024,"height":768},"media":"print","extraHeaders":{"X-Debug":"1"}}；任一字段传 null 清除；空串 UA 清除伪装' },
-  { match: '^kitesurf\\.kite\\.state$', example: 'kitesurf.kite.state', status: 409, cause: '生命周期阶段不符（idle 才能 start、running 才能 suspend、suspended 才能 resume）', next: 'GET /status 读 kite.phase；按阶段选 start/suspend/resume；host 重启后 phase 会自动 adopt' },
-  { match: '^kitesurf\\.kite\\.(origin|remote|mcpPort|action)$', example: 'kitesurf.kite.remote', status: 400, cause: 'configure 参数非法、远程地址未开 allowRemote、或 action 未知', next: 'loopback 地址；mcpPort 1..65535；action ∈ init|start|suspend|resume|configure' },
-  { match: '^kitesurf\\.kite\\.(node|init)$', example: 'kitesurf.kite.node', status: 500, cause: 'Node 版本过低或锁文件不可写', next: '需要 Node ≥22；检查 DSH_HOME 可写' },
-  { match: '^kitesurf\\.kite\\.portbusy$', example: 'kitesurf.kite.portbusy', status: 409, cause: '引擎要绑的宿主端口被其他程序占用（本机 8787 常被 Cursor 占用）', next: '把 profile 的 config.httpBase 指到空闲端口（如 http://127.0.0.1:8798）后重启宿主；端口分配由 dsh-nano-local-sandbox 宿主管' },
-  { match: '^kitesurf\\.kite\\.(start|resume)$', example: 'kitesurf.kite.resume', status: 502, cause: '引擎 CDP 无应答——本包不启动容器，引擎须由沙箱宿主带起', next: 'GET /status 看 engineAlive；引擎由 dsh-nano-local-sandbox 宿主启动（POST /nano-local-sandbox/recover）' },
-  { match: '^kitesurf\\.navigate\\.egress$', example: 'kitesurf.navigate.egress', status: 504, cause: '目标站点出站超过 25s（引擎写入 egress timeout）', next: '换可达站点；不要重试同一地址；GET /status 确认引擎仍活' },
+  { match: '^kitesurf\\.kite\\.state$', example: 'kitesurf.kite.state', status: 409, cause: '生命周期阶段不符、configure 目标不可达（idle 才能 start、running 才能 suspend、suspended 才能 resume）', next: 'GET /status 读 kite.phase；按阶段选 start/suspend/resume；host 重启后 phase 会自动 adopt' },
+  { match: '^kitesurf\\.kite\\.', example: 'kitesurf.kite.state', status: 409, cause: 'kite 动作与当前 phase 不符、引擎不可达、或 action 未知', next: 'GET /status 看 phase；action ∈ init|start|suspend|resume|configure；configure 参数非法走 kitesurf.body.json' },
+  { match: '^kitesurf\\.navigate\\.egress$', example: 'kitesurf.navigate.egress', status: 504, cause: '目标站点出站超时（引擎 errorText 写 egress）', next: '换可达站点；不要重试同一地址；GET /status 确认引擎仍活' },
   { match: '^kitesurf\\.navigate\\.delta$', example: 'kitesurf.navigate.delta', status: 400, cause: '/history delta 不是 -1 或 +1', next: 'POST /history {delta:-1} 后退 / {delta:1} 前进' },
   { match: '^kitesurf\\.navigate\\.(timeout|failed)$', example: 'kitesurf.navigate.failed', status: 502, cause: 'Page.navigate 超时或被拒绝（DNS/网络）', next: '检查 URL 可达；超时后不要立刻重复 open（可能已在导航）' },
-  { match: '^kitesurf\\.engine\\.context$', example: 'kitesurf.engine.context', status: 409, cause: '页面正在导航，JS 执行上下文被销毁（竞态，不是引擎故障）', next: '已自动重试一次；仍失败时等页面稳定后重试，或 POST /recover 一键恢复' },
+  { match: '^kitesurf\\.engine\\.mismatch$', example: 'kitesurf.engine.mismatch', status: 409, cause: 'configure 目标回答 devtools 但不是 Kitesurf 引擎', next: '指到 Kitesurf 容器端口，不要指向本机 Chrome' },
   { match: '^kitesurf\\.engine\\.', example: 'kitesurf.engine.connect', status: 502, cause: 'CDP 连接失败/服务不是 Kitesurf/socket 关闭/命令超时', next: 'GET /status；container list；curl http://127.0.0.1:8798/health；必要时 /kite resume' },
-  { match: '^kitesurf\\.context\\.(text|miss)$', example: 'kitesurf.context.miss', status: 404, cause: '上下文引用不存在或 text 为空（ref 环只保留最近 50 条，宿主重启即清空）', next: '重新点选生成新 ref；GET /nano-local-sandbox/context 列出最近引用' },
-  { match: '^kitesurf\\.console\\.', example: 'kitesurf.console.query', status: 400, cause: 'console 查询参数非法', next: 'GET /console?level=error&limit=50；POST /console {clear:true} 清空' },
-  { match: '^kitesurf\\.diag\\.query$', example: 'kitesurf.diag.query', status: 400, cause: 'diagnostics/operations 查询参数非法', next: 'GET /diagnostics?limit=20；GET /operations?errorsOnly=true' },
+  // NOTE: /console 的坏参数走 kitesurf.query.*（下方 96 行 query. 通配覆盖），
+  // 不存在独立的 kitesurf.console.* 发射 id——旧行是虚构。
   { match: '^kitesurf\\.evaluate\\.(empty|toolong)$', example: 'kitesurf.evaluate.empty', status: 400, cause: 'expression 为空或超过 2000 字符', next: 'POST /evaluate {expression:"document.title"}，≤2000 字符' },
   { match: '^kitesurf\\.evaluate\\.exception$', example: 'kitesurf.evaluate.exception', status: 400, cause: '页面 JS 求值抛异常（输入侧表达式错误）', next: '看 error 里的异常描述；先 /open 再求值；确认 selector/变量名存在' },
   { match: '^kitesurf\\.wait\\.query$', example: 'kitesurf.wait.query', status: 400, cause: '/wait 条件不合法：selector/text/url/fn 必须恰好一个，load 必须是 commit|domcontentloaded|load|networkidle', next: 'POST /wait {selector:".ready"} 或 {text:"Done"} 或 {url:"/home"}；加 load:"networkidle" 等空闲' },
@@ -72,24 +66,56 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.shot\\.empty$', example: 'kitesurf.shot.empty', status: 502, cause: '引擎返回了空截图（页面不可绘/渲染器忙）', next: '确认页面已 /open；等一秒重试；仍空则 GET /diagnostics 看页面是否 about:blank' },
   { match: '^kitesurf\\.dom\\.(empty|blank)$', example: 'kitesurf.dom.blank', status: 502, cause: '无文档可序列化（页面未打开/仍是 about:blank/文档不可序列化）', next: '先 POST /open；空白页是 socket 断开重置的信号 — GET /status 看 phase' },
   { match: '^kitesurf\\.elements\\.empty$', example: 'kitesurf.elements.empty', status: 502, cause: '引擎 DOM.getDocument 未返回文档根（页面未打开）', next: '先 POST /open；或 GET /elements?selector=… 前先确认页面存在' },
-  { match: '^kitesurf\\.snapshot\\.(empty|failed)$', example: 'kitesurf.snapshot.empty', status: 502, cause: 'a11y walker 没返回 JSON / 在页面里抛异常', next: '先 POST /open 再 GET /snapshot；页面若 about:blank 先导航' },
+  // /snapshot 的失败走 kitesurf.engine.connect (502) 或 evaluate.*——不存在
+  // kitesurf.snapshot.empty 这个发射 id；上面 engine.connect 行已覆盖。
   { match: '^kitesurf\\.ref\\.miss$', example: 'kitesurf.ref.miss', status: 404, cause: '@N 元素 ref 不在当前表（页面变了/还没跑过 /snapshot）', next: 'GET /nano-local-sandbox/snapshot 重建 ref 表后重试；或直接传 selector' },
   { match: '^kitesurf\\.evaluate\\.miss$', example: 'kitesurf.evaluate.miss', status: 404, cause: 'evaluate 的 token 不在页内缓存（过期/页面重建）', next: '重新 POST /evaluate {expression} 取新 token；token 缓存页级，导航即失效' },
-  { match: '^kitesurf\\.storage\\.(name|op)$', example: 'kitesurf.storage.op', status: 400, cause: 'storage 请求缺 name 或 op 非法', next: 'GET /storage?scope=local|session|cookie 读；POST {scope,op:set|delete|clear,name,value}' },
-  { match: '^kitesurf\\.storage\\.exception$', example: 'kitesurf.storage.exception', status: 400, cause: 'storage 页面内操作抛异常（如 cookie 语法/配额）', next: '看 error 描述；localStorage/sessionStorage 用 key-value；cookie 走 document.cookie（HttpOnly 不可达）' },
-  { match: '^kitesurf\\.state\\.(miss|exception)$', example: 'kitesurf.state.miss', status: 400, cause: '/state load 缺 state 或命名快照不存在/页面内恢复抛异常', next: 'POST /state {action:save,name:"x"} 先存；load 传 {action:load,name:"x"} 或 {action:load,state:{...}}' },
+  { match: '^kitesurf\\.storage\\.op$', example: 'kitesurf.storage.op', status: 400, cause: 'storage op 不在白名单 read|set|delete|clear', next: 'POST {scope,op:read|set|delete|clear,name,value}；未知 op 直接 400，不会静默清空' },
+  { match: '^kitesurf\\.state\\.miss$', example: 'kitesurf.state.miss', status: 404, cause: '/state load 的命名快照不存在（DNLS 真源状态）', next: 'POST /state {action:save,name:"x"} 先存；load 传 {action:load,name:"x"} 或 {action:load,state:{...}}' },
   { match: '^kitesurf\\.interact\\.(action|selector)$', example: 'kitesurf.interact.selector', status: 400, cause: '/interact 缺 target/selector 或 action 非法', next: 'POST /interact {action:click,target:"@1"} 或 {action:fill,target:"input",text:"x"}' },
-  { match: '^kitesurf\\.interact\\.(miss|invisible|occluded|option|type)$', example: 'kitesurf.interact.occluded', status: 404, cause: '交互失败：元素未命中/零 box/被遮挡/无该 option/类型不支持该 action', next: 'occluded 时先 scroll 或关覆盖层；miss 重跑 /snapshot 或换 selector；check/select 只对 checkbox/select 元素' },
-  { match: '^kitesurf\\.interact\\.exception$', example: 'kitesurf.interact.exception', status: 400, cause: '页内合成事件抛异常', next: '看 error 描述；确认元素可交互（非 disabled/readonly）' },
+  { match: '^kitesurf\\.interact\\.(miss|invisible|occluded|option|type)$', example: 'kitesurf.interact.occluded', status: 400, cause: '交互失败：元素未命中/零 box/被遮挡/无该 option/类型不支持该 action（DNLS 发射为 400）', next: 'occluded 时先 scroll 或关覆盖层；miss 重跑 /snapshot 或换 selector；check/select 只对 checkbox/select 元素' },
 ]
 
 /**
  * Bridge-local errors (runtime/mcp-bridge.mjs) — these fire inside the MCP
  * bridge, not on an HTTP route, so they are not host KitesurfError sites.
  * They are registered here so the "every kitesurf.* id is documented" test
- * and the agent's error table treat them as first-class, bridge-scoped ids
- * (status is null: they never map to an HTTP status).
+ * and the agent's error table treat them as first-class, bridge-scoped ids.
+ * status is null because they don't map 1:1 to one HTTP status: on the MCP
+ * lane they arrive in a 200 JSON-RPC result with isError:true; the HTTP
+ * /control lane surfaces them as 409/400 bodies — DNLS's own catalog is the
+ * per-route status truth.
  */
+// DNLS-emitted ids agents actually see (bridged HTTP /control, pushed tools,
+// query validation, backend). Aligned against dsh-nano-local-sandbox's
+// src/host/error-catalog.js — the emitter's table is the truth; this list is
+// the agent-facing mirror (drift-check happens in DNLS's delivery-guard test).
+// DNLS-emitted HTTP ids agents see on authenticated routes (query validation,
+// interact/evaluate/dom families, backend). Bridge-scoped ids (*.stale,
+// control.*, diag.*) stay in BRIDGE_ERRORS below — they never map to an HTTP
+// status. Aligned against dsh-nano-local-sandbox's src/host/error-catalog.js.
+const DNLS_EMITTED = [
+  { match: '^kitesurf\\.query\\.', example: 'kitesurf.query.limit', status: 400, cause: '查询参数不是数字', next: 'limit/since/sinceSeq/tail/depth 传数字' },
+  { match: '^kitesurf\\.evaluate\\.', example: 'kitesurf.evaluate.threw', status: 400, cause: '表达式抛异常/超长/为空', next: '≤2000 字符，修表达式' },
+  { match: '^kitesurf\\.dom\\.(empty|blank)$', example: 'kitesurf.dom.blank', status: 502, cause: '页是 about:blank 或 srcdoc 为空', next: '先 /open 地址' },
+  { match: '^kitesurf\\.backend\\.', example: 'kitesurf.backend.cli', status: 502, cause: 'container CLI 失败/超时', next: 'GET /selftest 看 backend.lastError' },
+  { match: '^sandbox\\.params\\.', example: 'sandbox.params.type', status: 400, cause: 'sandbox.* 工具参数类型不符', next: '查工具 inputSchema' },
+  { match: '^kitesurf\\.network\\.missing$', example: 'kitesurf.network.missing', status: 404, cause: '网络条目不存', next: '查 /network 当前条目' },
+  { match: '^kitesurf\\.shot\\.fit$', example: 'kitesurf.shot.fit', status: 400, cause: 'fit 尺寸非法', next: 'width 320..3840, height 240..2160' },
+  { match: '^sandbox\\.instance\\.policy-stale$', example: 'sandbox.instance.policy-stale', status: 409, cause: '策略指纹变化，需重建实例', next: 'POST instance ensure' },
+  { match: '^sandbox\\.profile\\.unknown$', example: 'sandbox.profile.unknown', status: 404, cause: '未知 profile 名', next: 'GET profiles 列表' },
+  { match: '^sandbox\\.selftest\\.unavailable$', example: 'sandbox.selftest.unavailable', status: 502, cause: 'selftest 不可用', next: '宿主 /selftest' },
+  { match: '^kitesurf\\.tool\\.unknown$', example: 'kitesurf.tool.unknown', status: 404, cause: 'DNLS 对未映射工具/路径的 404 发射（命名有误或方法不对）', next: '对 tools/list 与路由表核对名字和方法' },
+  { match: '^kitesurf\\.state\\.name$', example: 'kitesurf.state.name', status: 400, cause: "'__last__' 保留名被占用", next: '换名或不带 name' },
+  // Mirror parity: these three are real host emitters (see routes.js) that the
+  // DNK mirror silently dropped — an agent reading this catalog alone would
+  // never learn the statuses.
+  { match: '^kitesurf\\.dom\\.empty$', example: 'kitesurf.dom.empty', status: 502, cause: '没有可序列化的文档/引擎页未打开', next: '先 POST /open 再重试 /dom' },
+  { match: '^sandbox\\.cdp\\.page-lost$', example: 'sandbox.cdp.page-lost', status: 502, cause: '该实例的页面 socket 已丢失', next: '按 lastUrl 重开，不要复用旧 DOM' },
+  { match: '^kitesurf\\.control\\.bridge$', example: 'kitesurf.control.bridge', status: 502, cause: '容器 MCP 桥不可达（humanHold/控制态读写失败）', next: 'GET /status 看 phase；桥健康走 sandbox.bridge_health' },
+]
+ERROR_CATALOG.push(...DNLS_EMITTED)
+
 export const BRIDGE_ERRORS = [
   { id: 'kitesurf.diag.stale', cause: '宿主尚未把诊断快照推给桥（首次连接/刚重启）', next: '等几秒重试，或先在已登录页面调 GET /diagnostics 让宿主推一份' },
   { id: 'kitesurf.history.stale', cause: '桥侧还没有 history 快照', next: '在宿主打开一个页面产生 history 后重试' },
@@ -100,7 +126,10 @@ export const BRIDGE_ERRORS = [
   { id: 'kitesurf.control.held', cause: '人接管了页面（humanHold.active），写类调用被拒——held 比 busy 更高一级', next: '立刻停写、别 claim 别 retry；把控制权交还人，等 humanHold.active:false 再写' },
   { id: 'kitesurf.control.body', cause: '/control 请求体 JSON 解析失败（400）', next: '修正请求体 schema 后重试一次' },
   { id: 'kitesurf.control.query', cause: 'sandbox.control 的 action 不是 status|claim|release', next: '用 kitesurf_control {action:"status"|"claim"|"release"}' },
-  { id: 'kitesurf.tool.unknown', cause: '调用了不存在的 kitesurf_* 工具名', next: '对照 tools/list 的 kitesurf_* 工具名' },
+  // kitesurf.tool.unknown left this list: it is now a real HTTP emitter too
+  // (DNLS 404s it on unmapped routes), so it lives in DNLS_EMITTED — a dual
+  // home would break the "bridge ids never map a host status" invariant.
+
 ]
 
 /** Bridge ids are bridge-scoped, not host-catalog rows — kept separate. */

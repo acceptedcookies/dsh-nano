@@ -13,6 +13,10 @@ const ALLOW = [
   'docs/specs/dsh-nano-local-sandbox/closure/DNLS01-full-close.md',
   'docs/specs/dsh-nano-model-selector/qna/DNMS01-qna.md',
   'docs/code-review/26-nov/PRE-1116-qna.md',
+  // The 1119 audit evidence corpus quotes the retired namespace verbatim —
+  // it is a historical record, not live product surface.
+  'docs/specs/dsh-nano-kitesurf/1119-delivery-gaps.md',
+  'docs/specs/dsh-nano-kitesurf/1119-evidence/git-history.tsv',
 ]
 
 function files(dir, out = []) {
@@ -30,7 +34,7 @@ function files(dir, out = []) {
 }
 
 test('retired literals stay in the historical documents, and the container CLI stays in backend-apple.js', () => {
-  assert.equal(ALLOW.length, 7)
+  assert.equal(ALLOW.length, 9)
   const allowed = new Set(ALLOW.map((path) => resolve(root, path)))
   const apple = resolve(root, 'dsh-nano-local-sandbox/src/host/backend-apple.js')
   const oldPrefix = '/nano-' + 'kitesurf/'

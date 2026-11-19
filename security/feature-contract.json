@@ -1062,6 +1062,30 @@
         "GET": 0
       },
       "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/diff",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "200 {ok:true,diff|truncated} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/last",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "200 {ok:true,pick:{element,at,url}|null}"
     }
   ],
   "ui": {

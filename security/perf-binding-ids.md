@@ -74,6 +74,7 @@
 | `/nano-local-sandbox/har` | — | `dnls.har` | http | exact |
 | `/nano-local-sandbox/snapshot` | — | `dnls.snapshot` | http | exact |
 | `/nano-local-sandbox/refs` | — | `dnls.refs` | http | exact |
+| `/nano-local-sandbox/last` | — | `dnls.last` | http | exact |
 | `/nano-local-sandbox/control` | — | `dnls.control` | http | exact |
 | `/dsh-nano-terminal/mcp` | `dnt.mcp` | `dnt.mcp` | http | exact |
 | `/dsh-nano-terminal/sessions` | `dnt.sessions` | `dnt.sessions` | http | exact |

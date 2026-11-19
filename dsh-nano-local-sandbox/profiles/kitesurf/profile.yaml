@@ -6,14 +6,14 @@ backend: apple-container
 scope: session
 build:
   base: node:22-bookworm-slim
-  image: kitesurf-engine:39feadfb9a3e6c14b40cf170a559ce417d0fce5d-665716c07c13
+  image: kitesurf-engine:39feadfb9a3e6c14b40cf170a559ce417d0fce5d-472144145d78
   npmPrefix:
     wrangler: 4.131.2
     agent-browser: 0.42.0
   checkout:
     ref: 39feadfb9a3e6c14b40cf170a559ce417d0fce5d
     verify: packages/engine/wrangler.jsonc
-  digest: sha256:665716c07c13d435d0693a60f0e982b8f381b7ff78e40c0510279795bd94bac9
+  digest: sha256:472144145d78032f0ef3a00d29b6fc36eb38335f62e1b94fe28ec0005223d9c1
 runtime:
   user: node
   entrypoint: /entrypoint.sh

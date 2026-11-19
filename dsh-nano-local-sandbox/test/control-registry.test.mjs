@@ -22,7 +22,7 @@ import { createUseBindings } from '../src/host/instance-registry.js'
 const here = dirname(fileURLToPath(import.meta.url))
 const REGISTRY_SRC_URL = pathToFileURL(join(here, '..', 'src', 'host', 'control-registry.js')).href
 
-const ROW_KEYS = ['sandboxId', 'name', 'profileId', 'principal', 'recipeRef', 'origin', 'stateVolume', 'binding', 'ports', 'operations', 'removed'].sort()
+const ROW_KEYS = ['sandboxId', 'name', 'profileId', 'principal', 'recipeRef', 'origin', 'stateVolume', 'binding', 'ports', 'operations', 'terminals', 'removed'].sort()
 const DOC_KEYS = ['version', 'envId', 'sandboxes'].sort()
 
 function fixture(t) {

@@ -47,9 +47,7 @@ import { policyFingerprint, tupleFromPolicy } from './policy-adapter.js'
 import { errorCatalog, errorCode, statusOf } from './error-catalog.js'
 import { buildSrcDoc } from './dom-srcdoc.js'
 import { bumpEpoch, projectSnapshot } from './observe.js'
-import { closeTermSession, listTermSessions, openTermSession, readTermSession, resizeTermSession, termStateFor, writeTermSession } from './term-bridge.js'
 import { TERM_TOOLS } from './terminal-driver.js'
-import { spawnContainerPty } from './backend-apple.js'
 
 const keeper = createCdpKeeper()
 
@@ -456,7 +454,7 @@ async function observeOnce(session, deps) {
   const bridge = bridgeRaw.ok ? { state: 'up', detail: bridgeRaw.detail || '' } : { state: 'down', detail: bridgeRaw.detail || '' }
   const terminal = deps.termPolicyStale
     ? { state: 'policy-stale' }
-    : { state: termStateFor(session.termSessionId) === 'listening' || listTermSessions().length > 0 ? 'listening' : 'absent' }
+    : { state: 'absent' }
   const effective = { httpBase, enginePort: engineRow?.hostPort ?? host.engineHostPort, bridgePort: bridgeRow?.hostPort ?? host.bridgeHostPort }
   const ports = {
     engine: engineRow ? { port: engineRow.hostPort, containerPort: engineRow.containerPort, heldBy: 'this-container' } : { port: host.engineHostPort, containerPort: host.engineContainerPort, heldBy: 'free' },
@@ -1389,47 +1387,16 @@ function livePolicy(session, deps) {
 
 /**
  * A terminal must not attach to a container whose policy fingerprint no longer
- * matches the live session policy. The registry row is the only durable record
- * of the fingerprint that was actually mounted.
+ * matches the live session policy; managed dispatch re-verifies the bound
+ * generation instead of trusting a session map.
+ *
+ * Pre-managed term.* calls fail closed: the v1 URL/token bridge and the
+ * global session map are gone. Managed dispatch (createManagedRoutes +
+ * the terminal owner) is the only live path once activated; until then no
+ * terminal work is served and no credential material is minted.
  */
-function termPolicyStale(session, sessionId, deps) {
-  if (deps?.termPolicyStale === true) return true
-  if (session?.policyStale === true) return true
-  const policy = livePolicy(session, deps)
-  if (!policy || !sessionId) return false
-  const registry = registryFor(deps, session.__profile)
-  const row = registry?.instances ? [...registry.instances.values()].find((item) => item.sessionId === sessionId) : null
-  if (!row?.policyFingerprint) return false
-  try {
-    return policyFingerprint(tupleFromPolicy({ ...policy, sessionId })) !== row.policyFingerprint
-  } catch { return false }
-}
-
-async function callTermTool(name, args, session, deps) {
-  if (name === 'term.session.create') {
-    const snap = await envSnapshot(session, deps)
-    const created = await openTermSession({
-      sessionId: args.sessionId,
-      cols: args.cols,
-      rows: args.rows,
-      containerRunning: snap.planes?.container?.state === 'running',
-      policyStale: termPolicyStale(session, args.sessionId, deps),
-      spawnPty: (spec) => {
-        if (typeof deps.spawnPty === 'function') return deps.spawnPty(spec)
-        if (typeof deps.backend?.openPty === 'function') return deps.backend.openPty(snap.containerName, spec)
-        return spawnContainerPty(snap.containerName, spec)
-      },
-    })
-    if (created.ok) session.termSessionId = created.id
-    return created
-  }
-  if (name === 'term.session.close') return closeTermSession(args.id)
-  if (name === 'term.session.list') return { ok: true, sessions: listTermSessions() }
-  if (name === 'term.session.input') return writeTermSession(args.id, args.data)
-  if (name === 'term.session.read') return readTermSession(args.id, args.lines)
-  if (name === 'term.session.resize') return resizeTermSession(args.id, args.cols, args.rows)
-  if (name === 'term.audit' || name === 'term.lane.status') return { ok: true, sessions: listTermSessions() }
-  return { ok: false, kind: 'invalid', status: 400, error: `no terminal tool ${name}` }
+async function callTermTool(name) {
+  return { ok: false, kind: 'unavailable', status: 503, error: `managed terminal dispatch is not activated for ${name}` }
 }
 
 export function routeSpecs(deps = {}) {

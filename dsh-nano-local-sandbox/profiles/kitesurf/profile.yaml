@@ -7,18 +7,20 @@ scope: session
 driver: ./driver/index.js
 build:
   base: node:22-bookworm-slim
-  image: kitesurf-engine:39feadfb9a3e6c14b40cf170a559ce417d0fce5d-8870215e6c41
+  image: kitesurf-engine:39feadfb9a3e6c14b40cf170a559ce417d0fce5d-216aa53e4c48
   recipe:
     - Dockerfile
     - entrypoint.sh
     - mcp-bridge.mjs
+    - pty-entry.mjs
+    - pty-worker.py
   npmPrefix:
     wrangler: 4.131.2
     agent-browser: 0.42.0
   checkout:
     ref: 39feadfb9a3e6c14b40cf170a559ce417d0fce5d
     verify: packages/engine/wrangler.jsonc
-  digest: sha256:8870215e6c41e2f36b6531eb8d254f7bdb012ccd1ec5785e7c25c25e0881940d
+  digest: sha256:216aa53e4c4899b5755fa65c347abc2e6b3f1359128b2b469f428d1f0918ee4c
 runtime:
   user: node
   entrypoint: /entrypoint.sh

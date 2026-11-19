@@ -53,6 +53,45 @@ function isMissingContainer(error, name) {
 }
 
 const CLI_TIMEOUT_MS = Number(process.env.DNLS_CLI_TIMEOUT_MS || 15000)
+const SESSION_OUTPUT_MAX = 1 << 20
+
+/**
+ * Interactive `container exec -i`: the request goes over stdin, the answer
+ * over stdout — typed input never rides argv or CLI logs. `io.execSession`
+ * is the test seam.
+ */
+function runSession(io, args, { input = '', timeoutMs = CLI_TIMEOUT_MS } = {}) {
+  io.calls.spawn += 1
+  if (io.execSession) return io.execSession('container', args, input)
+  return new Promise((resolve, reject) => {
+    const child = spawn('container', args, { stdio: ['pipe', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    let capped = false
+    const timer = setTimeout(() => {
+      try { child.kill('SIGKILL') } catch { /* gone */ }
+      reject(cliError(args, { timedOut: true }))
+    }, timeoutMs)
+    child.stdout?.on('data', (chunk) => {
+      stdout += chunk
+      if (!capped && Buffer.byteLength(stdout) > SESSION_OUTPUT_MAX) {
+        capped = true
+        try { child.kill('SIGKILL') } catch { /* gone */ }
+      }
+    })
+    child.stderr?.on('data', (chunk) => { stderr += chunk })
+    child.on('error', (cause) => { clearTimeout(timer); reject(cliError(args, { cause })) })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (code === 0 && !capped) resolve(stdout)
+      else reject(cliError(args, { code: code ?? 1, stderr }))
+    })
+    child.stdin.end(input)
+  })
+}
+
+/** Terminal broker verbs the managed owner may invoke through entry. */
+const TERM_ENTRY_VERBS = new Set(['create', 'rpc'])
 
 function run(io, args, { timeoutMs = CLI_TIMEOUT_MS } = {}) {
   io.calls.spawn += 1
@@ -219,6 +258,39 @@ export function createAppleBackend(spec = {}, io = {}) {
     async stats(name) {
       const text = await runFile(bound, ['stats', '--no-stream', '--format', 'json', name])
       return JSON.parse(text)
+    },
+    /**
+     * Managed terminal broker control: one JSON request to the baked
+     * `pty-entry.mjs` inside the named container, over stdin/stdout — never
+     * argv, never a shell. `create` spawns the guest worker explicitly;
+     * `rpc` only forwards to an existing socket. This remains the only CLI
+     * call site; no host inputs or credentials reach argv/env/logs.
+     */
+    async terminalRpc(locator, verb, request) {
+      if (!TERM_ENTRY_VERBS.has(verb)) throw new Error(`terminalRpc rejects verb: ${String(verb)}`)
+      const args = [
+        'exec', '-i', '--user', '0:0', '--workdir', '/', locator,
+        '/usr/bin/env', '-i', 'PATH=/usr/local/bin:/usr/bin:/bin',
+        '/usr/local/bin/node', '/opt/dnls/pty-entry.mjs', verb,
+      ]
+      const text = await runSession(bound, args, { input: JSON.stringify(request ?? {}) })
+      const line = String(text).split('\n').find((row) => row.trim())
+      let reply
+      try {
+        reply = JSON.parse(line ?? '{}')
+      } catch {
+        reply = null
+      }
+      // Blank, malformed, or non-{ok:true} replies are never success —
+      // a create must also echo the exact terminalId it was asked for.
+      const bad = () => {
+        const error = new Error(`terminalRpc ${verb}: ${typeof reply?.error === 'string' ? reply.error : 'invalid reply'}`)
+        error.term = reply && typeof reply === 'object' ? reply : undefined
+        return error
+      }
+      if (reply?.ok !== true) throw bad()
+      if (verb === 'create' && reply.terminalId !== request?.terminalId) throw bad()
+      return reply
     },
     /** Remove a container so it can be recreated at a different size. */
     async remove(name) {

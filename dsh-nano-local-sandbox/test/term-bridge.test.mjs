@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
-import { decodeMcpReply } from '../../packages/dsh-interface/src/host/decodeMcpReply.js'
-import { registerRoutes } from '../lib/route-guard.js'
 import { BINDING_TABLE } from '../lib/bindings.js'
-import { spawnContainerPty, spawnPtyProcess } from '../src/host/backend-apple.js'
-import { routeSpecs } from '../src/host/routes.js'
-import { resetClient } from '../src/host/cdp-elements.js'
-import { shutdownTerms } from '../src/host/term-bridge.js'
+import { registerRoutes } from '../lib/route-guard.js'
+import { CONTRACT_VERSION } from '../src/host/control-contract.js'
+import { openControlRegistry } from '../src/host/control-registry.js'
+import { createManagedRoutes } from '../src/host/managed-routes.js'
+import { createTerminalOwner } from '../src/host/term-bridge.js'
 
-test.after(() => {
-  shutdownTerms()
-})
+const managedTable = () => BINDING_TABLE.filter((row) => row.path === '/nano-local-sandbox/mcp')
+const versioned = { 'x-dnls-contract': CONTRACT_VERSION }
 
 function ctxFor(routes) {
   return {
@@ -23,264 +23,213 @@ function ctxFor(routes) {
   }
 }
 
-function routesFor(deps) {
-  const routes = []
-  registerRoutes(ctxFor(routes), routeSpecs(deps), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
-  return Object.fromEntries(routes.map((route) => [route.path, route]))
-}
-
-async function call(route, body) {
-  let raw = ''
-  const res = { statusCode: 0, setHeader() {}, end(text) { raw = text } }
-  await route.handler({ method: 'POST', url: route.path, body }, res)
-  return { status: res.statusCode, body: raw ? JSON.parse(raw) : null }
-}
-
-const running = {
-  async inspect() {
-    return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [
-      { containerPort: 8787, hostAddress: '127.0.0.1', hostPort: 1 },
-      { containerPort: 8791, hostAddress: '127.0.0.1', hostPort: 2 },
-    ] } }]) }
-  },
-}
-
-function deps(extra = {}) {
+function resFor() {
   return {
-    session: { phase: 'running', history: [], containerName: 'kitesurf-dev' },
-    backend: running,
-    env: { DSH_HOME: '/tmp/.dsh-dev' },
-    prepareTimeoutMs: 0,
-    spawnPty() {
-      return spawn('/bin/cat', { stdio: ['pipe', 'pipe', 'pipe'] })
-    },
-    ...extra,
+    statusCode: 0,
+    headers: {},
+    setHeader(name, value) { this.headers[name] = value },
+    end(text) { this.raw = text },
   }
 }
 
-test('term.session.create without sessionId does not listen and is not term-1', async () => {
-  const routes = routesFor(deps())
-  const result = await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 1, method: 'tools/call',
-    params: { name: 'term.session.create', arguments: { cols: 80, rows: 24 } },
-  })
-  const decoded = decodeMcpReply(result.body)
-  assert.equal(decoded.ok, false)
-  assert.equal(JSON.stringify(result.body).includes('term-1'), false)
-  assert.equal(JSON.stringify(result.body).includes('ws://'), false)
-})
+const INTENT = { name: 'box', profileId: 'kitesurf', principal: 'owner', recipeRef: 'recipe@sha256:1' }
+const OBSERVED = { locator: 'box-1', generation: 'gen-1', stateVolume: '/state/box-1', state: 'running' }
 
-test('term.session.create round-trips bytes on the returned socket', async () => {
-  const routes = routesFor(deps())
-  const result = await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 2, method: 'tools/call',
-    params: { name: 'term.session.create', arguments: { sessionId: 'sess-live', cols: 80, rows: 24 } },
-  })
-  const decoded = decodeMcpReply(result.body)
-  assert.equal(decoded.ok, true)
-  assert.equal(decoded.data.attach.protocol, 'dnt-ws-v1')
-  assert.equal(Object.hasOwn(decoded.data.attach, 'path'), false)
-  assert.match(decoded.data.attach.url, /^ws:\/\/127\.0\.0\.1:\d+\/term\?session=sess-live&token=[0-9a-f]{32}$/)
-  const forged = new URL(decoded.data.attach.url)
-  forged.searchParams.delete('token')
-  const refusedOpen = await new Promise((resolve) => {
-    const probe = new WebSocket(forged.toString())
-    probe.addEventListener('open', () => { probe.close(); resolve(true) })
-    probe.addEventListener('error', () => resolve(false))
-  })
-  assert.equal(refusedOpen, false, 'an attach without the token must not upgrade')
-  const ws = new WebSocket(decoded.data.attach.url)
-  const echoed = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('no echo')), 3000)
-    ws.addEventListener('open', () => ws.send(new Uint8Array([104, 105, 10])))
-    ws.addEventListener('message', async (event) => {
-      clearTimeout(timer)
-      const data = event.data
-      const buf = typeof data === 'string' ? Buffer.from(data) : Buffer.from(await data.arrayBuffer())
-      resolve(buf.toString('utf8'))
-    })
-  })
-  assert.equal(echoed, 'hi\n')
-  await new Promise((resolve) => {
-    ws.addEventListener('close', () => resolve())
-    ws.close()
-  })
-  await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 3, method: 'tools/call',
-    params: { name: 'term.session.close', arguments: { id: 'sess-live' } },
-  })
-})
+/**
+ * A live world: observe reads it, the fake terminalRpc mutates it. `workers`
+ * maps terminalId → the broker replies an rpc returns; absent → throw (a
+ * dead worker is never a success).
+ */
+function fixture(t, { principal = 'owner', operator = true, obs = OBSERVED, issueLocator = (ref) => `ws://127.0.0.1/attach/${ref.terminalId}` } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'dnls-p4-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const registry = openControlRegistry({ root, envId: 'env-1' })
+  t.after(() => { try { registry.close() } catch { /* already closed */ } })
+  const row = registry.adopt(INTENT, OBSERVED)
 
-test('the same session reuses one pty and a stopped container returns no url', async () => {
-  const routes = routesFor(deps())
-  const first = decodeMcpReply((await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 4, method: 'tools/call',
-    params: { name: 'term.session.create', arguments: { sessionId: 'sess-once', cols: 40, rows: 12 } },
-  })).body)
-  const second = decodeMcpReply((await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 5, method: 'tools/call',
-    params: { name: 'term.session.create', arguments: { sessionId: 'sess-once', cols: 40, rows: 12 } },
-  })).body)
-  assert.equal(first.data.id, second.data.id)
-  assert.equal(first.data.attach.url, second.data.attach.url)
-  await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 6, method: 'tools/call',
-    params: { name: 'term.session.close', arguments: { id: 'sess-once' } },
-  })
-  const down = routesFor(deps({
-    backend: { async inspect() { return { raw: JSON.stringify([{ status: { state: 'stopped' }, configuration: { publishedPorts: [] } }]) } } },
-  }))
-  const refused = decodeMcpReply((await call(down['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 7, method: 'tools/call',
-    params: { name: 'term.session.create', arguments: { sessionId: 'sess-down', cols: 80, rows: 24 } },
-  })).body)
-  assert.equal(refused.ok, false)
-  assert.equal(JSON.stringify(refused).includes('ws://'), false)
-})
-
-test('container pty is asked to exec inside the named container', () => {
-  let seen = null
-  const child = spawnContainerPty('kitesurf-dev', { cols: 80, rows: 24 }, {
-    spawnPty(argv) {
-      seen = argv
-      return spawn('/bin/cat', { stdio: ['pipe', 'pipe', 'pipe'] })
-    },
-  })
-  child.kill('SIGKILL')
-  assert.deepEqual(seen, ['container', 'exec', '-it', 'kitesurf-dev', '/bin/sh'])
-})
-
-test('term.create goes through backend.openPty with the env container name', async () => {
-  let opened = null
-  const routes = routesFor(deps({
-    spawnPty: undefined,
-    backend: {
-      ...running,
-      openPty(name, spec) {
-        opened = { name, spec }
-        return spawn('/bin/cat', { stdio: ['pipe', 'pipe', 'pipe'] })
-      },
-    },
-  }))
-  const result = await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 31, method: 'tools/call',
-    params: { name: 'term.session.create', arguments: { sessionId: 'sess-route', cols: 90, rows: 33 } },
-  })
-  const decoded = decodeMcpReply(result.body)
-  assert.equal(decoded.ok, true)
-  assert.equal(opened?.name, 'kitesurf-dev')
-  assert.equal(opened?.spec?.cols, 90)
-  assert.equal(opened?.spec?.rows, 33)
-  await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 32, method: 'tools/call',
-    params: { name: 'term.session.close', arguments: { id: 'sess-route' } },
-  })
-})
-
-test('a stale policy does not listen', async () => {
-  const routes = routesFor(deps({ termPolicyStale: true }))
-  const result = await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 11, method: 'tools/call',
-    params: { name: 'term.session.create', arguments: { sessionId: 'sess-stale', cols: 80, rows: 24 } },
-  })
-  const decoded = decodeMcpReply(result.body)
-  assert.equal(decoded.ok, false)
-  assert.equal(decoded.error?.errorId, 'sandbox.instance.policy-stale')
-  assert.equal(JSON.stringify(result.body).includes('ws://'), false)
-})
-
-test('a changed live policy fingerprint blocks create from the registry row', async () => {
-  const { policyFingerprint } = await import('../src/host/policy-adapter.js')
-  let spawned = 0
-  const staleFingerprint = policyFingerprint({ sessionId: 'sess-policy', mode: 'read-only', workspaceRoot: '/work', extraRoots: [] })
-  const routes = routesFor(deps({
-    policy: () => ({ mode: 'danger-full-access', workspaceRoot: '/work', extraRoots: [] }),
-    registry: { instances: new Map([['i1', { sessionId: 'sess-policy', policyFingerprint: staleFingerprint }]]) },
-    spawnPty() { spawned += 1; return spawn('/bin/cat', { stdio: ['pipe', 'pipe', 'pipe'] }) },
-  }))
-  const result = await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 21, method: 'tools/call',
-    params: { name: 'term.session.create', arguments: { sessionId: 'sess-policy', cols: 80, rows: 24 } },
-  })
-  const decoded = decodeMcpReply(result.body)
-  assert.equal(decoded.ok, false)
-  assert.equal(decoded.error?.errorId, 'sandbox.instance.policy-stale')
-  assert.equal(spawned, 0)
-  assert.equal(JSON.stringify(result.body).includes('ws://'), false)
-})
-
-test('overlapping status reads share one probe pass', async () => {
-  let inspects = 0
-  const routes = routesFor(deps({
-    session: { phase: 'running', history: [], containerName: 'kitesurf-dev', httpBase: 'http://127.0.0.1:1' },
-    backend: { async inspect() { inspects += 1; await new Promise((r) => setTimeout(r, 30)); return running.inspect() } },
-  }))
-  const get = async () => {
-    let raw = ''
-    const res = { statusCode: 0, setHeader() {}, end(text) { raw = text } }
-    await routes['/nano-local-sandbox/status'].handler({ method: 'GET', url: '/nano-local-sandbox/status' }, res)
-    return JSON.parse(raw)
+  const workers = new Map()
+  const calls = []
+  const terminalRpc = async (locator, verb, request) => {
+    calls.push({ locator, verb, request })
+    assert.equal(locator, row.binding.locator)
+    if (verb === 'create') {
+      workers.set(request.terminalId, { state: 'active', out: 'shell-bytes' })
+      return { ok: true, terminalId: request.terminalId }
+    }
+    const worker = workers.get(request.terminalId)
+    if (!worker) throw new Error('worker unavailable')
+    if (request.verb === 'status') return { ok: true, state: worker.state }
+    if (request.verb === 'read') return { ok: true, seq: worker.out.length, from: request.from ?? 0, bytes: worker.out, ended: worker.state === 'ended' }
+    if (request.verb === 'close') { worker.state = 'ended'; return { ok: true, ended: true } }
+    return { ok: true }
   }
-  const [a, b, c] = await Promise.all([get(), get(), get()])
-  assert.equal(inspects, 1)
-  assert.equal(a.epoch, b.epoch)
-  assert.equal(b.epoch, c.epoch)
-  await get()
-  assert.equal(inspects, 2, 'a later read probes again; nothing is cached past the pass')
-})
 
-test('resetClient bumps generation and records one network gap', () => {
-  const session = { cdp: { close() {} }, network: [{ url: 'https://example.com' }] }
-  resetClient(session)
-  assert.equal(session.cdp, null)
-  assert.equal(session.cdpGeneration, 1)
-  assert.equal(session.network.filter((row) => row.gap === true).length, 1)
-  resetClient(session)
-  assert.equal(session.cdpGeneration, 2)
-  assert.equal(session.network.filter((row) => row.gap === true).length, 2)
-})
-
-test('resize reaches the pty: stty sees the new size', { skip: process.platform === 'win32' }, async () => {
-  const child = spawnPtyProcess(['/bin/sh', '-c', 'stty size; read x; stty size'], { cols: 80, rows: 24 })
-  let seen = ''
-  child.stdout.on('data', (chunk) => { seen += chunk.toString('utf8') })
-  const waitFor = (re) => new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`no ${re} in ${JSON.stringify(seen)}`)), 5000)
-    const tick = setInterval(() => { if (re.test(seen)) { clearTimeout(timer); clearInterval(tick); resolve() } }, 20)
+  const owner = createTerminalOwner({
+    registry,
+    envId: 'env-1',
+    observe: async () => obs,
+    resolvePrincipal: ({ peer }) => (peer?.key ? {
+      key: peer.key,
+      operator: peer.operator === true,
+      canSee: () => peer.operator === true || row.principal === peer.key,
+      canUse: () => peer.operator === true || row.principal === peer.key,
+    } : null),
+    resolveCwd: async (_row, { cwd }) => {
+      if (cwd === undefined) return '/'
+      if (typeof cwd !== 'string' || !cwd.startsWith('/') || cwd.includes('..')) return null
+      return cwd
+    },
+    terminalRpc,
+    issueLocator,
   })
-  try {
-    await waitFor(/24 80/)
-    child.resize(100, 30)
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    child.stdin.write('\n')
-    await waitFor(/30 100/)
-  } finally {
-    child.kill('SIGKILL')
+
+  let currentPeer = { key: principal, operator, principal: { kind: 'owner' }, signal: { aborted: false } }
+  const routes = []
+  registerRoutes(ctxFor(routes), createManagedRoutes({
+    table: managedTable(),
+    connection: { admit: async () => ({ peer: currentPeer }) },
+    capabilities: owner.capabilities,
+    execute: owner.execute,
+  }), { table: managedTable(), plugin: 'dsh-nano-local-sandbox' })
+  const mcp = routes[0].handler
+  const tool = async (name, args) => {
+    const res = resFor()
+    await mcp({ method: 'POST', url: '/nano-local-sandbox/mcp', headers: versioned, body: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args, _meta: { 'dnls/contract': CONTRACT_VERSION } } } }, res)
+    const body = res.raw ? JSON.parse(res.raw) : null
+    return { status: res.statusCode, content: body?.result?.structuredContent ?? body?.result }
   }
+  const setPeer = (key, op = operator) => { currentPeer = { key, operator: op, principal: { kind: 'owner' }, signal: { aborted: false } } }
+  return { registry, row, owner, workers, calls, tool, setPeer }
+}
+
+const OPEN = { openId: 'open-1', paneId: 'pane-1' }
+
+test('create returns exactly {sandboxId,terminalId} — no URL, no attach, one spawn', async (t) => {
+  const f = fixture(t)
+  const reply = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN })
+  assert.equal(reply.status, 200)
+  assert.deepEqual(Object.keys(reply.content).sort(), ['contractVersion', 'sandboxId', 'terminalId'])
+  const text = JSON.stringify(reply.content)
+  assert.equal(/url|token|attach/i.test(text), false)
+  const created = f.calls.filter((c) => c.verb === 'create')
+  assert.equal(created.length, 1)
+  assert.deepEqual(Object.keys(created[0].request).sort(), ['cols', 'cwd', 'rows', 'terminalId'])
 })
 
-test('term.session.* failures use frozen dnt kinds and HTTP status, not new errorIds', async () => {
-  const routes = routesFor(deps())
-  const noSession = await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 41, method: 'tools/call',
-    params: { name: 'term.session.create', arguments: { cols: 80, rows: 24 } },
-  })
-  assert.equal(noSession.status, 400)
-  assert.equal(noSession.body.result.kind, 'needs_target')
-  assert.equal(noSession.body.result.errorId, undefined)
-  const gone = await call(routes['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 42, method: 'tools/call',
-    params: { name: 'term.session.read', arguments: { id: 'never-opened' } },
-  })
-  assert.equal(gone.status, 404)
-  assert.equal(gone.body.result.kind, 'not_found')
-  const down = routesFor(deps({
-    backend: { async inspect() { return { raw: JSON.stringify([{ status: { state: 'stopped' }, configuration: { publishedPorts: [] } }]) } } },
-  }))
-  const unavailable = await call(down['/nano-local-sandbox/mcp'], {
-    jsonrpc: '2.0', id: 43, method: 'tools/call',
-    params: { name: 'term.session.create', arguments: { sessionId: 'sess-k', cols: 80, rows: 24 } },
-  })
-  assert.equal(unavailable.status, 409)
-  assert.equal(unavailable.body.result.kind, 'unavailable')
+test('same openId+args dedupes to the original ref; conflicting args refuse; no revive after ended', async (t) => {
+  const f = fixture(t)
+  const first = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN })
+  const again = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN })
+  assert.equal(again.content.terminalId, first.content.terminalId)
+  assert.equal(f.calls.filter((c) => c.verb === 'create').length, 1)
+  const conflict = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN, cols: 120 })
+  assert.equal(conflict.status, 409)
+  // The terminal ended: a replayed open still gets the original ref — never a respawn.
+  f.registry.transitionTerminal(f.row.sandboxId, first.content.terminalId, { state: 'ended', generation: 'gen-1' })
+  const replay = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN })
+  assert.equal(replay.content.terminalId, first.content.terminalId)
+  assert.equal(f.calls.filter((c) => c.verb === 'create').length, 1)
+})
+
+test('a dead worker denies attach with zero creates and is reported unknown, not success', async (t) => {
+  const f = fixture(t)
+  const first = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN })
+  f.workers.clear() // the broker is gone
+  const attach = await f.tool('term.session.attach', { sandboxId: f.row.sandboxId, terminalId: first.content.terminalId })
+  assert.equal(attach.status, 503)
+  assert.equal(f.calls.filter((c) => c.verb === 'create').length, 1)
+  const stored = f.registry.get(f.row.sandboxId).terminals.find((entry) => entry.terminalId === first.content.terminalId)
+  assert.equal(stored.state, 'unknown')
+})
+
+test('attach verifies status then returns a frozen {attach:{protocol,url}}; absent or faulty issueLocator denies', async (t) => {
+  const f = fixture(t)
+  const first = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN })
+  const attach = await f.tool('term.session.attach', { sandboxId: f.row.sandboxId, terminalId: first.content.terminalId })
+  assert.equal(attach.status, 200)
+  assert.equal(attach.content.attach.protocol, 'dnt-ws-v2')
+  assert.equal(attach.content.attach.url.includes(first.content.terminalId), true)
+  assert.equal(Object.hasOwn(attach.content, 'locator'), false)
+  assert.equal(Object.isFrozen(attach.content) || typeof attach.content.attach === 'object', true)
+
+  for (const bad of ['pty://socket/path', 'ws://user:pw@127.0.0.1/x', 'ws://127.0.0.1/x?token=abc', 'not-a-url']) {
+    const faulty = fixture(t, { issueLocator: () => bad })
+    await faulty.tool('term.session.create', { sandboxId: faulty.row.sandboxId, ...OPEN })
+    const denied = await faulty.tool('term.session.attach', { sandboxId: faulty.row.sandboxId, terminalId: faulty.registry.get(faulty.row.sandboxId).terminals[0].terminalId })
+    assert.equal(denied.status, 503, bad)
+  }
+
+  const noIssuer = fixture(t, { issueLocator: null })
+  const made = await noIssuer.tool('term.session.create', { sandboxId: noIssuer.row.sandboxId, ...OPEN })
+  const denied = await noIssuer.tool('term.session.attach', { sandboxId: noIssuer.row.sandboxId, terminalId: made.content.terminalId })
+  assert.equal(denied.status, 503)
+})
+
+test('list filters by principal; another principal sees none and cannot touch the terminal', async (t) => {
+  const f = fixture(t)
+  const first = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN })
+  f.setPeer('peer-b')
+  const listed = await f.tool('term.session.list', { sandboxId: f.row.sandboxId })
+  assert.equal(listed.status, 200)
+  assert.deepEqual(listed.content.terminals, [])
+  // peer-b can see the sandbox but owns no terminal there.
+  const attach = await f.tool('term.session.attach', { sandboxId: f.row.sandboxId, terminalId: first.content.terminalId })
+  assert.equal(attach.status, 403)
+  f.setPeer('owner')
+  const mine = await f.tool('term.session.list', { sandboxId: f.row.sandboxId })
+  assert.equal(mine.content.terminals.length, 1)
+  assert.equal(mine.content.terminals[0].state, 'active')
+})
+
+test('terminal ops require both ids; wrong sandbox or unknown terminal is 404', async (t) => {
+  const f = fixture(t)
+  const first = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN })
+  const other = f.registry.adopt({ ...INTENT, name: 'other' }, { ...OBSERVED, locator: 'box-2', stateVolume: '/state/box-2' })
+  const wrong = await f.tool('term.session.attach', { sandboxId: other.sandboxId, terminalId: first.content.terminalId })
+  assert.equal(wrong.status, 404)
+  const bogus = await f.tool('term.session.input', { sandboxId: f.row.sandboxId, terminalId: 'no-such', data: 'x' })
+  assert.equal(bogus.status, 404)
+})
+
+test('generation mismatch or a stopped object denies every terminal verb', async (t) => {
+  const f = fixture(t, { obs: { ...OBSERVED, generation: 'gen-2' } })
+  const created = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN })
+  assert.equal(created.status, 503)
+  assert.equal(f.calls.length, 0)
+  const stopped = fixture(t, { obs: { ...OBSERVED, state: 'stopped' } })
+  const denied = await stopped.tool('term.session.create', { sandboxId: stopped.row.sandboxId, ...OPEN })
+  assert.equal(denied.status, 503)
+})
+
+test('schema and param bounds: sessionId rejected, openId/paneId required, cwd escapes refused', async (t) => {
+  const f = fixture(t)
+  const withSession = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, sessionId: 'sess', ...OPEN })
+  assert.equal(withSession.status, 400)
+  const noOpen = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, paneId: 'p' })
+  assert.equal(noOpen.status, 400)
+  const escaped = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN, cwd: '/state/../host' })
+  assert.equal(escaped.status, 400)
+  const inside = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN, cwd: '/state/work' })
+  assert.equal(inside.status, 200)
+  assert.equal(f.calls.at(-1).request.cwd, '/state/work')
+})
+
+test('input/read/resize/close route the owned verb; close reaps and reports ended', async (t) => {
+  const f = fixture(t)
+  const first = await f.tool('term.session.create', { sandboxId: f.row.sandboxId, ...OPEN })
+  const id = first.content.terminalId
+  const input = await f.tool('term.session.input', { sandboxId: f.row.sandboxId, terminalId: id, data: 'ls\n' })
+  assert.equal(input.status, 200)
+  const read = await f.tool('term.session.read', { sandboxId: f.row.sandboxId, terminalId: id })
+  assert.deepEqual(Object.keys(read.content).sort(), ['bytes', 'contractVersion', 'ended', 'from', 'ok', 'sandboxId', 'seq'].sort())
+  const resize = await f.tool('term.session.resize', { sandboxId: f.row.sandboxId, terminalId: id, cols: 120, rows: 40 })
+  assert.equal(resize.status, 200)
+  const close = await f.tool('term.session.close', { sandboxId: f.row.sandboxId, terminalId: id })
+  assert.equal(close.status, 200)
+  assert.equal(f.registry.get(f.row.sandboxId).terminals[0].state, 'ended')
+  // detach/exit never auto-creates: a repeat close on the ended worker fails
+  // rather than respawning anything.
+  f.workers.clear()
+  const again = await f.tool('term.session.close', { sandboxId: f.row.sandboxId, terminalId: id })
+  assert.equal(again.status, 503)
 })

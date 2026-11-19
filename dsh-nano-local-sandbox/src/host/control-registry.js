@@ -37,7 +37,7 @@ const MAX_PATH = 4096
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const KNOWN_STATES = new Set(['running', 'stopped', 'missing'])
 const DOC_KEYS = ['version', 'envId', 'sandboxes']
-const ROW_KEYS = ['sandboxId', 'name', 'profileId', 'principal', 'recipeRef', 'origin', 'stateVolume', 'binding', 'ports', 'operations', 'removed']
+const ROW_KEYS = ['sandboxId', 'name', 'profileId', 'principal', 'recipeRef', 'origin', 'stateVolume', 'binding', 'ports', 'operations', 'terminals', 'removed']
 const BINDING_KEYS = ['locator', 'generation']
 const INTENT_KEYS = ['name', 'profileId', 'principal', 'recipeRef']
 const OBSERVATION_KEYS = ['locator', 'generation', 'stateVolume', 'state']
@@ -51,6 +51,8 @@ const OP_FLOW = new Map([
   ['accepted', new Set(['running', 'cancelled'])],
   ['running', new Set(['succeeded', 'failed', 'indeterminate'])],
 ])
+const TERMINAL_KEYS = ['terminalId', 'sandboxId', 'principal', 'openId', 'fingerprint', 'generation', 'state']
+const TERMINAL_STATES = new Set(['pending', 'active', 'ended', 'unknown'])
 
 function registryError(errorId, message, cause) {
   const error = new Error(message)
@@ -130,9 +132,24 @@ function validateStoredOperation(operation, sandboxId, what) {
   }
 }
 
+/**
+ * One terminal reservation record — metadata only: identity, ownership and
+ * the open-request fingerprint. Never an execution payload, screen or URL.
+ */
+function validateStoredTerminal(terminal, sandboxId) {
+  exactKeys(terminal, TERMINAL_KEYS, 'stored terminal')
+  for (const key of TERMINAL_KEYS) if (!Object.hasOwn(terminal, key)) throw conflict(`stored terminal missing ${key}`)
+  if (!UUID_PATTERN.test(terminal.terminalId)) throw conflict('stored terminalId is not a canonical UUID')
+  if (terminal.sandboxId !== sandboxId) throw conflict('stored terminal sandboxId does not match its row')
+  for (const key of ['principal', 'openId', 'fingerprint', 'generation']) {
+    if (!boundedText(terminal[key])) throw conflict(`stored terminal ${key} out of bounds`)
+  }
+  if (!TERMINAL_STATES.has(terminal.state)) throw conflict('stored terminal state is not a known value')
+}
+
 function validateStoredRow(row, rootPath, seen) {
   exactKeys(row, ROW_KEYS, 'stored sandbox row')
-  for (const key of ROW_KEYS) if (row[key] === undefined) throw conflict(`stored row missing ${key}`)
+  for (const key of ROW_KEYS) if (row[key] === undefined && key !== 'terminals') throw conflict(`stored row missing ${key}`)
   if (!UUID_PATTERN.test(row.sandboxId)) throw conflict('stored sandboxId is not a canonical UUID')
   if (!boundedText(row.name, MAX_NAME)) throw conflict('stored name out of bounds')
   if (!safeSegment(row.profileId)) throw conflict('stored profileId is not one safe path segment')
@@ -163,6 +180,18 @@ function validateStoredRow(row, rootPath, seen) {
     if (seen.dedupe.has(dedupe)) throw conflict('duplicate (principal, requestId) in stored registry')
     seen.dedupe.add(dedupe)
   }
+  // terminals is optional metadata: absent reads as an empty list.
+  if (row.terminals === undefined) row.terminals = []
+  if (!Array.isArray(row.terminals)) throw conflict('stored terminals is not an array')
+  const terminalDedupe = new Set()
+  for (const terminal of row.terminals) {
+    validateStoredTerminal(terminal, row.sandboxId)
+    if (seen.terminalId.has(terminal.terminalId)) throw conflict('duplicate terminalId in stored registry')
+    seen.terminalId.add(terminal.terminalId)
+    const key = `${terminal.principal}\n${terminal.openId}`
+    if (terminalDedupe.has(key)) throw conflict('duplicate (principal, openId) in stored registry')
+    terminalDedupe.add(key)
+  }
   for (const [kind, value] of [
     ['sandboxId', row.sandboxId],
     ['name', row.name],
@@ -185,7 +214,7 @@ function parseDocument(text, rootPath, envId) {
   if (doc.version !== DOC_VERSION) throw conflict('registry document version is not supported')
   if (doc.envId !== envId) throw conflict('registry document belongs to a different env')
   if (!Array.isArray(doc.sandboxes)) throw conflict('registry sandboxes is not an array')
-  const seen = { sandboxId: new Set(), name: new Set(), locator: new Set(), stateVolume: new Set(), operationId: new Set(), dedupe: new Set() }
+  const seen = { sandboxId: new Set(), name: new Set(), locator: new Set(), stateVolume: new Set(), operationId: new Set(), dedupe: new Set(), terminalId: new Set() }
   for (const row of doc.sandboxes) validateStoredRow(row, rootPath, seen)
   return doc.sandboxes
 }
@@ -286,6 +315,7 @@ export function openControlRegistry({ root, envId } = {}) {
         binding: { locator: row.binding.locator, generation: row.binding.generation },
         ports: row.ports.map((port) => structuredClone(port)),
         operations: row.operations.map((operation) => structuredClone(operation)),
+        terminals: (row.terminals ?? []).map((terminal) => structuredClone(terminal)),
         removed: row.removed,
       })),
     }
@@ -359,6 +389,7 @@ export function openControlRegistry({ root, envId } = {}) {
       stateVolume: join(rootPath, input.profileId, sandboxId),
       ports: [],
       operations: [],
+      terminals: [],
       removed: false,
       ...overrides,
     }
@@ -503,6 +534,60 @@ export function openControlRegistry({ root, envId } = {}) {
     return entry ? clone(entry) : null
   }
 
+  /**
+   * Durable terminal reservation BEFORE any spawn. The caller proves the
+   * current generation; a pending lifecycle op or a mismatched generation
+   * conflicts. `(principal, openId)` dedupes across all terminals of this
+   * sandbox — the same stable ref comes back even after the terminal ended,
+   * never a replay. The fingerprint is the caller's stable hash of the
+   * approved open params; changed params on the same key reject.
+   */
+  function reserveTerminal(sandboxId, { principal, openId, fingerprint, generation } = {}) {
+    assertLive()
+    for (const [key, value] of [['principal', principal], ['openId', openId], ['fingerprint', fingerprint], ['generation', generation]]) {
+      if (!boundedText(value)) throw conflict(`terminal reserve ${key} is required`)
+    }
+    const row = findRow(sandboxId)
+    if (!row || row.removed) throw conflict('unknown sandboxId')
+    if (row.binding.generation !== generation) throw conflict('terminal reserve generation does not match the bound object')
+    if (row.operations.some((op) => OP_PENDING.has(op.state))) {
+      throw conflict('lifecycle operation in progress on this sandbox')
+    }
+    const prior = row.terminals.find((terminal) => terminal.principal === principal && terminal.openId === openId)
+    if (prior) {
+      if (prior.fingerprint !== fingerprint) throw conflict('terminal reserve conflicts with an existing open')
+      return { isNew: false, ref: clone(prior) }
+    }
+    const ref = {
+      terminalId: randomUUID(),
+      sandboxId,
+      principal,
+      openId,
+      fingerprint,
+      generation,
+      state: 'pending',
+    }
+    row.terminals.push(ref)
+    publish()
+    return { isNew: true, ref: clone(ref) }
+  }
+
+  /**
+   * Report a terminal state change for the SAME id and its original
+   * generation — the generation itself is immutable once reserved.
+   */
+  function transitionTerminal(sandboxId, terminalId, { state, generation } = {}) {
+    assertLive()
+    if (!TERMINAL_STATES.has(state)) throw conflict('unknown terminal state')
+    const row = findRow(sandboxId)
+    const terminal = row?.terminals.find((entry) => entry.terminalId === terminalId)
+    if (!terminal) throw conflict('unknown terminalId')
+    if (terminal.generation !== generation) throw conflict('terminal generation mismatch — refusing to report on a different object')
+    terminal.state = state
+    publish()
+    return clone(terminal)
+  }
+
   /** (principal, requestId) lookup across all rows incl. tombstones. */
   function dedupe(principal, requestId) {
     assertLive()
@@ -551,6 +636,7 @@ export function openControlRegistry({ root, envId } = {}) {
       binding: { locator: obs.locator, generation: obs.generation },
       ports: [],
       operations: [],
+      terminals: [],
       removed: false,
     }
     rows.push(row)
@@ -638,5 +724,5 @@ export function openControlRegistry({ root, envId } = {}) {
     db.close()
   }
 
-  return { get, list, reserve, adopt, rename, confirm, reconcile, accept, transition, operation, dedupe, close }
+  return { get, list, reserve, adopt, rename, confirm, reconcile, accept, transition, operation, dedupe, reserveTerminal, transitionTerminal, close }
 }

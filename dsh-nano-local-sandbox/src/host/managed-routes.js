@@ -75,8 +75,8 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
     }
     // A typed refusal keeps its status; only detail-free text crosses.
     const status = Number.isInteger(error?.status) ? error.status : null
-    if (status === 400 || status === 401 || status === 403 || status === 404 || status === 409 || status === 413) {
-      const text = { 400: 'bad request', 401: 'unauthenticated', 403: 'denied', 404: 'not found', 409: 'conflict', 413: 'too large' }[status]
+    if (status === 400 || status === 401 || status === 403 || status === 404 || status === 409 || status === 413 || status === 503) {
+      const text = { 400: 'bad request', 401: 'unauthenticated', 403: 'denied', 404: 'not found', 409: 'conflict', 413: 'too large', 503: 'unavailable' }[status]
       return genericFail(status, text)
     }
     return genericFail(502, 'internal error')

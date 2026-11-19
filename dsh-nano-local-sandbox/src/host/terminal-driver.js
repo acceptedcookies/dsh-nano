@@ -4,27 +4,61 @@ import { dirname } from 'node:path'
 export const TERM_TOOL_NAMES = Object.freeze([
   'term.session.create',
   'term.session.list',
+  'term.session.attach',
   'term.session.input',
   'term.session.read',
   'term.session.resize',
   'term.session.close',
-  'term.audit',
-  'term.lane.status',
 ])
 
 function schema(properties, required = []) {
   return { type: 'object', additionalProperties: false, properties, required }
 }
 
+const size = { type: 'integer', minimum: 2, maximum: 512 }
+
+/**
+ * Managed terminal tool surface — the single source for names, input and
+ * result shapes. Sessions are guest-resident workers; nothing on this list
+ * returns a URL or token: attach yields only an opaque locator, output is a
+ * bounded seq-framed tail, never a screen.
+ */
 export const TERM_TOOLS = Object.freeze([
-  { name: 'term.session.create', inputSchema: schema({ lane: { type: 'string' }, sessionId: { type: 'string' }, shell: { type: 'string' }, cols: { type: 'integer', minimum: 2, maximum: 512 }, rows: { type: 'integer', minimum: 2, maximum: 512 }, title: { type: 'string' } }) },
-  { name: 'term.session.list', inputSchema: schema({}) },
-  { name: 'term.session.input', inputSchema: schema({ id: { type: 'string' }, data: { type: 'string' } }, ['id', 'data']) },
-  { name: 'term.session.read', inputSchema: schema({ id: { type: 'string' }, lines: { type: 'integer', minimum: 1, maximum: 500 } }, ['id']) },
-  { name: 'term.session.resize', inputSchema: schema({ id: { type: 'string' }, cols: { type: 'integer', minimum: 2, maximum: 512 }, rows: { type: 'integer', minimum: 2, maximum: 512 } }, ['id', 'cols', 'rows']) },
-  { name: 'term.session.close', inputSchema: schema({ id: { type: 'string' }, reason: { type: 'string' } }, ['id']) },
-  { name: 'term.audit', inputSchema: schema({ lines: { type: 'integer', minimum: 1, maximum: 500 } }) },
-  { name: 'term.lane.status', inputSchema: schema({}) },
+  {
+    name: 'term.session.create',
+    description: 'Reserve and spawn one terminal worker on an explicit sandboxId; returns exactly {sandboxId, terminalId}.',
+    inputSchema: schema({ sandboxId: { type: 'string' }, openId: { type: 'string' }, paneId: { type: 'string' }, cols: size, rows: size, cwd: { type: 'string' }, service: { type: 'string' } }, ['sandboxId', 'openId', 'paneId']),
+  },
+  {
+    name: 'term.session.list',
+    description: 'List this principal\'s terminals on one sandboxId; returns {sandboxId, terminals:[{terminalId,state}]}, never a URL.',
+    inputSchema: schema({ sandboxId: { type: 'string' } }, ['sandboxId']),
+  },
+  {
+    name: 'term.session.attach',
+    description: 'Verify an owned active terminal and return its opaque locator.',
+    inputSchema: schema({ sandboxId: { type: 'string' }, terminalId: { type: 'string' } }, ['sandboxId', 'terminalId']),
+  },
+  {
+    name: 'term.session.input',
+    description: 'Send input bytes to an owned terminal worker.',
+    inputSchema: schema({ sandboxId: { type: 'string' }, terminalId: { type: 'string' }, data: { type: 'string', maxLength: 65536 } }, ['sandboxId', 'terminalId', 'data']),
+  },
+  {
+    name: 'term.session.read',
+    description: 'Read the bounded output tail as {seq, from, bytes, ended} — a tail, not a screen.',
+    inputSchema: schema({ sandboxId: { type: 'string' }, terminalId: { type: 'string' }, from: { type: 'integer', minimum: 0 } }, ['sandboxId', 'terminalId']),
+  },
+  {
+    name: 'term.session.resize',
+    description: 'Resize an owned terminal worker.',
+    inputSchema: schema({ sandboxId: { type: 'string' }, terminalId: { type: 'string' }, cols: size, rows: size }, ['sandboxId', 'terminalId', 'cols', 'rows']),
+  },
+  {
+    name: 'term.session.close',
+    description: 'Hang up and reap an owned terminal worker.',
+    inputSchema: schema({ sandboxId: { type: 'string' }, terminalId: { type: 'string' } }, ['sandboxId', 'terminalId']),
+  },
 ])
 
 function bounds(name, key, value) {
@@ -58,23 +92,6 @@ export function appendTermAudit(file, record) {
   if (!file) return
   mkdirSync(dirname(file), { recursive: true })
   appendFileSync(file, `${JSON.stringify({ t: new Date().toISOString(), ...record })}\n`)
-}
-
-export function createTermSession(args, audit, url, auditFile) {
-  const checked = validateTermCall('term.session.create', args)
-  if (!checked.ok) return checked
-  if (typeof args.sessionId !== 'string' || args.sessionId.length === 0 || args.sessionId === 'term-1') {
-    return { ok: false, kind: 'needs_target', error: 'session' }
-  }
-  const id = args.sessionId
-  const session = {
-    id,
-    attach: { protocol: 'dnt-ws-v1', url },
-  }
-  const record = { op: 'open', id }
-  audit?.push(record)
-  appendTermAudit(auditFile, record)
-  return { ok: true, ...session }
 }
 
 export function encodeFrame(payload, opcode = 0x02) {

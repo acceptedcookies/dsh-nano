@@ -12,6 +12,7 @@ import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadProfileDriver } from '../src/host/profile-drivers.js'
+import { recipeSource } from '../src/host/profile-registry.js'
 import { createAppleBackend } from '../src/host/backend-apple.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -78,7 +79,11 @@ if (!before.image.ok) {
   const context = join(work, `context-${loaded.digest.slice('sha256:'.length, 'sha256:'.length + 12)}`)
   rmSync(context, { recursive: true, force: true })
   mkdirSync(context, { recursive: true })
-  for (const file of manifest.build.recipe) cpSync(join(profileDir, file), join(context, file))
+  for (const file of manifest.build.recipe) {
+    const source = recipeSource(profileDir, file)
+    if (!source) throw new Error(`recipe member is not a safe file: ${file}`)
+    cpSync(source, join(context, file))
+  }
   const prefix = driver.build.contextPrefix(manifest)
   run(prefix.argv[0], prefix.argv[1], context)
   run(process.execPath, [join(here, '../../scripts/build-kitesurf-image.mjs'), '--context', context, '--profile', profileDir, '--host-install', hostInstall, '--container-state', containerState], here)

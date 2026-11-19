@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join, resolve, sep } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parseYaml } from './yaml.js'
 
 const SHA = /^sha256:[0-9a-f]{64}$/
@@ -48,6 +49,30 @@ function safeFileName(name) {
   return typeof name === 'string' && name && !name.includes('..') && !/[/\\]/.test(name)
 }
 
+const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const TERMINAL_DIR = join(PACKAGE_ROOT, 'profiles', 'terminal')
+
+/**
+ * Package-owned guest helpers baked into every recipe — never host mounts,
+ * never user-writable. Only these two flat names resolve outside the
+ * profile dir; no other recipe member may leave it.
+ */
+const PACKAGE_RECIPE = new Map([
+  ['pty-entry.mjs', join(TERMINAL_DIR, 'pty-entry.mjs')],
+  ['pty-worker.py', join(TERMINAL_DIR, 'pty-worker.py')],
+])
+
+/**
+ * Where a declared recipe file's text comes from. Package-owned helpers
+ * resolve to `profiles/terminal/`; every other member must be one safe
+ * file name inside the profile dir itself — arbitrary absolute paths and
+ * traversal resolve to null.
+ */
+export function recipeSource(dir, name) {
+  if (PACKAGE_RECIPE.has(name)) return PACKAGE_RECIPE.get(name)
+  return safeFileName(name) ? join(dir, name) : null
+}
+
 /**
  * Recipe digest over the canonical LF text of the declared recipe files.
  * `profile.yaml` and the driver sources are deliberately outside the recipe:
@@ -56,13 +81,19 @@ function safeFileName(name) {
 export function recipeDigest(dir, files = recipeFilesOf(parseYaml(readFileSync(join(dir, 'profile.yaml'), 'utf8')))) {
   const hash = createHash('sha256')
   for (const name of files) {
-    hash.update(readFileSync(join(dir, name), 'utf8').replace(/\r\n/g, '\n'))
+    const source = recipeSource(dir, name)
+    if (!source) throw new Error(`recipe member is not a safe file: ${name}`)
+    hash.update(readFileSync(source, 'utf8').replace(/\r\n/g, '\n'))
   }
   return `sha256:${hash.digest('hex')}`
 }
 
 export function recipeText(dir, files) {
-  return files.map((name) => readFileSync(join(dir, name), 'utf8')).join('\n')
+  return files.map((name) => {
+    const source = recipeSource(dir, name)
+    if (!source) throw new Error(`recipe member is not a safe file: ${name}`)
+    return readFileSync(source, 'utf8')
+  }).join('\n')
 }
 
 function get(obj, path) {
@@ -90,8 +121,9 @@ export function validateManifest(manifest, { digest, text = '', checkoutRoot = n
   const files = recipeFilesOf(manifest)
   if (Array.isArray(manifest.build?.recipe) && files.length !== manifest.build.recipe.length) errors.push('build.recipe')
   for (const name of files) {
-    if (!safeFileName(name)) errors.push(`build.recipe:${name}`)
-    else if (profileDir && !existsSync(join(profileDir, name))) errors.push(`build.recipe-missing:${name}`)
+    const source = profileDir ? recipeSource(profileDir, name) : (safeFileName(name) ? name : null)
+    if (!source) errors.push(`build.recipe:${name}`)
+    else if (profileDir && !existsSync(source)) errors.push(`build.recipe-missing:${name}`)
   }
 
   const ref = manifest.build?.checkout?.ref
@@ -121,7 +153,7 @@ export function validateManifest(manifest, { digest, text = '', checkoutRoot = n
 
 export function loadProfile(dir, options = {}) {
   const manifest = parseYaml(readFileSync(join(dir, 'profile.yaml'), 'utf8'))
-  const files = recipeFilesOf(manifest).filter((name) => safeFileName(name) && existsSync(join(dir, name)))
+  const files = recipeFilesOf(manifest).filter((name) => { const source = recipeSource(dir, name); return source && existsSync(source) })
   const digest = recipeDigest(dir, files)
   let text = ''
   try { text = recipeText(dir, files) } catch { /* a missing recipe file is reported as a digest/recipe error */ }

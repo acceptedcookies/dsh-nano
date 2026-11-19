@@ -32,9 +32,9 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - [x] **P3-03**（staged 层 PASS；公开激活待原子同切） 主体与对象授权 — 新 `src/host/object-authz.js`，挂在对象路由之前；只调用 `connection.admit`（pin `rpc.ts:240`，不改 pin）；404/403 分开；审计无 attach URL 与输入（`DNLS03-T22`）
 
 ### Phase 4
-- [ ] **P4-01** create/attach 分离 — `term-bridge.js:23-44,124-125`；`terminal-driver.js:4-39`；create 与 list 的返回值没有 URL（`DNLS03-T30`）
-- [ ] **P4-02** 环境内 broker — `profiles/terminal/pty-entry.mjs`；`backend-apple.js:289` 不再是「只有容器名和 /bin/sh」这一条路径的全部；只重启宿主后，新输入进入同一原执行（`DNLS03-T31`）
-- [ ] **P4-03** 创建键 — `term-bridge.js`；同参返原引用；已结束不复活；attach 失联不 spawn（`DNLS03-T32`）
+- [x] **P4-01**（staged 层 PASS；公开激活待原子同切） create/attach 分离 — `term-bridge.js`；`terminal-driver.js`；create 与 list 的返回值没有 URL，attach 只回冻结 `{attach:{protocol:'dnt-ws-v2',url}}`（`DNLS03-T30`）
+- [x] **P4-02**（staged 层 PASS；公开激活待原子同切） 环境内 broker — `profiles/terminal/pty-entry.mjs` + `pty-worker.py`；`backend-apple.js` `terminalRpc`；真实两宿主进程证明：SIGKILL 宿主 A 后宿主 B 重开同一台账，attach/输入命中同一 shell（`DNLS03-T31`）
+- [x] **P4-03**（staged 层 PASS；公开激活待原子同切） 创建键 — `term-bridge.js` + `control-registry.js` `reserveTerminal`；同参返原引用；已结束不复活；attach 失联不 spawn；create 应答须 `{ok:true}` 且 terminalId 一致（`DNLS03-T32`）
 
 ### Phase 5
 - [ ] **P5-01** wire 硬切 — `term-ws.js`；`term-bridge.js:50` 附近 ready；open 必须 `v:2,align:1,session:<terminalId>`；沿用既有帧集与逐连接流控；无 v1 降级（`DNLS03-T40`）
@@ -64,7 +64,7 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - [ ] **STEP.8** — 回收、汇聚、核实全部审查报告，执行更新或修复并重入 测试↔修复 循环直至收口，更新 closure
 
 ## 4. 执行记录与证据
-执行状态：P3 进行中。开工点 `18ea26f`。主工作区保存原状：`9061673` [DNPR]，`909fa3f` 已移除的清单，`18ea26f` 计划与问答。`git fetch origin main` 后本地无落后提交。每笔 PASS 记录提交、命令、观测与 UTC；测试 ID 的否证以计划 §8.1、§8.5 为准。
+执行状态：P4 staged 完成（公开激活待原子同切）。开工点 `18ea26f`。主工作区保存原状：`9061673` [DNPR]，`909fa3f` 已移除的清单，`18ea26f` 计划与问答。`git fetch origin main` 后本地无落后提交。每笔 PASS 记录提交、命令、观测与 UTC；测试 ID 的否证以计划 §8.1、§8.5 为准。
 
 - 横向：`index.apply → registerRoutes → routeSpecs`。现 `/mcp` 的 `buildOwners` 在同一 env 的现场上按 session 登记实例；`callTermTool` 的 create/list 走宿主 `active` 表；`observeOnce` 读 inspect，而 bridge 定位仍从 engine 推导。目标是替换权威来源，不是增加旁路台账。
 - 历史图谱（按职责演进，不表示直接父子）：`2b9ac0f` session 实例/空闲回收 → `ed99c71` 实际路由接线 → `74d734f` 容器 PTY 与观察快照 → `ede7e45` PTY resize/错误边界 → `43e83d1` kernel/driver 切割 → `d0ddac4` 状态卷归 kernel 分配 → `1e41d91` 计划取样。`git diff 1e41d91 18ea26f -- dsh-nano-local-sandbox dsh-nano-terminal dsh-nano-kitesurf` 无源码差异。
@@ -73,9 +73,10 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - Phase 0 提交 `ba55bf7`；Phase 1 提交 `e32697b`。Phase 1 内核（不声明公开路由已切）：2026-11-19T16:22:30Z，`node --test dsh-nano-local-sandbox/test/control-registry.test.mjs dsh-nano-local-sandbox/test/instances-ensure.test.mjs`，26 pass / 0 fail；T01 文件字节可重开、原子写失败不报成功；T02 两个 session 释放后重开同一对象；T03 子进程持锁时第二写者失败，进程退出后原行可读；T04 有卷无账、损坏及不明代次失败关闭。原有 session 路由和旧用例等待原子同切，不作 T02 或产品交付证据。
 - Phase 2 提交 `589c8ea`。Phase 2 staged 派发（公开激活待原子同切）：2026-11-19T16:43:44Z，`node --test dsh-nano-local-sandbox/test/{contract-version,target-dispatch,error-catalog,route-scan-coverage}.test.mjs`，22 pass / 0 fail；projection+bake 复跑零漂移。最近聚焦复跑 2026-11-19T16:44:49Z，`node --test dsh-nano-local-sandbox/test/contract-version.test.mjs`，10 pass / 0 fail；T10 HTTP/MCP 发现同源且不触对象；T11 admit 信封（rejection/peer/signal.aborted/未知形状）、版本配对、七项错误、信封清洗；T13 单目标与重复键/转义键/越限体拒于 execute 前。
 - Phase 3 staged 生命周期与对象授权（公开激活待原子同切；登记时生命周期/授权文件未入库，提交引用待下一阶段回填）：2026-11-19T16:59:33Z，`node --test dsh-nano-local-sandbox/test/{lifecycle-operation,object-authz,control-registry,delivery-guard}.test.mjs`，75 pass / 0 fail。最近聚焦复跑 2026-11-19T17:02:44Z，`node --test dsh-nano-local-sandbox/test/lifecycle-operation.test.mjs`，21 pass / 0 fail；T20 意图单次落盘先于特权调用、同键同参返原、断连事件不取消在途操作、代次不符/中途替换/删除不确定一律 indeterminate 不置墓碑、墓碑内同提交者可读已完成操作、真实 `backend-apple.js` 仅对精确缺失诊断返回 null；T21 断连记 `disconnected`；T22 可见/可用分级、终端非通配、审计白名单无 URL。
+- Phase 4 staged 终端 broker（公开激活待原子同切；文件未入库，基于 Phase 3 提交 `ac025df` 的工作树）：2026-11-19T17:38:00Z，`node --test dsh-nano-local-sandbox/test/{term-bridge,terminal-contract,term-broker.spike,profile-load}.test.mjs`，15 pass / 0 fail。T30 create/list 无 URL、attach 仅冻结 `dnt-ws-v2` 形状且拒绝 token/userinfo/socket 定位符；T31 真实两宿主进程：宿主 A（`openControlRegistry` + `createTerminalOwner` + 夹具 `createWorker`）建立 shell 导出 `DNLS_PROOF` 并打印 nonce-PID，SIGKILL A 后宿主 B 重开同一台账，attach 原 terminalId 并输入新 nonce，实测两端 shell PID 同为 91805、`proof-ev9401` 环境变量存活、无 respawn、close 后 socket 消失；T32 `(principal,openId)` 去重同参返原引用、已结束不复活、失联 attach 503 不 spawn、create 应答校验 `{ok:true}` + terminalId 一致。worker 绑 socket 先于 fork、单事件循环 waitpid、HUP→KILL 有界、PTY EOF 注销主 fd 不空转、AF_UNIX 有界出站缓冲增量写、`bytes_b64` 二进制安全 read、无效 cwd 拒绝、回收后不再对可能复用 PID 发信号；生产 CLI 仅固定常量，测试经 `createWorker`/`callWorker` 导入夹具；配方 digest/tag 按 `recipeDigest` 重算 `216aa53e4c48`（pin 不变）。
 
 ## 5. 交接
-Phase 3 staged 生命周期与对象授权已完成（公开激活待原子同切）；当前节点 Phase 4。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
+Phase 4 staged 终端 broker 已完成（公开激活待原子同切）；当前节点 Phase 5。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
 
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。

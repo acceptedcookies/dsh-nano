@@ -100,7 +100,9 @@ export function authorize({ peer, envId, row, action, terminal, resolvePrincipal
   }
   if (!visible) return refusal(404, 'not found')
   if (!usable) return refusal(403, 'denied')
-  if (typeof action === 'string' && action.startsWith('terminal')) {
+  // terminal.create/terminal.list are object-level capabilities; every
+  // other terminal.* action additionally requires an owned terminal.
+  if (typeof action === 'string' && action.startsWith('terminal.') && action !== 'terminal.create' && action !== 'terminal.list') {
     const owned =
       terminal &&
       terminal.sandboxId === row.sandboxId &&

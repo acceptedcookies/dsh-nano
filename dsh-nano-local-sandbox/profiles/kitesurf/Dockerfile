@@ -11,12 +11,15 @@ ARG KITESURF_BASE_IMAGE
 FROM ${KITESURF_BASE_IMAGE}
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates tini \
+  && apt-get install -y --no-install-recommends ca-certificates tini python3 \
   && rm -rf /var/lib/apt/lists/*
 
 COPY linux-prefix /opt/npm-global
 COPY entrypoint.sh /entrypoint.sh
 COPY --chown=node:node --chmod=644 mcp-bridge.mjs /mcp-bridge.mjs
+# Terminal broker helpers: baked root-owned and not user-writable. The
+# worker itself drops to the node user inside the PTY child.
+COPY --chown=root:root --chmod=0555 pty-entry.mjs pty-worker.py /opt/dnls/
 # linux-prefix is npm-installed --ignore-scripts on the host, so
 # agent-browser's bundled binaries arrive without their exec bits and the
 # node user cannot chmod root-owned files — set them while still root.

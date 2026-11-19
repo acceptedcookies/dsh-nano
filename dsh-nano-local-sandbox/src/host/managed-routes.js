@@ -73,6 +73,12 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
       if (typeof error?.operation === 'string' && error.operation.length <= 64) body.operation = error.operation
       return { status, body }
     }
+    // A typed refusal keeps its status; only detail-free text crosses.
+    const status = Number.isInteger(error?.status) ? error.status : null
+    if (status === 400 || status === 401 || status === 403 || status === 404 || status === 409 || status === 413) {
+      const text = { 400: 'bad request', 401: 'unauthenticated', 403: 'denied', 404: 'not found', 409: 'conflict', 413: 'too large' }[status]
+      return genericFail(status, text)
+    }
     return genericFail(502, 'internal error')
   }
 
@@ -201,10 +207,15 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
     return false
   }
 
+  /** A capability may declare a function target — e.g. /lifecycle selects
+   * `none` only for action:'create' — resolved on the normalized args. */
+  const targetOf = (def, args) => (typeof def.target === 'function' ? def.target(args) : def.target)
+
   /** Resolve the one declared object target for `def`, or a params failure. */
   function selectHttpTarget(def, req, query, body) {
     const alternate = alternateSelectors(req, query, body)
-    if (def.target === 'object') {
+    const target = targetOf(def, body)
+    if (target === 'object') {
       const ids = query.getAll('sandboxId')
       if (ids.length !== 1 || !safeSegment(ids[0])) return { failure: paramsFail('sandboxId') }
       if (alternate) return { failure: paramsFail('sandboxId') }
@@ -215,6 +226,7 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
   }
 
   function selectMcpTarget(def, req, args, urlQuery) {
+    const target = targetOf(def, args)
     for (const name of SELECTOR_HEADERS) {
       if (req?.headers?.[name] !== undefined) return { failure: paramsFail('sandboxId') }
     }
@@ -224,7 +236,7 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
     for (const key of SELECTOR_KEYS.slice(1)) {
       if (key in args) return { failure: paramsFail('sandboxId') }
     }
-    if (def.target === 'object') {
+    if (target === 'object') {
       if (!Object.hasOwn(args, 'sandboxId') || !safeSegment(args.sandboxId)) return { failure: paramsFail('sandboxId') }
     } else if ('sandboxId' in args) {
       return { failure: paramsFail('sandboxId') }
@@ -232,7 +244,7 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
     const schema = def.tool?.inputSchema
     if (isPlainObject(schema)) {
       const allowed = new Set(Object.keys(isPlainObject(schema.properties) ? schema.properties : {}))
-      if (def.target === 'object') allowed.add('sandboxId')
+      if (target === 'object') allowed.add('sandboxId')
       if (allowed.size > 0) {
         for (const key of Object.keys(args)) {
           if (!allowed.has(key)) return { failure: paramsFail(key) }
@@ -244,7 +256,7 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
         }
       }
     }
-    return { sandboxId: def.target === 'object' ? args.sandboxId : null }
+    return { sandboxId: target === 'object' ? args.sandboxId : null }
   }
 
   /** Only an object-shaped result is a positive answer; anything else fails. */

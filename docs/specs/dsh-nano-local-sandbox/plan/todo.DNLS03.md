@@ -27,9 +27,9 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - [x] **P2-05**（staged-router 层 PASS；公开激活待原子同切） 绑定投影 — `lib/bindings.js:12-34`；`src/perf/declaration.json:11-41`；新路由进既有 bake；`dnls.control` 绑定 id 保持为 `/control`（`DNLS03-T14`）
 
 ### Phase 3
-- [ ] **P3-01** 操作文档 — `control-registry.js`；`routes.js` lifecycle；`(主体,requestId)` 去重；未结束 202；派发后取消返回现态（`DNLS03-T20`）
-- [ ] **P3-02** 断线 ≠ 取消 — `routes.js:1469-1471,2268-2270`；客户端断连不再把操作标成 `cancelled`（`DNLS03-T21`）
-- [ ] **P3-03** 主体与对象授权 — 新 `src/host/object-authz.js`，挂在对象路由之前；只调用 `connection.admit`（pin `rpc.ts:240`，不改 pin）；404/403 分开；审计无 attach URL 与输入（`DNLS03-T22`）
+- [x] **P3-01**（staged 层 PASS；公开激活待原子同切） 操作文档 — `control-registry.js`；`routes.js` lifecycle；`(主体,requestId)` 去重；未结束 202；派发后取消返回现态（`DNLS03-T20`）
+- [x] **P3-02**（staged 层 PASS；公开激活待原子同切） 断线 ≠ 取消 — `routes.js:1469-1471,2268-2270`；客户端断连不再把操作标成 `cancelled`（`DNLS03-T21`）
+- [x] **P3-03**（staged 层 PASS；公开激活待原子同切） 主体与对象授权 — 新 `src/host/object-authz.js`，挂在对象路由之前；只调用 `connection.admit`（pin `rpc.ts:240`，不改 pin）；404/403 分开；审计无 attach URL 与输入（`DNLS03-T22`）
 
 ### Phase 4
 - [ ] **P4-01** create/attach 分离 — `term-bridge.js:23-44,124-125`；`terminal-driver.js:4-39`；create 与 list 的返回值没有 URL（`DNLS03-T30`）
@@ -71,10 +71,11 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - 正反例：唯一锚表为计划 §7.1；`test/lifecycle.spike.test.mjs` 的删行、`test/term-bridge.test.mjs` 的 create 发 URL 是旧语义；`threat.spike.test.mjs` 的 local 协议不是它们的替代断言。`context/apple-container`、`context/deepseek-harness` 仅供参考，不是构建输入。
 - T00：从 worktree 根执行 `DNLS_MEASURE_HOST_PIN="$(git rev-parse --path-format=absolute --git-common-dir)/../.dependencies/pinned/deepseek-harness" node --test dsh-nano-local-sandbox/test/once/dnls03-anchors.once.test.mjs`。一次性历史测量，不加入包测试；以本阶段提交重现。A-23 命中 `admit(request)`；当前 pin `9c2670d` / [dsh] rc.5，与 Q41 原取样 rc.1 `66491b0` 的 `rpc.ts`、`rpc-host.ts`、`peer.ts` Git blob 分别同为 `aec79d0`、`88e7b48`、`3978399`。不推论运行时的业务权限或页签已可用。
 - Phase 0 提交 `ba55bf7`；Phase 1 提交 `e32697b`。Phase 1 内核（不声明公开路由已切）：2026-11-19T16:22:30Z，`node --test dsh-nano-local-sandbox/test/control-registry.test.mjs dsh-nano-local-sandbox/test/instances-ensure.test.mjs`，26 pass / 0 fail；T01 文件字节可重开、原子写失败不报成功；T02 两个 session 释放后重开同一对象；T03 子进程持锁时第二写者失败，进程退出后原行可读；T04 有卷无账、损坏及不明代次失败关闭。原有 session 路由和旧用例等待原子同切，不作 T02 或产品交付证据。
-- Phase 2 staged 派发（公开激活待原子同切；登记时 managed-routes.js 未入库，提交引用待下一阶段回填）：2026-11-19T16:43:44Z，`node --test dsh-nano-local-sandbox/test/{contract-version,target-dispatch,error-catalog,route-scan-coverage}.test.mjs`，22 pass / 0 fail；projection+bake 复跑零漂移。最近聚焦复跑 2026-11-19T16:44:49Z，`node --test dsh-nano-local-sandbox/test/contract-version.test.mjs`，10 pass / 0 fail；T10 HTTP/MCP 发现同源且不触对象；T11 admit 信封（rejection/peer/signal.aborted/未知形状）、版本配对、七项错误、信封清洗；T13 单目标与重复键/转义键/越限体拒于 execute 前。
+- Phase 2 提交 `589c8ea`。Phase 2 staged 派发（公开激活待原子同切）：2026-11-19T16:43:44Z，`node --test dsh-nano-local-sandbox/test/{contract-version,target-dispatch,error-catalog,route-scan-coverage}.test.mjs`，22 pass / 0 fail；projection+bake 复跑零漂移。最近聚焦复跑 2026-11-19T16:44:49Z，`node --test dsh-nano-local-sandbox/test/contract-version.test.mjs`，10 pass / 0 fail；T10 HTTP/MCP 发现同源且不触对象；T11 admit 信封（rejection/peer/signal.aborted/未知形状）、版本配对、七项错误、信封清洗；T13 单目标与重复键/转义键/越限体拒于 execute 前。
+- Phase 3 staged 生命周期与对象授权（公开激活待原子同切；登记时生命周期/授权文件未入库，提交引用待下一阶段回填）：2026-11-19T16:59:33Z，`node --test dsh-nano-local-sandbox/test/{lifecycle-operation,object-authz,control-registry,delivery-guard}.test.mjs`，75 pass / 0 fail。最近聚焦复跑 2026-11-19T17:02:44Z，`node --test dsh-nano-local-sandbox/test/lifecycle-operation.test.mjs`，21 pass / 0 fail；T20 意图单次落盘先于特权调用、同键同参返原、断连事件不取消在途操作、代次不符/中途替换/删除不确定一律 indeterminate 不置墓碑、墓碑内同提交者可读已完成操作、真实 `backend-apple.js` 仅对精确缺失诊断返回 null；T21 断连记 `disconnected`；T22 可见/可用分级、终端非通配、审计白名单无 URL。
 
 ## 5. 交接
-Phase 2 staged 派发已完成（公开激活待原子同切）；当前节点 Phase 3。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
+Phase 3 staged 生命周期与对象授权已完成（公开激活待原子同切）；当前节点 Phase 4。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
 
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。

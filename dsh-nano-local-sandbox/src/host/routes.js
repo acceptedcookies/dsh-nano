@@ -1476,7 +1476,9 @@ export function routeSpecs(deps = {}) {
       // A client that disconnects mid-handler never calls send() — the row
       // would sit status:null forever, unsearchable even by errorsOnly.
       res.on?.('close', () => {
-        if (op.status === null && res.destroyed) op.status = 'cancelled'
+        // Transport loss is not an operation cancel (T-O-43): the trace word
+        // stays 'disconnected'; only pre-dispatch cancellation is 'cancelled'.
+        if (op.status === null && res.destroyed) op.status = 'disconnected'
       })
       if (row.path.endsWith('/shot')) {
         // Real implementation: the page-ready stub (deps.pageReady) was a
@@ -2274,9 +2276,9 @@ export function routeSpecs(deps = {}) {
           }
           const opsLimit = Math.max(1, Math.min(Number(opsLimitRaw) || 100, 200))
           let rows = (session.operations || [])
-          // errorsOnly also keeps 'cancelled' — a status:null row the client
-          // dropped mid-flight is still a failed call.
-          if (errorsOnly) rows = rows.filter((item) => item.ok === false || (item.status && (item.status === 'cancelled' || item.status >= 400)))
+          // errorsOnly also keeps 'disconnected' — a status:null row the
+          // client dropped mid-flight is still a failed call.
+          if (errorsOnly) rows = rows.filter((item) => item.ok === false || (item.status && (item.status === 'disconnected' || item.status >= 400)))
           send(res, 200, { ok: true, entries: rows.slice(-opsLimit) })
           return
         }

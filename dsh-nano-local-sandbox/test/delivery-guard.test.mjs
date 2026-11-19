@@ -536,13 +536,13 @@ test('a 4xx route call stamps incidentId on the response AND the ops row', async
   assert.match(row.argSummary || '', /timeoutMs/, 'input summary must name the failing field')
 })
 
-test('/operations?limit honours the bound and errorsOnly keeps cancelled rows', async () => {
+test('/operations?limit honours the bound and errorsOnly keeps disconnected rows', async () => {
   const deps = depsWith()
   const routes = routesFor(deps)
   deps.session.operations = [
     { path: '/a', status: 200, ok: true },
     { path: '/b', status: 400, ok: false, errorId: 'kitesurf.wait.query' },
-    { path: '/c', status: 'cancelled', ok: false },
+    { path: '/c', status: 'disconnected', ok: false },
   ]
   const limited = await call(routes['/nano-local-sandbox/operations'], { url: '/nano-local-sandbox/operations?limit=1' })
   assert.equal(limited.body.entries.length, 1)

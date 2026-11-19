@@ -21,12 +21,35 @@ function cliError(args, { code, stderr = '', cause = null, timedOut = false } = 
   else if (/no such container|not found|does not exist/i.test(text)) kind = 'not-found'
   else if (/not running|is stopped|already stopped/i.test(text)) kind = 'not-running'
   else if (/already exists|in use|conflict|address already/i.test(text)) kind = 'conflict'
-  const error = new Error(`container ${verb} ${name}: ${timedOut ? 'timed out' : (text || `exit ${code}`)}`)
+  const error = new Error(`container ${verb} ${name}: ${timedOut ? 'timed out' : `exit ${code}`}`)
   error.code = code
   error.cliKind = kind
   error.errorId = timedOut ? errorCode('backend.timeout') : errorCode('backend.cli')
+  // The sanitized native stderr is kept privately for missing-proof
+  // matching; it never goes into a public message or JSON payload.
+  Object.defineProperty(error, 'nativeStderr', { value: text, enumerable: false })
   if (cause) error.cause = cause
   return error
+}
+
+/**
+ * Documented absence diagnostics from the Apple container CLI
+ * (ContainerInspect / ContainerLookup). `inspect` treats only a single
+ * diagnostic equal to one of these — for the exact requested name — as
+ * "missing"; everything else is an unknown fault, never an absence.
+ */
+const missingDiagnosticsFor = (name) => [
+  `container not found: ${name}`,
+  `container with ID ${name} not found`,
+]
+
+function isMissingContainer(error, name) {
+  if (error?.code === 'ENOENT' || error?.cliKind === 'timeout') return false
+  const native = typeof error?.nativeStderr === 'string' && error.nativeStderr ? error.nativeStderr : (error?.stderr || error?.message || '')
+  const text = String(native).trim()
+  if (text === '' || text.includes('\n')) return false
+  const diagnostic = text.replace(/^(?:Error|error|notFound)(?::| )/, '').trim()
+  return missingDiagnosticsFor(name).includes(diagnostic)
 }
 
 const CLI_TIMEOUT_MS = Number(process.env.DNLS_CLI_TIMEOUT_MS || 15000)
@@ -55,9 +78,9 @@ function runFile(io, args, { timeoutMs = CLI_TIMEOUT_MS } = {}) {
   io.calls.spawn += 1
   if (io.execFile) return io.execFile('container', args)
   return new Promise((resolve, reject) => {
-    const child = execFile('container', args, { encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL' }, (error, stdout) => {
+    const child = execFile('container', args, { encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL' }, (error, stdout, stderr) => {
       if (error) {
-        reject(cliError(args, { code: error.code, stderr: error.stderr, cause: error.killed ? null : error, timedOut: error.killed === true }))
+        reject(cliError(args, { code: error.code, stderr, cause: error.killed ? null : error, timedOut: error.killed === true }))
       }
       else resolve(stdout)
     })
@@ -175,9 +198,11 @@ export function createAppleBackend(spec = {}, io = {}) {
         const stdout = await runFile(bound, ['inspect', name])
         return { raw: stdout ?? '' }
       } catch (error) {
-        // A missing container is a state, not a fault: returning null keeps
-        // "absent → create" distinct from "daemon broken → blocked" upstream.
-        if (error?.cliKind === 'not-found' || /not found|no such container/i.test(error?.message || '')) return null
+        // A missing container is a state, not a fault — but only the
+        // documented absence diagnostic for this exact name is proof.
+        // Anything else (daemon broken, ENOENT, ambiguous output) is an
+        // unknown fault, never an absence.
+        if (isMissingContainer(error, name)) return null
         throw error
       }
     },

@@ -37,11 +37,20 @@ const MAX_PATH = 4096
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const KNOWN_STATES = new Set(['running', 'stopped', 'missing'])
 const DOC_KEYS = ['version', 'envId', 'sandboxes']
-const ROW_KEYS = ['sandboxId', 'name', 'profileId', 'principal', 'recipeRef', 'origin', 'stateVolume', 'binding', 'ports']
+const ROW_KEYS = ['sandboxId', 'name', 'profileId', 'principal', 'recipeRef', 'origin', 'stateVolume', 'binding', 'ports', 'operations', 'removed']
 const BINDING_KEYS = ['locator', 'generation']
 const INTENT_KEYS = ['name', 'profileId', 'principal', 'recipeRef']
 const OBSERVATION_KEYS = ['locator', 'generation', 'stateVolume', 'state']
 const ORIGINS = new Set(['created', 'adopted'])
+const OP_KEYS = ['operationId', 'requestId', 'principal', 'action', 'sandboxId', 'fingerprint', 'state', 'step', 'at', 'finishedAt']
+const OP_STATES = new Set(['accepted', 'running', 'succeeded', 'failed', 'indeterminate', 'cancelled'])
+const OP_PENDING = new Set(['accepted', 'running', 'indeterminate'])
+const OP_TERMINAL = new Set(['succeeded', 'failed', 'cancelled'])
+const WRITE_ACTIONS = new Set(['create', 'start', 'stop', 'restart', 'recreate', 'remove'])
+const OP_FLOW = new Map([
+  ['accepted', new Set(['running', 'cancelled'])],
+  ['running', new Set(['succeeded', 'failed', 'indeterminate'])],
+])
 
 function registryError(errorId, message, cause) {
   const error = new Error(message)
@@ -103,6 +112,24 @@ function checkedObservation(observation, required, what) {
   return obs
 }
 
+function validateStoredOperation(operation, sandboxId, what) {
+  exactKeys(operation, OP_KEYS, what)
+  for (const key of OP_KEYS) if (!Object.hasOwn(operation, key)) throw conflict(`${what} missing ${key}`)
+  if (!UUID_PATTERN.test(operation.operationId)) throw conflict(`${what} operationId is not a canonical UUID`)
+  for (const key of ['requestId', 'principal', 'action', 'fingerprint', 'step', 'at']) {
+    if (!boundedText(operation[key])) throw conflict(`${what} ${key} out of bounds`)
+  }
+  if (!WRITE_ACTIONS.has(operation.action)) throw conflict(`${what} action is not a managed write`)
+  if (operation.sandboxId !== sandboxId) throw conflict(`${what} sandboxId does not match its row`)
+  if (!OP_STATES.has(operation.state)) throw conflict(`${what} state is not a known operation state`)
+  if (operation.finishedAt !== null && !boundedText(operation.finishedAt)) {
+    throw conflict(`${what} finishedAt out of bounds`)
+  }
+  if (OP_TERMINAL.has(operation.state) && operation.finishedAt === null) {
+    throw conflict(`${what} terminal state without finishedAt`)
+  }
+}
+
 function validateStoredRow(row, rootPath, seen) {
   exactKeys(row, ROW_KEYS, 'stored sandbox row')
   for (const key of ROW_KEYS) if (row[key] === undefined) throw conflict(`stored row missing ${key}`)
@@ -126,6 +153,16 @@ function validateStoredRow(row, rootPath, seen) {
   }
   // Port allocations arrive with P6's validated schema; until then only `[]`.
   if (!Array.isArray(row.ports) || row.ports.length !== 0) throw conflict('stored ports must be an empty array')
+  if (row.removed !== true && row.removed !== false) throw conflict('stored removed is not a boolean')
+  if (!Array.isArray(row.operations)) throw conflict('stored operations is not an array')
+  for (const operation of row.operations) {
+    validateStoredOperation(operation, row.sandboxId, 'stored operation')
+    if (seen.operationId.has(operation.operationId)) throw conflict('duplicate operationId in stored registry')
+    seen.operationId.add(operation.operationId)
+    const dedupe = `${operation.principal}\n${operation.requestId}`
+    if (seen.dedupe.has(dedupe)) throw conflict('duplicate (principal, requestId) in stored registry')
+    seen.dedupe.add(dedupe)
+  }
   for (const [kind, value] of [
     ['sandboxId', row.sandboxId],
     ['name', row.name],
@@ -148,7 +185,7 @@ function parseDocument(text, rootPath, envId) {
   if (doc.version !== DOC_VERSION) throw conflict('registry document version is not supported')
   if (doc.envId !== envId) throw conflict('registry document belongs to a different env')
   if (!Array.isArray(doc.sandboxes)) throw conflict('registry sandboxes is not an array')
-  const seen = { sandboxId: new Set(), name: new Set(), locator: new Set(), stateVolume: new Set() }
+  const seen = { sandboxId: new Set(), name: new Set(), locator: new Set(), stateVolume: new Set(), operationId: new Set(), dedupe: new Set() }
   for (const row of doc.sandboxes) validateStoredRow(row, rootPath, seen)
   return doc.sandboxes
 }
@@ -248,6 +285,8 @@ export function openControlRegistry({ root, envId } = {}) {
         stateVolume: row.stateVolume,
         binding: { locator: row.binding.locator, generation: row.binding.generation },
         ports: row.ports.map((port) => structuredClone(port)),
+        operations: row.operations.map((operation) => structuredClone(operation)),
+        removed: row.removed,
       })),
     }
   }
@@ -296,16 +335,33 @@ export function openControlRegistry({ root, envId } = {}) {
 
   const clone = (value) => structuredClone(value)
   const findRow = (sandboxId) => rows.find((row) => row.sandboxId === sandboxId) ?? null
+  // Removed rows are tombstones: invisible to identity lookups, but their
+  // dedupe keys and operation documents are retained for authorized reads.
+  const findVisible = (sandboxId) => rows.find((row) => row.sandboxId === sandboxId && row.removed !== true) ?? null
 
   function get(sandboxId) {
     assertLive()
-    const row = findRow(sandboxId)
+    const row = findVisible(sandboxId)
     return row ? clone(row) : null
   }
 
   function list() {
     assertLive()
-    return clone(rows)
+    return clone(rows.filter((row) => row.removed !== true))
+  }
+
+  /** Shared row construction: one shape for reserve, adopt and create intent. */
+  function newRow(input, overrides) {
+    const sandboxId = randomUUID()
+    return {
+      ...input,
+      sandboxId,
+      stateVolume: join(rootPath, input.profileId, sandboxId),
+      ports: [],
+      operations: [],
+      removed: false,
+      ...overrides,
+    }
   }
 
   /** Persist a create intent first; no backend call is made here. */
@@ -313,15 +369,7 @@ export function openControlRegistry({ root, envId } = {}) {
     assertLive()
     const input = checkedIntent(intent)
     if (rows.some((row) => row.name === input.name)) throw nameTaken(`sandbox name already registered: ${input.name}`)
-    const sandboxId = randomUUID()
-    const row = {
-      ...input,
-      sandboxId,
-      origin: 'created',
-      stateVolume: join(rootPath, input.profileId, sandboxId),
-      binding: { locator: `dnls-${randomUUID()}`, generation: null },
-      ports: [],
-    }
+    const row = newRow(input, { origin: 'created', binding: { locator: `dnls-${randomUUID()}`, generation: null } })
     rows.push(row)
     try {
       publish()
@@ -330,6 +378,139 @@ export function openControlRegistry({ root, envId } = {}) {
       throw publishError
     }
     return clone(row)
+  }
+
+  const findOperation = (operationId) => {
+    for (const row of rows) {
+      const operation = row.operations.find((entry) => entry.operationId === operationId)
+      if (operation) return { row, operation }
+    }
+    return null
+  }
+
+  /**
+   * Atomic dedupe scope for one intent. `(principal, requestId)` already on
+   * the ledger — even on a tombstone — returns the original when the
+   * fingerprint matches and rejects a changed argument set. A create intent
+   * persists its reservation AND its accepted operation in one publish,
+   * before any privileged action runs.
+   */
+  function accept({ principal, requestId, action, sandboxId, createIntent, fingerprint } = {}) {
+    assertLive()
+    for (const [key, value] of [['principal', principal], ['requestId', requestId], ['action', action], ['fingerprint', fingerprint]]) {
+      if (!boundedText(value)) throw conflict(`accept ${key} is required`)
+    }
+    if (!WRITE_ACTIONS.has(action)) throw conflict(`accept action is not a managed write: ${action}`)
+    for (const row of rows) {
+      const prior = row.operations.find((entry) => entry.principal === principal && entry.requestId === requestId)
+      if (prior) {
+        if (prior.fingerprint !== fingerprint || prior.action !== action || prior.sandboxId !== (sandboxId ?? row.sandboxId)) {
+          throw conflict('requestId was already spent with different arguments')
+        }
+        return { operation: clone(prior), isNew: false }
+      }
+    }
+    let row
+    if (action === 'create') {
+      if (sandboxId !== null && sandboxId !== undefined) throw conflict('create takes no object selector')
+      const input = checkedIntent(createIntent)
+      if (rows.some((entry) => entry.name === input.name)) throw nameTaken(`sandbox name already registered: ${input.name}`)
+      row = newRow(input, { origin: 'created', binding: { locator: `dnls-${randomUUID()}`, generation: null } })
+    } else {
+      if (createIntent !== undefined && createIntent !== null) throw conflict('only create carries an intent')
+      if (typeof sandboxId !== 'string' || !UUID_PATTERN.test(sandboxId)) throw conflict('a canonical sandboxId is required')
+      row = findVisible(sandboxId)
+      if (!row) throw conflict('unknown sandboxId')
+      if (row.operations.some((entry) => OP_PENDING.has(entry.state))) {
+        throw conflict('another operation on this object is pending or indeterminate')
+      }
+    }
+    const operation = {
+      operationId: randomUUID(),
+      requestId,
+      principal,
+      action,
+      sandboxId: row.sandboxId,
+      fingerprint,
+      state: 'accepted',
+      step: 'accepted',
+      at: new Date().toISOString(),
+      finishedAt: null,
+    }
+    row.operations.push(operation)
+    const appended = !rows.includes(row)
+    if (appended) rows.push(row)
+    try {
+      publish()
+    } catch (publishError) {
+      row.operations.splice(row.operations.indexOf(operation), 1)
+      if (appended) rows.splice(rows.indexOf(row), 1)
+      throw publishError
+    }
+    return { operation: clone(operation), isNew: true }
+  }
+
+  /**
+   * CAS one operation. Flow is `accepted → running|cancelled` then
+   * `running → succeeded|failed|indeterminate`; every update is validated
+   * before any memory mutation. A successful create/recreate persists the
+   * verified binding with the success mark; the tombstone is allowed only
+   * on a verified remove success or a predispatch-cancelled create (which
+   * frees its quota slot). There is no undo of IO already sent.
+   */
+  function transition(operationId, from, { state, step, binding, removed } = {}) {
+    assertLive()
+    if (!OP_STATES.has(state)) throw conflict('transition target is not a known operation state')
+    const found = findOperation(operationId)
+    if (!found) throw conflict('unknown operationId')
+    const { row, operation } = found
+    if (operation.state !== from) {
+      const error = conflict(`operation is ${operation.state}, not ${from}`)
+      error.operationState = operation.state
+      throw error
+    }
+    if (!OP_FLOW.get(from)?.has(state)) throw conflict(`illegal transition ${from} -> ${state}`)
+    if (step !== undefined && !boundedText(step)) throw conflict('transition step out of bounds')
+    if (binding !== undefined) {
+      if (operation.action !== 'create' && operation.action !== 'recreate') {
+        throw conflict('only create/recreate may rebind')
+      }
+      exactKeys(binding, BINDING_KEYS, 'transition binding')
+      if (!boundedText(binding.locator) || !boundedText(binding.generation)) {
+        throw conflict('transition binding needs locator and generation')
+      }
+    }
+    if (removed === true) {
+      const allowed =
+        (operation.action === 'remove' && state === 'succeeded') ||
+        (operation.action === 'create' && state === 'cancelled')
+      if (!allowed) throw conflict('tombstone requires a verified remove or a predispatch cancelled create')
+    }
+    operation.state = state
+    if (step !== undefined) operation.step = step
+    if (OP_TERMINAL.has(state)) operation.finishedAt = new Date().toISOString()
+    if (binding !== undefined) row.binding = { locator: binding.locator, generation: binding.generation }
+    if (removed === true) row.removed = true
+    publish()
+    return clone(operation)
+  }
+
+  /** Document read including authorized tombstone rows; null when absent. */
+  function operation(sandboxId, operationId) {
+    assertLive()
+    const row = findRow(sandboxId)
+    const entry = row?.operations.find((candidate) => candidate.operationId === operationId)
+    return entry ? clone(entry) : null
+  }
+
+  /** (principal, requestId) lookup across all rows incl. tombstones. */
+  function dedupe(principal, requestId) {
+    assertLive()
+    for (const row of rows) {
+      const entry = row.operations.find((candidate) => candidate.principal === principal && candidate.requestId === requestId)
+      if (entry) return clone(entry)
+    }
+    return null
   }
 
   /**
@@ -369,6 +550,8 @@ export function openControlRegistry({ root, envId } = {}) {
       stateVolume: obs.stateVolume,
       binding: { locator: obs.locator, generation: obs.generation },
       ports: [],
+      operations: [],
+      removed: false,
     }
     rows.push(row)
     try {
@@ -388,7 +571,7 @@ export function openControlRegistry({ root, envId } = {}) {
   function confirm(sandboxId, observation) {
     assertLive()
     const obs = checkedObservation(observation, ['locator', 'generation', 'stateVolume'], 'confirm observation')
-    const row = findRow(sandboxId)
+    const row = findVisible(sandboxId)
     if (!row) throw conflict('unknown sandboxId')
     if (row.binding.generation !== null) throw conflict('binding is already confirmed and immutable')
     if (obs.locator !== row.binding.locator || obs.stateVolume !== row.stateVolume) {
@@ -436,7 +619,7 @@ export function openControlRegistry({ root, envId } = {}) {
   function rename(sandboxId, name) {
     assertLive()
     if (!boundedText(name, MAX_NAME)) throw conflict('name out of bounds')
-    const row = findRow(sandboxId)
+    const row = findVisible(sandboxId)
     if (!row) throw conflict('unknown sandboxId')
     if (rows.some((other) => other !== row && other.name === name)) throw nameTaken(`sandbox name already registered: ${name}`)
     row.name = name
@@ -455,5 +638,5 @@ export function openControlRegistry({ root, envId } = {}) {
     db.close()
   }
 
-  return { get, list, reserve, adopt, rename, confirm, reconcile, close }
+  return { get, list, reserve, adopt, rename, confirm, reconcile, accept, transition, operation, dedupe, close }
 }

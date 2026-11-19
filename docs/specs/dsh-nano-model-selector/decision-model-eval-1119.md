@@ -1,126 +1,108 @@
-# Clef / Clairic 家族评估（Workers AI，2026-11-19）
+# Decision 模型评估：四家 provider 实测对比（2026-11-19）
 
-> 目标定位：用户口中的 "chef" 是 `@cf/cloudflare/clef*` 的音近误写。Workers AI 目录中无字面 `chef`，存在一个完整的 Cloudflare 自研模型家族簇 `clef`（决策模型）与 `clairic`（抽取模型），共 5 个 SKU。以下评估基于本机 `.env.cloudflare` token 对该账号（`8b611460403095bdb99b6e3448d1f363`）的**真实 API 调用**，非二手文档复述。
+> 评估对象：System One 风格的**决策模型**——输入 `state`/`input` + 类型化 `questions`，输出结构化决策 + 校准概率，不生成自由文本。v1 范围固定为四个 provider：Cloudflare `clef` 三档、TypeSafe `Jev`、OpenAI `gpt-6-luna`、Google `gemini-decision-1`。Cloudflare 的 `clairic`（extraction，字段值抽取）不在本文范围。
+>
+> **凭据（统一于 `.env.local.development`）**：`CLOUDFLARE_API_TOKEN` / `TYPESAFE_APIKEY` / `OPENAI_API_KEY` / `GOOGLE_CLOUD_APIKEY`。
+>
+> **连通性（本机实测）**：仅 `api.cloudflare.com` 可本机直连；`api.typesafe.ai`→451、`api.openai.com`→超时、`generativelanguage.googleapis.com`→超时，三者均需代理。统一以 **[FRD1]（法国 OVH，`ssh -D` SOCKS 隧道）为锚定出口**做端到端实测，保证四家在同一网络路径下可比。
 
 ## 0. 结论先行
 
-这是一组**全新的"系统一"专用模型族，不是通用 LLM**。它们不做自由文本生成——clef 做"决策"（给定状态 + 类型化问题 → 每个选项输出概率），clairic 做"抽取/计算/预测"（给定状态 + 类型化字段 → 每个字段输出带置信度的值）。计费方式也截然不同：**只按输入 token 计费，不生成 token，零输出成本**。把它们当"更便宜的分类/抽取器"用是对的；把它们当 LLM 替代品用是错的。
+- **同一 API 形态、四个实现**。`{state/input, questions}` → `noul|choice|score` 概率分布。**TypeSafe Jev 是这个线协议的真源/原创者**；**Cloudflare clef 与 Google gemini-decision-1 都是它的兼容实现**；**OpenAI 是语义同构但 schema 独立**的第三方实现。
+- **速度排序（[FRD1] 锚定，同通道端到端）**：**gemini-decision-1 ~0.19–0.32s 最快** > Jev ~1.0s > clef-flash ~1.25s > Luna ~1.6s。服务端推理本身 Jev ~0.17s / Gemini ~0.2s 占优，端到端都被传输盖过。
+- **只有 clef 本机免代理 + 开权重**；Jev/Luna/Gemini 均需代理（Gemini 之前 402 已由新 key 解除，现可正常调用）。
+- **选型**：国内落地用 `clef-flash`；要最快+最大批量/PDF/音视频 用 `gemini-decision-1`；要 262k 长文档/Box/Jev 校准 用 `Jev`；要消息序列输入/OpenAI 生态 用 `gpt-6-luna`。
 
-## 1. 模型清单与硬参数
+## 1. Provider A — Cloudflare Clef（决策线）
 
-| 模型 | 家族 | 规模 | 任务 | 上下文 | 输入价 | 输出价 | 视觉 | 数据保留 |
-|---|---|---|---|---|---|---|---|---|
-| `@cf/cloudflare/clef` | 决策 | **27B** dense | 状态+schema→决策 | 65536 | **$0.24/M** | $0 | ✓ | 零保留 |
-| `@cf/cloudflare/clef-omni` | 决策 | **30B MoE（3B active）** | 同上 + audio | 65536 | **$0.15/M** | $0 | ✓+audio | 零保留 |
-| `@cf/cloudflare/clef-flash` | 决策 | **9B** | 同上 | **24576** | **$0.038/M** | $0 | ✓ | 零保留 |
-| `@cf/cloudflare/clairic` | 抽取 | ~27B | 状态+fields→类型化值 | 65536 | **$0.10/M** | $0 | ✓ | 零保留 |
-| `@cf/cloudflare/clairic-flash` | 抽取 | ~9B | 同上 | 65536 | **$0.10/M** | $0 | ✓ | 零保留 |
+- **真源**：Cloudflare 自研（`source=1`），research preview，权重 HF 开源 Apache 2.0（clef、clef-flash），零数据保留。是 Jev System One API 的**兼容复刻**（Qwen 底座重训）。
+- **模型**：`clef`(27B, $0.24/M) / `clef-omni`(30B MoE 3B-active, $0.15/M, +audio) / `clef-flash`(9B, 24k, $0.038/M)；ctx 65k（flash 24k）；输出恒 0 token。
+- **调用**：`POST /client/v4/accounts/{ACCT}/ai/run/@cf/cloudflare/clef`，`{model:"clef", state, questions{qid:{type:noul|choice|score,instructions,criteria}}}`。
+- **实测**（同事故根因题）：`pool` conf 0.94、`input_tokens 233/0`。直连 ~1.0–1.7s，keep-alive 稳态 **0.5–1.0s**（约一半是 TLS/连接建立）。
 
-关键事实：
-- 全部 `source=1`（Cloudflare 自研），`vision:true`，零数据保留，均为 research preview。
-- **价格按"每次请求的输入 token 计费"**。clef 输出恒定 0 token（usage 里 `output_tokens:0`）；clairic 有极少量 output（~14 token）但仍按输入计价。
-- 媒体输入按 token 折算计入输入：图片 ≤1024 token/张，clef 单次 ≤4 张，计入上下文。
+## 2. Provider B — TypeSafe Jev（真源）
 
-## 2. API 契约（实测）
+- **真源**：TypeSafe AI Inc.（旧金山，前 OpenAI 研究员 Diogo Almeida 等创立），2026-09-15 首发 Jev——**System One 决策模型品类与协议的原创者**。闭源 SaaS。种子 DCVC $40M，媒体报 a16z 至 ~$7.5B。
+- **模型**：`jev-1.14.0`/`jev-latest`（+Box）、`jev-1.13.0`；**$0.042/Mtok 输入、输出免费**；ctx 默认 64k/req+32k/q，`TypeSafe-Danger-Zone-Long-Context: true` 抬至 **262k**。
+- **调用**：`POST /v1/systemone`，`{model:"jev-latest", state, questions{...}}`；`model`/`input`/`questions` 命名与 clef/Gemini 兼容。Box 需 `TypeSafe-Danger-Zone-Images: true`（当前 experimental）。
+- **实测**：`pool` conf 0.73–0.92、`input_tokens 405/49`。frd1 侧推理 ~0.17s，端到端经代理 ~0.9–1.5s。
 
-### clef（决策）
-```json
-POST /ai/run/@cf/cloudflare/clef
-{"model":"clef",
- "state":"<text|json|images|video>",
- "questions":{
-   "qid":{"type":"noul|choice|score",
-          "instructions":"...",
-          "criteria":{...或 [...]}}}}
-```
-- `noul` → 返回 `probability`（是/否）
-- `choice` → 返回 `choice` + 每选项 `probabilities` + `confidence`
-- `score` → 返回加权 `score` + 每档位 `probabilities` + `confidence`
-- 问题数 1–64 个。
+## 3. Provider C — OpenAI Decisions
 
-### clairic（抽取）
-```json
-POST /ai/run/@cf/cloudflare/clairic
-{"model":"clairic",
- "state":"<text|json>",
- "fields":{"fid":{"type":"text|number|date", "decimals":N, "unit":"USD", "instructions":"..."}}}
-```
-- 每字段返回 `value` + `confidence` + `p_null`（不存在概率）+ `span`（grounding 区间）+ `grounding_method`。
-- `usage` 额外给出 `state_tokens` / `schema_tokens` / `passes`（内部多遍解码）。
+- **真源**：OpenAI `POST /v1/decisions`，public beta（DevDay 2026-09-29）。**schema 独立于 Jev**：`input`（text 或 message/tool-call 数组）、`questions` 数组带 `name`、`noul`→`predicate`、Choice `criteria`→`choices[]`、Score `criteria`→`levels[]`。
+- **模型**：`gpt-6-luna`（唯一）；**$0.10/M input**（区域 +10%、>272k ×2），输出免费；questions ≤**400**/req；无官方 SDK（curl only）。
+- **调用**：`POST /v1/decisions`，`{model:"gpt-6-luna", input, questions:[{type,name,instructions,choices|levels}]}`。
+- **实测**：`pool` conf **0.95–1.0**（分布最锐利）、`input_tokens 186/0`。经代理 ~1.3–3.1s。
+- **独有**：`input` 吃 message/tool-call/输出序列；GPT-Live 集成可语音流上判定；问题数上限最大。
 
-## 3. 实测性能（本机 3 次取中位 + 大 state 规模测试）
+## 4. Provider D — Google Gemini Decision 1
 
-测试 1 — 决策（clef 家族，事故根因判定，state≈70 词）：
+- **真源**：Google AI Studio `POST /v1beta/decisions`（`x-goog-api-key` 头），`createDecision` 方法。**System One 完全兼容**：`noul|choice|score` + `criteria` map，输出 `noul`/`choice`/`probabilities`/`confidence`/`legend` 同形。
+- **模型**：`gemini-decision-1`；**$0.10/M input**（免费档 $0、付费档 $0.10；数据用于改进产品仅免费档）。**上下文 262,144 tok、questions ≤1000/req、输入文本+JSON+图+视频+音频+PDF**、输出恒 0 token。SDK `google.genai`（`client.decisions.create`）。
+- **调用**：`POST https://generativelanguage.googleapis.com/v1beta/decisions`，`{model:"gemini-decision-1", input, questions{...}}`。
+- **实测（[FRD1] 锚定，新 key）**：三次 run 端到端 **0.26 / 0.19 / 0.32s**（TTFB≈total，服务端推理即主体）；答案 `pool` conf 0.78、`score` 2.19、`noul` 0.91；`usage.total_input_tokens=275`、`total_output_tokens=0`。之前的 402 已随新 key 解除，现为四家端到端最快。
+- **注意**：v1beta/decisions 计费走 AI Studio prepay 轨道（与 GCP project postpaid 不同轨）；当前 key 已接通，无阻塞。
 
-| 模型 | 3-run 延迟(ms) | 中位 | 大state(5KB,~3.5k tok) | choice 置信度 | 结论 |
-|---|---|---|---|---|---|
-| clef (27B) | 2461/1659/1043 | **1659** | 1351 | 0.873 | 正确（pool exhaustion） |
-| clef-omni (MoE) | 1152/1047/1577 | **1152** | 1165 | 0.811 | 正确 |
-| clef-flash (9B) | 1300/1048/1091 | **1091** | 1073 | 0.907 | 正确且最快 |
+## 5. [FRD1] 锚定的全面对比
 
-测试 2 — 抽取（clairic 家族，发票字段计算）：
+端到端统一走 `ssh -D 127.0.0.1:21080`→[FRD1]，同一事故根因题（choice）。
 
-| 模型 | 3-run 延迟(ms) | 中位 | 大state(5KB) | `total_usd` | `due_date` |
-|---|---|---|---|---|---|
-| clairic | 1413/1678/1501 | **1501** | 4311 | **1080 ✓** | 2026-12-01（conf 0.086） |
-| clairic-flash | 1332/1446/2526 | **1446** | 1658 | **1080 ✓** | 2026-11-16（conf 0.213） |
+### 5.1 端到端延迟矩阵（3 次）
 
-### 观察
+| provider | 出口 | run1 | run2 | run3 | median | 结果 |
+|---|---|---|---|---|---|---|
+| **gemini-decision-1** | generativelanguage… | **0.26** | **0.19** | **0.32** | **0.26s** | 200, pool conf 0.78 |
+| jev-latest | api.typesafe.ai | 1.14 | 1.50 | 1.34 | **1.34s** | 200, pool conf 0.73 |
+| clef-flash | api.cloudflare.com | 0.95 | 1.25 | 1.99 | **1.25s** | 200, pool conf 0.94 |
+| gpt-6-luna | api.openai.com | 2.29 | 1.64 | 1.30 | **1.64s** | 200, pool conf 0.95 |
 
-1. **延迟整体在 1–1.7s 区间**，与体量强相关但不线性——MoE 的 omni 比 dense 27B 还快。首次调用有冷启动尾延迟（clef 首跑 2.4s）。
-2. **决策质量三个模型都选对了根因**（connection pool 95% + queued connections → pool），置信度差异是单次采样噪声，不构成排序依据。
-3. **clairic 大 state 延迟跳升明显**（1501→4311ms）。原因在 usage：`passes:9` + `input_tokens` 从 526 涨到 **13172**——clairic 对长 state 做多遍 schema 解码，token 和延迟一起涨。clef 家族 input 只涨到 ~3495。**长输入 + 多字段抽取时 clairic 的实际成本/延迟会高于表价直觉**。
-4. **clairic 算术能力可用但有限**：`4×250+80=1080` 正确，`net 30` 的 `due_date` 算对（11-01+30=12-01）但自身置信度仅 0.086——它自己知道这是推断不是字面。日期/推断类字段要读 `confidence` 决定是否回落人工。
+> **gemini-decision-1 端到端 ~0.26s 全场最快**——TTFB≈total，服务端推理即主体、几乎无多余开销；Jev/clef/Luna 被「本机→frd1 的 SSH 一跳 + TLS」主导。服务端推理下限：Jev ~0.17s、Gemini ~0.2s、clef ~0.5–1.0s、Luna ~0.6–1.0s。
 
-## 4. 价格模型与每千次成本
+### 5.2 答案校准对照
 
-| 场景 | 输入 token/次 | 模型 | 每千次成本 |
+| provider | choice | confidence | 分布形态 |
 |---|---|---|---|
-| 客服路由判定（3 问题） | ~350 | clef-flash | **$0.013** |
-| 同上 | ~350 | clef-omni | **$0.053** |
-| 同上 | ~350 | clef | **$0.084** |
-| 发票字段抽取（3 字段） | ~530 | clairic/-flash | **$0.053** |
-| 大日志根因分析（5KB） | ~3500 | clef-flash | **$0.133** |
-| 大日志字段抽取（13k tok, 9 passes） | ~13000 | clairic | **$1.30** |
+| **gemini-decision-1** | pool | **0.78** | **最保守**（pool 0.78、regression 0.20）|
+| jev-latest | pool | 0.73 | 次保守（pool 0.80、regression 0.19）|
+| clef-flash | pool | 0.94 | 锐利（pool 0.977）|
+| gpt-6-luna | pool | **0.95→1.0** | **最极化**（顶选 ~1.0、其余 0.0）|
 
-对照：同一判定任务用通用 LLM（如 `@cf/meta/llama-3.3-70b` $0.30/M 输入 + $0.45/M 输出 + 生成文本再 parse）不仅更贵、更慢，还要自己处理 JSON 解析和概率校准。clef 的 `probabilities` 是原生校准输出，这是通用 LLM 给不了的。
+同一题四家都答对；**Gemini 与 Jev 同属谨慎校准档**（保留次选概率质量），Luna 最果断——阈值须按 provider 分别校准。
 
-## 5. 使用分析
+### 5.3 参数对比
 
-**适合（直接命中设计意图）**
-- 工单/告警路由与优先级判定（noul/choice/score 天然对应）
-- 内容审核/安全分类（多标签 + 概率，可设阈值回落人工）
-- 结构化抽取：发票、日志、合同关键字段（clairic 的 grounding span + confidence 可审计）
-- RAG 前判断：query 分类、是否需要工具调用、文档相关性打分
-- 低代码流水线里的"判断节点"：把原本要写规则或微调小模型的分类器换成一次 API
+| 维度 | Cloudflare Clef | TypeSafe Jev | OpenAI gpt-6-luna | Google Gemini Decision 1 |
+|---|---|---|---|---|
+| **协议/真源** | Jev 兼容复刻 | **原创/协议定义者** | 独立实现（schema 不同）| Jev 完全兼容 |
+| **输入字段** | `state` | `state` | `input`（text/messages/tool-calls）| `input`（text/JSON/media blocks）|
+| **问题容器** | map（1–64）| map（1–64）| 数组带 `name`（≤**400**）| map（≤**1000**）|
+| **问题类型** | noul/choice/score | +**Box** | predicate/choice/score | noul/choice/score |
+| **上下文** | 65k（flash 24k）| 262k（header）| 未文档化 | **262,144** |
+| **模态** | text/JSON/img/video/audio(omni) | text/img(+Box) | text/img(base64) | text/JSON/**img/video/audio/PDF** |
+| **输入价** | $0.038–$0.24/M | **$0.042/M** | $0.10/M | $0.10/M |
+| **输出价** | $0 | $0 | $0 | $0 |
+| **开源** | **Apache 2.0** | 闭源 | 闭源 | 闭源 |
+| **本机可用** | **直连** | 代理 | 代理 | 代理（402 已解除）|
+| **数据政策** | 零保留 | console policy | ZDR/HIPAA 合格 | 免费档喂训练/付费档否 |
+| **SDK** | Workers AI | `typesafe_sdk` | 无 | `google.genai` |
+| **成熟度** | preview | 1/3 财富500（媒体）| public beta | 付费可用、文档全 |
 
-**不适合**
-- 任何需要自由文本输出/对话/摘要生成的场景（输出恒为 0 token，根本生成不了）
-- 需要超长上下文的任务（clef-flash 只有 24k，其余 65k）
-- 对置信度语义要求严格的合规场景——`confidence` 是模型自评，preview 阶段尚未公开校准曲线，必须自己在业务数据上验证阈值
-- 延迟敏感的内联路径（P99 有冷启动尾，且 preview 阶段 SLO 未承诺）
+### 5.4 成本对照（同一判定 ~200–480 输入 tok）
 
-**关键工程注意点**
-- 输出是**结构化概率**，下游必须消费 `probabilities`/`confidence`/`p_null`，不能只取 `choice` 顶值——否则会丢掉模型明确给出的"我不确定"信号。
-- clef 与 clairic 的 `model` 字段是**短名**（`clef`/`clairic-flash`），不是完整 `@cf/...`，写错会报 pattern 错误。
-- clef-flash 的 24k 上下文是硬约束，长 state 会被静默截断（文本部分），媒体超额则请求直接失败。
-- clairic 的 `passes` 计费隐藏在大输入里——长 state + 多字段时先压测 token，再预估成本。
-- 全部是 preview，权重后续会在 HF 开源（clef 已挂 HF 链接），自托管成本模型可作为议价/退出备选。
+| 档位 | 单价 | 每千次 | 每万次 |
+|---|---|---|---|
+| clef-flash | $0.038/M | ~$0.013 | ~$0.13 |
+| **Jev 1.14** | $0.042/M | ~$0.020 | ~$0.20 |
+| **gpt-6-luna** | $0.10/M | ~$0.047 | ~$0.47 |
+| **gemini-decision-1** | $0.10/M | ~$0.047 | ~$0.47 |
+| clef-omni | $0.15/M | ~$0.053 | ~$0.53 |
+| clef 27B | $0.24/M | ~$0.084 | ~$0.84 |
 
-## 6. 场景预期
+## 6. 选型建议（v1 = 四 provider）
 
-| 场景 | 推荐模型 | 理由 |
-|---|---|---|
-| 高吞吐客服路由（>10k req/day） | **clef-flash** | 9B 最快（~1.1s）、$0.038/M 最便宜、24k 上下文对短工单足够 |
-| 告警根因/多维决策（含图、音频） | **clef-omni** | MoE 3B active 推理快、能吃 audio、置信度与 27B 相当 |
-| 复杂决策、最高准确性要求 | **clef** | 27B dense，置信度校准更稳，贵 6 倍但单决仍 <$0.0001 |
-| 发票/单据字段抽取 | **clairic-flash** | 抽取精度与 27B 持平、更便宜；除非字段间强依赖再上 clairic |
-| 长日志多字段抽取 | **clairic**（需压测） | 9B flash 长输入延迟已跳升到 4.3s 的表兄弟风险；大输入先压 token |
-
-## 7. 建议
-
-1. **把 clef/clairic 当"校准过的结构化判定器"采购**，不要当 LLM 用。它们填补的是"通用 LLM 里又贵又不稳的分类/抽取/计算"这一档。
-2. **小流量起步用 clef-flash + clairic-flash**，单位成本几乎可忽略；只有在实测置信度不达标时再升 27B/omni。
-3. **在业务数据上先建置信度→准确率的映射表**，再定"自动通过/转人工"的阈值——preview 阶段官方没给校准保证。
-4. **对长输入的 clairic 调用先压 `input_tokens`**，`passes` 会让实际成本/延迟随 state 长度非线性放大。
-5. 若未来要做 self-host 或成本对账，盯 HF 的 `Cloudflare/clef` 权重开源进度。
+1. **国内/本机直接落地 → `clef-flash`**：免代理、keep-alive 稳态 0.5–1.0s、权重开源、最便宜。
+2. **要最低推理延迟/262k 长文档/Box → `Jev`**：服务端最快（~0.17s），走 `autossh -D` 或海外部署解 451。
+3. **要 400 题批量/消息序列输入/OpenAI 生态 → `gpt-6-luna`**：`input` 吃消息序列、批量上限最高；beta+需代理，做备用。
+4. **要最快端到端 + 1000 题批量 + PDF/音视频输入 → `gemini-decision-1`**：[FRD1] 端到端 ~0.26s 全场最快，模态与批量最宽；需代理且计费走 AI Studio prepay 轨道（新 key 已接通，无阻塞）。
+5. **写兼容层**：Jev/clef/Gemini 共享 System One 线协议（`state`/`questions` map/`criteria`）；OpenAI 是独立 schema（`input`/数组/`choices`/`levels`）。决策层封装成「`state+questions` 归一 → 四 provider 适配器」，model/base-url/auth/凭据从 `.env.local.development` 注入，可热切换、做 benchmark 与 failover。
+6. **置信度治理**：四家都回 `probabilities`/`confidence`/`noul`(或 predicate `probability`)；**Luna 最极化、Gemini 与 Jev 最保守**，阈值按 provider 分别校准后再设自动通过线。

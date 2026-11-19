@@ -796,8 +796,12 @@ function interactExpression(body) {
     const fire=(type,init)=>{el.dispatchEvent(new (type.startsWith('key')?KeyboardEvent:type==='input'?InputEvent:MouseEvent)(type,Object.assign({bubbles:true,cancelable:true},init)))};
     const nativeSet=(o,v)=>{const d=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(o),'value');if(d&&d.set)d.set.call(o,v);else o.value=v};
     switch(a.action){
-      case 'click': ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(t=>fire(t,{clientX:cx,clientY:cy})); break;
-      case 'dblclick': ['pointerdown','mousedown','pointerup','mouseup','click','dblclick'].forEach(t=>fire(t,{clientX:cx,clientY:cy})); break;
+      // el.click() closes the sequence: synthetic dispatchEvent never runs the
+      // element's activation behavior, so an anchor/button would report ok
+      // while never navigating — a human click always activates. el.click()
+      // dispatches the click event AND performs activation (href, submit, etc).
+      case 'click': ['pointerdown','mousedown','pointerup','mouseup'].forEach(t=>fire(t,{clientX:cx,clientY:cy})); el.click(); break;
+      case 'dblclick': ['pointerdown','mousedown','pointerup','mouseup'].forEach(t=>fire(t,{clientX:cx,clientY:cy})); el.click(); el.click(); fire('dblclick',{clientX:cx,clientY:cy}); break;
       case 'focus': el.focus(); break;
       case 'blur': el.blur(); break;
       case 'hover': ['pointerover','mouseover','pointermove','mousemove'].forEach(t=>fire(t,{clientX:cx,clientY:cy})); break;

@@ -105,6 +105,9 @@ lab/out/
 screenshot/
 screenshots/
 
+# Generated evidence bundles (test logs, screenshots, captured JSON) — never commit
+**/evidence/
+
 # 开发工作树 dev worktree
 .worktree/
 .agents

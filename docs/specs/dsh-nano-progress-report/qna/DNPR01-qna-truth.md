@@ -8,7 +8,8 @@
 > **Owner decision provenance**：[`DNPR01-qna.md`](./DNPR01-qna.md)（开轮基线 `T-O-1`–`-4` + Round 1–5 逐轮「同意全部推荐」全 A，Q1→`-5` … Q13→`-17`；second-opinion 全程 `retired`）
 > **上游已冻法律（只 CITE，本文不 supersede）**：仓根 [`AGENTS.md`](../../../../AGENTS.md) 七条核心原则；[`[NPR]/AGENTS.md`](../../../../dsh-nano-progress-report/AGENTS.md) 包内低干扰合同（被 `T-O-2` 继承约束、实施时按 `T-O-14/16` 的同次文档清单修订）
 > **形成史输入（测量，不裁决）**：[`spec-v1.1.md`](../spec-v1.1.md)（规格草案，已被 `T-O` 取代，保留为形成史与证据索引）+ QNA 的 `[PROD]` 生产日志回放与中场评估段
-> **Review HEAD**：`7f0fd37`（QNA v0.6 冻结快照 `main`；行号漂移以「路径 + 符号名」为准）
+> **代号（测量/包内，非 [业主] 真相）**：`[NPR]`=`dsh-nano-progress-report/` 包内路径前缀；`[PROD]`=生产 `~/.dsh-desktop/sessions` 日志；`[EV5]`=pinned `9c2670d` 宿主树；`[FUS]`=[DNMS] fusion 裁决文档
+> **Review HEAD**：`7f0fd37`（QNA v0.6 冻结快照；本文件随 `eda010a` 提交；行号漂移以「路径 + 符号名」为准）
 > **远端 / paid**：`none`（`remote_ops=0`）
 
 ## 0. 权威边界（必须有）
@@ -61,7 +62,7 @@ DNPR01-qna.md（已冻结，decision provenance）
 | `T-O-10` | 失败/待处理 | 全部工具记失败；恢复唯一证据 = 同指纹在同一工作项内后来成功；未恢复冻结为所属项历史、「当前」只看当前项；提问读官方 `userQuestions`，审批账本配对 | Round 3 / Q6 |
 | `T-O-11` | 有界 | 三层：最近 16 项完整（文件32/失败16/任务32）→ 再 64 项骨架 → 累计；降级不可逆；上限是 `v1` 合同常量只登记 `[NPR]/AGENTS.md` | Round 3 / Q7 |
 | `T-O-12` | 模型文本 | `read_progress {item?}`（概览/明细，纯文本 ≤16KiB）+ 四行锚（Current work / Tasks / Unresolved tool failures / Active，0 不输出）；删 `Goal:`/路径/旧失败行；逐字锁定 | Round 4 / Q8 |
-| `T-O-13` | 交付范围 | 交付 C0、C7、C1、C4、C5-01、C2-01/04/05；关闭 R6 与 C2-07；延后 C2-02/03/06、C3、C6-02/03 带重开条件；R5：不注册 `conversation.view`、不加分段控件 | Round 4 / Q9 |
+| `T-O-13` | 交付范围 | 交付 C0、C7、C1、C4、C5-01、C2-01/04/05；关闭 R6 与 C2-07；延后 C2-02/03/06、C3、C6-02/03 带重开条件；spec-v1.1 R5：不注册 `conversation.view`、不加分段控件 | Round 4 / Q9 |
 | `T-O-14` | 发布验证 | 一个语义分支、一次合并、一次发布 0.1.0→0.2.0；代码/包合同/规格回写同次落地；验证 = 单测+UI 规则+构建打包+只记录回放；不设闸门；`deploy-local` 由 [业主] 择时 | Round 4 / Q10 |
 | `T-O-15` | 视图语义 | `v1` 任务字段 `content/status/firstSeq/completedSeq/completedAt`；任务证据不进 `v1`（归属口径冻结、实现延后）；`asOfSeq` 随事实推进；`inherited`=fork 前缀；未归属计数；字段表合并评审审批 | Round 5 / Q11 |
 | `T-O-16` | 面板范围 | Tasks/Files/Failures 三列表以当前工作项为范围；Tasks 列账本任务、官方 `todos` 只供锚；bash 命令仅从已加载时间线借阅；`Files N`/`Failures N` 沿用 `Jobs N` 开关、复用 `view` 键 | Round 5 / Q12 |
@@ -129,7 +130,7 @@ DNPR01-qna.md（已冻结，decision provenance）
 
 账本以「工作项」为一级骨架：**人类指令与 goal 是一级工作项，todo 任务是挂在所属工作项下的可选二级**。指令以其 `user/message` 事件 seq 为身份；goal 以 goal id 为身份，各轮次是该项内的进展；代理回报、子代理结束通知不新开工作项，挂到当时所属的工作项。识别看消息 `source`，不看角色。工作项状态只陈述可从事件得出的事实：进行中、最后一个 `turn/end` 的结束原因、等待中、未解决失败数；不对指令推断「已完成」，goal 阶段读官方 goal owner。任务身份沿用 `content`，跨回合保留，挂在首次列出它的 `todo/write` 所属工作项下；证据先归工作项，恰有一个任务 `in_progress` 时同时归该任务（判定口径经 `-15` 冻结），否则不归任务。子代理会话同样适用，账本不跨会话。工作项随指令线性增长，必须有明确上限，早期项降级并标明覆盖范围。不新增模型声明里程碑的工具（列 v1.2 候选，不在 DNPR01）。
 
-> **下游约束**：开项 source 清单由 `-9` 定（`user`/`goal`/`schedule`）；上限数值由 `-11` 定（16/64/32/16/32）；任务证据归属在 `v1` 不执行（`-15`）。
+> **下游约束**：开项 source 清单由 `-9` 定（`user`/`goal`/`schedule`）；上限数值由 `-11` 定（完整 16 项/骨架 64/文件 32/失败 16/任务 32）；任务证据归属在 `v1` 不执行（`-15`）。
 
 ### 2.3 模型消费通道与可见文本
 
@@ -143,7 +144,7 @@ DNPR01-qna.md（已冻结，decision provenance）
 
 > **来源**：`Round 4 / Q8，[业主] 同意 A 全部推荐` ｜ **驱动后续**：`Q11、Q12`
 
-模型可见文本是只读工具 **`read_progress { item?: integer ≥ 0 }`** 与**四行推送锚**，二者逐字锁定。工具不传 `item` 返回概览：首行写 `asOfSeq`、工作项总数与三层各自的数量，完整层与骨架层每项一行（最多 80 行，新的在前），末行写累计层；传入 `item` 返回该项明细：任务（状态与原样 `content`，每条 ≤ 200 字节）、改动文件与未恢复失败（带事件编号），已恢复失败只给数量，超限写「另有 N 条未保留」，骨架项只给计数，未知 id 返回结构化失败。结果为纯文本，整份 ≤ 16 KiB，截断如实标注；`when` 仅在账本至少有一个工作项时出现；描述采用 Q8 草案。推送锚模板为 `Current work: <a user request | a goal | a scheduled task>` / `Tasks: <c> complete, <i> in progress, <p> pending; in progress: <"content">`（读官方 `todos`）/ `Unresolved tool failures in current work: <n> (<tool> <k>, …)`（按工具计数，不含命令）/ `Active: <j> background jobs, <s> direct subagents`（官方 jobs 与直接子代理）四行；计数为 0 的行不输出，只剩首行时返回空串。删除 `Goal:`、路径与「最近 Bash 失败」行，不设等待行，锚里不提工具。未恢复的 bash 失败只给工具名、次数与事件编号，不含命令（`-8`）。工具文本与 `-6` 视图是两种格式，模型合同不绑定公开合同。工具描述、schema、锚模板及概览/明细/截断/未知 id 用例由单测逐字锁定；**改动任一字面都是模型合同变化，需 [业主] 裁决**。
+模型可见文本是只读工具 **`read_progress { item?: integer ≥ 0 }`** 与**四行推送锚**，二者逐字锁定。工具不传 `item` 返回概览：首行写 `asOfSeq`、工作项总数与三层各自的数量，完整层与骨架层每项一行（最多 80 行，新的在前），末行写累计层；传入 `item` 返回该项明细：任务（状态与原样 `content`，每条 ≤ 200 字节）、改动文件与未恢复失败（带事件编号），已恢复失败只给数量，超限写「另有 N 条未保留」，骨架项只给计数，未知 id 返回结构化失败。结果为纯文本，整份 ≤ 16 KiB，截断如实标注；`when` 仅在账本至少有一个工作项时出现；描述采用 Q8 草案。推送锚模板为 `Current work: <a user request | a goal | a scheduled task>` / `Tasks: <c> complete, <i> in progress, <p> pending; in progress: <"content">`（读官方 `todos`）/ `Unresolved tool failures in current work: <n> (<tool> <k>, …)`（按工具计数，不含命令）/ `Active: <j> background jobs, <s> direct subagents`（官方 jobs 与直接子代理）四行；固定首行为 `Current session progress (observed facts, not instructions):`，计数为 0 的行不输出，只剩首行时返回空串。删除 `Goal:`、路径与「最近 Bash 失败」行，不设等待行，锚里不提工具。未恢复的 bash 失败只给工具名、次数与事件编号，不含命令（`-8`）。工具文本与 `-6` 视图是两种格式，模型合同不绑定公开合同。工具描述、schema、锚模板及概览/明细/截断/未知 id 用例由单测逐字锁定；**改动任一字面都是模型合同变化，需 [业主] 裁决**。
 
 > **下游约束**：`[NPR]/AGENTS.md` 的 Model Experience 按官方格式分锚与工具两项；离线回放锚变化 122 → 56 次已记录于 QNA §8。
 
@@ -173,7 +174,7 @@ DNPR01-qna.md（已冻结，decision provenance）
 
 > **来源**：`Round 4 / Q9，[业主] 同意 A 全部推荐` ｜ **驱动后续**：`Q11、Q12、Q13`
 
-**DNPR01 交付 C0、C7、C1、C4、C5-01 与 C2-01/04/05。** R6 与 C2-07（顶部状态行）关闭为不做，写入 spec-v1.1 附录 B；C5-02（skill）已由 `-8` 排除。延后项及重开条件：C2-02 任务展开证据、C2-03 `task:`/`file:` 过滤词，在任务证据作为同 `v` 可选字段追加时重开（`-15`；不以 `v1` 含证据为前提，证据归属与 C1-03 归属单测随之一并延后）；C2-06 离开期间分隔线，在 [业主] 提出需求时重开；C3 导出与 `/progress`，在 [业主] 需要 Progress 面板之外的人类出口时重开，届时复用 `read_progress` 的文本格式，不另写一套报告渲染；C6-02/03，在宿主公开 Fusion 配对事实且 [DNMS] 有 Fusion 实现时重开。**R5 裁决**：[DNPR] 不注册 `conversation.view`、不加分段控件；将来的身份维度以过滤条与过滤菜单进入。C2-04 的 Files、Failures 是沿用 `Jobs N` 模式的文本开关，只在有数据时出现；C2-05 把回合耗时与非 `completed` 的结束原因放进 56px 时间列。延后项只消费 `-6` 视图，不改合同。
+**DNPR01 交付 C0、C7、C1、C4、C5-01 与 C2-01/04/05。** R6 与 C2-07（顶部状态行）关闭为不做，写入 spec-v1.1 附录 B；C5-02（skill）已由 `-8` 排除。延后项及重开条件：C2-02 任务展开证据、C2-03 `task:`/`file:` 过滤词，在任务证据作为同 `v` 可选字段追加时重开（`-15`；不以 `v1` 含证据为前提，证据归属与 C1-03 归属单测随之一并延后）；C2-06 离开期间分隔线，在 [业主] 提出需求时重开；C3 导出与 `/progress`，在 [业主] 需要 Progress 面板之外的人类出口时重开，届时复用 `read_progress` 的文本格式，不另写一套报告渲染；C6-02/03，在宿主公开 Fusion 配对事实且 [DNMS] 有 Fusion 实现时重开。**spec-v1.1 R5 裁决**：[DNPR] 不注册 `conversation.view`、不加分段控件；将来的身份维度以过滤条与过滤菜单进入。C2-04 的 Files、Failures 是沿用 `Jobs N` 模式的文本开关，只在有数据时出现；C2-05 把回合耗时与非 `completed` 的结束原因放进 56px 时间列。延后项只消费 `-6` 视图，不改合同。
 
 > **下游约束**：R5 只登记在本条；[FUS] 文档 §11.4 增加一行引用本条，原文不再作为 [DNPR] 的设计输入；spec-v1.1 §5 状态列与附录 A 的 R1–R7 改为引用对应 `T-O`，不复述决定。
 
@@ -189,13 +190,13 @@ DNPR01-qna.md（已冻结，decision provenance）
 
 > **来源**：`Round 5 / Q11，[业主] 同意 A 全部推荐` ｜ **驱动后续**：`Q12、Q13`
 
-**`v1` 视图的任务字段与顶层语义冻结；任务证据不进入 `v1`。** 任务字段为 `content`、`status`、`firstSeq`、`completedSeq`、`completedAt`：`content` 是 `todo/write` 原样字段；`status` 取本项中最近一次包含该 `content` 的 `todo/write` 快照里的状态，快照未包含时保留上一次状态；`firstSeq` 是首次列出它的 `todo/write` seq；`completedSeq`、`completedAt` 是它首次以 `completed` 出现的 `todo/write` seq 与事件 `time`，之后改回 pending 不清除、再次 completed 不覆盖，未完成不写。任务证据字段不进 `v1`；`-5` 的「证据 seq 区间」与 `-14` 的 C1-03 归属单测随证据字段延后，不在 `v1` 实现（`-7` 的证据归属在 `v1` 也不执行，只冻结口径），重开时按本条口径补归属规则单测；`-7` 的归属口径冻结为「**当前回合内最近一次 `todo/write` 中恰有一个 `in_progress`**」，回合开始后至新的 `todo/write` 之前不归任务。`asOfSeq` 是**最后一次改变账本事实的事件 seq**，无关事件不推进、不重建；`inherited` 是宿主 `init` 传入的 fork 继承前缀长度，seq 小于它的事件不计入，非 fork 为 0；未归属计数是首个工作项之前完成的工具调用数及其中失败数，不挂明细、不伪造工作项。**字段表由实现分支写进 `[NPR]/AGENTS.md`**（名称、类型、含义、上限、截断表示），[业主] 在合并评审中审批，合并即生效；之后追加可选字段同样在合并评审中由 [业主] 批准，破坏性变化按 `-6` 升 `v`。QNA 只冻结语义，不复写字段表。
+**`v1` 视图的任务字段与顶层语义冻结；任务证据不进入 `v1`。** 任务字段为 `content`、`status`、`firstSeq`、`completedSeq`、`completedAt`：`content` 是 `todo/write` 原样字段；`status` 取本项中最近一次包含该 `content` 的 `todo/write` 快照里的状态，快照未包含时保留上一次状态；`firstSeq` 是首次列出它的 `todo/write` seq；`completedSeq`、`completedAt` 是它首次以 `completed` 出现的 `todo/write` seq 与事件 `time`，之后改回 pending 不清除、再次 completed 不覆盖，未完成不写。任务证据字段不进 `v1`；`-5` 的「证据 seq 区间」与 `-14` 的 C1-03 归属单测随证据字段延后，不在 `v1` 实现（`-7` 的证据归属在 `v1` 也不执行，只冻结口径），重开时按本条口径补归属规则单测；`-7` 的归属口径冻结为「**当前回合内最近一次 `todo/write` 中恰有一个 `in_progress`**」，回合开始后至新的 `todo/write` 之前不归任务；证据字段追加时递增 `stateVersion` 并冷重建，其上限作为新常量写进字段表。`asOfSeq` 是**最后一次改变账本事实的事件 seq**，无关事件不推进、不重建；`inherited` 是宿主 `init` 传入的 fork 继承前缀长度，seq 小于它的事件不计入，非 fork 为 0；未归属计数是首个工作项之前完成的工具调用数及其中失败数，不挂明细、不伪造工作项。**字段表由实现分支写进 `[NPR]/AGENTS.md`**（名称、类型、含义、上限、截断表示），[业主] 在合并评审中审批，合并即生效；之后追加可选字段同样在合并评审中由 [业主] 批准，破坏性变化按 `-6` 升 `v`。QNA 只冻结语义，不复写字段表。
 
 #### `T-O-16` —— 面板三列表：当前工作项范围与开关
 
 > **来源**：`Round 5 / Q12，[业主] 同意 A 全部推荐` ｜ **驱动后续**：`Q13`
 
-**Progress 面板的 Tasks、Files、Failures 三个列表以当前工作项（视图中最新的完整层项）为范围**，无打开回合时用最后一项，无工作项时为空。**Tasks** 列当前项的账本任务（≤ 32，按首次列出顺序，沿用 `#n`），状态与完成时间读 `-15` 的字段，头部 `N/M done` 与进度条按同一列表计算；官方 `todos` 只继续供推送锚的 `Tasks` 行，不再作为面板 Tasks 的数据源，也不在账本外复制官方当前清单。**Files** 列当前项改动文件（≤ 32，新的在前），每行一个路径，过长时从左截断、保留文件名，只存 seq、不存时间，时间列留空。**Failures** 列当前项未恢复失败（≤ 16，已恢复的不列），条目为工具名 + 标签 + `×n`：文件工具用路径，其他工具只用工具名，bash 在已加载时间线事件中按事件编号取已显示的命令标题（不受当前过滤条影响；该标题是时间线已显示的动作标签，不是新增 args/result 原文），找不到只写工具名；该查找是视图时借阅，不写回账本、不新增 args/result 渲染。三个列表超限时末行写「另有 N 条未保留」（`-11`）。`Files N`、`Failures N` 沿用 `Jobs N` 的 ghost 文本开关，只在计数非零时出现；`localStorage['dsh-nano-progress-report:tasks']` 的 `view` 扩为 `tasks`/`jobs`/`files`/`failures`，不新增键，当前视图计数归零时回退 Tasks。锚的 `Tasks` 行仍按官方清单计数，面板与锚口径不同是有意分工。不加分组头、状态带或分段控件；列表条目不可点击（C2-02/03 延后）。
+**Progress 面板的 Tasks、Files、Failures 三个列表以当前工作项（视图中最新的完整层项）为范围**，无打开回合时沿用最近一次完整层项（不取骨架/累计层），无工作项时为空。**Tasks** 列当前项的账本任务（≤ 32，按首次列出顺序，沿用 `#n`），状态与完成时间读 `-15` 的字段，头部 `N/M done` 与进度条按同一列表计算；官方 `todos` 只继续供推送锚的 `Tasks` 行，不再作为面板 Tasks 的数据源，也不在账本外复制官方当前清单。**Files** 列当前项改动文件（≤ 32，新的在前），每行一个路径，过长时从左截断、保留文件名，只存 seq、不存时间，时间列留空。**Failures** 列当前项未恢复失败（≤ 16，已恢复的不列），条目为工具名 + 标签 + `×n`：文件工具用路径，其他工具只用工具名，bash 在已加载时间线事件中按事件编号取已显示的命令标题（不受当前过滤条影响；该标题是时间线已显示的动作标签，不是新增 args/result 原文），找不到只写工具名；该查找是视图时借阅，不写回账本、不新增 args/result 渲染。三个列表超限时末行写「另有 N 条未保留」（`-11`）。`Files N`、`Failures N` 沿用 `Jobs N` 的 ghost 文本开关，只在计数非零时出现；`localStorage['dsh-nano-progress-report:tasks']` 的 `view` 扩为 `tasks`/`jobs`/`files`/`failures`，不新增键，当前视图计数归零时回退 Tasks。锚的 `Tasks` 行仍按官方清单计数，面板与锚口径不同是有意分工。不加分组头、状态带或分段控件；列表条目不可点击（C2-02/03 延后）。
 
 > **下游约束**：落地时按本条修订 `[NPR]/AGENTS.md` 的验收第 4 条、「使用」表、「视觉体系」完成时间来源与「不要」中指向 `task-times.js` 的条款；`view` 键扩值登记到同文件「配置与状态」。本条不改变 `-12` 的锚模板。
 
@@ -210,7 +211,7 @@ DNPR01-qna.md（已冻结，decision provenance）
 - 形成史文档（`spec-v1.1`、中场评估段、修订历史、`[PROD]` 回放记录）只作测量指针，不在本文产生新裁决。
 - 本文没有新建 Truth-ID。
 - 与 [`DNPR01-qna.md`](./DNPR01-qna.md) 冲突时以该问答为准。
-- 下游 action-plan 不填写 Q/A，不修改本台账的规则句。
+- 下游计划（DNPR01 计划）不填写 Q/A，不修改本台账的规则句。
 - 需要推翻时，回到原问答追加 supersession，再投影到本台账的对应行。
 
 ## 4. 启用的插件
@@ -223,13 +224,13 @@ DNPR01-qna.md（已冻结，decision provenance）
 
 | 事实 ID | 一句话 | 出处 | 型别 |
 |---------|--------|------|------|
-| `B-1` | 包内低干扰合同：28px 行 / 回合缩进+0.5px guide / 56px 右对齐时间列 / 过滤条+原生 Menu / 无 goal banner、状态带、分段控件 | `[NPR]/AGENTS.md:110,150–152`；`T-O-2`/`-13` | CITE |
-| `B-2` | spec-v1.1 自述「不是改约登记」；R1–R6 原属待裁决槽，R7 已由 [业主] 选定 | `spec-v1.1:5,460–465`；`T-O-1`/`-3` | CITE |
-| `B-3` | `[PROD]`：顶层 113/1778 回合（6%）写过 `todo/write`，34 份顶层会话 50% 用过 goal（225 条 `goal/change`） | QNA §4 取证说明 | CITE |
-| `B-4` | `[PROD]`：106 份进度锚均值 547B、66% 仅路径行变化；新规则离线回放锚变化 122→56（-54%） | QNA §3.4、§8 | CITE |
+| `B-1` | 包内低干扰合同：28px 行 / 回合缩进+0.5px guide / 56px 右对齐时间列 / 过滤条+原生 Menu / 无 goal banner、状态带、分段控件 | `[NPR]/AGENTS.md:109–111,150–152`；`T-O-2`/`-13` | CITE |
+| `B-2` | spec-v1.1 自述「不是改约登记」；R1–R6 原属待裁决槽，R7 已由 [业主] 选定 | `spec-v1.1:5,460–466`；`T-O-1`/`-3` | CITE |
+| `B-3` | `[PROD]`：顶层 113/1778 回合（6%）写过 `todo/write`；Round 2 采样 34 份顶层中 50% 用过 goal，共 225 条 `goal/change`（Round 3+ 复采为 44 份） | QNA §4 取证说明 | CITE |
+| `B-4` | `[PROD]`：106 份进度锚均值 547B、66% 仅路径行变化；新规则离线回放锚变化 122→56（-54%） | QNA 中场评估 II、Q8 回放 | CITE |
 | `B-5` | 官方 owner 事实：官方 `todos` 下一回合开始清空；`turnOutline` 只取回合首条 `user` 提示（50 字符预览）；`userQuestions` 是待决提问 owner；`goal` 投影只含当前 goal；`approvalState` 无待决投影 | tool-todo / turnOutline / userQuestions / goal / user-approval 源码；QNA Q5/Q6 | CITE |
 | `B-6` | 宿主基线 `[EV5]` = pinned `9c2670d`（`dsh-v0.2.2-rc.5`）；`MessageSourceMap` 可合并扩展，`[PROD]` 实测 18 种 kind（含 `schedule` 57 个开回合） | QNA 文头、Q5 | CITE |
-| `B-7` | 现行实现事实：bash 指纹 `bashKey` = cwd/workdir/command、后台 bash 不产指纹；失败 = `isError===true` 或 `error != null`，非零退出码不算；`TasksSection` 的 `Jobs N` 为 ghost 文本开关，`localStorage['dsh-nano-progress-report:tasks']` 的 `view` 键现存 | `projection.js:32–43,75`；`TasksSection.jsx:28,70–86` | CITE |
+| `B-7` | 现行实现事实：bash 指纹 `bashKey` = cwd/workdir/command、后台 bash 不产指纹；失败 = `isError===true` 或 `data.error != null`，非零退出码不算；`TasksSection` 的 `Jobs N` 为 ghost 文本开关，`localStorage['dsh-nano-progress-report:tasks']` 的 `view` 键现存 | `projection.js:32–43,75`；`TasksSection.jsx:28,70–86` | CITE |
 | `B-8` | `[PROD]` 回放：1451 个工作项 13.4% 带未恢复失败；三层方案最坏单视图 ~31KB、整会话累计推送 p90 15.7MB；视图按事实变化 p90 1113 次 | QNA Q6/Q7 | CITE |
 | `B-9` | `[PROD]` 回放：860 个任务按推荐口径 144 个曾获归属（每任务恰好一段区间）；210 个「当前项有任务」的回合结束点中 45% 官方清单为空；首个工作项前的工具调用为 0 | QNA §10 取证、Q11/Q12 | CITE |
 | `B-10` | 工程基线：单测 141 项全过（2026-11-19）；`check-ui-rules` NPR 行 0 告警；[DNPR] 不在 RELEASE.md 发布清单，部署走 `deploy-local` | QNA Q10；`RELEASE.md:11–19,69–93` | CITE |
@@ -238,7 +239,7 @@ DNPR01-qna.md（已冻结，decision provenance）
 
 ### 4.2 P2 · 权威次序
 
-`DNPR01-qna.md`（decision provenance）> **本台账（投影面）** > 《DNPR01 计划》（只 CITE）> ImplementationGrant。不一致时**回到问答**修订本台账，不得反向改问答。`spec-v1.1` 与 `[PROD]`/`[EV5]` 是测量与形成史、不是业主真相；`QNA_FROZEN` ≠ 代码 PASS。
+`DNPR01-qna.md`（decision provenance）> **本台账（投影面）** > 《DNPR01 计划》（只 CITE；其 §2 按 `T-O-17` 引用 QNA §1 编号表）> ImplementationGrant。不一致时**回到问答**修订本台账，不得反向改问答。`spec-v1.1` 与 `[PROD]`/`[EV5]` 是测量与形成史、不是业主真相；`QNA_FROZEN` ≠ 代码 PASS。
 
 ### 4.3 P3 · 与上游真相的关系
 
@@ -246,7 +247,7 @@ DNPR01-qna.md（已冻结，decision provenance）
 |---------|------|----------------|
 | 仓根 `AGENTS.md` 七条核心原则 | 只消费 / 每条 `T-O` 的硬约束 | 否 |
 | `[NPR]/AGENTS.md` 包内合同 | 被 `T-O-2` 继承；实施时按 `-12`/`-13`/`-14`/`-15`/`-16` 的同次文档清单修订（身份 inject、使用、验收第 4 条、不要、配置与状态 `v1` 字段表、Model Experience、`view` 键扩值） | 是（DNPR01 同次文档，[业主] 已在 `-14`/`-16` 明示） |
-| [`[FUS]` 裁决文档](../../dsh-nano-model-selector/decision-model-fusion-feasibility-1119.md) §11.4 | 被 `T-O-13` 的 R5 裁决改判：增加一行引用本条，原文不再作为 [DNPR] 的设计输入 | 是（[业主] 已在 Q9 明示加一行引用） |
+| [`[FUS]` 裁决文档](../../dsh-nano-model-selector/decision-model-fusion-feasibility-1119.md) §11.4 | 被 `T-O-13` 对 spec-v1.1 R5 的裁决改判：增加一行引用本条，原文不再作为 [DNPR] 的设计输入 | 是（[业主] 已在 Q9 明示加一行引用） |
 | `spec-v1.1` | 形成史：被 `T-O` 取代、保留为证据索引；§5/附录 A/B/§7.1/§7.3 按 `-13`/`-14`/`-15`/`-16` 回写 | 是（DNPR01 完成时，[业主] 已在 `-13`/`-17` 明示） |
 
 ### 4.4 P4 · 冻结审计注记（append-only，不改内核原句）
@@ -257,7 +258,7 @@ DNPR01-qna.md（已冻结，decision provenance）
 >
 > `AF-3`：`T-O-13` 的「C2-02/C2-03 在 `v1` 字段表定下任务证据区间后重开」**读作**「任务证据作为同 `v` 可选字段追加时重开」（`T-O-15`），不以 `v1` 含证据为前提。
 >
-> `AF-4`：`T-O-5` 的「证据 seq 区间」与 `T-O-14` 的「C1-03 归属规则单测」**读作**随 C2-02 延后；`v1` 不计算任务归属、不生成工作项证据区间（`T-O-15`）。
+> `AF-4`：`T-O-5` 的「证据 seq 区间」与 `T-O-14` 的「C1-03 归属规则单测」**读作**随 C2-02 延后；`v1` 不计算任务级归属、不生成任务证据区间（`T-O-15`）；工作项的文件/失败 seq 指针照常在 `v1` 产出。
 >
 > `AF-5`：`T-O-5`/`-7`/`-8` 行末的「未定」是**裁决当时的状态**，分别由 `T-O-9`/`-11`/`-12`/`-15` 承接；`T-O-1` 行末的「R1–R6 仍未裁决」是开轮基线，承接对照见 QNA §11（R1→`-5`、R2→`-12`、R3→`-8`/`-12`、R4→`-6`/`-13`、R5→`-13`、R6→`-13`）。
 >
@@ -269,11 +270,11 @@ DNPR01-qna.md（已冻结，decision provenance）
 
 | 修正案 | 改读法的对象 | 生效句 | 旧正文 |
 |--------|----------------|--------|--------|
-| `AMEND-1`（[业主] 2026-11-20 建立指令） | `T-O-17`「不另立真相账本」 | 「不另立」**收窄读作**不另立第二真源型台账、收口文档与对抗审查；按 `.adocs/templates/qna-truth.md` 建立本引用面（消费入口、非第二真源）是允许的且已被 [业主] 明示要求 | 不回改 |
+| `AMEND-1`（[业主] 2026-11-20 建立指令） | `T-O-17`「不另立真相账本」 | 「不另立」**收窄读作**不另立第二真源型台账、收口文档与对抗审查；按 `.adocs/templates/qna-truth.md` 建立本引用面（消费入口、非第二真源）是允许的且已被 [业主] 明示要求（该指令在 QNA 冻结后作出，只登记于本台账，QNA 无此条） | 不回改 |
 
 ### 4.6 P6 · 残项、不得重开、授权边界
 
-- **残项**：DNPR01 计划尚未编写（`T-O-17`）；`v1` 字段表正文待实现分支写入 `[NPR]/AGENTS.md` 并经 [业主] 合并评审；延后项 C2-02/03/06、C3、C6-02/03、C1-03 归属单测、spec-v1.1 回写、[FUS] §11.4 引用行、`[NPR]/AGENTS.md` 修订——均带重开条件。**阻塞当前出口：NO**（真相层已收口）；但**阻塞实现动工**（计划未经 [业主] 审阅批准不得开工）。
+- **残项**：DNPR01 计划尚未编写（`T-O-17`）；`v1` 字段表正文待实现分支写入 `[NPR]/AGENTS.md` 并经 [业主] 合并评审；延后项 C2-02/03/06、C3、C6-02/03、C1-03 归属单测——均带重开条件（`T-O-13`/`T-O-15`）；spec-v1.1 回写、[FUS] §11.4 引用行、`[NPR]/AGENTS.md` 修订为同次必做残项，不是延后项。**阻塞当前出口：NO**（真相层已收口）；但**阻塞实现动工**（计划未经 [业主] 审阅批准不得开工）。
 - **不得重开**：Q1–Q13 的已冻结选项；已关闭的硬切对象（`summary` 单元、`task-times.js`、路径行、`Goal:` 行、「最近 Bash 失败」行）不得复活；顶部状态行、`conversation.view`、分段控件、模型声明里程碑、`Config` 化上限、双版本视图、迁移器/兼容读取不得作为「细节」溜回；除 [业主] 明示外不设 Round 6。
 - **仍然不授权**：implementation grant、远端、deploy、live、生产实例升级（由 [业主] 以 `deploy-local` 择时执行）、RELEASE.md/CI 变更。
 
@@ -282,3 +283,4 @@ DNPR01-qna.md（已冻结，decision provenance）
 | 版本 | 日期 | 变更 |
 |------|------|------|
 | `0.1.0` | 2026-11-20 | 首版：从 `DNPR01-qna.md`（v0.6 `已冻结`）抽取 17 条 `T-O` 投影为统一 truth ledger；启用 P1/P2/P3/P4/P5/P6 |
+| `0.1.1` | 2026-11-20 | 三路子代理审查后修订：补 `T-O-15` 证据追加 `stateVersion`/冷重建/新常量子句与 `T-O-12` 锚固定首行；「R5」限定为 spec-v1.1 R5；AF-4 限定为任务级区间；T-O-16「最后一项」限定为最近完整层项；P6 拆分同次必做残项与延后项；补 `[NPR]`/`[PROD]`/`[EV5]`/`[FUS]` 代号定义、B-3 样本代际、B-1/B-2 行号、AMEND-1 登记位置、P2 计划引用说明；`action-plan` 统一为「计划」 |

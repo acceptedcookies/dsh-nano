@@ -9,7 +9,7 @@ export const ROOT_ATTR = 'nano-progress-report'
 
 /** Row type taxonomy (filter `type:` values). */
 export const TYPES = Object.freeze([
-  'prompt', 'goal', 'message', 'shell', 'file', 'web', 'tool',
+  'prompt', 'schedule', 'goal', 'message', 'shell', 'file', 'web', 'tool',
   'todo', 'subagent', 'wait', 'turn', 'job', 'lifecycle',
 ])
 

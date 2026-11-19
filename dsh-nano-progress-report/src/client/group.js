@@ -12,7 +12,7 @@
  *  the current group. Activity after a close without an opener (window opened
  *  mid-session, queued input) starts an opener-less group. */
 
-const OPENERS = new Set(['prompt', 'goal'])
+const OPENERS = new Set(['prompt', 'goal', 'schedule'])
 const ACTIVITY = new Set(['message', 'shell', 'file', 'web', 'tool', 'todo', 'subagent', 'wait'])
 
 const stepKey = row => `${row.turn}:${row.step}`

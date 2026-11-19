@@ -12,7 +12,8 @@ export const progressPromptDefinition = {
   match(event) {
     if (event.type !== 'user/message') return null
     const kind = event.data?.source?.kind
-    return kind === 'user' || kind === 'goal' ? { id: String(event.seq), role: 'start' } : null
+    return kind === 'user' || kind === 'goal' || kind === 'schedule'
+      ? { id: String(event.seq), role: 'start' } : null
   },
   start(context, match) {
     const data = match.event.data
@@ -20,6 +21,7 @@ export const progressPromptDefinition = {
     return {
       seq: match.event.seq, time: match.event.time,
       text: blocksText(data.content ?? data.message?.content ?? data.text),
+      sourceKind: source.kind === 'user' ? undefined : source.kind,
       goal: source.kind === 'goal'
         ? { goalId: String(source.goalId ?? ''), round: Number.isSafeInteger(source.round) ? source.round : undefined }
         : undefined,
@@ -32,7 +34,8 @@ export const progressPromptDefinition = {
     return {
       key: context.key, kind: context.kind, id: context.id, target: TARGET,
       data: {
-        row: state.goal === undefined ? 'prompt' : 'goal',
+        row: state.sourceKind === 'schedule' ? 'schedule'
+          : state.goal === undefined ? 'prompt' : 'goal',
         seq: state.seq, time: state.time, text: state.text,
         goalId: state.goal?.goalId, round: state.goal?.round,
         location: context.start?.location,

@@ -11,7 +11,7 @@ import {
   IconSlidersTwoOutlineRegular, Input, Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { applyFilter, isEmptyFilter, parseFilter } from '../filter.js'
-import { activeMenuTokens, filterCounts, toggleMenuToken } from '../filter-menu.js'
+import { activeMenuTokens, filterCounts, toggleMenuToken, visibleMenuOptions } from '../filter-menu.js'
 import { STATUSES, TYPES } from '../constants.js'
 import { taskCompletionTimes } from '../task-times.js'
 import { perf } from '../perf.js'
@@ -121,7 +121,8 @@ export default function ProgressBody(props) {
   const selectedTokens = useMemo(() => activeMenuTokens(query), [query])
   const menuItems = useMemo(() => [
     { type: 'label', id: 'label-status', text: t('filter.status') },
-    ...STATUSES.map(value => ({
+    // C0-05: zero-count dimensions hide; an already-selected token stays.
+    ...visibleMenuOptions(STATUSES, counts.statuses, selectedTokens, 'status').map(value => ({
       id: `status:${value}`,
       // The host menu's `shortcut` slot renders key caps (array), not a count;
       // fold the number into the label instead of abusing it.
@@ -129,13 +130,13 @@ export default function ProgressBody(props) {
     })),
     { type: 'separator', id: 'sep-1' },
     { type: 'label', id: 'label-type', text: t('filter.type') },
-    ...TYPES.map(value => ({
+    ...visibleMenuOptions(TYPES, counts.types, selectedTokens, 'type').map(value => ({
       id: `type:${value}`,
       label: `${t(`filter.type.${value}`)} (${String(counts.types[value] ?? 0)})`,
     })),
     { type: 'separator', id: 'sep-2' },
     { id: 'clear', label: t('filter.clearAll'), disabled: query === '' },
-  ], [counts, query, t])
+  ], [counts, query, selectedTokens, t])
 
   const hasMore = sessionSnap?.hasMore === true
   const loadingOlder = sessionSnap?.loadingOlder === true
@@ -228,6 +229,7 @@ export default function ProgressBody(props) {
               t,
               openKey,
               onRowToggle: toggleRow,
+              condensed: true,
             })))
           : h(AnimatedRows, {
             className: 'npr-rows',

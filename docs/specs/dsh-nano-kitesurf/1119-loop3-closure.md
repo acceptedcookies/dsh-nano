@@ -186,7 +186,15 @@ D 闸口五项落地对照：
 
 ### 6.4 未闭合与风险
 
-- **待 [业主] 裁决：`/evaluate` 分段合同**。早前授权引入的分段读取（`{token,offset}` / `?page=N`）在迁入 DNLS 时丢失，错误目录也没有对应的 miss 行；DNK `routes.md` 仍承诺分段。恢复它等于改公共合同，按「不得擅自扩约」未实施。两种处理：恢复分段（需登记）或从 DNK skill 删除这条承诺。
+- ~~**待 [业主] 裁决：`/evaluate` 分段合同**~~ → 已恢复（见 6.5）。分段读取由 `9b2db68` 授权引入，DNLS 接管路由时丢失（main 上已不分段）；按 [业主]「已交付价值不 regress」指令恢复，登记为 [DNLS02 `R-1`](../dsh-nano-local-sandbox/qna/DNLS02-qna.md)。
 - **history 未迁移**：旧 `~/.dsh-kitesurf-state-dev` 按 `T-O-23` ⑤ 退役，未迁入新状态卷，dev 环境历史从空开始。
 - **并发部署风险**：本轮另一会话两次把 `~/.dsh-dev/plugins` 覆盖为 main 代码并重启宿主，并触发漂移重建。验收前须对比部署树与本分支一致；合入 main 前 dev 环境的结果不稳定。
 - G24 双 session live 隔离、G30 i18n 行为测试、desktop 独立验收：NOT RUN。
+
+### 6.5 合入 main（2026-11-19）
+
+- `bfe16db` [DNLS] 恢复 `/evaluate` 分段：超过 4000 字符返回首段与 `token`，`{token,offset}` / `?token=&page=N` 拉分段，页内环保留最近 20 条、导航即失效，未命中 `kitesurf.evaluate.miss`（404）；4000 字符以内的应答形状不变。
+- 合并提交 `ae2a590`（第一父 main `0cf1259`，第二父 `bfe16db`）。合并前后在同一工作树逐项对比全仓套件：无新增失败；DNLS 修复 main 上 3 项既有失败（283/283），`dsh-interface` 修复 1 项，`check-feature-contract` 由失败转通过。其余失败（DNEE、DNMS、DNT 依赖缺失、`dsh-interface` 3 项、`dsh-performance-review` 2 项、`dsh-s3-client` 3 项、`check-clean-lib`）在 main 上同样存在。
+- 一致性：main 的 18 个错误 id 在合并后全部解析到同一状态码；DNLS 路由 30 条，唯一变化是 `/kite` → `/lifecycle`（`T-O-19`）；DNK 引用的 30 个 `/nano-local-sandbox/*` 路径全部在路由表内；`dncs-1119`、`npr-progress-report` 与合并结果试合无冲突，且不会带回 `/kite`。
+- 重新构建 DNK / DNLS，产物与提交内容逐字节一致。部署到 dsh-dev 后与合并树逐文件一致，部署就绪报告为 runtime/镜像就绪。
+- dsh-dev 复验：API 验收 22/22（新增 evaluate 原样、分段、miss 三项）；DNK pane e2e 29/29（含 `eval-chunk`、`storage-state-roundtrip`、lifecycle、selftest 0/11）；截图核对 pick 框与便签、composer `<kitesurf ref>`、DevTools Network 正常。e2e 的 `composer-ref` 依赖宿主已选工作区，未选时会因输入框禁用而失败，属测试前置条件。

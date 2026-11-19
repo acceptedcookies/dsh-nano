@@ -122,11 +122,18 @@ export function compactRuntime(ctx) {
     }
   }
 
+  function propertyOf(target, name) {
+    try { return target[name] } catch { return undefined }
+  }
+
   function fillFor(session, W) {
     // A bare id can name the session but cannot be measured by the token meter.
     if (session === null || typeof session !== 'object') return null
     try {
-      const meter = ctx.tokenMeter ?? ctx.get?.('tokenMeter')
+      // Not statically injected: on a cordis context the `ctx.tokenMeter`
+      // accessor throws "cannot get property without inject", so the lazy
+      // lookup goes first and the property read is only a guarded fallback.
+      const meter = ctx.get?.('tokenMeter') ?? propertyOf(ctx, 'tokenMeter')
       if (meter === undefined || meter === null) return null
       const lastEventSeq = session.seq ?? session.lastEventSeq ?? 0
       const key = `${session.id}:${lastEventSeq}`

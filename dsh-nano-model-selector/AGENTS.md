@@ -152,7 +152,7 @@ npm run build
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| GET/HEAD | `/nano-model-selector/async-compact` | `{ok,policy:{…,effective:{pin,windowMin,dcs},runtime:{fill,lastCompaction,degraded}},missing}`。`policy=null`+`degraded='state-read-failed'` 表示状态文件不可读（U4）。**不携带 `bundle`**——库存投影在独立路由上，见下 |
+| GET/HEAD | `/nano-model-selector/async-compact` | `{ok,policy:{…,effective:{pin,windowMin,dcs},runtime:{fill,window,lastCompaction,degraded}},missing}`（`window` 是 fill 的分母：会话请求头里的模型窗口，取不到时回落摘要模型窗口）。`policy=null`+`degraded='state-read-failed'` 表示状态文件不可读（U4）。**不携带 `bundle`**——库存投影在独立路由上，见下 |
 | GET/HEAD | `/nano-model-selector/async-compact/bundle` | `{ok,bundle:{installed,enabled,known,availability?}}`。唯一的 U1–U4 库存读口。宿主侧快照缓存（默认 30 分钟，正确性由 `plugin-manager/changed` 立即失效保证，TTL 只兜底漏事件）+ 并发去重；**不得**把它并回状态面，`pluginManager.listBundles()` 单次约 0.9 秒同步磁盘枚举，轮询会把宿主事件循环打死 |
 | PUT | `/nano-model-selector/async-compact` | 部分更新 `async-compact.json`（16384 字节上限；master 序 + schema 校验 + fail-closed，400 不写） |
 | POST | `/nano-model-selector/async-compact/switch` | 面板唯一写入口（1024 字节上限）；转发 `pluginManager.setBundleEnabled('dsh-nano-model-selector-compaction')`，返回 `{application,restartReason?,bundle}`（先失效库存快照再重读） |
@@ -169,13 +169,13 @@ npm run build
 
 状态文件：与 media-engine.json 同目录的 `plugins/nano-model-selector/async-compact.json`（tmp+rename 原子写，0600）。卸载不删。字段 8 项（无 `enabled`）：`model` / `bufferSizeAsync`（B，默认 0.65，必须 `< H` 之上且 `< S`）/ `healthTargetAsync`（H，0.50）/ `bufferSizeSafety`（S，0.90 只读，文件不是 0.90 即 state-read-failed，不抬升）/ `pinnedAsyncTokens`（100000）/ `pinnedFullTokens`（20000）/ `extraRequirements`（追加在内置摘要指令之后，默认空）/ `schema`（1）。`summaryPrompt` 键出现即 `invalid-schema`。`effectivePin = min(pinnedAsyncTokens, floor(0.15·W))`；DC-1 `B < windowMin` → `fullOnly`；fill = `totalTokens/W`。
 
-面板入口：顶栏搜索框与关闭按钮之间的「异步压缩」按钮，仅当 companion bundle 已安装时出现，否则搜索框占满该位。目录刷新按钮在搜索框内。页内四态（未安装/未启用/已启用/degraded），开关先经 `NanoDialog` 确认再走 `POST …/switch`；B/H/pinnedAsyncTokens/model 可编辑 PUT（H<B<S 严格序，客户端同规则预检）。
+面板入口：顶栏搜索框与关闭按钮之间的「异步压缩」按钮，仅当 companion bundle 已安装时出现，否则搜索框占满该位。目录刷新按钮在搜索框内。页内四态（未安装/未启用/已启用/degraded），开关先经确认对话框再走 `POST …/switch`。面板里的确认（开关、预设）用 nano-ui `NanoWindowDialog` 画在选择器浮窗（`.nms-panel`，层级 1200）内部：主窗口级 `NanoDialog` 在宿主 Modal 层（1000），会被浮窗盖住。已启用时自上而下：当前会话水位（四区水位尺 + 窗口/有效保留/上次压缩）、两个一键预设（`src/client/compact-presets.js`：「窗口 < 300K」B 0.70/H 0.45、「窗口 > 300K」B 0.60/H 0.30，二者都写 pinnedAsync 140000/pinnedFull 20000 与一句「原文保留本轮开场请求」的附加要求；点击先经确认对话框列出逐字段旧值→新值，确认后一次多字段 PUT，宿主仍做 master 序校验；当前策略与某预设全等时该按钮显示「当前」）、水位线（B/H 可编辑，S 只读）、保留量（pinnedAsyncTokens/pinnedFullTokens 可编辑）、摘要（model + 附加要求）。每项带一行白话说明。H<B<S 严格序，客户端同规则预检。
 
-历史视图：会话头部「更多操作」菜单里的「异步压缩历史」（`ctx.contextMenus.register({target:'sessionHeader', order:500})`），打开 nano-ui `NanoDialog`（主窗口级，宿主 `Modal` 承载遮罩、居中与焦点）。卡片顶部是水位尺（当前 fill 对 H/B/S 三条线，越过 B 即为应有 episode 的状态），下面是触发/执行/成功/失败四个计数，再下是「时间线 / 诊断」两个页签：时间线逐条列出决策（可展开看原始 JSON），诊断给出 `bundle/policy/effective/runtime/history` 的完整快照并支持一键复制。全部控件来自官方 primitive（`SegmentedControl`/`Tag`/`Button`/`relativeTime`/`writeClipboard`），配色只读 `--dsw-*` token。面板里的接管开关是宿主 `Switch`，场景页签是宿主 `SegmentedControl`，模型与媒体引擎标签是宿主 `Tag`。
+历史视图：侧栏会话行右键菜单里的「异步压缩历史」（`ctx.contextMenus.register({target:'session', order:500})`；同时注册旧宿主的 `sessionHeader` 目标。当前宿主的会话头部「更多操作」菜单由 session-log-export 写死，不经 contextMenus，插件无法加项），打开 nano-ui `NanoDialog`（主窗口级，宿主 `Modal` 承载遮罩、居中与焦点）。卡片顶部是白话结论（`diagnosisOf`：当前填充相对触发线/强制线的位置 + 最近一次异步压缩的结果，含成功、未生效、已撤销、中断、压缩后仍过满），其下是四区水位尺（健康区 <H、缓冲区 H–B、异步压缩区 B–S、强制压缩区 ≥S，带图例与当前用量），再下是「时间线 / 诊断」两个页签，旁边是异步成功/异步未生效/同步压缩/跳过四个计数。时间线按「一次压缩」聚合（`groupEpisodes`：arm→claim→select→commit/drop→health 合为一张卡，同一同步通道 60 秒内的重试合并，连续同因 skip 折叠），卡片给出状态和一行摘要（触发时填充、保留原文量、替换条数、压缩后填充），展开看逐条决策与原始 JSON；诊断页给出关键事实网格和 `bundle/policy/effective/runtime/history` 快照并支持一键复制。全部控件来自官方 primitive（`SegmentedControl`/`Tag`/`Button`/`relativeTime`/`writeClipboard`），配色只读 `--dsw-*` token。面板里的接管开关是宿主 `Switch`，场景页签是宿主 `SegmentedControl`，模型与媒体引擎标签是宿主 `Tag`。
 
 两个必须遵守的呈现约束：
 
-1. **固定高度**：时间线与诊断内容量差很大，内容撑高会让卡片在切页签时跳。`NanoDialog` 传 `fixedHeight: 560`，正文滚动。
+1. **固定高度**：时间线与诊断内容量差很大，内容撑高会让卡片在切页签时跳。`NanoDialog` 传 `fixedHeight: 640`（nano-ui 最高档；结论卡和水位尺固定占位，560 时记录区只剩约 200px），正文滚动，切页签时滚动位置归零。
 2. **页签用 `SegmentedControl` 而非 `SegmentedTabs`**：后者每个页签渲染一个 `Pill`，看起来像自绘的描边控件；前者是 shell 自己的滑动指示器。
 
 状态徽标：会话头部操作区（`conversation.session.header.utilities`，list slot，**必须带 `id`**，否则注册被拒）显示 `异步压缩已排队` / `正在异步压缩` / `已异步压缩 · N 条` / `异步压缩失败`，悬停给出摘要模型与 `摘要 v<8位指纹>`。指纹是生效摘要指令的 sha256 前 8 位（内置 + 附加要求整段；改 `extraRequirements` 即变）。

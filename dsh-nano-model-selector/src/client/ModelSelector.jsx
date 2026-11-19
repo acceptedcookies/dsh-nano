@@ -156,8 +156,9 @@ let lastCompactFace = null
  * @param {(selection: any) => Promise<any>} props.select
  * @param {{ current: () => string, subscribe: (listener: () => void) => (() => void) }} props.language
  * @param {(text: any) => string} props.resolveText
+ * @param {string} [props.sessionId] - the composer's session; the compaction panel reports its fill
  */
-export function ModelSelector({ locked, available, directory, load, select, language, resolveText }) {
+export function ModelSelector({ locked, available, directory, load, select, language, resolveText, sessionId = null }) {
   const [copy, setCopy] = React.useState(() => copyFor(language.current()))
   const [open, setOpen] = React.useState(false)
   const [filter, setFilter] = React.useState('all')
@@ -955,7 +956,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                 )}
 
                 {filter === 'compact' && (
-                  <CompactPanel copy={copy} models={compactModelPairs} onError={onCompactError} onSwitchDone={pullCompact} />
+                  <CompactPanel copy={copy} models={compactModelPairs} sessionId={typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null} onError={onCompactError} onSwitchDone={pullCompact} />
                 )}
 
                 {filter !== 'media' && filter !== 'compact' && visibleFavorites.length > 0 && (

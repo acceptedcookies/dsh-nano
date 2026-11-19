@@ -17,9 +17,11 @@
 export const HISTORY_KINDS = {
   arm: { tone: 'info' },
   claim: { tone: 'neutral' },
+  select: { tone: 'neutral' },
   commit: { tone: 'success' },
   drop: { tone: 'danger' },
-  skip: { tone: 'warning' },
+  skip: { tone: 'quiet' },
+  health: { tone: 'success' },
 }
 
 /** Fallback for a kind this build does not know (forward compatibility). */
@@ -69,33 +71,96 @@ export function relativeTimeOf(at, now) {
   return { unit: 'years', n: Math.floor(delta / (365 * 86_400_000)) }
 }
 
-/**
- * The one line that explains a decision, per kind. Every branch falls back to
- * an em dash instead of printing `undefined` — a diagnostic view that shows
- * "undefined" is worse than one that shows nothing.
- * @param {object} record - one ledger record.
- * @param {object} copy - active dictionary slice.
- * @returns {string}
- */
-export function recordHeadline(record, copy) {
-  const dash = value => (value === undefined || value === null || value === '' ? '—' : String(value))
-  switch (record?.kind) {
-    case 'arm':
-      return `${copy.historyFill} ${pct(record.fill)} · ${copy.historyRetain} ${dash(record.retain)}`
-    case 'claim':
-      return `${copy.historyRetain} ${dash(record.retain)}`
-    case 'select':
-      return `${dash(record.lane)} · ${dash(record.boundary)} · ${dash(record.retainedTokens)} tok`
-    case 'commit':
-      return `${dash(record.records)} 条 · ${dash(record.tokens)} tok`
-    case 'drop':
-    case 'skip':
-      return dash(record.detail ?? record.reason)
-    default:
-      return dash(record?.detail ?? record?.reason)
-  }
+/** Fill `{name}` slots; a missing value renders as an em dash. */
+export function fillTemplate(template, vars) {
+  return String(template ?? '').replace(/\{(\w+)\}/g, (_, key) => {
+    const value = vars[key]
+    return value === undefined || value === null || value === '' ? '—' : String(value)
+  })
 }
 
+/**
+ * Tokens as a short count: 140000 → "140K", 39321 → "39.3K".
+ * @param {unknown} value
+ */
+export function tok(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+  if (Math.abs(value) >= 1_000_000) return `${trimZero((value / 1_000_000).toFixed(2))}M`
+  if (Math.abs(value) >= 1000) return `${trimZero((value / 1000).toFixed(1))}K`
+  return String(Math.round(value))
+}
+
+function trimZero(text) {
+  return text.includes('.') ? text.replace(/\.?0+$/, '') : text
+}
+
+/** Plain-language reason for a drop/skip code; the raw code when unknown. */
+export function reasonText(reason, copy) {
+  if (reason === undefined || reason === null || reason === '') return copy.historyUnknownReason ?? '—'
+  return copy.historyReason?.[reason] ?? String(reason)
+}
+
+/** Why a compaction lane ran, in words. */
+export function triggerText(record, copy) {
+  const key = record?.trigger ?? (record?.lane === 'async' ? 'b-line' : record?.lane)
+  return copy.historyTrigger?.[key] ?? (key === undefined || key === null ? '—' : String(key))
+}
+
+/** Where the cut landed (turn/step/node), in words. */
+export function boundaryText(boundary, copy) {
+  return copy.historyBoundary?.[boundary] ?? (boundary === undefined || boundary === null ? '—' : String(boundary))
+}
+
+/**
+ * The one line that explains a decision, in plain language. Every slot falls
+ * back to an em dash instead of printing `undefined` — a diagnostic view that
+ * shows "undefined" is worse than one that shows nothing.
+ * @param {object} record - one ledger record.
+ * @param {object} copy - active dictionary slice.
+ * @param {object|null} [policy] - current policy, for lines the record does not carry.
+ * @returns {string}
+ */
+export function recordHeadline(record, copy, policy = null) {
+  const step = copy.historyStep ?? {}
+  switch (record?.kind) {
+    case 'arm':
+      return fillTemplate(step.arm, {
+        fill: pct(record.fill),
+        line: pct(record.bufferSizeAsync ?? policy?.bufferSizeAsync),
+        kept: tok(record.retain),
+      })
+    case 'claim':
+      return fillTemplate(step.claim, {
+        model: typeof record.target === 'string' && record.target !== '' ? record.target
+          : record.target?.model ? `${record.target.provider}/${record.target.model}` : copy.historyModelRouted,
+      })
+    case 'select':
+      return fillTemplate(record.lane === 'async' ? step.selectAsync : step.selectSync, {
+        trigger: triggerText(record, copy),
+        fill: pct(record.fill),
+        boundary: boundaryText(record.boundary, copy),
+        kept: tok(record.retainedTokens),
+      })
+    case 'commit':
+      return fillTemplate(step.commit, { records: record.records, tokens: tok(record.tokens) })
+    case 'drop': {
+      const reason = reasonText(record.reason, copy)
+      return fillTemplate(step.drop, { reason: record.detail && copy.historyReason?.[record.reason] === undefined ? record.detail : reason })
+    }
+    case 'skip':
+      return reasonText(record.reason, copy)
+    case 'health':
+      return fillTemplate(record.overHealth ? step.healthOver : step.healthOk, {
+        fill: pct(record.fill),
+        line: pct(record.healthTargetAsync ?? policy?.healthTargetAsync),
+        tokens: tok(record.tokens),
+      })
+    default: {
+      const value = record?.detail ?? record?.reason
+      return value === undefined || value === null || value === '' ? '—' : String(value)
+    }
+  }
+}
 /**
  * Fold ledger records into the four counters the header shows.
  *
@@ -153,7 +218,10 @@ export function statusBadgeFor(phase, copy) {
     }
   }
   if (phase.state === 'failed') {
-    const reason = phase.detail ?? phase.reason ?? copy.historyUnknownReason
+    const plain = copy.historyReason?.[phase.reason]
+    const reason = plain === undefined
+      ? phase.detail ?? phase.reason ?? copy.historyUnknownReason
+      : (phase.detail ? `${plain}（${phase.detail}）` : plain)
     return { state: 'failed', text: copy.historyBadgeFailed, tooltip: copy.historyBadgeFailedTip.replace('{reason}', reason) }
   }
   return null
@@ -262,4 +330,232 @@ export function axisLabels(health, buffer, safety) {
       anchor,
     }
   })
+}
+
+/* ---------------- episode view (timeline cards) ---------------- */
+
+/** An async episode with no terminal record for this long was cut off (host restart). */
+const ARMED_STALE_MS = 15 * 60_000
+const RUNNING_STALE_MS = 3 * 60_000
+/** Consecutive sync selects of one lane within this gap are retries of one compaction. */
+const SYNC_RETRY_GAP_MS = 60_000
+
+const timeOf = record => (typeof record?.at === 'string' ? Date.parse(record.at) : Number.NaN)
+
+/**
+ * Fold ledger records (oldest first) into the units a reader thinks in: one
+ * async compaction (arm → claim → select → commit/drop, plus the post-commit
+ * health verdict), one synchronous compaction (its select retries), one run of
+ * identical skips. Returned oldest first.
+ *
+ * Statuses: async `armed`/`running`/`committed`/`dropped`/`settled` (disarmed
+ * or preempted — a settlement, not a failure)/`stale` (no terminal record);
+ * sync `started` (its outcome lives in the journal, not in the ledger);
+ * skip `skipped`; orphan health `ok`/`over`; anything else `other`.
+ *
+ * @param {object[]} records
+ * @param {number} [now]
+ */
+export function groupEpisodes(records, now = Date.now()) {
+  const groups = []
+  const byCompaction = new Map()
+  let open = null
+  const push = group => { groups.push(group); return group }
+  const closeStale = () => { if (open !== null) open.status = 'stale'; open = null }
+
+  for (const record of Array.isArray(records) ? records : []) {
+    if (record === null || typeof record !== 'object') continue
+    const kind = record.kind
+    if (kind === 'arm') {
+      closeStale()
+      open = push({ type: 'async', status: 'armed', records: [record] })
+    } else if (kind === 'claim' || (kind === 'select' && record.lane === 'async')) {
+      if (open === null) open = push({ type: 'async', status: 'running', records: [] })
+      open.records.push(record)
+      open.status = 'running'
+    } else if (kind === 'commit') {
+      const group = open ?? push({ type: 'async', status: 'committed', records: [] })
+      group.records.push(record)
+      group.status = 'committed'
+      if (typeof record.compactionId === 'string') byCompaction.set(record.compactionId, group)
+      open = null
+    } else if (kind === 'drop') {
+      const group = open ?? push({ type: 'async', status: 'dropped', records: [] })
+      group.records.push(record)
+      group.status = record.reason === 'disarmed' || record.reason === 'preempted' ? 'settled' : 'dropped'
+      open = null
+    } else if (kind === 'health') {
+      const group = byCompaction.get(record.compactionId)
+      if (group !== undefined) group.records.push(record)
+      else push({ type: 'health', status: record.overHealth ? 'over' : 'ok', records: [record] })
+    } else if (kind === 'select') {
+      const last = groups.at(-1)
+      const lastRecord = last?.records.at(-1)
+      if (last?.type === 'sync' && last.records[0].lane === record.lane
+        && last.records[0].trigger === record.trigger
+        && timeOf(record) - timeOf(lastRecord) <= SYNC_RETRY_GAP_MS) {
+        last.records.push(record)
+      } else {
+        push({ type: 'sync', status: 'started', records: [record] })
+      }
+    } else if (kind === 'skip') {
+      const last = groups.at(-1)
+      if (last?.type === 'skip' && last.records[0].reason === record.reason) last.records.push(record)
+      else push({ type: 'skip', status: 'skipped', records: [record] })
+    } else {
+      push({ type: 'other', status: 'other', records: [record] })
+    }
+  }
+  if (open !== null) {
+    const age = now - timeOf(open.records.at(-1))
+    const limit = open.status === 'armed' ? ARMED_STALE_MS : RUNNING_STALE_MS
+    if (Number.isFinite(age) && age > limit) open.status = 'stale'
+  }
+  return groups
+}
+
+const GROUP_TONES = {
+  committed: 'success',
+  dropped: 'danger',
+  settled: 'neutral',
+  armed: 'info',
+  running: 'info',
+  stale: 'warning',
+  started: 'warning',
+  skipped: 'quiet',
+  ok: 'success',
+  over: 'warning',
+  other: 'outline',
+}
+
+/**
+ * Title, status tag and one summary line for an episode card.
+ * @param {ReturnType<typeof groupEpisodes>[number]} group
+ * @param {object} copy
+ * @param {object|null} [policy]
+ * @returns {{title: string, status: string, tone: string, summary: string, at: string|null, count: number}}
+ */
+export function episodeView(group, copy, policy = null) {
+  const first = group.records[0] ?? {}
+  const last = group.records.at(-1) ?? {}
+  const find = kind => group.records.find(record => record.kind === kind)
+  const status = copy.historyEpisodeStatus?.[group.status] ?? group.status
+  const tone = GROUP_TONES[group.status] ?? 'outline'
+  const at = typeof last.at === 'string' ? last.at : null
+  const parts = []
+  let title = copy.historyEpisode?.[group.type] ?? group.type
+
+  if (group.type === 'async') {
+    const arm = find('arm')
+    const select = find('select')
+    const commit = find('commit')
+    const drop = find('drop')
+    const health = find('health')
+    if (arm !== undefined) parts.push(fillTemplate(copy.historySummary?.armFill, { fill: pct(arm.fill) }))
+    if (select !== undefined) parts.push(fillTemplate(copy.historySummary?.kept, { kept: tok(select.retainedTokens) }))
+    if (commit !== undefined) parts.push(fillTemplate(copy.historySummary?.replaced, { records: commit.records, tokens: tok(commit.tokens) }))
+    if (drop !== undefined) parts.push(reasonText(drop.reason, copy))
+    if (health !== undefined) {
+      parts.push(fillTemplate(health.overHealth ? copy.historySummary?.afterOver : copy.historySummary?.afterOk, {
+        fill: pct(health.fill),
+        line: pct(health.healthTargetAsync ?? policy?.healthTargetAsync),
+      }))
+    } else if (commit !== undefined) {
+      parts.push(copy.historySummary?.afterPending ?? '')
+    }
+  } else if (group.type === 'sync') {
+    title = `${title} · ${triggerText(first, copy)}`
+    parts.push(fillTemplate(copy.historySummary?.syncFill, { fill: pct(first.fill) }))
+    parts.push(fillTemplate(copy.historySummary?.kept, { kept: tok(last.retainedTokens) }))
+    if (group.records.length > 1) parts.push(fillTemplate(copy.historySummary?.retries, { n: group.records.length }))
+    parts.push(copy.historySummary?.syncResult ?? '')
+  } else if (group.type === 'skip') {
+    parts.push(reasonText(first.reason, copy))
+  } else if (group.type === 'health') {
+    parts.push(recordHeadline(first, copy, policy))
+  } else {
+    parts.push(recordHeadline(first, copy, policy))
+  }
+  return {
+    title,
+    status,
+    tone,
+    summary: parts.filter(part => typeof part === 'string' && part.length > 0).join(' · '),
+    at,
+    count: group.records.length,
+  }
+}
+
+/**
+ * The one-paragraph answer to "what is going on with compaction here?",
+ * shown above the timeline. Pure so the wording is pinned by tests.
+ *
+ * @param {{fill: number|null, policy: object|null, groups: object[], now?: number, copy: object, ago?: (at:number)=>string}} input
+ * @returns {{tone: 'success'|'info'|'warning'|'danger'|'neutral', lines: string[]}}
+ */
+export function diagnosisOf({ fill, policy, groups, copy, ago = () => '' }) {
+  const B = policy?.bufferSizeAsync
+  const H = policy?.healthTargetAsync
+  const S = policy?.bufferSizeSafety ?? 0.9
+  const lines = []
+  let tone = 'neutral'
+  const v = copy.historyVerdict ?? {}
+
+  const latestAsync = [...(groups ?? [])].reverse().find(group => group.type === 'async') ?? null
+  if (latestAsync?.status === 'running') { lines.push(v.running); tone = 'info' }
+  else if (latestAsync?.status === 'armed') { lines.push(v.armed); tone = 'info' }
+
+  if (typeof fill === 'number' && Number.isFinite(fill) && typeof B === 'number') {
+    if (fill >= S) { lines.push(fillTemplate(v.aboveSafety, { fill: pct(fill), line: pct(S) })); tone = 'danger' }
+    else if (fill >= B) { lines.push(fillTemplate(v.aboveBuffer, { fill: pct(fill), line: pct(B) })); if (tone === 'neutral') tone = 'warning' }
+    else { lines.push(fillTemplate(v.belowBuffer, { fill: pct(fill), line: pct(B) })); if (tone === 'neutral') tone = 'success' }
+  } else if ((groups ?? []).length > 0) {
+    lines.push(v.unknownFill)
+  }
+
+  if (latestAsync !== null) {
+    const at = Date.parse(latestAsync.records.at(-1)?.at ?? '')
+    const when = Number.isFinite(at) ? ago(at) : '—'
+    const drop = latestAsync.records.find(record => record.kind === 'drop')
+    const commit = latestAsync.records.find(record => record.kind === 'commit')
+    const health = latestAsync.records.find(record => record.kind === 'health')
+    if (latestAsync.status === 'committed') {
+      lines.push(fillTemplate(v.committed, { ago: when, records: commit?.records, tokens: tok(commit?.tokens) }))
+      if (health?.overHealth === true) {
+        lines.push(fillTemplate(v.overHealth, { fill: pct(health.fill), line: pct(health.healthTargetAsync ?? H) }))
+        if (tone === 'success' || tone === 'neutral') tone = 'warning'
+      }
+    } else if (latestAsync.status === 'dropped') {
+      lines.push(fillTemplate(v.dropped, { ago: when, reason: reasonText(drop?.reason, copy) }))
+      if (tone !== 'danger') tone = 'danger'
+    } else if (latestAsync.status === 'settled') {
+      lines.push(fillTemplate(v.settled, { ago: when, reason: reasonText(drop?.reason, copy) }))
+    } else if (latestAsync.status === 'stale') {
+      lines.push(fillTemplate(v.stale, { ago: when }))
+      if (tone === 'success' || tone === 'neutral') tone = 'warning'
+    }
+  }
+  if (lines.length === 0) lines.push(v.empty)
+  return { tone, lines: lines.filter(line => typeof line === 'string' && line.length > 0) }
+}
+
+/**
+ * The four zones of the water line, each with its range and the zone the
+ * current fill sits in.
+ * @param {number} health @param {number} buffer @param {number} safety
+ * @param {number|null} fill
+ */
+export function zonesOf(health, buffer, safety, fill) {
+  const zones = [
+    { key: 'health', from: 0, to: health },
+    { key: 'buffer', from: health, to: buffer },
+    { key: 'async', from: buffer, to: safety },
+    { key: 'force', from: safety, to: 1 },
+  ]
+  const at = typeof fill === 'number' && Number.isFinite(fill) ? Math.min(1, Math.max(0, fill)) : null
+  return zones.map((zone, index) => ({
+    ...zone,
+    current: at !== null && at >= zone.from && (at < zone.to || (index === zones.length - 1 && at <= zone.to)),
+    range: `${Math.round(zone.from * 100)}–${Math.round(zone.to * 100)}%`,
+  }))
 }

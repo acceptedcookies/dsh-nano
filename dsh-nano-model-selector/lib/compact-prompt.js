@@ -1,6 +1,6 @@
 /** GENERATED FILE — do not edit. Source: dsh-nano-model-selector-compaction.
  *  baked by scripts/bake-compact-shared.mjs from dsh-nano-model-selector-
- *  compaction/lib/compact-region.js (sha256:8ddd3ea02130).
+ *  compaction/lib/compact-region.js (sha256:a605ffa5d2bc).
  *  Browser-safe: no node imports. Re-run the bake after changing the source. */
 
 const SUMMARY_OPEN_TAG = '<compacted-summary>'

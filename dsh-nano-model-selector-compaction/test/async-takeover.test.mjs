@@ -1864,3 +1864,189 @@ test('T14 four lanes each write one select record; ledger failure never blocks c
     }
   }
 })
+
+/* ===== over-health timing, selector overhead (-07①),                 ===== */
+/* ===== deterministic opening-request carry, FULL trigger attribution ===== */
+
+const { ensureVerbatimRequest, VERBATIM_REQUEST_SECTION } = await import('../lib/compact-region.js')
+
+test('T15 over-health is judged from the first post-commit provider usage, not the commit-time estimate', async () => {
+  writePolicy()
+  const ctx = makeCtx()
+  const engine = makeEngine(ctx)
+  const { session } = makeBLineSession('s-overhealth')
+  session.append('turn/start', { turn: 't-1' })
+  const agent = makeAgent(session)
+  await ctx.emitPreStep(agent)
+  await ctx.settle(agent)
+  assert.equal(session.eventsOf('compaction/end').length, 1)
+  assert.equal(engine._overHealth.has(session.id), false, 'no verdict at commit time')
+  const pending = engine._overHealthPending.get(session.id)
+  assert.ok(pending !== undefined, 'verdict is pending until provider usage arrives')
+  assert.equal(pending.window, W)
+
+  // An event older than the commit, or one without usage, keeps it pending.
+  ctx.emitSessionEvent(session, { seq: pending.fromSeq - 1, type: 'assistant/message', data: { usage: { inputTokens: 90000, outputTokens: 0 } } })
+  ctx.emitSessionEvent(session, { seq: pending.fromSeq, type: 'assistant/message', data: {} })
+  assert.ok(engine._overHealthPending.has(session.id))
+  assert.equal(engine._overHealth.has(session.id), false)
+
+  // First usage-bearing reply after commit: 55k + 5k cache + 1k output = 0.61 >= H 0.5.
+  ctx.emitSessionEvent(session, {
+    seq: pending.fromSeq + 1,
+    type: 'assistant/message',
+    data: { usage: { inputTokens: 55000, cacheReadTokens: 5000, outputTokens: 1000 } },
+  })
+  assert.equal(engine._overHealthPending.has(session.id), false)
+  assert.equal(engine._overHealth.has(session.id), true)
+  const health = ledgerOf(session.id).filter(r => r.kind === 'health')
+  assert.equal(health.length, 1)
+  assert.equal(health[0].overHealth, true)
+  assert.equal(health[0].tokens, 61000)
+  assert.equal(health[0].healthTargetAsync, 0.5)
+  assert.equal(health[0].compactionId, session.eventsOf('compaction/end')[0].data.compactionId)
+
+  // The next B crossing runs FULL and the ledger names the trigger.
+  // Grow into [B, S) so only the over-health member of the FULL set can fire.
+  for (let i = 0; sessionMeter(session).totalTokens / W < 0.7; i += 1) session.addMessage('user', `grow${i}`, 5000)
+  assert.ok(sessionMeter(session).totalTokens / W < 0.9)
+  await ctx.emitPreStep(agent)
+  const full = ledgerOf(session.id).filter(r => r.kind === 'select' && r.lane === 'full')
+  assert.ok(full.length >= 1, 'over-health primes FULL at the next B crossing')
+  assert.equal(full[0].trigger, 'over-health')
+  assert.equal(typeof full[0].fill, 'number')
+  assert.equal(engine._overHealth.has(session.id), false, 'the flag is consumed')
+})
+
+test('T15b a healthy adoption records overHealth:false and never primes FULL', async () => {
+  writePolicy()
+  const ctx = makeCtx()
+  const engine = makeEngine(ctx)
+  const { session } = makeBLineSession('s-healthy')
+  const agent = makeAgent(session)
+  await ctx.emitPreStep(agent)
+  await ctx.settle(agent)
+  const { fromSeq } = engine._overHealthPending.get(session.id)
+  ctx.emitSessionEvent(session, { seq: fromSeq, type: 'assistant/message', data: { usage: { inputTokens: 30000, outputTokens: 500 } } })
+  assert.equal(engine._overHealth.has(session.id), false)
+  const health = ledgerOf(session.id).filter(r => r.kind === 'health')
+  assert.equal(health.length, 1)
+  assert.equal(health[0].overHealth, false)
+  // A later message does not record a second verdict.
+  ctx.emitSessionEvent(session, { seq: fromSeq + 5, type: 'assistant/message', data: { usage: { inputTokens: 90000, outputTokens: 0 } } })
+  assert.equal(ledgerOf(session.id).filter(r => r.kind === 'health').length, 1)
+})
+
+test('T15c a synchronous compaction clears a pending adoption verdict', async () => {
+  writePolicy()
+  const ctx = makeCtx()
+  const engine = makeEngine(ctx)
+  const { session } = makeBLineSession('s-verdict-clear')
+  const agent = makeAgent(session)
+  await ctx.emitPreStep(agent)
+  await ctx.settle(agent)
+  assert.ok(engine._overHealthPending.has(session.id))
+  for (let i = 0; i < 10; i += 1) session.addMessage('user', `more${i}`, 10000)
+  await engine.compactNow(agent, new AbortController().signal)
+  assert.equal(engine._overHealthPending.has(session.id), false)
+})
+
+test('T16 selector upper bound subtracts request overhead outside the surface', () => {
+  const session = makeSession('s-overhead')
+  session.setHeader('prov', 'mod')
+  session.addMessage('system', 'sys', 15000)
+  for (let i = 0; i < 6; i += 1) session.addMessage('user', `m${i}`, 10000)
+  const withOverhead = extra => {
+    const m = sessionMeter(session)
+    const surfaceTokens = m.nodes.reduce((t, n) => t + n.tokens, 0)
+    return { ...m, surfaceTokens, totalTokens: surfaceTokens + extra }
+  }
+  // No overhead: cap 26808 keeps the 20000 candidate (closest to 20000).
+  assert.equal(selectCompactableRange(session, withOverhead(0), { targetTokens: 20000, line: 0.5, window: W }).retainedTokens, 20000)
+  // 10k of tool schema/output/provider gap: cap 16808 leaves only 10000.
+  assert.equal(selectCompactableRange(session, withOverhead(10000), { targetTokens: 20000, line: 0.5, window: W }).retainedTokens, 10000)
+  // Overhead larger than the room left: no candidate at all.
+  assert.equal(selectCompactableRange(session, withOverhead(20000), { targetTokens: 20000, line: 0.5, window: W }), null)
+  // A measurement without surfaceTokens keeps the old formula.
+  assert.equal(selectCompactableRange(session, sessionMeter(session), { targetTokens: 20000, line: 0.5, window: W }).retainedTokens, 20000)
+})
+
+test('T17 step compensation: host notices skipped, header honest, request carried deterministically', async () => {
+  const session = makeSession('s-verbatim')
+  session.setHeader('prov', 'mod')
+  session.addMessage('system', 'sys', 15000)
+  session.append('turn/start', { turn: 't-1' })
+  session.append('user/message', { content: [{ type: 'text', text: 'The working directory changed.' }], source: { kind: 'working-directory' } })
+  session.append('user/message', { content: [{ type: 'text', text: '<system-reminder>ctx</system-reminder>' }], source: { kind: 'runtime-context' } })
+  session.append('user/message', { content: [{ type: 'text', text: '请完整保留这句开场请求' }], source: { kind: 'user' } })
+  assert.equal(currentTurnOpeningRequest(session), '请完整保留这句开场请求')
+
+  const goal = makeSession('s-verbatim-goal')
+  goal.append('turn/start', { turn: 't-1' })
+  goal.append('user/message', { content: [{ type: 'text', text: '<goal_round>do it</goal_round>' }], source: { kind: 'goal' } })
+  assert.equal(currentTurnOpeningRequest(goal), '<goal_round>do it</goal_round>')
+
+  const { instructionText } = await import('../lib/compact-region.js')
+  const text = instructionText({ verbatimRequest: 'ASK' })
+  assert.equal(text.includes('preserved verbatim'), false, 'the request is replaced, not preserved')
+  assert.match(text, /inside the span your checkpoint replaces/)
+
+  const summary = [{ type: 'text', text: '## Primary Request and Intent\n- 请完整保留…' }]
+  const carried = ensureVerbatimRequest(summary, '请完整保留这句开场请求')
+  assert.equal(carried.length, 2)
+  assert.ok(carried[1].text.includes(VERBATIM_REQUEST_SECTION))
+  assert.ok(carried[1].text.endsWith('请完整保留这句开场请求'))
+  const already = [{ type: 'text', text: '## Primary Request and Intent\n- 请完整保留这句\n  开场请求' }]
+  assert.equal(ensureVerbatimRequest(already, '请完整保留这句 开场请求'), already, 'whitespace-insensitive match keeps the summary')
+  assert.equal(ensureVerbatimRequest(summary, undefined), summary)
+
+  // Engine closure: the summarizer output gets the carry before framing.
+  writePolicy()
+  const ctx = makeCtx()
+  const engine = makeEngine(ctx)
+  const agent = makeAgent(session)
+  const deps = engine._regionDependencies(undefined, undefined, { verbatimRequest: '请完整保留这句开场请求' })
+  const out = await deps.summarize({ messages: [] }, agent, undefined)
+  assert.ok(out.summary.some(b => b.text.includes('请完整保留这句开场请求')))
+})
+
+test('T18 every select record names its trigger; summarizer window guard fails fast', async () => {
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    makeEngine(ctx)
+    const { session } = makeSLineSession('s-trig-safety')
+    session.append('turn/start', { turn: 't-1' })
+    await ctx.emitPreStep(makeAgent(session))
+    assert.equal(ledgerOf(session.id).find(r => r.kind === 'select').trigger, 'safety')
+  }
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    makeEngine(ctx)
+    const { session } = makeBLineSession('s-trig-async')
+    const agent = makeAgent(session)
+    await ctx.emitPreStep(agent)
+    await ctx.settle(agent)
+    assert.equal(ledgerOf(session.id).find(r => r.kind === 'select').trigger, 'b-line')
+  }
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    const engine = makeEngine(ctx)
+    const { session } = makeBLineSession('s-trig-manual')
+    await engine.compactNow(makeAgent(session), new AbortController().signal)
+    assert.equal(ledgerOf(session.id).find(r => r.kind === 'select').trigger, 'manual')
+  }
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    const engine = makeEngine(ctx)
+    ctx.tokenMeter.estimateMessage = () => 60000
+    await assert.rejects(
+      engine._assertSummarizerFits({ provider: 'p', model: 'm' }, { messages: [{}, {}] }),
+      error => error.code === 'SUMMARIZER_WINDOW',
+    )
+    await engine._assertSummarizerFits({ provider: 'p', model: 'm' }, { messages: [{}] })
+  }
+})

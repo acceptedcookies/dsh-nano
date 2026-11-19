@@ -155,6 +155,7 @@ async function loadComponent(entry, { stateValues = [], stubFiles = {} } = {}) {
   const nanoUi = join(dir, 'nano-ui.mjs')
   writeFileSync(nanoUi, `
     export const NanoDialog = (props) => ({ type: 'NanoDialog', props: { ...(props ?? {}), children: props?.children ?? [] } })
+    export const NanoWindowDialog = (props) => ({ type: 'NanoWindowDialog', props: { ...(props ?? {}), children: props?.children ?? [] } })
   `)
   const compactStub = join(dir, 'compact-stub.mjs')
   const switchCalls = []
@@ -271,8 +272,8 @@ test('T17 switch confirm: POST is never sent before the dialog confirms', { skip
     assert.equal(globalThis.__switchCalls === undefined || globalThis.__switchCalls.length === 0, true,
       'POST /switch must not fire before confirmation')
     // The confirm dialog is rendered (confirmSwitch state was set truthy).
-    const dialog = findType(tree, 'NanoDialog')
-    assert.ok(dialog !== null, 'confirming NanoDialog must render while confirmSwitch is set')
+    const dialog = findType(tree, 'NanoWindowDialog')
+    assert.ok(dialog !== null, 'confirming dialog must render while confirmSwitch is set')
     assert.equal(dialog.props.confirmLabel, 'compactConfirmYes')
     // Confirm: now the POST fires exactly once.
     dialog.props.onConfirm()

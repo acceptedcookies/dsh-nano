@@ -12,11 +12,15 @@ const BUNDLE_GET_OP = jsonOp({ method: 'GET', url: BUNDLE_BASE })
 const PUT_OP = jsonOp({ method: 'PUT', url: BASE })
 const SWITCH_OP = jsonOp({ method: 'POST', url: `${BASE}/switch` })
 
-/** GET the stored policy + derived read-only fields + ledger `history`.
- * Returns null when the face is unreachable (non-domain failure). */
-export async function fetchCompactState() {
+/** GET the stored policy + derived read-only fields. With a sessionId the
+ * runtime block (fill, window, last compaction) and `history` describe that
+ * session. Returns null when the face is unreachable (non-domain failure). */
+export async function fetchCompactState(sessionId) {
   try {
-    const data = await call(GET_OP)
+    const op = typeof sessionId === 'string' && sessionId.length > 0
+      ? jsonOp({ method: 'GET', url: `${BASE}?${new URLSearchParams({ sessionId }).toString()}` })
+      : GET_OP
+    const data = await call(op)
     return data?.ok === true ? data : null
   } catch { return null }
 }
@@ -31,8 +35,12 @@ export async function fetchBundleState() {
 }
 
 /** PUT a partial policy update. Returns the updated payload or throws the error reason. */
-export async function putCompactPolicy(patch) {
-  return call(PUT_OP, patch) // {ok, policy:{…, effective, runtime}, bundle} — caller merges, no refetch
+export async function putCompactPolicy(patch, sessionId) {
+  // The response's runtime block is per session; without the id it comes back empty.
+  const op = typeof sessionId === 'string' && sessionId.length > 0
+    ? jsonOp({ method: 'PUT', url: `${BASE}?${new URLSearchParams({ sessionId }).toString()}` })
+    : PUT_OP
+  return call(op, patch) // {ok, policy:{…, effective, runtime}, bundle} — caller merges, no refetch
 }
 
 /**
@@ -62,10 +70,11 @@ export const INFLIGHT_POLL_MS = 3000
 /**
  * Kinds that close an episode. `select` is deliberately NOT here (an episode
  * can sit between select and commit for a while); `skip` means "suppressed"
- * and settles immediately. An unknown kind counts as in-flight — never let a
- * record this build does not know silently stop the pump.
+ * and settles immediately; `health` is the post-commit verdict and only ever
+ * follows a commit. An unknown kind counts as in-flight — never let a record
+ * this build does not know silently stop the pump.
  */
-const SETTLED_KINDS = new Set(['commit', 'drop', 'skip'])
+const SETTLED_KINDS = new Set(['commit', 'drop', 'skip', 'health'])
 
 function tailRecord(data) {
   const records = data?.history?.records

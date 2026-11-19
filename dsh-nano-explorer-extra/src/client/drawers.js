@@ -6,7 +6,7 @@
  */
 
 import React from 'react'
-import { Button, FileTypeIcon, IconCloseOutlineRegular, IconLoadingOutlineRegular, IconRightUpOutlineRegular, Input, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, FileTypeIcon, IconCloseOutlineRegular, IconCopyOutlineRegular, IconLoadingOutlineRegular, IconRightUpOutlineRegular, Input, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton, NanoWindowDialog } from 'dsh-nano-ui'
 import { Dialog, useDialogContainer } from './dialogs.js'
 import { ageParts, partitionChanges, shortenPath, splitPath } from './format.js'
@@ -255,6 +255,7 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
   // close animation; `filesOpen` is the slide itself.
   const [picked, setPicked] = useState(null)
   const [filesOpen, setFilesOpen] = useState(false)
+  const [hashCopied, setHashCopied] = useState(false)
   useEffect(() => {
     if (picked === null) return undefined
     const frame = requestAnimationFrame(() => setFilesOpen(true))
@@ -382,12 +383,27 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
             ' ',
             React.createElement('span', { 'data-tone': 'del' }, `−${shown.deletions ?? 0}`),
             ')')),
-        React.createElement(IconButton, {
-          className: 'nxe-commit-files-close',
-          icon: React.createElement(IconCloseOutlineRegular, { size: 12 }),
-          'aria-label': copy.dismiss,
-          onClick: event => { event.stopPropagation(); setFilesOpen(false); setPicked(null) },
-        })),
+        React.createElement('span', { className: 'nxe-commit-files-actions' },
+          React.createElement(IconButton, {
+            className: 'nxe-commit-files-close',
+            icon: React.createElement(IconCopyOutlineRegular, { size: 12 }),
+            'aria-label': hashCopied ? copy.copied : copy.copyCommitHash,
+            onClick: event => {
+              event.stopPropagation()
+              const hash = shown.full || shown.hash
+              if (!hash) return
+              void navigator.clipboard.writeText(hash).then(() => {
+                setHashCopied(true)
+                window.setTimeout(() => setHashCopied(false), 1500)
+              }).catch(() => {})
+            },
+          }),
+          React.createElement(IconButton, {
+            className: 'nxe-commit-files-close',
+            icon: React.createElement(IconCloseOutlineRegular, { size: 12 }),
+            'aria-label': copy.dismiss,
+            onClick: event => { event.stopPropagation(); setFilesOpen(false); setPicked(null) },
+          }))),
       React.createElement('div', { className: 'nxe-commit-files-rule', role: 'separator' }),
       (shown.files ?? []).length === 0
         ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.commitFilesEmpty)

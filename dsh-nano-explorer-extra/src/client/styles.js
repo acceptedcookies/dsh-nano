@@ -506,10 +506,16 @@ export const STYLE = `${NANO_STYLES}
   background: var(--dsw-alias-bg-layer-1, transparent);
 }
 .nxe-commit-files-head {
+  position: relative; z-index: 1;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 2px 2px 2px 8px;
 }
-.nxe-commit-files-lead { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.nxe-commit-files-lead { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; }
+.nxe-commit-files-actions {
+  position: relative; z-index: 1; flex: none;
+  display: inline-flex; align-items: center; gap: 2px;
+  background: var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-2));
+}
 .nxe-commit-files-title { flex: none; font-size: 12px; line-height: 18px; font-weight: 600; color: var(--dsw-alias-label-primary); }
 .nxe-commit-files-note {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

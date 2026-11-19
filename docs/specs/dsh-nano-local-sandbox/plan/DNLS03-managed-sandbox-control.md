@@ -743,34 +743,34 @@ DNLS03-managed-sandbox-control
 
 | 收口目标 | 工作项 | Test-ID | PASS 证据（四元组） | 状态 |
 |----------|--------|---------|---------------------|------|
-| 台账原子且可重启 | P1-01 | `DNLS03-T01` | 执行时填写 | `未观察` |
-| session 不是物理身份 | P1-02 | `DNLS03-T02` | 执行时填写 | `未观察` |
-| 无第二写者胜出 | P1-03 | `DNLS03-T03` | 执行时填写 | `未观察` |
-| 不空表认领 | P1-04 | `DNLS03-T04` | 执行时填写 | `未观察` |
-| 发现不授权 | P2-01 | `DNLS03-T10` | 执行时填写 | `未观察` |
-| 错版本不派发 | P2-02 | `DNLS03-T11` | 执行时填写 | `未观察` |
-| 错误前缀稳定 | P2-03 | `DNLS03-T12` | 执行时填写 | `未观察` |
-| 无选择不执行 | P2-04 | `DNLS03-T13` | 执行时填写 | `未观察` |
-| 绑定 id 未被冒名 | P2-05 | `DNLS03-T14` | 执行时填写 | `未观察` |
-| 一笔意图一次派发 | P3-01 | `DNLS03-T20` | 执行时填写 | `未观察` |
-| 断线不是取消 | P3-02 | `DNLS03-T21` | 执行时填写 | `未观察` |
-| 授权与审计 | P3-03 | `DNLS03-T22` | 执行时填写 | `未观察` |
-| create 不发地址 | P4-01 | `DNLS03-T30` | 执行时填写 | `未观察` |
-| 原执行可被新输入推进 | P4-02 | `DNLS03-T31` | 执行时填写 | `未观察` |
-| attach 不 spawn | P4-03 | `DNLS03-T32` | 执行时填写 | `未观察` |
-| 无 v1 降级 | P5-01 | `DNLS03-T40` | 执行时填写 | `未观察` |
-| 撤权不杀 PTY | P5-02 | `DNLS03-T41` | 执行时填写 | `未观察` |
-| local 协议未改 | P5-03 | `DNLS03-T42` | 执行时填写 | `未观察` |
-| 废止端口加一 | P6-01 | `DNLS03-T50` | 执行时填写 | `未观察` |
-| 保存不应用 | P6-02 | `DNLS03-T51` | 执行时填写 | `未观察` |
-| 用量不插值 | P6-03 | `DNLS03-T52` | 执行时填写 | `未观察` |
-| fleet 不泄露 | P7-01 | `DNLS03-T60` | 执行时填写 | `未观察` |
-| 只停不删且按对象计额 | P7-02 | `DNLS03-T61` | 执行时填写 | `未观察` |
-| UI 不假交付 | P8-01 | `DNLS03-T70` | 执行时填写 | `未观察` |
-| 交接不二次 create | P8-02 | `DNLS03-T71` | 执行时填写 | `未观察` |
-| 文档与版本边界 | P8-03 | `DNLS03-T72` | 执行时填写 | `未观察` |
-| 旅程同切 | Phase 8 | `DNLS03-T80` | 执行时填写 | `未观察` |
-| 写者竞态 | P1-03/P7-02 | `DNLS03-T81` | 执行时填写 | `未观察` |
+| 台账原子且可重启 | P1-01 | `DNLS03-T01` | `e32697b`，16:22:30Z，control-registry | 夹具 PASS |
+| session 不是物理身份 | P1-02 | `DNLS03-T02` | `e32697b`，16:22:30Z，instances-ensure；最终包回归 §11 | 夹具 PASS |
+| 无第二写者胜出 | P1-03 | `DNLS03-T03` | `e32697b`，16:22:30Z，control-registry 跨进程锁 | PASS |
+| 不空表认领 | P1-04 | `DNLS03-T04` | `e32697b`，16:22:30Z，损坏/缺账否定 | 内核 PASS；接管入口见 closure |
+| 发现不授权 | P2-01 | `DNLS03-T10` | `589c8ea`，16:43:44Z，contract-version | 夹具 PASS |
+| 错版本不派发 | P2-02 | `DNLS03-T11` | `589c8ea`，16:44:49Z，contract-version | 夹具 PASS |
+| 错误前缀稳定 | P2-03 | `DNLS03-T12` | `589c8ea`，16:43:44Z，error-catalog | 夹具 PASS |
+| 无选择不执行 | P2-04 | `DNLS03-T13` | `589c8ea`，16:43:44Z，target-dispatch | 夹具 PASS |
+| 绑定 id 未被冒名 | P2-05 | `DNLS03-T14` | `589c8ea`，16:43:44Z，route-scan-coverage | PASS |
+| 一笔意图一次派发 | P3-01 | `DNLS03-T20` | `ac025df`，17:02:44Z，lifecycle-operation | 夹具 PASS |
+| 断线不是取消 | P3-02 | `DNLS03-T21` | `ac025df`，16:59:33Z，lifecycle-operation / delivery-guard | 夹具 PASS |
+| 授权与审计 | P3-03 | `DNLS03-T22` | `ac025df`，16:59:33Z，object-authz；`b3ad7e5` 的 T80 补证 | 核权夹具 PASS；实际多人归属未观察 |
+| create 不发地址 | P4-01 | `DNLS03-T30` | `6f84933`，17:38:00Z，term-bridge / terminal-contract | 夹具 PASS |
+| 原执行可被新输入推进 | P4-02 | `DNLS03-T31` | `6f84933`，17:38:00Z，term-broker.spike：换宿主进程后验证新输入/原 PID | 本地进程 PASS，非 Apple 实机 |
+| attach 不 spawn | P4-03 | `DNLS03-T32` | `6f84933`，17:38:00Z，term-bridge 失联、已结束、异参 | 夹具 PASS |
+| 无 v1 降级 | P5-01 | `DNLS03-T40` | `b3ad7e5`，19:07:46Z，t42-sandbox-wire.log | PASS |
+| 撤权不杀 PTY | P5-02 | `DNLS03-T41` | `b3ad7e5`，19:07:46Z，term-attach-authz | 夹具 PASS |
+| local 协议未改 | P5-03 | `DNLS03-T42` | `b3ad7e5`，19:07:37Z / 19:07:46Z，两份 T42 日志 | 按[业主]勘误范围 PASS |
+| 废止端口加一 | P6-01 | `DNLS03-T50` | `3f87460`，18:23:21Z，非相邻端口；`b33a2a8` 补 CDP 18:41:19Z | 回环夹具 PASS |
+| 保存不应用 | P6-02 | `DNLS03-T51` | `3f87460`，18:28:54Z，environment-owner / managed-revision | 夹具 PASS |
+| 用量不插值 | P6-03 | `DNLS03-T52` | `3f87460`，18:24:20Z，usage-minutes 删一分钟再查 | PASS |
+| fleet 不泄露 | P7-01 | `DNLS03-T60` | `b3ad7e5`，19:05:58Z，fleet-projection 逐行、逐 env 撤权及进程字段断言 | 夹具 PASS |
+| 只停不删且按对象计额 | P7-02 | `DNLS03-T61` | `b33a2a8`，18:44:54Z，quota-idle / lifecycle.spike | 夹具 PASS |
+| UI 不假交付 | P8-01 | `DNLS03-T70` | `b3ad7e5`，19:05:58Z，sandbox-tab.spike 子进程退出 3 | 无槽位分支 PASS；有槽位未观察 |
+| 交接不二次 create | P8-02 | `DNLS03-T71` | `b3ad7e5`，19:05:58Z，resource-handoff；19:07:37Z，sandbox-resource | 公开引用与夹具 PASS；真实页签未观察 |
+| 文档与版本边界 | P8-03 | `DNLS03-T72` | `b3ad7e5`，19:05:58Z，dnls03-docs | PASS |
+| 旅程同切 | Phase 8 | `DNLS03-T80` | `b3ad7e5`，19:05:14Z，dnls03-journey.mega | 包入口夹具 PASS |
+| 写者竞态 | P1-03/P7-02 | `DNLS03-T81` | `b33a2a8`，18:44:54Z，registry-race.soak，20 轮 | PASS |
 
 ### 10.3 Definition of Done
 
@@ -795,4 +795,15 @@ DNLS03-managed-sandbox-control
 
 ## 11. 执行日志回填
 
-文档状态不是 `executed`。本节省略。执行完成后另记，不在本轮把计划写成已完成。
+执行日为 2026-11-19，§10.2 的时点均为 UTC。状态为 `executing / No-Go`，不是 `executed`。逐 Phase 命令、提交及观察值见[工作台账](todo.DNLS03.md)，审查裁定见[closure](../closure/DNLS03-closure.md)。
+
+| 工作项 | 实际落点 | 命令或观察 | 结果 |
+|---|---|---|---|
+| P0–P1 | 文件测量、`control-registry.js` | `ba55bf7` / `e32697b`；第二进程抢锁、退出重开、解绑后读取 | 已证实持久内核；未操作已有环境 |
+| P2–P3 | `managed-routes.js`、`lifecycle-operations.js` | `589c8ea` / `ac025df`；合同配对、单目标、写者/审计、未决态 | 台账先于后端派发；当时尚未启用宿主入口 |
+| P4–P5 | broker、WS、[DNT] 消费点 | `6f84933` / `b7f3d34`；两个不同宿主进程复用原 shell；v1 拒绝、断开后不补发 | 真实本地 PTY；不是已部署镜像 |
+| P6–P7 | profile、分钟库、fleet、idle | `3f87460` / `b33a2a8`；非相邻桥、修订不应用、缺采样、20 轮竞态 | 配方最终记录以当前 `profile.yaml` 为准；无持续空闲证明即不自动停 |
+| P8 公开入口及消费 | `b3ad7e5`，包 `index.js` 与两个已构建 client | 从 `apply` 注册路由，经回环 HTTP 查同一操作、对象与服务，取终端引用后另发 attach；共享 owner 否定分支 | 正式包入口夹具 PASS；不代表 [dsh] Loader、浏览器或 Apple 实机验证 |
+| 审查复核 | 三路 PROMPT、报告与两份 T42 日志 | 首次包全量 432 pass / 6 fail：目录映射 1、缺 operations 的旧行夹具 4、pack 清单 1；T80 暴露了 route 注册与 broker 夹具问题 | 已修复并复测；完整 [DNLS] 433/433、[DNK] 51/51、[DNT] 定向 33/33、沙箱 wire 定向 20/20，均无跳过 |
+
+**偏差与阻塞**：审查在 Phase 8 工作树先行，以便在公开面同一提交里修复。rc.5 的正式右栏 API 需要 session；无会话管理页不交付。默认宿主共享 owner 不足以授权个人终端；已有容器的登记内核不是面向操作者的接管入口。以上不以假 session、fixture 授权、临时密钥或部署覆盖。没有发版、合并、push 或 PR 状态结论。

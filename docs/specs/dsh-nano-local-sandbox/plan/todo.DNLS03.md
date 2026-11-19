@@ -58,10 +58,10 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 ### 收口测试与工作方法收尾
 - [x] **DNLS03-T80** mega — 2026-11-19T19:05:14Z，`node --test dsh-nano-local-sandbox/test/dnls03-journey.mega.test.mjs`，1/1 PASS。调用实际包 `apply`、回环 HTTP、真实台账和 profile；Apple backend、`ctx.effect` 与可信具名主体是夹具。共享 owner 被拒且 broker 计数不变。
 - [x] **DNLS03-T81** N=20 受控屏障：第二写者被拒、过期复核时新使用或新 PTY 登记成功，未发 stop。此项不替代 WS upgrade 测试。
-- [ ] **STEP.5** — 以 `工作日志模板` 创建 [工作日志] 并回填至执行计划文档底部
-- [ ] **STEP.6** — 以 `closure模板` 输出 closure 至 `../closure/DNLS03-closure.md`
-- [ ] **STEP.7** — 三路独立审查（真相层对账 / 工作完成度 / 防测试假绿·防业务侧载），PROMPT 与报告落盘 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`
-- [ ] **STEP.8** — 回收、汇聚、核实全部审查报告，执行更新或修复并重入 测试↔修复 循环直至收口，更新 closure
+- [x] **STEP.5** — 工作日志已回填至执行计划 §11，逐项证据记录在 §10.2。
+- [x] **STEP.6** — 本地候选 closure：`../closure/DNLS03-closure.md`，不宣告完整交付。
+- [x] **STEP.7** — 真相、完成度与防假绿三路 PROMPT、报告和复核结论已落盘 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`。
+- [x] **STEP.8** — 修复并复测后的代码提交 `b3ad7e5`；三路在该快照上复核 closure，一致支持 No-Go。需宿主能力的工作保持未验收。
 
 ## 4. 执行记录与证据
 执行状态：P4 staged 完成（公开激活待原子同切）。开工点 `18ea26f`。主工作区保存原状：`9061673` [DNPR]，`909fa3f` 已移除的清单，`18ea26f` 计划与问答。`git fetch origin main` 后本地无落后提交。每笔 PASS 记录提交、命令、观测与 UTC；测试 ID 的否证以计划 §8.1、§8.5 为准。

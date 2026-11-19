@@ -59,16 +59,17 @@
         "verification": "各插件 package.json engines.dsh 与该版本兼容；dsh --version 输出一致"
       },
       "eval": {
-        "ref": "dsh-v0.2.2-rc.3",
-        "resolvedSha": "38a6a5c965aa99ab525161efb7cc5cf1fe62fced",
+        "ref": "dsh-v0.2.2-rc.5",
+        "resolvedSha": "9c2670d3bce5275e0d1610272958121af87787bb",
+        "fetchedAt": "2026-11-19",
         "path": "eval/deepseek-harness/",
-        "note": "最新 release tag（rc.2 已跳过，直接评 rc.3）。评估 lib/types 与插件调用面兼容性后 repin；同时需同步 npm 安装版本"
+        "note": "上游最新 release tag（rc.3 → rc.5 于 2026-11-19 刷新；rc.4 @3f321d3 存在但非最新）。评估 lib/types 与插件调用面兼容性后 repin；repin 时须同步本机 npm 安装版本"
       }
     }
   },
   "pending": [
     "fx: 核验 fx-core.wasm / sqlite3.wasm / pdf*.mjs / np-sqlite-worker.mjs 的构建来源与 hash，登记进本文件",
-    "deepseek-harness: 完成 rc.3 兼容性评估后 repin，并同步本机 npm 安装版本",
+    "deepseek-harness: 完成 rc.5 兼容性评估后 repin，并同步本机 npm 安装版本（当前已装 0.2.2-rc.1）",
     "通用: 落地 repin 校验脚本（verify deps 路径存在、ref 与 MANIFEST 一致、vendored 产物与 pinned 树字节一致）"
   ]
 }

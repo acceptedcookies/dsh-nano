@@ -1,0 +1,47 @@
+# [DNCSH] bundle patch: swap the stock rows whose code carries the native
+# external-session views for this package's derived build of the same
+# upstream packages (upstream/BASE + upstream/native-host.patch).
+#
+# A patch whose `name` differs from the targeted row is skipped, so each stock
+# row is disabled by id and a replacement row is inserted under a new id.
+# Removing this bundle from dsh.profile.bundles restores the stock rows.
+
+- id: session-controller
+  disabled: true
+- id: terminal-controller
+  disabled: true
+- id: workspace-files
+  disabled: true
+- id: api-remotes
+  disabled: true
+- id: ui-conversation
+  disabled: true
+- id: ui-sidebar-right
+  disabled: true
+- id: ui-sidebar-files
+  disabled: true
+- id: ui-sidebar-terminal
+  disabled: true
+
+- insert:
+    # Root row: the composite browser bundle (lib/client.js) plus the stock
+    # conversation preferences host half; the browser reads those preferences
+    # under this row id.
+    - id: nano-cloud-session-host
+      name: dsh-nano-cloud-session-host
+
+    # The grants file is operator-owned (user-owned, mode 0600) and optional:
+    # without it the row keeps DSH_EXTERNAL_WORKSPACE_GRANTS or no grants.
+    - id: nano-cloud-session-host-session-controller
+      name: dsh-nano-cloud-session-host/session-controller
+      config:
+        externalWorkspaceGrants: !!js "(() => { const file = dshHomePath('nano-cloud-session-grants.json'); return process.getBuiltinModule('node:fs').existsSync(file) ? file : undefined })()"
+
+    - id: nano-cloud-session-host-terminal-controller
+      name: dsh-nano-cloud-session-host/terminal-controller
+
+    - id: nano-cloud-session-host-workspace-files
+      name: dsh-nano-cloud-session-host/workspace-files
+
+    - id: nano-cloud-session-host-remotes
+      name: dsh-nano-cloud-session-host/remotes

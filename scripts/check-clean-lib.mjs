@@ -34,10 +34,11 @@ export const PLUGINS = [
   'dsh-nano-local-sandbox',
   'dsh-nano-terminal',
   'dsh-nano-cloud-session',   // P5-02: DNCS was unscanned (coverage gap)
+  'dsh-nano-cloud-session-host',
 ]
 
 /** Plugins whose host entry is the unbundled index.js (also a runtime file). */
-export const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector', 'dsh-nano-model-selector-compaction', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal', 'dsh-nano-cloud-session']
+export const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector', 'dsh-nano-model-selector-compaction', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal', 'dsh-nano-cloud-session', 'dsh-nano-cloud-session-host']
 
 /**
  * Packages whose shipped lib/ legally carries bare `@deepseek-ai/*` specifiers
@@ -55,6 +56,21 @@ export const HOST_RESOLVED_SPECIFIERS = new Set(['@deepseek-ai/cordis', '@deepse
  *  its optional native-accel candidates (@libfx/libfx-<plat>) are lazy probe
  *  imports that the wasm layer catches when absent (wasm is the real artifact).
  */
+/**
+ * Bare names a plugin declares as optional peers. The rc.5 profile resolver
+ * routes a linked plugin's peer-declared bare imports to the running
+ * installation, so those resolve at runtime (DNCSH vendored host faces).
+ * A specifier's package name is its first segment, or first two when scoped.
+ */
+export function optionalPeers(dir) {
+  const file = join(dir, 'package.json')
+  if (!existsSync(file)) return new Set()
+  const pkg = JSON.parse(readFileSync(file, 'utf8'))
+  return new Set(Object.keys(pkg.peerDependencies ?? {}).filter(name => pkg.peerDependenciesMeta?.[name]?.optional === true))
+}
+
+const packageName = spec => spec.split('/').slice(0, spec.startsWith('@') ? 2 : 1).join('/')
+
 export const SKIP_LIB_SUBDIRS = new Set(['lib/fx'])
 
 /**
@@ -106,6 +122,7 @@ export function collectBare(root, plugins = PLUGINS, unbundled = UNBUNDLED_INDEX
   for (const plugin of plugins) {
     const dir = join(root, plugin)
     const lib = join(dir, 'lib')
+    const peers = optionalPeers(dir)
     // Recurse: DNMSC vendored lib/compaction/types/*.js would otherwise be missed.
     const walk = (d, acc = []) => {
       if (!existsSync(d)) return acc
@@ -127,7 +144,7 @@ export function collectBare(root, plugins = PLUGINS, unbundled = UNBUNDLED_INDEX
       scanned.push(file)
       const text = readFileSync(file, 'utf8')
       for (const { spec, line } of specifiers(text)) {
-        if (isBare(spec) && spec.length < 180 && !/[\s,();]/.test(spec) && !HOST_RESOLVED_SPECIFIERS.has(spec)) {
+        if (isBare(spec) && spec.length < 180 && !/[\s,();]/.test(spec) && !HOST_RESOLVED_SPECIFIERS.has(spec) && !peers.has(packageName(spec))) {
           problems.push(`${file.slice(root.length + 1)}:${line} — bare specifier '${spec}' would fail at runtime`)
         }
       }

@@ -1136,6 +1136,7 @@
       "firstRun": "no active profile -> section shows guide row; settings opens on 接入 with carrier preset Devin Cloud and 3-step guide; connect test shows principal_type/orgMatch",
       "settings": "NanoDialog + nanoTabs: 接入/会话/安全/SSH; 接入 folder holds Devin preset, token/org/baseURL, connection test, permission checklist and doc deep links; 会话 holds new-session defaults; 安全 is read-only store policy; SSH is keygen/enroll"
     },
+    "dsh-nano-cloud-session-host": "overlay companion of dsh-nano-cloud-session: no web routes and no own UI; disables the stock session-controller, terminal-controller, workspace-files, api-remotes, ui-conversation and ui-sidebar-{right,files,terminal} rows and inserts its derived build (upstream/BASE + upstream/native-host.patch) so external Sessions open in native Chat with capability-filtered files/terminal/attachments tabs; one composite browser module (lib/client.js)",
     "dsh-nano-model-selector-compaction": "host-only companion: mounts ctx.compaction inside preset id:compaction isolate; no web routes, no UI; ON/OFF via dsh.profile.bundles or POST /nano-model-selector/async-compact/switch (route owned by dsh-nano-model-selector)"
   },
   "dataLocations": {
@@ -1174,6 +1175,11 @@
       "knownHosts": "${DSH_HOME}/nano-cloud-session-known-hosts (0600)",
       "scopes": "in-memory WorkspaceScope only; restart invalidates",
       "remoteBridge": "lib/remote/devin-workspace.mjs hashed into ~/.dncs-bridge/<sha256>/ on the VM; no PAT"
+    },
+    "dsh-nano-cloud-session-host": {
+      "grants": "${DSH_HOME}/nano-cloud-session-grants.json (operator-owned, user-owned 0600 JSON array binding exact external: session ids to SSH targets and roots; read-only to the host, never created/modified/deleted by the plugin; absent = no grants)",
+      "preferences": "conversation preferences (busyEnter) under the nano-cloud-session-host settings namespace; stock ui-conversation values are not inherited",
+      "knownHosts": "external SSH targets use the grant entry's knownHostsFile; no StrictHostKeyChecking=no"
     },
     "dsh-nano-model-selector-compaction": {
       "asyncCompactState": "${DSH_DATA_DIR||DSH_HOME||~/.dsh}/plugins/nano-model-selector/async-compact.json (written via the sibling DNMS switch route; takeover mutex layer)"

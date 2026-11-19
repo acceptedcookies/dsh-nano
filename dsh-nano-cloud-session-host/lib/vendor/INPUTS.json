@@ -1,0 +1,22 @@
+{
+  "base": "deepseek-harness 9c2670d3bc (v0.2.2-rc.5)",
+  "patch": "1f519b0c777f8dcb7341e5fcc6d975e52ae9f10bb68f7d6aa751893075738a57",
+  "inputs": {
+    "packages/api/remotes/lib/client.js": "ff2ba7ef11fe555eed3beed72223fe59642d56fe50d3f2d94414b26ca018d608",
+    "packages/api/session-controller/lib/client.js": "c58b898a4a293fc6a07349d2dcaa3e178c2fda9aca9475cfa14846db34f4109b",
+    "packages/api/session-controller/lib/index.js": "ca3a28f4ea8b4b541641326b288b2c5773aa37368ea299a566f1fc97c041422b",
+    "packages/api/session-controller/lib/typert.host.js": "f3b45f410e66413e2f7d84102e52d73b221358cf967a1d922b3b128f6ec47140",
+    "packages/api/terminal-controller/lib/client.js": "3f79ead498d33103754f20b1380ddea80554e326f6b7e881eb974b602e3004c0",
+    "packages/api/terminal-controller/lib/index.js": "475b7ac3e7f3b6f4d999eb9d09d2989c00cb353b3d77e8b821fbb28e41e0b6e5",
+    "packages/api/terminal-controller/lib/typert.host.js": "33fbefdea00a6f9168e8e36255a8fb27c65426558af4068806d61f97a79cb51a",
+    "packages/api/workspace-files/lib/client.js": "54e68dd239564d486d26b141b0af8f7d86fa11a583727e2588b77c843b4b6748",
+    "packages/api/workspace-files/lib/index.js": "b5d43451a3bd8e7ce7e35492a86bce7bc1f41d8ceafcf898eca91b21d559265f",
+    "packages/api/workspace-files/lib/typert.host.js": "2ba191a5213052a5943fdd8f883af4fab6f778fd23fe9792904556c1ac09306e",
+    "packages/client/ui-chat/src/client/conversation-nodes/external.ts": "3ed3334b3726769b680e2be7e64663d690cb6cae9750f1109a356aa637ed5045",
+    "packages/client/ui-conversation/lib/client.js": "21ddc820f0ec626733d4e5f398d4faa08d8b48f9fb330b2b8009645d2acfcd73",
+    "packages/client/ui-sidebar-files/lib/client.js": "c1306a6f733975c83512ecea9781b85f933d7c5e232dc029e0b392c9562a489f",
+    "packages/client/ui-sidebar-right/lib/client.js": "9519bc1613cc770bf18c022999e4ce4c1e9b542d8f5d9fd211f476d9924f73be",
+    "packages/client/ui-sidebar-terminal/lib/client.js": "fcc2a4f1c6f685a3fca90793f56655f640b9e8e3208d906b05cd0b2a2b3e8b9a",
+    "packages/client/ui-sidebar-terminal/lib/client.terminal.js": "08b19858ecd0e52f33cc522114bfec2e665908690ff7bf4db6f08e3ad2921231"
+  }
+}

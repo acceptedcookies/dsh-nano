@@ -18,7 +18,7 @@ const CONTRACT = join(ROOT, 'security', 'feature-contract.json')
 // The contract ledger covers every ACTIVE plugin's ui + dataLocations surface.
 // dsh-nano-cloud-session (DNCS) and dsh-nano-model-selector-compaction (DNMSC)
 // were missing from this assertion set (P5-02 / agent-8/-9 coverage finding).
-export const PLUGINS = ['dsh-nano-notepad', 'dsh-nano-explorer-extra', 'dsh-nano-model-selector', 'dsh-nano-model-selector-compaction', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal', 'dsh-nano-cloud-session']
+export const PLUGINS = ['dsh-nano-notepad', 'dsh-nano-explorer-extra', 'dsh-nano-model-selector', 'dsh-nano-model-selector-compaction', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal', 'dsh-nano-cloud-session', 'dsh-nano-cloud-session-host']
 
 const sorted = a => [...a].sort().join(',')
 

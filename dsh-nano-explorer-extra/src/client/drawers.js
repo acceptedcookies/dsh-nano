@@ -374,13 +374,21 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
         'aria-label': copy.commitFilesTitle,
       },
       React.createElement('div', { className: 'nxe-commit-files-head' },
-        React.createElement('span', { className: 'nxe-commit-files-title' }, copy.commitFilesTitle),
+        React.createElement('span', { className: 'nxe-commit-files-lead' },
+          React.createElement('span', { className: 'nxe-commit-files-title' }, copy.commitFilesTitle),
+          React.createElement('span', { className: 'nxe-commit-files-note' },
+            '(', copy.commitFilesSummary(shown.fileCount ?? (shown.files ?? []).length), ' ',
+            React.createElement('span', { 'data-tone': 'add' }, `+${shown.additions ?? 0}`),
+            ' ',
+            React.createElement('span', { 'data-tone': 'del' }, `−${shown.deletions ?? 0}`),
+            ')')),
         React.createElement(IconButton, {
           className: 'nxe-commit-files-close',
           icon: React.createElement(IconCloseOutlineRegular, { size: 12 }),
           'aria-label': copy.dismiss,
           onClick: event => { event.stopPropagation(); setFilesOpen(false); setPicked(null) },
         })),
+      React.createElement('div', { className: 'nxe-commit-files-rule', role: 'separator' }),
       (shown.files ?? []).length === 0
         ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.commitFilesEmpty)
         : React.createElement('ul', { className: 'nxe-drawer-list nxe-commit-files-body' },

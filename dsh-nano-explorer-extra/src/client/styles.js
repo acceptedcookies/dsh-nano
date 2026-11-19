@@ -509,7 +509,15 @@ export const STYLE = `${NANO_STYLES}
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 2px 2px 2px 8px;
 }
-.nxe-commit-files-title { font-size: 12px; line-height: 18px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+.nxe-commit-files-lead { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.nxe-commit-files-title { flex: none; font-size: 12px; line-height: 18px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+.nxe-commit-files-note {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; line-height: 16px; font-weight: 400; color: var(--dsw-alias-label-tertiary);
+}
+.nxe-commit-files-note [data-tone="add"] { color: var(--nxe-git-added, #3fb950); }
+.nxe-commit-files-note [data-tone="del"] { color: var(--nxe-git-deleted, #f85149); }
+.nxe-commit-files-rule { border-top: var(--dsh-hairline-width, 0.5px) solid var(--dsw-alias-border-l2); }
 .nxe-commit-files-head .nxe-commit-files-close { width: 20px; height: 20px; min-width: 20px; padding: 0; }
 .nxe-commit-files-body { height: 148px; overflow: auto; margin: 0; }
 .nxe-commit-file {

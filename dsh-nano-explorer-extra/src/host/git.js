@@ -392,6 +392,7 @@ export function parseHistoryRecord(record) {
   if (commit === undefined) return undefined
   let additions = 0
   let deletions = 0
+  let fileCount = 0
   let filesTruncated = false
   const files = []
   for (const line of lines.slice(1)) {
@@ -403,10 +404,11 @@ export function parseHistoryRecord(record) {
     if (!Number.isFinite(added) || !Number.isFinite(deleted)) continue
     additions += added
     deletions += deleted
+    fileCount += 1
     if (files.length < 80) files.push({ path: tab.slice(2).join('\t'), additions: added, deletions: deleted })
     else filesTruncated = true
   }
-  return { ...commit, additions, deletions, files, filesTruncated }
+  return { ...commit, additions, deletions, files, fileCount, filesTruncated }
 }
 
 /**

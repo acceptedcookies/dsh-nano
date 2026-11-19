@@ -1,7 +1,7 @@
 // src/host/routes.js
 import { watch } from "node:fs";
 
-// ../../../../packages/dsh-interface/src/contracts/jsonOutcome.js
+// ../packages/dsh-interface/src/contracts/jsonOutcome.js
 var FAILURE_KIND = Object.freeze({
   /** signal aborted; issued-before cancellation makes no server-side claim. */
   CANCELLED: "cancelled",
@@ -16,7 +16,7 @@ var FAILURE_KIND = Object.freeze({
 });
 var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
 
-// ../../../../packages/dsh-interface/src/contracts/observeEvent.js
+// ../packages/dsh-interface/src/contracts/observeEvent.js
 var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
 var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
 var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
@@ -75,7 +75,7 @@ function assertObserveEvent(event) {
   return event;
 }
 
-// ../../../../packages/dsh-performance-review/src/state.js
+// ../packages/dsh-performance-review/src/state.js
 var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
 var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
 var BUILD_STAMP = true ? "ff5694c57be1" : "dev";
@@ -147,7 +147,7 @@ function roundMs(value) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
-// ../../../../packages/dsh-performance-review/src/host.js
+// ../packages/dsh-performance-review/src/host.js
 var WINDOW_SAMPLE_CAP = 512;
 var EVENT_CAP = 32;
 var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
@@ -499,7 +499,7 @@ function ensurePerfReviewHost(env = {}) {
   return installSingleton(global, HOST_KEY, "__perfReviewHost", stamp, () => createPerfReviewHost(env));
 }
 
-// ../../../../packages/dsh-host-route-guard/src/route-guard.js
+// ../packages/dsh-host-route-guard/src/route-guard.js
 var RouteGuardError = class extends Error {
   constructor(reason, detail = "") {
     super(detail ? `route-guard: ${reason} \u2014 ${detail}` : `route-guard: ${reason}`);
@@ -687,7 +687,7 @@ function createGuard({ table, plugin, observe } = {}) {
   return { registerRoutes: registerRoutes3, inventory, lookup };
 }
 
-// ../../../../packages/dsh-interface/src/contracts/webBinding.js
+// ../packages/dsh-interface/src/contracts/webBinding.js
 var BindingError = class extends Error {
   constructor(reason, detail = "") {
     super(detail ? `web-binding: ${reason} \u2014 ${detail}` : `web-binding: ${reason}`);
@@ -775,7 +775,7 @@ function bindingRecord(binding) {
   });
 }
 
-// ../../../../packages/dsh-interface/src/host/emitObserve.js
+// ../packages/dsh-interface/src/host/emitObserve.js
 function observeStamp2(observe) {
   if (typeof observe !== "function") return null;
   return globalThis.performance.now();
@@ -791,7 +791,7 @@ function emitObserve2(observe, event) {
   }
 }
 
-// ../../../../packages/dsh-interface/src/host/createWebRegistrar.js
+// ../packages/dsh-interface/src/host/createWebRegistrar.js
 function createWebRegistrar({ plugin, bindings, observe } = {}) {
   const normalized = normalizeBindings(bindings ?? [], { plugin });
   const effective = [];
@@ -1212,6 +1212,7 @@ function parseHistoryRecord(record) {
   if (commit === void 0) return void 0;
   let additions = 0;
   let deletions = 0;
+  let fileCount = 0;
   let filesTruncated = false;
   const files = [];
   for (const line of lines.slice(1)) {
@@ -1223,10 +1224,11 @@ function parseHistoryRecord(record) {
     if (!Number.isFinite(added) || !Number.isFinite(deleted)) continue;
     additions += added;
     deletions += deleted;
+    fileCount += 1;
     if (files.length < 80) files.push({ path: tab.slice(2).join("	"), additions: added, deletions: deleted });
     else filesTruncated = true;
   }
-  return { ...commit, additions, deletions, files, filesTruncated };
+  return { ...commit, additions, deletions, files, fileCount, filesTruncated };
 }
 function parseHistory(stdout) {
   const commits = [];

@@ -36,6 +36,7 @@ test('parseHistory flags a file list past 80 rows without dropping the totals', 
   for (let i = 0; i < 85; i += 1) lines.push(`1\t1\tf${i}`)
   const [commit] = parseHistory(lines.join('\n'))
   assert.equal(commit.files.length, 80)
+  assert.equal(commit.fileCount, 85)
   assert.equal(commit.filesTruncated, true)
   assert.equal(commit.additions, 85)
   assert.equal(commit.deletions, 85)

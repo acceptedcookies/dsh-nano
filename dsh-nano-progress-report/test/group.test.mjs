@@ -1,7 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { denoise, groupRows } from '../src/client/group.js'
-import { countsText, defaultOpen, durationText } from '../src/client/group-format.js'
 
 let seq = 0
 const row = (over) => {
@@ -85,25 +84,5 @@ describe('groupRows', () => {
   it('an awaiting row marks the group awaiting', () => {
     const [g] = groupRows([row({ type: 'prompt' }), row({ type: 'wait', status: 'awaiting' })])
     assert.equal(g.awaiting, true)
-  })
-})
-
-describe('group format', () => {
-  const t = k => ({ 'count.shell': '{n} shell', 'count.file': '{n} file', 'count.web': '{n} web', 'dur.s': '{n}s', 'dur.m': '{n}m', 'dur.h': '{n}h' })[k] ?? k
-  it('counts are largest first and capped', () => {
-    assert.equal(countsText({ file: 2, shell: 5, web: 1 }, t, 2), '5 shell · 2 file')
-    assert.equal(countsText({ message: 3 }, t), '')
-  })
-  it('durations', () => {
-    assert.equal(durationText(500, t), '')
-    assert.equal(durationText(42_000, t), '42s')
-    assert.equal(durationText(300_000, t), '5m')
-    assert.equal(durationText(5_400_000, t), '1.5h')
-  })
-  it('only the latest, in-flight or awaiting groups start open', () => {
-    assert.equal(defaultOpen({ status: 'ok', awaiting: false }, false), false)
-    assert.equal(defaultOpen({ status: 'ok', awaiting: false }, true), true)
-    assert.equal(defaultOpen({ status: 'open', awaiting: false }, false), true)
-    assert.equal(defaultOpen({ status: 'ok', awaiting: true }, false), true)
   })
 })

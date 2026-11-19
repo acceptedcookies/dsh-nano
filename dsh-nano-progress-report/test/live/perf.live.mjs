@@ -146,7 +146,7 @@ async function main() {
     }, ROOT_SRC)
     await new Promise(r => setTimeout(r, 500))
     await page.evaluate(src => {
-      eval(src)?.querySelector('.npr-load-older')?.click()
+      eval(src)?.querySelector('.npr-older [data-npr="load-older"]')?.click()
     }, ROOT_SRC)
     await new Promise(r => setTimeout(r, 1500))
   }

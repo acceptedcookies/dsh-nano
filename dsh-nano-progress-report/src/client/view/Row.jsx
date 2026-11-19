@@ -68,6 +68,7 @@ export function Row({ row, now, t, open, onToggle }) {
     'data-row-key': row.key,
     'data-type': row.type,
     'data-status': row.status,
+    'data-role': row.role,
     'data-open': open ? 'true' : undefined,
   },
   h(DisclosureRow, {

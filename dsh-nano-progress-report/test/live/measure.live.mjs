@@ -1,285 +1,225 @@
 /**
- * Visual acceptance measurements for dsh-nano-progress-report on dsh-dev.
+ * Visual measurement for the low-key Progress rebuild.
  *
  *   ego-browser nodejs < test/live/measure.live.mjs
  *
- * Emits measurements (geometry, computed tokens, per-type colour identity,
- * drawer metrics) and screenshots to /tmp/dnpr-measure-*.png. Prints a JSON
- * summary; exits non-zero when the panel is not mounted.
+ * Prints the numbers the design review compares against the Devin reference:
+ * search line height, row pitch, title colours/weights, task footer metrics,
+ * drag range and collapse height. Also writes screenshots:
+ *   /tmp/dnpr-measure-panel.png   right workbench pane
+ *   /tmp/dnpr-measure-full.png    whole window
+ *   /tmp/dnpr-measure-tasks.png   task footer close-up
  */
 
-const SPACE = process.env.DNPR_EGO_SPACE || 'dnpr-measure'
-const GUI = process.env.DNPR_GUI_URL || 'https://dsh-dev.local/'
+const GUI = 'https://dsh-dev.local/'
+const VIEW_SRC = `[...document.querySelectorAll('[data-nano-progress-report][data-variant="view"]')].find(el => el.offsetWidth > 0 && getComputedStyle(el).visibility === 'visible') ?? null`
+const PANE_SRC = `[...document.querySelectorAll('[data-nano-progress-report][data-variant="pane"]')].find(el => el.offsetWidth > 0 && getComputedStyle(el).visibility === 'visible') ?? null`
 
-/** keepMounted panes of other sessions stay hidden — select the visible root. */
-const ROOT_SRC = `[...document.querySelectorAll('[data-nano-progress-report]')]
-  .find(el => el.offsetWidth > 0 && getComputedStyle(el).visibility === 'visible') ?? null`
+const task = await taskSpace('dnpr-measure')
+const pages = await task.pages()
+const page = pages[0] || task.page('p1')
 
-/** Navigate to the dev GUI. The token redirect mints a single-use token, so a
- *  consumed/expired URL surfaces as an HTTP error status; fall back to the bare
- *  origin (which mints a fresh one) before giving up. */
-async function gotoApp(page, url) {
-  const attempts = [url, 'https://dsh-dev.local/', url]
-  let lastError = null
-  for (const target of attempts) {
+async function gotoApp() {
+  for (const target of [GUI, GUI, GUI]) {
     try {
       await page.goto(target, { timeout: 60000 })
       await page.waitForLoadState()
-      const failed = await page.evaluate(() => {
+      const bad = await page.evaluate(() => {
         const text = document.body?.innerText ?? ''
-        return text.length < 20 || /HTTP ERROR|ERR_|not found/i.test(text.slice(0, 200))
+        return text.length < 20 || /HTTP ERROR|ERR_/i.test(text.slice(0, 200))
       }).catch(() => true)
-      if (!failed) return true
-    } catch (error) { lastError = error }
-    await new Promise(resolve => setTimeout(resolve, 1500))
+      if (!bad) return true
+    } catch { /* retry */ }
+    await new Promise(r => setTimeout(r, 2500))
   }
-  if (lastError) throw lastError
   return false
 }
 
-/** Bring the Progress pane on screen: activate the tab chip when the host has
- *  one (inactive panes are unmounted, so "mounted" means "active"), otherwise
- *  reveal the right pane and use its guide card. */
-async function ensureProgressPane(page) {
-  const mountedNow = () => page.evaluate(src => eval(src) !== null, ROOT_SRC)
-  if (await mountedNow()) return true
-  const steps = [
-    async () => page.evaluate(() => {
-      const chip = [...document.querySelectorAll('[role="tab"], button')]
-        .find(e => (e.textContent ?? '').trim() === 'Progress' && e.getBoundingClientRect().y < 90)
-      if (!chip) return false
-      chip.click()
-      return true
-    }),
-    async () => page.evaluate(() => {
-      const b = [...document.querySelectorAll('button[aria-label]')]
-        .find(e => /打开右侧边栏/.test(e.getAttribute('aria-label') || ''))
-      b?.click()
-      return Boolean(b)
-    }),
-    async () => page.evaluate(() => {
-      const chip = [...document.querySelectorAll('[role="tab"], button')]
-        .find(e => (e.textContent ?? '').trim() === 'Progress' && e.getBoundingClientRect().y < 90)
-      if (!chip) return false
-      chip.click()
-      return true
-    }),
-    async () => page.evaluate(() => {
-      const el = [...document.querySelectorAll('button, [role="button"], [role="menuitem"], li')]
-        .find(e => e.textContent?.trim() === 'Progress' && e.getBoundingClientRect().x > 700)
-      if (!el) return false
-      el.click()
-      return true
-    }),
-  ]
-  for (const step of steps) {
-    const acted = await step()
-    if (acted !== false) {
-      for (let i = 0; i < 12; i += 1) {
-        if (await mountedNow()) return true
+async function ensureView() {
+  if (await page.evaluate(src => eval(src) !== null, VIEW_SRC)) return true
+  const deadline = Date.now() + 20000
+  while (Date.now() < deadline) {
+    const ok = await page.evaluate(() => {
+      const t = [...document.querySelectorAll('button[role="tab"]')]
+        .find(b => (b.textContent ?? '').trim() === 'Progress' && b.getBoundingClientRect().y < 90)
+      if (!t) return false
+      t.click(); return true
+    })
+    if (ok) {
+      for (let i = 0; i < 25; i += 1) {
+        if (await page.evaluate(src => eval(src) !== null, VIEW_SRC)) return true
         await new Promise(r => setTimeout(r, 400))
       }
     }
+    await new Promise(r => setTimeout(r, 500))
+  }
+  return false
+}
+
+async function ensurePane() {
+  if (await page.evaluate(src => eval(src) !== null, PANE_SRC)) return true
+  await page.evaluate(() => {
+    const open = [...document.querySelectorAll('button[aria-label]')]
+      .find(b => /打开右侧边栏/.test(b.getAttribute('aria-label') || ''))
+    open?.click()
+  })
+  await new Promise(r => setTimeout(r, 1200))
+  if (await page.evaluate(src => eval(src) !== null, PANE_SRC)) return true
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button[aria-label="新标签页"]')]
+      .find(e => e.getBoundingClientRect().x > 700 && e.getBoundingClientRect().width > 0)
+    b?.click()
+  })
+  await new Promise(r => setTimeout(r, 1200))
+  const card = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('button, [role="button"]')]
+      .find(e => (e.textContent ?? '').trim() === 'Progress'
+        && e.getBoundingClientRect().x > 700 && e.getBoundingClientRect().y > 100)
+    if (!el) return false
+    el.click(); return true
+  })
+  if (!card) return false
+  for (let i = 0; i < 25; i += 1) {
+    if (await page.evaluate(src => eval(src) !== null, PANE_SRC)) return true
     await new Promise(r => setTimeout(r, 400))
   }
-  return await mountedNow()
+  return false
 }
 
-async function main() {
-  const task = await taskSpace(SPACE)
-  const managed = await task.pages()
-  const page = managed[0] || task.page('p1')
+await gotoApp()
+await new Promise(r => setTimeout(r, 3500))
 
-  if (process.env.DNPR_RESET_DRAWER === '1') {
-    await gotoApp(page, GUI)
-    await page.evaluate(() => { try { window.localStorage.removeItem('dsh-nano-progress-report:drawer') } catch { /* off */ } })
-    await page.reload()
+const view = await ensureView()
+const pane = await ensurePane()
+await new Promise(r => setTimeout(r, 1200))
+
+const data = await page.evaluate(([vsrc, psrc]) => {
+  const viewRoot = eval(vsrc)
+  const paneRoot = eval(psrc)
+  const cs = e => e ? getComputedStyle(e) : null
+  const rect = e => {
+    if (!e) return null
+    const r = e.getBoundingClientRect()
+    return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }
   }
-  await gotoApp(page, GUI)
-  await new Promise(r => setTimeout(r, 2500))
-
-  const mountedSession = null
-  const mounted = await ensureProgressPane(page)
-  if (!mounted) {
-    console.log(JSON.stringify({ mounted: false }, null, 1))
-    await task.finish({ keep: [] })
-    process.exit(1)
-  }
-  // Let the view target assemble before measuring rows.
-  for (let i = 0; i < 25; i += 1) {
-    const rows = await page.evaluate(src => eval(src)?.querySelectorAll('.npr-row').length ?? 0, ROOT_SRC)
-    if (rows > 0) break
-    await new Promise(r => setTimeout(r, 600))
-  }
-
-  // Start from the unfiltered view: a persisted `status:…` from an earlier run
-  // would silently change every count below.
-  await page.evaluate(src => {
-    const root = eval(src)
-    const input = root?.querySelector('[data-npr="search"]')
-    if (!input) return
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
-    setter.call(input, '')
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  }, ROOT_SRC)
-  await new Promise(r => setTimeout(r, 400))
-
-  const m = await page.evaluate(src => {
-    const root = eval(src)
-    if (!root) return { mounted: false }
-    const cs = getComputedStyle(root)
-    const rect = root.getBoundingClientRect()
-    const rows = [...root.querySelectorAll('.npr-row')]
-    const colourOf = sel => {
-      const el = root.querySelector(sel)
-      return el ? getComputedStyle(el).color : null
-    }
-    // Per-type identity: the leading glyph colour is what separates a human
-    // prompt from a shell step. Collected for every type actually present.
-    const iconColours = {}
-    for (const icon of root.querySelectorAll('.npr-icon')) {
-      const type = icon.dataset.type
-      if (type && !(type in iconColours)) iconColours[type] = getComputedStyle(icon).color
-    }
-    const titleColours = {}
-    for (const title of root.querySelectorAll('.npr-row-title[class*="npr-t-"]')) {
-      const type = [...title.classList].find(c => c.startsWith('npr-t-'))?.slice(6)
-      if (type && !(type in titleColours)) titleColours[type] = getComputedStyle(title).color
-    }
-    const toolbar = root.querySelector('[data-npr="toolbar"]')
-    const searchInput = root.querySelector('[data-npr="search"]')
-  const search = searchInput?.closest('.npr-search') ?? searchInput
-    const status = root.querySelector('[data-npr="status"]')
-    const drawer = root.querySelector('[data-npr="drawer"]')
-    const head = drawer?.querySelector('.npr-drawer-head')
-    const body = drawer?.querySelector('[data-npr="drawer-body"]')
+  const view = viewRoot ? {
+    root: rect(viewRoot),
+    toolbar: rect(viewRoot.querySelector('[data-npr="toolbar"]')),
+    search: {
+      rect: rect(viewRoot.querySelector('.npr-search')),
+      border: cs(viewRoot.querySelector('.npr-search'))?.borderTopWidth,
+      bg: cs(viewRoot.querySelector('.npr-search'))?.backgroundColor,
+    },
+    rows: [...viewRoot.querySelectorAll('[data-npr="row"]')].length,
+    rowHeights: [...new Set([...viewRoot.querySelectorAll('[data-npr="row"]')].map(r => Math.round(r.getBoundingClientRect().height)))],
+    types: [...new Set([...viewRoot.querySelectorAll('[data-npr="row"]')].map(r => r.dataset.type))],
+    sample: [...viewRoot.querySelectorAll('[data-npr="row"]')].slice(0, 8).map(r => ({
+      type: r.dataset.type,
+      title: r.querySelector('.npr-row-title')?.textContent?.slice(0, 34),
+      color: cs(r.querySelector('.npr-row-title'))?.color,
+      weight: cs(r.querySelector('.npr-row-title'))?.fontWeight,
+      icon: cs(r.querySelector('.npr-icon'))?.color,
+      bg: cs(r).backgroundColor,
+      time: r.querySelector('[data-npr="time"]')?.textContent,
+    })),
+    expanded: (() => {
+      const d = viewRoot.querySelector('[data-npr="detail"]')
+      return d ? { ...rect(d), bg: cs(d).backgroundColor, font: cs(d).fontSize, borderLeft: cs(d).borderLeftWidth } : null
+    })(),
+  } : null
+  const pane = paneRoot ? (() => {
+    const bar = paneRoot.querySelector('[data-npr="tasks-panel"]')
+    const tasks = [...(bar?.querySelectorAll('[data-npr="task"]') ?? [])]
+    const progress = bar?.querySelector('[data-npr="progress"]')
+    const fill = progress?.querySelector('.npr-progress-fill')
     return {
-      mounted: true,
-      rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
-      rootBg: cs.backgroundColor,
-      rootColor: cs.color,
-      fontSize: cs.fontSize,
-      rowCount: rows.length,
-      rowTypes: [...new Set(rows.map(r => r.dataset.type))],
-      rowStatuses: [...new Set(rows.map(r => r.dataset.status))],
-      iconColours,
-      titleColours,
-      failedRowBg: (() => {
-        const failed = root.querySelector('.npr-row[data-status="failed"]')
-        return failed ? getComputedStyle(failed).backgroundColor : null
-      })(),
-      toolbar: toolbar ? { h: Math.round(toolbar.getBoundingClientRect().height), bg: getComputedStyle(toolbar).backgroundColor, border: getComputedStyle(toolbar).borderBottomColor } : null,
-      search: searchInput ? {
-        type: searchInput.type,
-        placeholder: searchInput.placeholder,
-        h: Math.round(search.getBoundingClientRect().height),
-        border: getComputedStyle(search).borderColor,
-        bg: getComputedStyle(search).backgroundColor,
-      } : null,
-      stats: root.querySelector('[data-npr="stats"]')?.textContent ?? null,
-      status: status ? {
-        text: status.textContent.trim(),
-        h: Math.round(status.getBoundingClientRect().height),
-        color: getComputedStyle(status).color,
-        state: status.querySelector('[data-npr="state"]')?.dataset.state ?? null,
-      } : null,
-      drawer: drawer ? {
-        h: Math.round(drawer.getBoundingClientRect().height),
-        collapsed: drawer.dataset.collapsed,
-        view: drawer.dataset.view,
-        headBg: head ? getComputedStyle(head).backgroundColor : null,
-        bodyH: body ? Math.round(body.getBoundingClientRect().height) : 0,
-        count: drawer.querySelector('[data-npr="tasks-count"]')?.textContent ?? null,
-      } : null,
-      session: root.querySelector('.npr-status')?.textContent ?? null,
-    taskItems: root.querySelectorAll('[data-npr="task"]').length,
-      stateDots: root.querySelectorAll('[data-npr="task"] svg[data-state]').length,
-      todoTexts: [...root.querySelectorAll('[data-npr="task"] .npr-task-text')].slice(0, 4).map(el => el.textContent),
-      jobsItems: root.querySelectorAll('[data-npr="job"]').length,
-      filterValue: searchInput?.value ?? '',
+      root: rect(paneRoot),
+      rows: paneRoot.querySelectorAll('[data-npr="row"]').length,
+      tasks: {
+        panel: rect(bar),
+        bg: cs(bar)?.backgroundColor,
+        borderTop: cs(bar)?.borderTopWidth,
+        head: rect(bar?.querySelector('[data-disclosure-header]')),
+        count: bar?.querySelector('[data-npr="tasks-count"]')?.textContent ?? null,
+        bar: rect(progress),
+        fill: rect(fill),
+        fillColor: cs(fill)?.backgroundColor,
+        items: tasks.map(t => ({
+          status: t.dataset.status,
+          h: Math.round(t.getBoundingClientRect().height),
+          num: t.querySelector('.npr-task-num')?.textContent,
+          text: t.querySelector('.npr-task-text')?.textContent?.slice(0, 30),
+          glyph: t.querySelector('.npr-task-glyph')?.firstElementChild?.tagName,
+        })),
+      },
     }
-  }, ROOT_SRC)
+  })() : null
+  return { view, pane }
+}, [VIEW_SRC, PANE_SRC])
 
-  // Expand a row that actually carries detail, then read the payload style.
-  await page.evaluate(src => {
-    const root = eval(src)
-    // Prefer a shell row: its payload is the long command, which is where the
-    // mono/width behaviour actually shows.
-    const rows = [...root.querySelectorAll('.npr-row[data-status]')]
-    const row = rows.find(r => r.dataset.type === 'shell' && r.querySelector('[data-disclosure-row][data-expandable]'))
-      ?? rows.find(r => r.querySelector('[data-disclosure-row][data-expandable]'))
-    row?.querySelector('[data-disclosure-row]')?.click()
-  }, ROOT_SRC)
-  await new Promise(r => setTimeout(r, 500))
-  m.expandedDetail = await page.evaluate(src => {
-    const d = eval(src)?.querySelector('[data-npr="detail"]')
-    if (!d) return null
-    const cs = getComputedStyle(d)
-    return {
-      fontFamily: cs.fontFamily.slice(0, 60),
-      fontSize: cs.fontSize,
-      bg: cs.backgroundColor,
-      lines: d.querySelectorAll('.npr-detail-line').length,
-      text: d.textContent.slice(0, 90),
-    }
-  }, ROOT_SRC)
-
-  // Drag the grip up by 80px: the drawer must grow, and clamp at the ceiling.
-  m.resize = await page.evaluate(async src => {
-    const root = eval(src)
-    if (!root) return null
-    const drawer = root.querySelector('[data-npr="drawer"]')
-    const grip = root.querySelector('[data-npr="grip"]')
-    if (!drawer || !grip) return null
-    const before = Math.round(drawer.getBoundingClientRect().height)
+// Drag the footer to measure the usable range, then put it back.
+const drag = await page.evaluate(async src => {
+  const root = eval(src)
+  const bar = root?.querySelector('[data-npr="tasks-panel"]')
+  const grip = bar?.querySelector('[data-npr="grip"]')
+  if (!bar || !grip) return null
+  const fire = (type, y) => {
     const r = grip.getBoundingClientRect()
-    const opts = { bubbles: true, cancelable: true, clientX: r.x + 20, clientY: r.y + 2, pointerId: 1 }
-    grip.dispatchEvent(new PointerEvent('pointerdown', opts))
-    window.dispatchEvent(new PointerEvent('pointermove', { ...opts, clientY: r.y - 78 }))
-    window.dispatchEvent(new PointerEvent('pointerup', opts))
-    await new Promise(res => setTimeout(res, 120))
-    const after = Math.round(drawer.getBoundingClientRect().height)
-    return { before, after, delta: after - before }
-  }, ROOT_SRC)
-
-  // Collapse round-trip: the head must survive, the body must leave the layout.
-  m.collapse = await page.evaluate(async src => {
-    const root = eval(src)
-    if (!root) return null
-    const drawer = root.querySelector('[data-npr="drawer"]')
-    const toggle = root.querySelector('[data-npr="drawer-toggle"]')
-    if (!drawer || !toggle) return null
-    const openH = Math.round(drawer.getBoundingClientRect().height)
-    const hadBody = drawer.querySelector('[data-npr="drawer-body"]') !== null
-    toggle.click()
-    await new Promise(res => setTimeout(res, 260))
-    const collapsedH = Math.round(drawer.getBoundingClientRect().height)
-    const bodyGone = drawer.querySelector('[data-npr="drawer-body"]') === null
-    toggle.click()
-    await new Promise(res => setTimeout(res, 260))
-    const reopenedH = Math.round(drawer.getBoundingClientRect().height)
-    return { openH, collapsedH, reopenedH, hadBody, bodyGone, headStillThere: drawer.querySelector('.npr-drawer-head') !== null }
-  }, ROOT_SRC)
-
-  await page.screenshot({ path: '/tmp/dnpr-measure-full.png' })
-  const clip = await page.evaluate(src => {
-    const r = eval(src)?.getBoundingClientRect()
-    return r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null
-  }, ROOT_SRC)
-  if (clip) {
-    await page.screenshot({ path: '/tmp/dnpr-measure-panel.png', clip }).catch(() => {})
-    // Drawer close-up: the panel the owner asked to be raisable.
-    const drawerClip = await page.evaluate(src => {
-      const r = eval(src)?.querySelector('[data-npr="drawer"]')?.getBoundingClientRect()
-      return r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null
-    }, ROOT_SRC)
-    if (drawerClip) await page.screenshot({ path: '/tmp/dnpr-measure-drawer.png', clip: drawerClip }).catch(() => {})
+    ;(type === 'pointerdown' ? grip : window).dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, clientX: r.x + 20, clientY: y, pointerId: 1,
+    }))
   }
+  const seat = () => new Promise(res => setTimeout(res, 180))
+  const h = () => Math.round(bar.getBoundingClientRect().height)
+  const dragBy = async dy => {
+    const y = grip.getBoundingClientRect().y + 2
+    fire('pointerdown', y); fire('pointermove', y - dy); fire('pointerup', y - dy)
+    await seat()
+    return h()
+  }
+  const floored = await dragBy(-2000)
+  const settled = await dragBy(200 - floored)
+  const raised = await dragBy(140)
+  const ceiling = Math.round(window.innerHeight * 0.6)
+  const clamped = await dragBy(2000)
+  const back = await dragBy(200 - clamped)
+  return { floored, settled, raised, clamped, ceiling, back }
+}, PANE_SRC)
 
-  m.switchedToSession = mountedSession
-  console.log(JSON.stringify(m, null, 1))
-  await task.finish({ keep: [] })
-  process.exit(m.mounted ? 0 : 1)
-}
+// Collapse/reopen snapshot.
+const collapse = await page.evaluate(async src => {
+  const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
+  if (!bar) return null
+  const openH = Math.round(bar.getBoundingClientRect().height)
+  bar.querySelector('.npr-taskbar-title')?.click()
+  await new Promise(r => setTimeout(r, 260))
+  const collapsedH = Math.round(bar.getBoundingClientRect().height)
+  const bodyGone = bar.querySelector('[data-npr="tasks-body"]') === null
+  bar.querySelector('.npr-taskbar-title')?.click()
+  await new Promise(r => setTimeout(r, 260))
+  return { openH, collapsedH, reopenedH: Math.round(bar.getBoundingClientRect().height), bodyGone }
+}, PANE_SRC)
 
-main().catch(e => { console.error('measure crashed:', e); process.exit(1) })
+// Close-ups.
+const grabs = await page.evaluate(([vsrc, psrc]) => {
+  const v = eval(vsrc)
+  if (v) {
+    const first = v.querySelector('[data-npr="row"]')
+    const target = first?.querySelector('[data-disclosure-row][data-expandable]')
+    if (target && !v.querySelector('[data-npr="detail"]')) target.click()
+    return { expanded: true }
+  }
+  return { expanded: false }
+}, [VIEW_SRC, PANE_SRC])
+await new Promise(r => setTimeout(r, 700))
+if (pane) await page.screenshot({ path: '/tmp/dnpr-measure-panel.png' })
+await page.screenshot({ path: '/tmp/dnpr-measure-full.png' })
+const clip = await page.evaluate(src => {
+  const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
+  if (!bar) return null
+  const r = bar.getBoundingClientRect()
+  return { x: Math.max(0, Math.round(r.x) - 2), y: Math.max(0, Math.round(r.y) - 12), width: Math.round(r.width) + 4, height: Math.round(r.height) + 14 }
+}, PANE_SRC)
+if (clip) await page.screenshot({ path: '/tmp/dnpr-measure-tasks.png', clip })
+
+console.log(JSON.stringify({ viewFound: view, paneFound: pane, view: data.view, pane: data.pane, drag, collapse, grabs }, null, 2))

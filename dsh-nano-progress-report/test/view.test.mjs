@@ -1,9 +1,13 @@
 /** View-layer guards.
  *
- *  These are the anti-fake-green checks for the UI rebuild: they fail when
- *  someone reintroduces a hand-drawn glyph, a raw colour literal, a hand-written
- *  status header, or swaps the host primitives back out for bespoke chrome.
- *  Everything here is a source-level fact — it cannot be satisfied by a mock. */
+ *  These are the anti-fake-green checks for the low-key Progress rebuild:
+ *  they fail when someone reintroduces a hand-drawn glyph, a raw colour
+ *  literal, a tinted band, a bold "hero" row, or swaps the host primitives
+ *  back out for bespoke chrome. Everything here is a source-level fact — it
+ *  cannot be satisfied by a mock.
+ *
+ *  The visual contract is the Devin Progress reference (a flat execution log
+ *  plus a quiet Tasks footer), rendered with host primitives only. */
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -13,6 +17,7 @@ import { formatRelative, relTime, UNIT_KEY } from '../src/client/time-format.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const read = rel => readFileSync(join(root, rel), 'utf8')
+const exists = rel => existsSync(join(root, rel))
 
 function* walk(dir) {
   for (const entry of readdirSync(dir)) {
@@ -69,12 +74,15 @@ describe('no hand-drawn UI', () => {
     assert.doesNotMatch(css, /\brgba?\s*\(/, 'rgb()/rgba() in styles.js — use a --dsw-alias-* token')
   })
 
-  it('the hand-written status header is gone', () => {
+  it('the old hand-written header, goal band and grouping chrome are gone', () => {
     const body = read('src/client/view/ProgressBody.jsx')
     const css = read('src/client/styles.js')
-    for (const banned of ['npr-head', 'npr-panel', 'npr-filter-chip']) {
+    for (const banned of ['npr-head', 'npr-panel', 'npr-filter-chip', 'npr-goal', 'npr-group', 'npr-status', 'npr-drawer']) {
       assert.ok(!body.includes(banned), `ProgressBody still renders .${banned}`)
       assert.ok(!css.includes(`.${banned}`), `styles.js still defines .${banned}`)
+    }
+    for (const gone of ['Group.jsx', 'GoalHeader.jsx', 'Drawer.jsx']) {
+      assert.ok(!exists(`src/client/view/${gone}`), `${gone} must not come back — the panel is flat`)
     }
   })
 
@@ -106,33 +114,65 @@ describe('official primitives drive the chrome', () => {
     expect('src/client/view/Row.jsx', ['DisclosureRow', 'headerAccessory', 'expandOnRowClick'])
   })
 
-  it('the timeline is host AnimatedRows and the filter is host Input', () => {
+  it('the timeline is host AnimatedRows and the search is host Input', () => {
     expect('src/client/view/ProgressBody.jsx', ['AnimatedRows', 'Input', 'rowKeys', 'resetKey'])
   })
 
-  it('turn group headers are host DisclosureRow; the header action is host Button + Tooltip', () => {
-    expect('src/client/view/Group.jsx', ['DisclosureRow', 'headerAccessory', 'expandOnRowClick'])
+  it('the task bar is a host DisclosureRow over a pointer-resizable grip', () => {
+    expect('src/client/view/TasksSection.jsx', ['DisclosureRow', "role: 'separator'", 'setPointerCapture', "'progressbar'"])
+    // No segmented control: the footer is one list, with a text switch only
+    // when the host actually reports jobs.
+    assert.ok(!read('src/client/view/TasksSection.jsx').includes('SegmentedControl'))
+  })
+
+  it('tasks use host state glyphs and never invent timestamps', () => {
+    expect('src/client/view/TasksView.jsx', ['IconCheckCircleFillRegular', 'StateDot'])
+    const view = read('src/client/view/TasksView.jsx')
+    assert.ok(!/\brelTime\b|relativeTime|completed\s+\d/.test(view), 'TodoItem carries no time — do not fake one')
+  })
+
+  it('the header action is still host Button + Tooltip', () => {
     expect('src/client/view/HeaderAction.jsx', ['Button', 'Tooltip', 'IconFlatListOutlineRegular'])
-    expect('src/client/view/GoalHeader.jsx', ['StateDot'])
+  })
+})
+
+describe('low-key visual contract', () => {
+  const css = read('src/client/styles.js')
+
+  it('the search line is a quiet 34px row, not a boxed field', () => {
+    assert.match(css, /\.npr-toolbar\s*\{[^}]*height:\s*34px/s)
+    const searchRule = /\[data-nano-progress-report\] \.npr-search\s*\{([^}]*)\}/s.exec(css)
+    assert.ok(searchRule, 'no scoped .npr-search rule')
+    assert.match(searchRule[1], /border:\s*0/)
+    assert.match(searchRule[1], /background:\s*transparent/)
   })
 
-  it('the drawer is a host SegmentedControl over a pointer-resizable grip', () => {
-    expect('src/client/view/Drawer.jsx', ['SegmentedControl', "role: 'separator'", 'setPointerCapture'])
+  it('rows carry no tinted band, no left bar and no bold weight', () => {
+    assert.doesNotMatch(css, /\.npr-row\[data-type="prompt"\]/, 'human input must not own a background')
+    assert.doesNotMatch(css, /\.npr-row\[data-status="failed"\][^{]*\{[^}]*background/s, 'failed rows must not own a background')
+    assert.doesNotMatch(css, /inset\s+2px/, 'no left status bars')
+    assert.doesNotMatch(css, /font-weight:\s*(600|700)\b/, 'no bold rows')
   })
 
-  it('tasks and jobs use host StateDot semantics', () => {
-    expect('src/client/view/TasksView.jsx', ['StateDot'])
-    expect('src/client/view/JobsView.jsx', ['StateDot'])
-    expect('src/client/icons.js', ['TODO_DOT', 'JOB_DOT'])
+  it('the leading glyph is uniform tertiary; only failure recolours it', () => {
+    const iconRule = /\.npr-icon\s*\{([^}]*)\}/s.exec(css)
+    assert.ok(iconRule, 'no .npr-icon rule')
+    assert.match(iconRule[1], /color:\s*var\(--dsw-alias-label-tertiary\)/)
+    assert.match(css, /\.npr-row\[data-status="failed"\] \.npr-icon[^{]*\{[^}]*state-error-primary/s)
+    const chip = /\.npr-icon\[data-type="prompt"\][^{]*\{([^}]*)\}/s.exec(css)
+    assert.equal(chip, null, 'prompt icon must not get a chip')
   })
 
-  it('row colours are token-driven, one rule per event kind', () => {
-    const css = read('src/client/styles.js')
-    for (const type of ['prompt', 'goal', 'message', 'shell', 'file', 'web', 'tool', 'todo', 'subagent', 'wait', 'turn', 'job', 'lifecycle']) {
-      assert.match(css, new RegExp(`\\.npr-icon\\[data-type="${type}"\\]|\\.npr-t-${type}`),
-        `no colour identity for type ${type}`)
-    }
-    // Human input must be the filled/branded one.
-    assert.match(css, /\.npr-icon\[data-type="prompt"\][\s\S]*?var\(--dsw-alias-brand-primary\)/)
+  it('text hierarchy: conversation primary, machinery secondary, boundaries tertiary', () => {
+    assert.match(css, /\.npr-t-prompt, \.npr-t-message\s*\{[^}]*label-primary/s)
+    assert.match(css, /\.npr-t-shell\s*\{[^}]*label-secondary/s)
+    assert.match(css, /\.npr-t-wait, \.npr-t-turn, \.npr-t-job\s*\{[^}]*label-tertiary/s)
+    assert.match(css, /\.npr-t-lifecycle\s*\{[^}]*label-dimmed/s)
+  })
+
+  it('the task footer is one quiet 30px header over layer-1', () => {
+    assert.match(css, /\.npr-taskbar\s*\{[^}]*background:\s*var\(--dsw-alias-bg-layer-1\)/s)
+    assert.match(css, /\.npr-taskbar-head \[data-disclosure-row\]\s*\{[^}]*min-height:\s*30px/s)
+    assert.match(css, /\.npr-task\s*\{[^}]*min-height:\s*24px/s)
   })
 })

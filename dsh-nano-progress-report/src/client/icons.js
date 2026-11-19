@@ -42,13 +42,6 @@ export const FAIL_ICON = IconWarningOutlineRegular
 /** Unknown types still get a real glyph (never the raw kind string). */
 export const FALLBACK_ICON = IconInfoOutlineRegular
 
-/** Todo status → host `StateDot` state (`done|warning|ongoing|error|idle`). */
-export const TODO_DOT = {
-  completed: 'done',
-  in_progress: 'ongoing',
-  pending: 'idle',
-}
-
 /** Job status → host `StateDot` state. */
 export const JOB_DOT = {
   running: 'ongoing',

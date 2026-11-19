@@ -22,8 +22,6 @@ function* walk(dir) {
 /** Keys the renderer builds dynamically (`t(\`state.${k}\`)`); enumerated so a
  *  renamed variant cannot silently fall back to its own key. */
 const DYNAMIC = [
-  'state.idle', 'state.running', 'state.awaiting',
-  'tasks.status.completed', 'tasks.status.in_progress', 'tasks.status.pending',
   'time.now', 'time.minutes', 'time.hours', 'time.days', 'time.months', 'time.years',
 ]
 
@@ -32,7 +30,7 @@ describe('makeI18n', () => {
     const zh = Object.keys(DICTIONARIES.zh).sort()
     const en = Object.keys(DICTIONARIES.en).sort()
     assert.deepEqual(zh, en, 'zh/en dictionaries diverge')
-    assert.ok(zh.length > 30, `copy table suspiciously small: ${zh.length}`)
+    assert.ok(zh.length > 20, `copy table suspiciously small: ${zh.length}`)
   })
 
   it('every literal t(\'…\') in src/client resolves in both locales', () => {
@@ -64,7 +62,7 @@ describe('makeI18n', () => {
   it('placeholders the renderer replaces are present in the copy', () => {
     for (const locale of ['zh', 'en']) {
       const t = makeI18n(() => locale)
-      for (const key of ['time.minutes', 'status.events', 'status.failedCount', 'toolbar.events']) {
+      for (const key of ['time.minutes', 'toolbar.matched', 'detail.truncated']) {
         assert.match(t(key), /\{n\}/, `${locale}.${key} must carry {n}`)
       }
       assert.match(t('toolbar.matched'), /\{n\}[\s\S]*\{total\}/, `${locale}.toolbar.matched needs {n} and {total}`)

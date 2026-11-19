@@ -2,7 +2,7 @@
 
 只处理这一个包。不要安装、不要修改、也不要假设旁边还有别的 nano 插件。
 周围仓库、`context/`、本机手册都不在这个包里。
-装好的标志：会话视图出现「Progress」，头部动作也可把它打开到右侧 [dsh工作台]。视图含执行事件流、过滤条和 Tasks/Jobs 抽屉。
+装好的标志：会话视图出现「Progress」，头部动作也可把它打开到右侧 [dsh工作台]。视图含扁平执行事件流、过滤条和底部 Tasks 区（可拖拽、可折叠）。
 
 ## 身份
 
@@ -68,7 +68,7 @@ dsh plugin --profile web add <spec>
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
 2. 重启并刷新后，页面里能找到本包的 client 模块（包名）。找不到说明 client 没进页面。
 3. 打开会话内的「Progress」得到 `[data-nano-progress-report]` 根节点；会话头部动作打开右侧同一会话的进度视图。右栏 guide 与 tab 菜单入口仍可用。
-4. 已运行过 tool 调用的会话在 Progress 里能看到按时间排序的事件行（提示、shell、文件、工具、todo、turn），行首 glyph 按行型上色、人类输入行有底色；底部抽屉（Tasks/Jobs）可拖拽抬升、可折叠，Tasks 与 `session.projections.faceOf('todos')` 同步。
+4. 已运行过 tool 调用的会话在 Progress 里能看到一条扁平、按时间排序的事件流（提示、shell、文件、工具、todo、turn）：行高 26px、无底色、无 600 字重；glyph 统一三级色，失败行只有红字 + 告警 glyph；人类输入 `label-primary`、机器步骤 `label-secondary`、边界行 `label-tertiary`。底部 Tasks 区头部 30px，可拖拽（下限 88px、上限 60% 视口）、点击头部折叠；Tasks 与 `session.projections.faceOf('todos')` 同步，`N/M done` 与进度条一致。
 
 ## 初次运行
 
@@ -85,9 +85,9 @@ dsh plugin --profile web add <spec>
 | `tool:bash` | 只看 bash 的 tool/call 行（wire 名精确匹配；bash 的 approval 行也归 bash）；`-tool:bash` 排除 bash |
 | `type:subagent` | subagent 调用行，加上别的 agent 发来的消息（`Agent <name> sent a message:` 开头）与后台 subagent 结束通知；结束通知记录了非 `completed` 的结束原因时算失败 |
 | 点击行 | 就地展开 detail（args 原文、result、耗时、subagent 的 PTC 子调用）；再点收起 |
-| 拖拽底部抽屉上沿 | 抬升/下移 Tasks/Jobs 面板，上限 70% 视口，下限 96px |
-| 抽屉头部的折叠按钮 | 只留标题行；再点回到原高度 |
-| 抽屉里的 Tasks / Jobs | Tasks 读 `todos` 投影（宿主在 turn 开始时清零，历史仍留在时间线的 `Task list` 行）；Jobs 读 `ctx.jobs`，无 job 时该视图禁用 |
+| 拖拽 Tasks 区上沿 | 抬升/下移，下限 88px，上限 60% 视口；高度按会话记忆 |
+| 点击 Tasks 头部 | 折叠到只剩 30px 头部；再点回到原高度 |
+| Tasks / Jobs | Tasks 读 `todos` 投影（宿主在 turn 开始时清零，历史仍留在时间线的 `Task list` 行）；Jobs 读 `ctx.jobs`，只有存在 job 时头部才出现 `Jobs N` 文本开关 |
 | 「Load older」 | 调 `session.loadOlder()`，时间线向前翻页 |
 
 ## 配置与状态
@@ -99,15 +99,17 @@ dsh plugin --profile web add <spec>
 | 键 | 内容 |
 |---|---|
 | `localStorage['dsh-nano-progress-report:filter:<sessionId>']` | 最近一次过滤条文本，按会话记忆 |
-| `localStorage['dsh-nano-progress-report:drawer']` | `{height, collapsed, view}`，抽屉高度/折叠/当前视图 |
+| `localStorage['dsh-nano-progress-report:tasks']` | `{height, collapsed, view}`，Tasks 区高度/折叠/当前列表 |
 
 ## 视觉体系
 
 宿主优先，不自造风格。三份参照：
 
-1. **宿主 primitive**：行用 `DisclosureRow`（24px 进程行、hover 换色、running shimmer），过滤框用 `Input`（`className` 落在包裹层、`data-*` 落在 `<input>`），抽屉视图切换用 `SegmentedControl`，状态标记用 `StateDot`，动态列表用 `AnimatedRows`，相对时间用 `relativeTime`，全部图标取 `Icon*` catalog。
-2. **[DNK] 的工作台密度**：38px 工具条（下边框 `border-l3`）→ 内容 → 26px 状态行（上边框 `border-l3`）→ 顶边可拖拽抽屉（抓手 7px、`cursor: row-resize`、头部 `bg-layer-1`）。
-3. **devin Progress 的行语义**：人类输入是唯一带底色的行（`brand-primary` 8% + 实心 glyph chip + 600 字重），机器步骤用次级色，边界行（turn/job/lifecycle）用三级/最暗色；长文本省略号截断；失败行 `state-error` 10% 底色 + 2px 内阴影 + 尾随告警 glyph。
+1. **宿主 primitive**：行用 `DisclosureRow`（26px 行、hover 换色、running shimmer、折叠 chevron），搜索用 `Input`（34px 工具条里 22px 无边框字段），清空/加载更早/Jobs 切换用 `Button`（ghost），Tasks 状态用 `StateDot` + catalog 的 `IconCheckCircleFillRegular` / `IconCheckCircleOutlineRegular`，动态列表用 `AnimatedRows`，相对时间用 `relativeTime`，全部图标取 `Icon*` catalog。
+2. **devin Progress 的阅读顺序**：一条扁平列表——搜索行 → 事件行 → Tasks 区。没有 goal banner、没有回合分组头、没有状态带、没有抽屉分段控件；默认视图只保留这些层。
+3. **安静的文字层级**：12px 常规字重，人类输入/agent 文本 `label-primary`，机器步骤 `label-secondary`，边界（turn/job/wait）`label-tertiary`，lifecycle `label-dimmed`；失败行只把标题和 glyph 换成 `state-error`，不加底色、不加左条。shell 命令与展开的 payload 用 `--dsh-font-family-code`，detail 11px、左侧 0.5px 引线，无卡片底色。
+
+Tasks 区是 devin 的 footer：`bg-layer-1` + 上边框，30px 头部（`DisclosureRow`：checklist 图标 + `Tasks` + 右侧 56×3px 进度条 + `N/M done`），任务行 24px（完成绿勾 / 进行中宿主 spinner / 待办空心圈 + `#n` + 12px 文本）。`TodoItem` 只有 `content` + `status`，不伪造完成时间。进度条是唯一本地 primitive，已在 [DESIGN §10](../../docs/specs/dsh-nano-ui/DESIGN.md) 登记 `nano-ui-exempt`。
 
 颜色只用 `--dsw-alias-*`，间距/层级用 `--nano-space-*`/`NANO_LAYER`（本包只用到 z-index 1）。禁止十六进制色值、`rgb()` 字面量和 unicode 图标；`.npr-row-content > span` 只做截断（宿主 `TextShimmer` 把字串放在两层 span 里），不改宿主结构。
 
@@ -141,6 +143,8 @@ npm run build
 - 不要在工作流之外批量切换其它会话的 tab；本包只投影当前会话。
 - 不要把 `cordis.patch.yml` 的 `name` 改成绝对路径再分发。
 - 不要自己写状态/标题栏、图标或色值：标题归层主 tab，颜色归 token，图标归 catalog。
+- 不要给行加底色、左侧状态条、600 字重或 icon chip；不要恢复 goal banner、回合分组头、状态带或 `SegmentedControl`——低干扰是验收项。
+- 不要给 Tasks 伪造完成时间或 id：`TodoItem` 只有 `content` + `status`。
 - 不要手写协议：会话事件、`todos` 投影、`jobs` 状态、相对时间都走宿主接缝；非零退出码按宿主语义不算 tool 失败，展开的 payload 里保留原始输出。
 - 不要在 ProgressBody 里嫁接宿主 DOM（`[class*=]`、`:has()`、hash-class 发现）；只用自己的 `npr-` 前缀类和 `--dsw-alias-*` token。
 - 不要把 `context/` 或本机手册当成安装步骤。它们不在这个包里。

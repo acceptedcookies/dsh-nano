@@ -8,29 +8,6 @@ const ZH = {
   'menu.openProgress': '打开 Progress',
   'action.openProgress': '在右侧栏打开 Progress',
 
-  'group.untitled': '继续执行',
-  'goal.section': '目标',
-  'goal.rounds': '第 {n}/{max} 轮',
-  'goal.phase.active': '进行中',
-  'goal.phase.paused': '已暂停',
-  'goal.phase.blocked': '受阻',
-  'goal.phase.complete': '已完成',
-
-  'count.shell': '{n} 命令',
-  'count.file': '{n} 文件',
-  'count.web': '{n} 网页',
-  'count.tool': '{n} 工具',
-  'count.subagent': '{n} 协作',
-  'count.todo': '{n} 任务',
-  'count.wait': '{n} 等待',
-  'count.job': '{n} 后台',
-  'count.goal': '{n} 目标',
-  'count.lifecycle': '{n} 事件',
-
-  'dur.s': '{n} 秒',
-  'dur.m': '{n} 分钟',
-  'dur.h': '{n} 小时',
-
   'filter.placeholder': '搜索或过滤 (type:shell, -status:failed)…',
   'filter.clear': '清除过滤',
 
@@ -55,32 +32,15 @@ const ZH = {
   'detail.truncated': '结果已截断（共 {n} 字符，完整输出在会话记录中）',
   'detail.job': '后台',
 
-  'status.events': '{n} 个事件',
-  'status.failedCount': '{n} 个失败',
   'status.failed': '失败',
-
-  'toolbar.events': '{n} 个事件',
   'toolbar.matched': '{n}/{total}',
 
-  'state.idle': '等待指令',
-  'state.running': '运行中',
-  'state.awaiting': '等待确认',
-
-  'drawer.views': '面板视图',
   'drawer.tasks': 'Tasks',
   'drawer.jobs': 'Jobs',
   'drawer.resize': '调整面板高度',
-  'drawer.expand': '展开面板',
-  'drawer.collapse': '收起面板',
 
-  'tasks.title': 'Tasks',
-  'tasks.empty': '暂无任务',
   'tasks.done': 'done',
-  'tasks.status.completed': '已完成',
-  'tasks.status.in_progress': '进行中',
-  'tasks.status.pending': '待办',
-
-  'jobs.title': 'Jobs',
+  'tasks.empty': '暂无任务',
   'jobs.empty': '暂无后台任务',
 
   'session.unavailable': '会话不可用',
@@ -91,29 +51,6 @@ const EN = {
   'view.progressDesc': 'Execution timeline and task tracking',
   'menu.openProgress': 'Open Progress',
   'action.openProgress': 'Open Progress in the sidebar',
-
-  'group.untitled': 'Continued',
-  'goal.section': 'Goal',
-  'goal.rounds': 'Round {n}/{max}',
-  'goal.phase.active': 'Active',
-  'goal.phase.paused': 'Paused',
-  'goal.phase.blocked': 'Blocked',
-  'goal.phase.complete': 'Complete',
-
-  'count.shell': '{n} shell',
-  'count.file': '{n} file',
-  'count.web': '{n} web',
-  'count.tool': '{n} tool',
-  'count.subagent': '{n} agent',
-  'count.todo': '{n} task',
-  'count.wait': '{n} wait',
-  'count.job': '{n} job',
-  'count.goal': '{n} goal',
-  'count.lifecycle': '{n} event',
-
-  'dur.s': '{n}s',
-  'dur.m': '{n}m',
-  'dur.h': '{n}h',
 
   'filter.placeholder': 'Search or filter (type:shell, -status:failed)…',
   'filter.clear': 'Clear filter',
@@ -139,32 +76,15 @@ const EN = {
   'detail.truncated': 'result truncated ({n} chars; the full output is in the session log)',
   'detail.job': 'background',
 
-  'status.events': '{n} events',
-  'status.failedCount': '{n} failed',
   'status.failed': 'Failed',
-
-  'toolbar.events': '{n} events',
   'toolbar.matched': '{n}/{total}',
 
-  'state.idle': 'Awaiting instructions',
-  'state.running': 'Running',
-  'state.awaiting': 'Awaiting approval',
-
-  'drawer.views': 'Panel view',
   'drawer.tasks': 'Tasks',
   'drawer.jobs': 'Jobs',
   'drawer.resize': 'Resize panel',
-  'drawer.expand': 'Expand panel',
-  'drawer.collapse': 'Collapse panel',
 
-  'tasks.title': 'Tasks',
-  'tasks.empty': 'No tasks',
   'tasks.done': 'done',
-  'tasks.status.completed': 'Completed',
-  'tasks.status.in_progress': 'In progress',
-  'tasks.status.pending': 'Pending',
-
-  'jobs.title': 'Jobs',
+  'tasks.empty': 'No tasks',
   'jobs.empty': 'No background jobs',
 
   'session.unavailable': 'Session unavailable',

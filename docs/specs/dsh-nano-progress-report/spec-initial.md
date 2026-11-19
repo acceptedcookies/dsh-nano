@@ -182,32 +182,34 @@ export const inject = [
 
 ## 4. 视图层设计（ProgressBody 解剖）
 
-三份参照：**宿主 primitive catalog**（结构与控件）、**[DNK] 的工作台密度**（工具条/状态行/抽屉）、**devin Progress 的行语义**（谁是人类输入）。插件自绘的只剩布局胶水。
+三份参照：**宿主 primitive catalog**（结构与控件）、**devin Progress 的阅读顺序**（扁平列表 + 底部 Tasks）、**nano-ui 设计原则**（令牌、层级、宿主优先）。插件自绘的只剩布局胶水与一条 meter（已登记 DESIGN §10）。
+
+目标是低干扰：默认面只保留搜索行、事件行、Tasks 区三层；没有 goal banner、回合分组头、状态带或抽屉分段控件。
 
 ```
-[dsh工作台] tab（标题由宿主 tab 条渲染；插件不再自绘 head）
+[dsh工作台] tab（标题由宿主 tab 条渲染；插件不自绘 head）
 └─ [data-nano-progress-report][data-npr=root]        bg-base，flex column（根无自有类）
-   ├─ .npr-toolbar  38px，border-bottom l3
-   │   ├─ host Input[type=search]  .npr-search（包裹层：border l2 / radius-sm / bg-layer-1；focus→business）
-   │   ├─ 清除 Button（ghost sm，仅有过滤文本时）
+   ├─ .npr-toolbar  34px，border-bottom l3
+   │   ├─ IconSearchOutlineRegular 14px（label-tertiary）
+   │   ├─ host Input[type=search]  .npr-search（22px，无边框、透明底；focus 仅 1px business 下划线）
+   │   ├─ 清除 Button（ghost，仅有过滤文本时）
    │   └─ .npr-stats（仅有过滤文本时：`n/total`）
    ├─ .npr-flow  flex:1，滚动
-   │   ├─ .npr-older（hasMore：host Button outline sm「Load older」）
+   │   ├─ .npr-older（hasMore：host Button ghost sm「Load older」，11px tertiary）
    │   └─ host AnimatedRows(.npr-rows) → .npr-row*（data-row-key）
-   │        └─ host DisclosureRow（leading glyph / title / headerAccessory=相对时间 + 失败告警）
-   │             └─ 展开：.npr-detail（mono，args/result/error/reasoning/耗时/子调用）
-   ├─ .npr-status  26px，border-top l3，label-tertiary：`n 个事件` · `m 个失败` …… 会话状态
-   └─ .npr-drawer  顶边可拖拽；head = bg-layer-1
-        ├─ .npr-grip  7px，role=separator，cursor row-resize，96px … 70%vh
-        ├─ .npr-drawer-head：host SegmentedControl[Tasks | Jobs(无 job 时禁用)] + 计数 + 折叠 Button
-        └─ .npr-drawer-body：TasksView（StateDot + 13px 文本 + 状态字）/ JobsView
+   │        └─ host DisclosureRow（leading glyph / title / headerAccessory=11px 相对时间 + 失败告警）
+   │             └─ 展开：.npr-detail（11px mono，左 0.5px 引线；args/result/error/reasoning/耗时/子调用）
+   └─ .npr-taskbar  顶边可拖拽；bg-layer-1 + 上边框
+        ├─ .npr-grip  6px，role=separator，cursor row-resize，88px … 60%vh
+        ├─ host DisclosureRow 头部 30px：checklist 图标 + `Tasks` + 右侧 56×3px meter + `N/M done` + `Jobs N` 文本开关（仅有 job）
+        └─ .npr-taskbar-body：TasksView（24px 行：绿勾/spinner/空心圈 + `#n` + 12px 文本）/ JobsView
 ```
 
 ### 4.1 行型 → 视觉语义
 
 | 行型 | glyph（宿主 catalog） | 标题色 | 备注 |
 |---|---|---|---|
-| `prompt` | `IconUserOutlineRegular`（唯一实心 chip：brand 22% + 0.5px 描边） | `label-primary`，600 | 人类输入是**唯一带底色**的行（brand 8%） |
+| `prompt` | `IconUserOutlineRegular` | `label-primary`，400 | 人类输入只靠字色，不带底色/chip/加粗 |
 | `message` | `IconSparkleRegular` | `label-primary` | agent 文本（reasoning 已并入） |
 | `shell` | `IconCodeOutlineRegular` | `label-secondary` + `--dsh-font-family-code(-default)` | 命令按代码字体渲染 |
 | `file` | `IconDeliverDocRegular` | `label-secondary` | |
@@ -215,22 +217,23 @@ export const inject = [
 | `tool` | `IconSlidersTwoOutlineRegular` | `label-secondary` | |
 | `todo` | `IconChecklistOutlineRegular` | `label-secondary` | |
 | `subagent` | `IconUsersOutlineRegular` | `label-secondary` | |
-| `wait` | `IconClockOutlineRegular` | `state-warn-primary` | 审批 / inbox |
+| `goal` | `IconGoalOutlineRegular` | `label-secondary` | goal 轮事件行 |
+| `wait` | `IconClockOutlineRegular` | `label-tertiary` | 审批 / inbox |
 | `turn` | `IconPlayOutlineRegular` | `label-tertiary` | |
 | `job` | `IconQueueOutlineRegular` | `label-tertiary` | |
 | `lifecycle` | `IconInfoOutlineRegular` | `label-dimmed` | 边界事件 |
 
-- 失败行：`state-error` 10% 底色 + `inset 2px 0` 左条 + 标题红 + 尾随告警 glyph；`running` 用 `business` 左条 + `DisclosureRow` 的 running shimmer；`awaiting` 用 `warn` 左条。
+- 所有 glyph 默认 `label-tertiary`；只有失败行把 glyph 和标题换成 `state-error`。行没有底色、没有左侧状态条、没有 600 字重——这是「低干扰」的验收线。
 - 长文本：`.npr-row-content > span` 上做单行省略号（宿主 `TextShimmer` 把字串放在两层 span 内，`title` 本身不会收缩）。
-- 动效：行入场 `npr-row-in`、抽屉 body `npr-body-in`、`AnimatedRows` 的新增/位移、任务行 hover 换色；`prefers-reduced-motion` 下全关。
+- 动效：只用宿主 `AnimatedRows` 的新增/位移与 `DisclosureRow` 的 running shimmer；本地只保留 meter 的 `width` 过渡，`prefers-reduced-motion` 下关闭。
 
-### 4.2 抽屉行为
+### 4.2 Tasks 区行为
 
-- 高度 `96px … round(innerHeight × 0.7)`，`box-sizing: border-box`（含上边框），拖拽走 pointer capture；双击不改状态。
-- 折叠只留 head（body 从 DOM 移除），再展开回到折叠前高度。
-- 状态 `{height, collapsed, view}` 落 `localStorage['dsh-nano-progress-report:drawer']`——纯视图态，不进宿主。
-- **Tasks**：读 `session.projections.faceOf('todos')`（`TodoItem[] | null`）。宿主 `TodoPanel` 未从包入口导出，故按其度量自绘：13px 文本、gap 8、`StateDot`、逐项状态字、头部 `done/total`。投影在 `turn/start` 被宿主清零——历史仍留在时间线的 `Task list` 行，这是宿主语义，不是丢数据。
-- **Jobs**：读 `ctx.jobs`（先 `watchRows`）；无 job 时该视图选项 `disabled`，不留一个永远空的面板。
+- 高度 `88px … round(innerHeight × 0.6)`，`box-sizing: border-box`（含上边框），拖拽走 pointer capture。
+- 点击头部（host `DisclosureRow`）折叠到 30px 头，body 从 DOM 移除；再点回到折叠前高度。
+- 状态 `{height, collapsed, view}` 落 `localStorage['dsh-nano-progress-report:tasks']`——纯视图态，不进宿主。
+- **Tasks**：读 `session.projections.faceOf('todos')`（`TodoItem[] | null`）。行 = 状态 glyph（完成 `IconCheckCircleFillRegular` 绿、进行中 `StateDot` spinner、待办 `IconCheckCircleOutlineRegular` 三级色）+ `#n` + 12px 文本；头部 `N/M done` + 3px meter。`TodoItem` 只有 `content`/`status`，**不伪造完成时间或 id**。投影在 `turn/start` 被宿主清零——历史仍留在时间线的 `Task list` 行，这是宿主语义，不是丢数据。
+- **Jobs**：读 `ctx.jobs`（先 `watchRows`）；只有存在 job 时头部才出现 11px 文本开关，无 job 时不渲染该开关。
 
 ### 4.3 过滤
 
@@ -318,9 +321,9 @@ node test/live/tab.live.mjs
 
 - 探 `https://dsh-dev.local/` → `302` → 剥 `?token=`（任一前置不满足 exit 0 skip）；
 - `findEgo()` 定位 ego-browser → `spawnSync(ego,['nodejs'],{input:script})` → `taskSpace('dnpr-progress')` → `page('p1')`；
-- `page.evaluate` 断言：`document.querySelector('[data-nano-progress-report]')` 存在且只有一个可见 pane；`[data-npr="search"]` 是 `input[type=search]`；`[data-npr="drawer"]` 的 drag/collapse 生效；
-- 用真实会话事件断言：`.npr-row` 出现、按 `data-type` 取到的 glyph 颜色互不相同、`prompt` 行底色不同于 `shell` 行、失败行有 `[data-npr="fail"]`；
-- `getBoundingClientRect`/`computedStyle` 断言 toolbar=38px、status=26/27px、抽屉高度随拖拽变化且 clamp 在 `96 … 0.7vh`；
+- `page.evaluate` 断言：会话视图与右栏各有一个可见根；`[data-npr="search"]` 是 `input[type=search]`，包裹层 22px、无边框、透明底；`[data-npr="tasks-panel"]` 的 drag/collapse 生效；
+- 用真实会话事件断言：`.npr-row` 全部 26px、背景透明、标题 400 字重；glyph 统一三级色（失败行除外）；`prompt` 标题色 ≠ `shell` 标题色且无底色；失败行 `[data-npr="fail"]` 且无红底/内阴影；
+- `getBoundingClientRect`/`computedStyle` 断言 toolbar=34px、Tasks 头部=30px、meter 宽度比 = done/total、Tasks 高度随拖拽变化且 clamp 在 `88 … 0.6vh`；
 - `page.screenshot('/tmp/dnpr-progress-*.png')` 留证；测完还原（关闭 tab、清 localStorage）。
 
 ### 7.3 Spike 取证（宪章 `test/spike/progress-report-tab/`）

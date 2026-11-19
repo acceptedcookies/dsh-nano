@@ -110,6 +110,12 @@ describe('official primitives drive the chrome', () => {
     expect('src/client/view/ProgressBody.jsx', ['AnimatedRows', 'Input', 'rowKeys', 'resetKey'])
   })
 
+  it('turn group headers are host DisclosureRow; the header action is host Button + Tooltip', () => {
+    expect('src/client/view/Group.jsx', ['DisclosureRow', 'headerAccessory', 'expandOnRowClick'])
+    expect('src/client/view/HeaderAction.jsx', ['Button', 'Tooltip', 'IconFlatListOutlineRegular'])
+    expect('src/client/view/GoalHeader.jsx', ['StateDot'])
+  })
+
   it('the drawer is a host SegmentedControl over a pointer-resizable grip', () => {
     expect('src/client/view/Drawer.jsx', ['SegmentedControl', "role: 'separator'", 'setPointerCapture'])
   })
@@ -122,7 +128,7 @@ describe('official primitives drive the chrome', () => {
 
   it('row colours are token-driven, one rule per event kind', () => {
     const css = read('src/client/styles.js')
-    for (const type of ['prompt', 'message', 'shell', 'file', 'web', 'tool', 'todo', 'subagent', 'wait', 'turn', 'job', 'lifecycle']) {
+    for (const type of ['prompt', 'goal', 'message', 'shell', 'file', 'web', 'tool', 'todo', 'subagent', 'wait', 'turn', 'job', 'lifecycle']) {
       assert.match(css, new RegExp(`\\.npr-icon\\[data-type="${type}"\\]|\\.npr-t-${type}`),
         `no colour identity for type ${type}`)
     }

@@ -53,10 +53,30 @@ describe('ProgressBuilder', () => {
     assert.equal(s1.revision, 1)
     assert.equal(s2.revision, 2)
   })
-  it('snapshot carries exactly {rows,timeline,counts,revision}', () => {
+  it('snapshot carries exactly {rows,groups,timeline,counts,revision}', () => {
     const b = new ProgressBuilder()
     const snap = b.replace({ nodes: [], timeline: {} })
-    assert.deepEqual(Object.keys(snap).sort(), ['counts', 'revision', 'rows', 'timeline'])
+    assert.deepEqual(Object.keys(snap).sort(), ['counts', 'groups', 'revision', 'rows', 'timeline'])
+    assert.deepEqual(Object.keys(b.empty).sort(), ['counts', 'groups', 'revision', 'rows', 'timeline'])
+  })
+  it('groups the turn under its prompt and folds the background job into its shell row', () => {
+    const b = new ProgressBuilder()
+    const snap = b.replace({
+      nodes: [
+        node('p', { row: 'prompt', seq: 1, time: 1001, text: 'go' }),
+        node('t', toolData(2, 'bash', 'ok', { callId: 'cb', turn: 1, step: 0 })),
+        { key: 'j', kind: 'progress-job', id: 'j', target: 'progress', data: { row: 'job', seq: 3, time: 1003, jobId: 'j', label: 'npm test', status: 'running', callId: 'cb' } },
+        node('e', { row: 'turn', seq: 4, time: 1004, turn: 1, reason: 'completed' }),
+      ],
+      timeline: {},
+    })
+    assert.equal(snap.rows.some(r => r.type === 'job'), false)
+    const shell = snap.rows.find(r => r.key === 't')
+    assert.equal(shell.status, 'running')
+    assert.equal(snap.groups.length, 1)
+    assert.equal(snap.groups[0].opener.key, 'p')
+    assert.equal(snap.groups[0].end.key, 'e')
+    assert.deepEqual(snap.groups[0].byType, { shell: 1 })
   })
   it('apply tolerates null upserts and last-write-wins on same key', () => {
     const b = new ProgressBuilder()

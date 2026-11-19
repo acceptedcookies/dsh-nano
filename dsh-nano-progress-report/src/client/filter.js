@@ -68,13 +68,18 @@ export function isEmptyFilter(f) {
     && f.statuses.size === 0 && f.notStatuses.size === 0 && f.tool === null && f.notTool === null
 }
 
-/** Haystack text for free-text matching: summary + detail text + tool name. */
+/** Leading slice of a tool result that free text searches. Whole results made
+ *  each keystroke scan megabytes on long sessions. */
+export const RESULT_HAYSTACK_MAX = 512
+
+/** Haystack text for free-text matching: summary + detail text + tool name +
+ *  the head of the tool result. */
 export function rowHaystack(row) {
   const parts = [row.summary, row.tool]
   const detail = row.detail
   if (detail !== undefined) {
     if (typeof detail.text === 'string') parts.push(detail.text)
-    if (typeof detail.resultText === 'string') parts.push(detail.resultText)
+    if (typeof detail.resultText === 'string') parts.push(detail.resultText.slice(0, RESULT_HAYSTACK_MAX))
     if (typeof detail.error === 'string') parts.push(detail.error)
     if (typeof detail.argsRaw === 'string') parts.push(detail.argsRaw)
   }

@@ -1,5 +1,11 @@
-/** ProgressBody — the 'progress' workbench tab body.
- *  Props arrive from the seat + this plugin's inject: { sessionId, ctx, t }.
+/** ProgressBody — the Progress surface, mounted twice:
+ *  - `variant: 'pane'` — the 'progress' workbench tab in the right sidebar;
+ *  - `variant: 'view'` — the 'nano-progress' conversation view tab, which
+ *    scrolls inside the host conversation body (sticky toolbar, no drawer).
+ *  Props arrive from the seat + this plugin's inject: { sessionId, ctx, t, variant }.
+ *
+ *  Unfiltered, the timeline is grouped by turn (goal → round → turn); a filter
+ *  switches to the flat matching rows.
  *
  *  Composition follows the two references the owner named:
  *  - DNK devtools: 38px toolbar (host `Input`, border-bottom l3) → content →
@@ -12,7 +18,10 @@ import React from 'react'
 import { AnimatedRows, Button, IconCloseOutlineRegular, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import { applyFilter, isEmptyFilter, parseFilter } from '../filter.js'
 import { perf } from '../perf.js'
+import { defaultOpen } from '../group-format.js'
 import { Drawer } from './Drawer.jsx'
+import { GoalHeader } from './GoalHeader.jsx'
+import { GoalSection, Group } from './Group.jsx'
 import { JobsView } from './JobsView.jsx'
 import { Row } from './Row.jsx'
 import { TasksView } from './TasksView.jsx'
@@ -55,6 +64,7 @@ function useExternal(source, deps) {
 
 export default function ProgressBody(props) {
   const { sessionId, ctx, t } = props
+  const variant = props.variant === 'view' ? 'view' : 'pane'
   const storageKey = `dsh-nano-progress-report:filter:${sessionId ?? 'all'}`
   const [query, setQuery] = useState(() => {
     try { return window.localStorage.getItem(storageKey) ?? '' } catch { return '' }
@@ -67,6 +77,7 @@ export default function ProgressBody(props) {
   const [now, setNow] = useState(() => Date.now())
   const [bindingError, setBindingError] = useState(false)
   const [openKey, setOpenKey] = useState(null)
+  const [groupOverride, setGroupOverride] = useState(() => new Map())
   const [ready, setReady] = useState(false)
   const [drawer, setDrawer] = useState(readDrawer)
 
@@ -87,6 +98,11 @@ export default function ProgressBody(props) {
   }, [sessionFace])
   const todos = useExternal(todosSource, [todosSource])
 
+  const goalSource = useMemo(() => {
+    try { return sessionFace?.projections?.faceOf?.('goal') ?? null } catch { return null }
+  }, [sessionFace])
+  const goal = useExternal(goalSource, [goalSource])
+
   const jobsSource = useMemo(() => ctx.jobs?.state ?? null, [ctx])
   const jobsSnap = useExternal(jobsSource, [jobsSource])
   useEffect(() => {
@@ -106,6 +122,8 @@ export default function ProgressBody(props) {
 
   const filter = useMemo(() => parseFilter(query), [query])
   const rows = progress?.rows ?? []
+  const groups = progress?.groups ?? []
+  const grouped = isEmptyFilter(filter)
   const filtered = useMemo(
     () => (isEmptyFilter(filter) ? rows : applyFilter(rows, filter)),
     [rows, filter],
@@ -125,8 +143,50 @@ export default function ProgressBody(props) {
   const setDrawerField = (patch) => setDrawer(current => ({ ...current, ...patch }))
 
   if (bindingError) {
-    return h('div', { className: 'npr-empty', 'data-nano-progress-report': '1', 'data-npr': 'root' },
+    return h('div', { className: 'npr-empty', 'data-nano-progress-report': '1', 'data-npr': 'root', 'data-variant': variant },
       t('session.unavailable'))
+  }
+
+  const toggleRow = (key) => {
+    if (openKey !== key) perf.count('row-expand')
+    setOpenKey(current => (current === key ? null : key))
+  }
+  const goalObjective = goal?.goal?.objective
+  const goalId = goal?.goal?.id
+  const renderGroups = () => {
+    const out = []
+    let lastGoal = null
+    groups.forEach((group, index) => {
+      const last = index === groups.length - 1
+      if (group.goalId !== null && group.goalId !== lastGoal) {
+        out.push(h(GoalSection, {
+          key: `goal:${group.key}`,
+          objective: group.goalId === goalId ? goalObjective : undefined,
+          t,
+        }))
+      }
+      if (group.opener !== null || group.goalId !== null) lastGoal = group.goalId
+      const open = groupOverride.get(group.key) ?? defaultOpen(group, last)
+      out.push(h(Group, {
+        key: group.key,
+        group,
+        open,
+        running: last && running && group.status === 'open',
+        now,
+        t,
+        openKey,
+        onRowToggle: toggleRow,
+        onToggle: () => {
+          perf.count('group-toggle')
+          setGroupOverride((current) => {
+            const next = new Map(current)
+            next.set(group.key, !open)
+            return next
+          })
+        },
+      }))
+    })
+    return out
   }
 
   const stateKey = awaiting ? 'awaiting' : running ? 'running' : 'idle'
@@ -139,7 +199,7 @@ export default function ProgressBody(props) {
     { value: 'jobs', label: t('drawer.jobs'), disabled: jobs.length === 0 },
   ]
 
-  return h('div', { 'data-nano-progress-report': '1', 'data-npr': 'root' },
+  return h('div', { 'data-nano-progress-report': '1', 'data-npr': 'root', 'data-variant': variant },
     h('div', { className: 'npr-toolbar', 'data-npr': 'toolbar' },
       h(Input, {
         className: 'npr-search',
@@ -158,11 +218,16 @@ export default function ProgressBody(props) {
           onClick: () => onQuery(''),
         })
         : null,
-      // Only while filtering: the status line already carries the plain
-      // count, so an unfiltered toolbar stays as quiet as DNK's.
+      // While filtering: the match count. Unfiltered, the pane's status line
+      // carries the plain count; the view (no drawer) shows the task tally.
       query === ''
-        ? null
+        ? (variant === 'view' && todoItems.length > 0
+          ? h('span', { className: 'npr-stats', 'data-npr': 'tasks-count' },
+            `${t('drawer.tasks')} ${String(todoDone)}/${String(todoItems.length)}`)
+          : null)
         : h('span', { className: 'npr-stats', 'data-npr': 'stats' }, stats)),
+
+    h(GoalHeader, { goal, t }),
 
     h('div', { className: 'npr-flow', 'data-npr': 'flow' },
       hasMore
@@ -179,7 +244,10 @@ export default function ProgressBody(props) {
       filtered.length === 0
         ? h('div', { className: 'npr-empty', 'data-npr': 'empty' },
           isEmptyFilter(filter) ? t('flow.empty') : t('flow.emptyFiltered'))
-        : h(AnimatedRows, {
+        : grouped
+          ? h('div', { className: 'npr-groups', role: 'list', 'aria-label': t('flow.list'), 'data-npr': 'groups' },
+            renderGroups())
+          : h(AnimatedRows, {
           className: 'npr-rows',
           role: 'list',
           label: t('flow.list'),
@@ -192,13 +260,10 @@ export default function ProgressBody(props) {
           now,
           t,
           open: openKey === row.key,
-          onToggle: () => {
-            if (openKey !== row.key) perf.count('row-expand')
-            setOpenKey(current => (current === row.key ? null : row.key))
-          },
+          onToggle: () => toggleRow(row.key),
         }))))),
 
-    h('div', { className: 'npr-status', 'data-npr': 'status' },
+    variant === 'view' ? null : h('div', { className: 'npr-status', 'data-npr': 'status' },
       h('span', { className: 'npr-status-item', 'data-npr': 'status-count' },
         t('status.events').replace('{n}', String(rows.length))),
       failed > 0
@@ -209,7 +274,7 @@ export default function ProgressBody(props) {
       h('span', { className: 'npr-status-item', 'data-npr': 'state', 'data-state': stateKey },
         t(`state.${stateKey}`))),
 
-    h(Drawer, {
+    variant === 'view' ? null : h(Drawer, {
       t,
       view,
       onView: next => setDrawerField({ view: next }),

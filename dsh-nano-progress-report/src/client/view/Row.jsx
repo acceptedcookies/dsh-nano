@@ -31,6 +31,11 @@ function DetailBody({ row, t }) {
   if (d.resultText) parts.push(h('div', { key: 'r', className: 'npr-detail-line', 'data-field': 'result' },
     h('span', { className: 'npr-detail-label' }, t(LABEL.result)),
     h('span', { className: 'npr-detail-value' }, String(d.resultText))))
+  if (d.resultTruncated === true) parts.push(h('div', { key: 'rt', className: 'npr-detail-line', 'data-field': 'truncated' },
+    h('span', { className: 'npr-detail-label' }, t('detail.truncated').replace('{n}', String(d.resultLength)))))
+  if (row.job !== undefined) parts.push(h('div', { key: 'j', className: 'npr-detail-line', 'data-field': 'job' },
+    h('span', { className: 'npr-detail-label' }, t('detail.job')),
+    h('span', { className: 'npr-detail-value' }, String(row.job.label ?? row.job.status))))
   if (d.reasoning) parts.push(h('div', { key: 'q', className: 'npr-detail-line', 'data-field': 'reasoning' },
     h('span', { className: 'npr-detail-label' }, t(LABEL.reasoning)),
     h('span', { className: 'npr-detail-value' }, String(d.reasoning))))

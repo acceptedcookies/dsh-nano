@@ -2,18 +2,28 @@
 import { TARGET } from '../constants.js'
 import { blocksText } from '../args.js'
 
-/** `user/message` whose source is a human → 'prompt' row. Other sources are
- *  injected context; inter-agent sources get their own rows below. */
+/** `user/message` whose source is a human → 'prompt' row; a goal continuation
+ *  (`source: {kind:'goal', goalId, revision, round}`) → 'goal' row. Both open a
+ *  turn group. Other sources are injected context; inter-agent sources get
+ *  their own rows below. */
 export const progressPromptDefinition = {
   kind: 'progress-prompt',
   target: TARGET,
   match(event) {
     if (event.type !== 'user/message') return null
-    return event.data?.source?.kind === 'user' ? { id: String(event.seq), role: 'start' } : null
+    const kind = event.data?.source?.kind
+    return kind === 'user' || kind === 'goal' ? { id: String(event.seq), role: 'start' } : null
   },
   start(context, match) {
     const data = match.event.data
-    return { seq: match.event.seq, time: match.event.time, text: blocksText(data.content ?? data.message?.content ?? data.text) }
+    const source = data.source ?? {}
+    return {
+      seq: match.event.seq, time: match.event.time,
+      text: blocksText(data.content ?? data.message?.content ?? data.text),
+      goal: source.kind === 'goal'
+        ? { goalId: String(source.goalId ?? ''), round: Number.isSafeInteger(source.round) ? source.round : undefined }
+        : undefined,
+    }
   },
   update: context => context.state,
   buildViewNode(context) {
@@ -21,7 +31,12 @@ export const progressPromptDefinition = {
     if (state === undefined) return null
     return {
       key: context.key, kind: context.kind, id: context.id, target: TARGET,
-      data: { row: 'prompt', seq: state.seq, time: state.time, text: state.text, location: context.start?.location },
+      data: {
+        row: state.goal === undefined ? 'prompt' : 'goal',
+        seq: state.seq, time: state.time, text: state.text,
+        goalId: state.goal?.goalId, round: state.goal?.round,
+        location: context.start?.location,
+      },
     }
   },
 }
@@ -30,8 +45,10 @@ export const progressPromptDefinition = {
  *  into this session. Host payload (dsh-subagent continuation-messages):
  *  `agent-message` = `{kind, form:'relay', senderSessionId}`, text opens with
  *  "Agent <name> sent a message:"; `subagent-settled` = `{kind, form:'notice',
- *  summary, stopReason?, senderSessionId}`. `stopReason` is absent before rc.5. */
-const AGENT_SOURCES = new Set(['agent-message', 'subagent-settled'])
+ *  summary, stopReason?, senderSessionId}`. `stopReason` is absent before rc.5.
+ *  agent-team mailbox delivery: `team-message` = `{kind, teamId, messageId,
+ *  senderId, senderName}`. */
+const AGENT_SOURCES = new Set(['agent-message', 'subagent-settled', 'team-message'])
 
 /** Inter-agent `user/message` → 'relay' (send_message from another agent) or
  *  'settled' (background subagent finished) row. Kept apart from 'prompt':
@@ -51,7 +68,9 @@ export const progressAgentMessageDefinition = {
       sourceKind: source.kind,
       summary: typeof source.summary === 'string' ? source.summary : undefined,
       stopReason: typeof source.stopReason === 'string' ? source.stopReason : undefined,
-      sender: typeof source.senderSessionId === 'string' ? source.senderSessionId : undefined,
+      sender: typeof source.senderSessionId === 'string' ? source.senderSessionId
+        : typeof source.senderId === 'string' ? source.senderId : undefined,
+      senderName: typeof source.senderName === 'string' ? source.senderName : undefined,
       text: blocksText(data.content ?? data.message?.content ?? data.text),
     }
   },
@@ -62,9 +81,11 @@ export const progressAgentMessageDefinition = {
     return {
       key: context.key, kind: context.kind, id: context.id, target: TARGET,
       data: {
-        row: state.sourceKind === 'subagent-settled' ? 'settled' : 'relay',
+        row: state.sourceKind === 'subagent-settled' ? 'settled'
+          : state.sourceKind === 'team-message' ? 'team' : 'relay',
         seq: state.seq, time: state.time, text: state.text,
         summary: state.summary, stopReason: state.stopReason, sender: state.sender,
+        senderName: state.senderName,
         location: context.start?.location,
       },
     }
@@ -104,7 +125,7 @@ export const progressAssistantDefinition = {
     }
     return {
       seq: match.event.seq, time: match.event.time,
-      turn: data.turn, text, reasoning,
+      turn: data.turn, step: data.step, text, reasoning,
       reasoningText: reasoningParts.join('\n'),
       interrupted: message.interrupted === true || data.interrupted === true,
     }
@@ -123,7 +144,7 @@ export const progressAssistantDefinition = {
     return {
       key: context.key, kind: context.kind, id: context.id, target: TARGET,
       data: {
-        row: 'message', seq: state.seq, time: state.time, turn: state.turn,
+        row: 'message', seq: state.seq, time: state.time, turn: state.turn, step: state.step,
         text: state.text, reasoning: state.reasoning, reasoningText: state.reasoningText,
         interrupted: state.interrupted, location: context.start?.location,
       },

@@ -68,10 +68,31 @@ describe('rowFromNode', () => {
     const denied = rowFromNode(node({ row: 'approval', toolName: 'bash', outcome: 'rejected' }))
     assert.equal(denied.status, 'failed')
   })
-  it('inbox spliced → wait ok row', () => {
-    const r = rowFromNode(node({ row: 'inbox', summary: 'Inbox next-turn: +1 message(s)' }))
-    assert.equal(r.type, 'wait')
-    assert.equal(r.status, 'ok')
+  it('goal round → goal row on the goal lane', () => {
+    const r = rowFromNode(node({ row: 'goal', goalId: 'g1', round: 2, text: 'continue toward the goal' }))
+    assert.equal(r.type, 'goal')
+    assert.equal(r.role, 'goal')
+    assert.equal(r.round, 2)
+    assert.equal(r.summary, 'Goal round 2')
+  })
+  it('goal change: block awaits the human, other operations are ok', () => {
+    const blocked = rowFromNode(node({ row: 'goal-change', operation: 'block', blocked: 'needs input', roundsStarted: 3, maxGoalRounds: 10 }))
+    assert.equal(blocked.type, 'goal')
+    assert.equal(blocked.status, 'awaiting')
+    assert.match(blocked.summary, /block \(3\/10\): needs input/)
+    assert.equal(rowFromNode(node({ row: 'goal-change', operation: 'create', objective: 'ship' })).summary, 'Goal created: ship')
+    assert.equal(rowFromNode(node({ row: 'goal-change', operation: 'clear' })).summary, 'Goal cleared')
+  })
+  it('team message → subagent row on the peer lane, prefixed by sender', () => {
+    const r = rowFromNode(node({ row: 'team', senderName: 'lead', text: 'take task 2' }))
+    assert.equal(r.type, 'subagent')
+    assert.equal(r.role, 'peer')
+    assert.equal(r.summary, 'lead: take task 2')
+  })
+  it('truncated tool results are flagged with their full length', () => {
+    const r = rowFromNode(node({ row: 'tool', name: 'bash', argsRaw: '{}', status: 'ok', resultText: 'abc', resultLength: 9000 }))
+    assert.equal(r.detail.resultTruncated, true)
+    assert.equal(r.detail.resultLength, 9000)
   })
   it('relay row → subagent ok row with the framed text', () => {
     const r = rowFromNode(node({ row: 'relay', text: 'Agent lead sent a message: \nfix the login page' }))

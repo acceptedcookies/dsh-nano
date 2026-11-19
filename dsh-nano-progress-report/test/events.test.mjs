@@ -7,10 +7,10 @@
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { progressToolDefinition } from '../src/client/events/tool.js'
+import { progressToolDefinition, RESULT_MAX } from '../src/client/events/tool.js'
 import { progressAgentMessageDefinition, progressAssistantDefinition, progressPromptDefinition } from '../src/client/events/message.js'
 import {
-  progressApprovalDefinition, progressInboxDefinition,
+  progressApprovalDefinition, progressGoalChangeDefinition,
   progressLifecycleDefinition, progressTurnDefinition,
 } from '../src/client/events/turn.js'
 import { progressJobDefinition, progressTodoDefinition } from '../src/client/events/job.js'
@@ -52,6 +52,18 @@ describe('tool definition', () => {
     assert.equal(node.data.name, 'bash')
     assert.equal(node.data.resultText, 'boom')
   })
+  it('result text is capped for display but keeps the full length', () => {
+    const call = evt('tool/call', { callId: 'c1', name: 'bash', arguments: '{}', turn: 2, step: 3 }, 5)
+    const state = progressToolDefinition.start(ctx(undefined), { event: call })
+    const big = 'x'.repeat(RESULT_MAX + 50)
+    const settled = progressToolDefinition.update(ctx(state), {
+      event: evt('tool/result', { message: { source: { callId: 'c1' }, content: [{ type: 'text', text: big }] } }, 6),
+    })
+    const node = progressToolDefinition.buildViewNode(ctx(settled))
+    assert.equal(node.data.resultText.length, RESULT_MAX)
+    assert.equal(node.data.resultLength, RESULT_MAX + 50)
+    assert.equal(node.data.step, 3)
+  })
   it('no-result call produces running status', () => {
     const call = evt('tool/call', { callId: 'c1', name: 'bash', arguments: '{}' }, 5)
     const node = progressToolDefinition.buildViewNode(ctx(progressToolDefinition.start(ctx(undefined), { event: call })))
@@ -75,6 +87,28 @@ describe('prompt definition', () => {
       assert.equal(progressPromptDefinition.match(evt('user/message', { source: { kind }, content: [] })), null, kind)
     }
     assert.equal(progressPromptDefinition.match(evt('user/message', { content: [] })), null)
+  })
+  it('a goal continuation becomes a goal row carrying goalId and round', () => {
+    const e = evt('user/message', { source: { kind: 'goal', goalId: 'g1', revision: 2, round: 3 }, content: [{ type: 'text', text: 'continue' }] })
+    assert.ok(progressPromptDefinition.match(e))
+    const node = progressPromptDefinition.buildViewNode(ctx(progressPromptDefinition.start(ctx(undefined), { event: e })))
+    assert.equal(node.data.row, 'goal')
+    assert.equal(node.data.goalId, 'g1')
+    assert.equal(node.data.round, 3)
+  })
+})
+
+describe('team-message delivery', () => {
+  it('agent-team mailbox messages become team rows with the sender name', () => {
+    const e = evt('user/message', {
+      source: { kind: 'team-message', teamId: 't', messageId: 'm', senderId: 'session-a', senderName: 'lead' },
+      content: [{ type: 'text', text: 'take task 2' }],
+    })
+    assert.ok(progressAgentMessageDefinition.match(e))
+    const node = progressAgentMessageDefinition.buildViewNode(ctx(progressAgentMessageDefinition.start(ctx(undefined), { event: e })))
+    assert.equal(node.data.row, 'team')
+    assert.equal(node.data.senderName, 'lead')
+    assert.equal(node.data.sender, 'session-a')
   })
 })
 
@@ -233,15 +267,29 @@ describe('approval definition', () => {
   })
 })
 
-describe('inbox definition', () => {
-  it('agent/inbox/spliced produces a start row', () => {
-    const m = progressInboxDefinition.match(evt('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [{}] }))
-    assert.deepEqual(m.role, 'start')
-    const node = progressInboxDefinition.buildViewNode(ctx(
-      progressInboxDefinition.start(ctx(undefined), { event: evt('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [{}] }) }),
-    ))
-    assert.equal(node.data.row, 'inbox')
-    assert.match(node.data.summary, /next-turn/)
+describe('goal change definition', () => {
+  it('goal/change snapshot carries operation, phase and round budget', () => {
+    const e = evt('goal/change', {
+      kind: 'goal/change', version: 1, operation: 'block',
+      goal: { id: 'g1', revision: 3, objective: 'ship it', phase: 'blocked', blockedReason: { code: 'x', message: 'needs a key' }, maxGoalRounds: 10 },
+      roundsStarted: 4, createdAt: 1, updatedAt: 2,
+    })
+    const node = progressGoalChangeDefinition.buildViewNode(ctx(progressGoalChangeDefinition.start(ctx(undefined), { event: e })))
+    assert.equal(node.data.row, 'goal-change')
+    assert.equal(node.data.operation, 'block')
+    assert.equal(node.data.blocked, 'needs a key')
+    assert.equal(node.data.roundsStarted, 4)
+    assert.equal(node.data.maxGoalRounds, 10)
+  })
+  it('the clear tombstone keeps the cleared goal id', () => {
+    const e = evt('goal/change', { kind: 'goal/change', version: 1, operation: 'clear', cleared: { id: 'g1', revision: 4 }, clearedAt: 3 })
+    const state = progressGoalChangeDefinition.start(ctx(undefined), { event: e })
+    assert.equal(state.goalId, 'g1')
+    assert.equal(state.operation, 'clear')
+  })
+  it('agent/inbox/spliced is no longer a progress row', () => {
+    assert.equal(progressGoalChangeDefinition.match(evt('agent/inbox/spliced', { target: 'next-turn' })), null)
+    assert.equal(progressLifecycleDefinition.match(evt('agent/inbox/spliced', { target: 'next-turn' })), null)
   })
 })
 

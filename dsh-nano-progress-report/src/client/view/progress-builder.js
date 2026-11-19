@@ -1,6 +1,8 @@
-/** ConversationViewBuilder for the 'progress' target: keeps seq-ordered
- *  ProgressRow[] plus aggregate counters. Pure data, no React/DOM. */
+/** ConversationViewBuilder for the 'progress' target: keeps ProgressRows by
+ *  node key and publishes a denoised flat list plus turn groups. Pure data,
+ *  no React/DOM. */
 import { rowCounts, rowFromNode, sortRows } from '../rows.js'
+import { denoise, groupRows } from '../group.js'
 
 export class ProgressBuilder {
   constructor() {
@@ -30,10 +32,11 @@ export class ProgressBuilder {
   }
 
   snapshot(timeline) {
-    const rows = sortRows([...this.rows.values()])
+    const rows = denoise(sortRows([...this.rows.values()]))
     this.revision += 1
     return {
       rows,
+      groups: groupRows(rows),
       timeline,
       counts: rowCounts(rows),
       revision: this.revision,
@@ -43,6 +46,7 @@ export class ProgressBuilder {
 
 const EMPTY = Object.freeze({
   rows: Object.freeze([]),
+  groups: Object.freeze([]),
   timeline: Object.freeze({ turnOrder: Object.freeze([]), turns: Object.freeze(new Map()) }),
   counts: Object.freeze({ total: 0, failed: 0, running: 0, awaiting: 0, byType: Object.freeze({}) }),
   revision: 0,

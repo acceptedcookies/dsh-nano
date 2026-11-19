@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { applyFilter, isEmptyFilter, parseFilter, rowHaystack } from '../src/client/filter.js'
+import { applyFilter, isEmptyFilter, parseFilter, RESULT_HAYSTACK_MAX, rowHaystack } from '../src/client/filter.js'
 
 const row = over => ({
   key: 'k', kind: 'k', id: 'i', seq: 1, time: 0, turn: 0,
@@ -80,6 +80,10 @@ describe('applyFilter', () => {
     assert.equal(applyFilter(rows, f).length, 1)
     const f2 = parseFilter('type:file status:ok')
     assert.equal(applyFilter(rows, f2).length, 0)
+  })
+  it('rowHaystack searches only the head of a tool result', () => {
+    const tail = row({ summary: 's', tool: 'bash', detail: { resultText: `${'x'.repeat(RESULT_HAYSTACK_MAX)}NEEDLE` } })
+    assert.equal(rowHaystack(tail).includes('needle'), false)
   })
   it('rowHaystack includes detail text', () => {
     const r = row({ summary: 's', tool: 'bash', detail: { resultText: 'ENOENT inside' } })

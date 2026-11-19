@@ -7,6 +7,7 @@ import {
   IconClockOutlineRegular,
   IconCodeOutlineRegular,
   IconDeliverDocRegular,
+  IconGoalOutlineRegular,
   IconGlobeOutlineRegular,
   IconInfoOutlineRegular,
   IconPlayOutlineRegular,
@@ -21,6 +22,7 @@ import {
 /** Row type → catalog icon. Keys mirror `constants.js` TYPES. */
 export const TYPE_ICON = {
   prompt: IconUserOutlineRegular,
+  goal: IconGoalOutlineRegular,
   message: IconSparkleRegular,
   shell: IconCodeOutlineRegular,
   file: IconDeliverDocRegular,

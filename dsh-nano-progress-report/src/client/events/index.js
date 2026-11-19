@@ -2,7 +2,7 @@
 import { TARGET } from '../constants.js'
 import { progressToolDefinition } from './tool.js'
 import { progressAgentMessageDefinition, progressAssistantDefinition, progressPromptDefinition } from './message.js'
-import { progressApprovalDefinition, progressInboxDefinition, progressLifecycleDefinition, progressTurnDefinition } from './turn.js'
+import { progressApprovalDefinition, progressGoalChangeDefinition, progressLifecycleDefinition, progressTurnDefinition } from './turn.js'
 import { progressJobDefinition, progressTodoDefinition } from './job.js'
 import { ProgressBuilder } from '../view/progress-builder.js'
 
@@ -15,7 +15,7 @@ const DEFINITIONS = [
   progressTurnDefinition,
   progressJobDefinition,
   progressApprovalDefinition,
-  progressInboxDefinition,
+  progressGoalChangeDefinition,
   progressLifecycleDefinition,
 ]
 

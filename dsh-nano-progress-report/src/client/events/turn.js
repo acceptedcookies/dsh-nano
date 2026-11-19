@@ -110,29 +110,30 @@ const LIFECYCLE = {
   'compaction/summary': () => 'Context compacted',
 }
 
-/** `agent/inbox/spliced` — agent inbox delivery to next-turn/next-step.
- *  Payload `{target, start, removedCount?, inserted: SessionMessageLike[]}`.
- *  Surfaced as a 'wait'-typed ok row per spec §3.1. */
-export const progressInboxDefinition = {
-  kind: 'progress-inbox-spliced',
+/** `goal/change` → one 'goal' row per durable goal mutation. Payload is the
+ *  full post-mutation snapshot `{operation, goal:{id, objective, phase,
+ *  blockedReason?, maxGoalRounds}, roundsStarted}` or the clear tombstone
+ *  `{operation:'clear', cleared:{id}}`. Inbox splices are not rows: the
+ *  delivered messages already appear as relay/settled/team rows. */
+export const progressGoalChangeDefinition = {
+  kind: 'progress-goal-change',
   target: TARGET,
   match(event) {
-    return event.type === 'agent/inbox/spliced' ? { id: String(event.seq), role: 'start' } : null
+    return event.type === 'goal/change' ? { id: String(event.seq), role: 'start' } : null
   },
   start(context, match) {
     const event = match.event
     const data = event.data ?? {}
-    const inserted = Array.isArray(data.inserted) ? data.inserted.length : 0
-    const removed = Number.isSafeInteger(data.removedCount) ? data.removedCount : 0
-    const canceled = data.outcome === 'canceled'
-    const parts = []
-    if (canceled) parts.push('withdrawn')
-    if (inserted > 0) parts.push(`+${inserted} message(s)`)
-    if (removed > 0 && !canceled) parts.push(`-${removed} message(s)`)
+    const goal = data.goal ?? {}
     return {
       seq: event.seq, time: event.time,
-      summary: `Inbox ${data.target ?? 'queue'}${parts.length ? `: ${parts.join(', ')}` : ''}`,
-      detail: JSON.stringify(data).slice(0, 2000),
+      operation: typeof data.operation === 'string' ? data.operation : 'edit',
+      goalId: String(goal.id ?? data.cleared?.id ?? ''),
+      objective: typeof goal.objective === 'string' ? goal.objective : '',
+      phase: typeof goal.phase === 'string' ? goal.phase : undefined,
+      blocked: typeof goal.blockedReason?.message === 'string' ? goal.blockedReason.message : undefined,
+      roundsStarted: Number.isSafeInteger(data.roundsStarted) ? data.roundsStarted : undefined,
+      maxGoalRounds: Number.isSafeInteger(goal.maxGoalRounds) ? goal.maxGoalRounds : undefined,
     }
   },
   update: context => context.state,
@@ -141,11 +142,7 @@ export const progressInboxDefinition = {
     if (state === undefined) return null
     return {
       key: context.key, kind: context.kind, id: context.id, target: TARGET,
-      data: {
-        row: 'inbox', seq: state.seq, time: state.time,
-        summary: state.summary, detail: state.detail,
-        location: context.start?.location,
-      },
+      data: { row: 'goal-change', ...state, location: context.start?.location },
     }
   },
 }

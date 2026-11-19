@@ -18,6 +18,20 @@ export const PROGRESS_CSS = `
   container-type: inline-size;
 }
 
+/* The conversation view variant lives inside the host's scrolling
+ * conversation body: natural height, full width (as the trajectory view),
+ * sticky toolbar. */
+[data-nano-progress-report][data-variant="view"] {
+  height: auto; min-height: 0;
+  width: 100%;
+  background: transparent;
+}
+[data-nano-progress-report][data-variant="view"] .npr-toolbar {
+  position: sticky; top: 0; z-index: var(--nano-layer-local1);
+  background: var(--dsw-alias-bg-base);
+}
+[data-nano-progress-report][data-variant="view"] .npr-flow { overflow: visible; padding-bottom: 16px; }
+
 /* ── toolbar: host search field, DNK density ─────────────────────────── */
 .npr-toolbar {
   flex: none; display: flex; align-items: center; gap: 8px;
@@ -146,6 +160,49 @@ export const PROGRESS_CSS = `
 .npr-subcall-name { flex: none; color: var(--dsw-alias-label-tertiary); }
 .npr-subcall-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .npr-subcall[data-status="failed"] .npr-subcall-summary { color: var(--dsw-alias-state-error-primary); }
+
+/* ── goal banner + turn groups ───────────────────────────────────────── */
+.npr-goal {
+  flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+  padding: 6px 10px; border-bottom: .5px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-layer-1);
+}
+.npr-goal-objective {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--dsw-alias-label-primary); font-weight: 600;
+}
+.npr-goal-meta {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11);
+}
+.npr-goal-blocked { flex: 1 1 100%; color: var(--dsw-alias-state-warn-primary); font: var(--dsw-font-xxxs-11); }
+.npr-goal[data-phase="blocked"] { box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary); }
+.npr-goal-section {
+  display: flex; align-items: center; gap: 6px; margin: 8px 10px 2px;
+  color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11);
+}
+.npr-goal-section-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.npr-icon[data-type="goal"] { color: var(--dsw-alias-brand-primary); }
+.npr-t-goal { color: var(--dsw-alias-label-primary); font-weight: 600; }
+
+.npr-groups { display: flex; flex-direction: column; gap: 2px; }
+.npr-group { display: flex; flex-direction: column; }
+/* The human opener keeps its tint as a group header; peer and goal openers get
+ * a quieter lane marker so "who started this turn" reads at a glance. */
+.npr-group[data-role="peer"] > .npr-group-head { box-shadow: inset 2px 0 0 var(--dsw-alias-label-tertiary); }
+.npr-group[data-role="goal"] > .npr-group-head {
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 5%, transparent);
+}
+.npr-group-body {
+  display: flex; flex-direction: column;
+  margin-left: 14px; padding-left: 2px;
+  border-left: .5px solid var(--dsw-alias-border-l3);
+}
+.npr-group-counts {
+  flex: none; color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11); white-space: nowrap;
+}
+@container (max-width: 320px) { .npr-group-counts { display: none; } }
 
 /* ── status line (DNK .nks-status metric) ────────────────────────────── */
 .npr-status {

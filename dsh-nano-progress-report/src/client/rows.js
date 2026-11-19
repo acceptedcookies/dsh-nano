@@ -16,6 +16,8 @@ import { argString, blocksText, oneLine, parseArgs } from './args.js'
  * @property {boolean} expandable
  * @property {object} detail     expandable payload: {call?, result?, text?, args?, error?, durationMs?, children?}
  * @property {number} turn       owning turn number or -1
+ * @property {number} step       owning step number or -1 (assistant/tool rows)
+ * @property {string} role       lane: human | goal | agent | peer | exec | boundary
  */
 
 const text = value => oneLine(value ?? '', 140)
@@ -102,18 +104,39 @@ export function rowFromNode(node) {
     key: node.key, kind: node.kind, id: node.id,
     seq: data.seq ?? 0, time: data.time ?? 0,
     turn: turnOf(data.location, data.turn),
-    expandable: false, detail: undefined, tool: '',
+    step: typeof data.step === 'number' ? data.step : -1,
+    expandable: false, detail: undefined, tool: '', role: 'exec',
   }
   switch (data.row) {
     case 'prompt':
-      return { ...base, type: 'prompt', status: 'ok',
+      return { ...base, type: 'prompt', status: 'ok', role: 'human',
         summary: text(data.text), expandable: (data.text ?? '').length > 140,
         detail: { text: data.text } }
+    case 'goal':
+      return { ...base, type: 'goal', status: 'ok', role: 'goal',
+        goalId: data.goalId, round: data.round,
+        summary: text(data.round !== undefined ? `Goal round ${data.round}` : 'Goal round'),
+        expandable: (data.text ?? '').length > 0,
+        detail: { text: data.text } }
+    case 'goal-change': {
+      const op = data.operation
+      const status = op === 'block' ? 'awaiting' : 'ok'
+      const rounds = data.roundsStarted !== undefined && data.maxGoalRounds !== undefined
+        ? ` (${data.roundsStarted}/${data.maxGoalRounds})` : ''
+      const what = op === 'clear' ? 'Goal cleared'
+        : op === 'create' ? `Goal created: ${data.objective}`
+          : `Goal ${op}${rounds}${op === 'block' && data.blocked ? `: ${data.blocked}` : ''}`
+      return { ...base, type: 'goal', status, role: 'boundary', goalId: data.goalId,
+        summary: text(what),
+        expandable: (data.objective ?? '').length > 0,
+        detail: { text: data.objective || undefined, error: data.blocked } }
+    }
     case 'message': {
       const interrupted = data.interrupted === true
       const hasReasoning = data.reasoning === true
       const summaryText = data.text !== '' ? data.text : (hasReasoning ? '(reasoning)' : '')
-      return { ...base, type: 'message', status: interrupted ? 'failed' : 'ok',
+      return { ...base, type: 'message', status: interrupted ? 'failed' : 'ok', role: 'agent',
+        empty: (data.text ?? '') === '',
         summary: text(summaryText),
         expandable: (data.text ?? '').length > 140 || data.reasoning === true,
         detail: { text: data.text, reasoning: data.reasoningText } }
@@ -143,6 +166,9 @@ export function rowFromNode(node) {
         expandable: true,
         detail: {
           argsRaw: data.argsRaw, resultText: data.resultText, error: data.error,
+          resultLength: data.resultLength,
+          resultTruncated: typeof data.resultLength === 'number' && typeof data.resultText === 'string'
+            && data.resultLength > data.resultText.length,
           durationMs, children, callId: data.callId,
         } }
     }
@@ -159,7 +185,7 @@ export function rowFromNode(node) {
       const reason = data.reason
       const status = TURN_FAILED.has(reason) ? 'failed'
         : reason === 'blocked' ? 'awaiting' : 'ok'
-      return { ...base, type: 'turn', status,
+      return { ...base, type: 'turn', status, role: 'boundary',
         summary: `Turn ${data.turn} ended${reason ? `: ${reason}` : ''}`,
         expandable: data.error !== undefined,
         detail: { error: typeof data.error === 'string' ? data.error : data.error?.message ?? (data.error === undefined ? undefined : String(data.error)) } }
@@ -179,7 +205,7 @@ export function rowFromNode(node) {
         detail: { text: data.reason } }
     }
     case 'relay':
-      return { ...base, type: 'subagent', status: 'ok',
+      return { ...base, type: 'subagent', status: 'ok', role: 'peer',
         summary: text(data.text || 'Agent message'),
         expandable: (data.text ?? '').length > 140,
         detail: { text: data.text } }
@@ -187,16 +213,16 @@ export function rowFromNode(node) {
       // Missing stopReason (pre-rc.5 notices) carries no failure claim;
       // any recorded reason other than 'completed' means the child did not finish.
       const status = data.stopReason === undefined || data.stopReason === 'completed' ? 'ok' : 'failed'
-      return { ...base, type: 'subagent', status,
+      return { ...base, type: 'subagent', status, role: 'peer',
         summary: text(data.summary || data.text || 'Subagent finished'),
         expandable: (data.text ?? '').length > 0,
         detail: { text: data.text } }
     }
-    case 'inbox':
-      return { ...base, type: 'wait', status: 'ok',
-        summary: text(data.summary ?? 'Inbox updated'),
-        expandable: (data.detail ?? '').length > 0,
-        detail: { text: data.detail } }
+    case 'team':
+      return { ...base, type: 'subagent', status: 'ok', role: 'peer',
+        summary: text(`${data.senderName || 'Teammate'}: ${data.text || ''}`),
+        expandable: (data.text ?? '').length > 140,
+        detail: { text: data.text } }
     case 'job': {
       const status = data.status === 'failed' || data.status === 'killed'
         ? 'failed' : data.status === 'running' || data.status === 'stopping'
@@ -204,10 +230,10 @@ export function rowFromNode(node) {
       return { ...base, type: 'job', status,
         summary: text(`Job ${data.label || data.kind || data.jobId}${data.status ? ` (${data.status})` : ''}`),
         expandable: data.detail !== undefined || data.cause !== undefined,
-        detail: { text: data.detail, cause: data.cause } }
+        detail: { text: data.detail, cause: data.cause, callId: data.callId } }
     }
     case 'lifecycle':
-      return { ...base, type: 'lifecycle', status: data.status === 'failed' ? 'failed' : 'ok',
+      return { ...base, type: 'lifecycle', status: data.status === 'failed' ? 'failed' : 'ok', role: 'boundary',
         summary: text(data.summary ?? data.eventType ?? 'event'),
         expandable: (data.detail ?? '').length > 0,
         detail: { text: data.detail } }

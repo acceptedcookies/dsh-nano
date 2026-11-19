@@ -78,6 +78,7 @@ export const progressJobDefinition = {
         row: 'job', seq: state.seq, time: state.time,
         jobId: state.jobId, kind: state.kind, label: state.label,
         status: state.status, cause: state.cause, detail: state.detail,
+        callId: state.callId,
         location: context.start?.location,
       },
     }
@@ -93,5 +94,6 @@ function fallback(context) {
     seq: settled.event.seq, time: settled.event.time, jobId: String(data.jobId),
     kind: data.kind, label: data.label, status: data.status ?? 'completed',
     finishedAt: data.finishedAt, cause: data.cause, detail: data.detail,
+    callId: data.toolCall?.callId,
   }
 }

@@ -1,14 +1,17 @@
 /** Client entry for dsh-nano-progress-report.
- *  Registers the 'progress' conversation view target, the workbench tab type,
- *  and the tab body. No host routes, no stored state — the session event
+ *  Registers the 'progress' conversation view target, the Progress
+ *  conversation view tab (primary entry), the workbench tab type and body
+ *  (kept as the side-by-side entry), and a session-header action that opens
+ *  the workbench tab. No host routes, no stored state — the session event
  *  stream is the single source of truth; this plugin only projects it. */
 import { registerProgressProjection } from './events/index.js'
 import ProgressBody from './view/ProgressBody.jsx'
 import OpenProgressItem from './view/OpenProgressItem.jsx'
+import HeaderAction from './view/HeaderAction.jsx'
 import { PROGRESS_CSS } from './styles.js'
 import { makeI18n } from './i18n.js'
 import { perf } from './perf.js'
-import { TAB_ID, TAB_KIND } from './constants.js'
+import { TAB_ID, TAB_KIND, VIEW_ID } from './constants.js'
 
 export const inject = [
   'slots', 'locale', 'sessions', 'sidebarRight', 'sidebarRightTabs',
@@ -52,6 +55,28 @@ export function apply(ctx) {
     key: TAB_ID,
     inject: () => ({ ctx, t }),
   }, ProgressBody))
+
+  ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view',
+    id: VIEW_ID,
+    // After chat (0) and trajectory (10).
+    order: 30,
+    label: () => t('view.progress'),
+    inject: () => ({ ctx, t, variant: 'view' }),
+  }, ProgressBody))
+
+  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+    name: 'conversation.session.header.actions',
+    id: VIEW_ID,
+    // After background jobs (20).
+    order: 30,
+    inject: () => ({
+      t,
+      openProgress: (sessionId) => {
+        try { ctx.sidebarRight.openTabIn(sessionId, TAB_KIND) } catch { /* sidebar unavailable for this session */ }
+      },
+    }),
+  }, HeaderAction))
 
   ctx.slots.inject('sidebar.right.tab.menu.item', () => ctx.slots.register({
     name: 'sidebar.right.tab.menu.item',

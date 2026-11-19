@@ -3,6 +3,9 @@
 import { TARGET } from '../constants.js'
 
 const MAX_CHILDREN = 64
+/** Display cap for a tool result. The full output stays in the session log;
+ *  a progress row only previews it (one long session carried ~9 MB of results). */
+export const RESULT_MAX = 8000
 
 function startData(match) {
   const data = match.event.data
@@ -117,14 +120,16 @@ export const progressToolDefinition = {
     const seq = context.start?.event.seq ?? context.matches[0]?.event.seq ?? 0
     const time = result?.time ?? context.start?.event.time ?? context.matches[0]?.event.time ?? 0
     const status = result === undefined ? 'running' : (result.isError || result.error !== undefined ? 'failed' : 'ok')
+    const fullText = textOf(result?.content)
     return {
       key: context.key, kind: context.kind, id: context.id, target: TARGET,
       data: {
-        row: 'tool', seq, time, turn: head.turn,
+        row: 'tool', seq, time, turn: head.turn, step: head.step,
         callId: head.callId, name: head.name, argsRaw: head.argsRaw,
         callTime: context.start?.event.time,
         status,
-        resultText: textOf(result?.content),
+        resultText: fullText.length > RESULT_MAX ? fullText.slice(0, RESULT_MAX) : fullText,
+        resultLength: fullText.length,
         error: result?.error === undefined ? undefined : String(result.error.reason ?? result.error.name ?? result.error),
         subCalls: children,
         location: context.start?.location,

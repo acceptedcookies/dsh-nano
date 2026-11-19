@@ -50,6 +50,15 @@ async function bridgeWriterFree({ bridge }) {
   return { ok: writer === null, detail: writer === null ? 'no writer held' : `held by ${writer}` }
 }
 
+/** Visits live in the instance state as one chronological list of {url, at}. */
+function historyConsistent({ session }) {
+  const rows = session?.history
+  if (rows === undefined) return { ok: true, detail: '0 entries' }
+  if (!Array.isArray(rows)) return { ok: false, detail: 'history is not a list' }
+  const broken = rows.filter((row) => typeof row?.url !== 'string' || !row.url).length
+  return { ok: broken === 0, detail: broken ? `${broken} of ${rows.length} entries without url` : `${rows.length} entries` }
+}
+
 export default function createDriver(api) {
   settings.configure(api)
   history.configure(api)
@@ -92,7 +101,7 @@ export default function createDriver(api) {
     },
     selftest: {
       ids: SELFTEST_IDS,
-      probes: { 'bridge-writer-free': bridgeWriterFree },
+      probes: { 'bridge-writer-free': bridgeWriterFree, 'history-consistent': historyConsistent },
     },
     errors: { namespace: 'kitesurf', rows: ERROR_ROWS },
   }

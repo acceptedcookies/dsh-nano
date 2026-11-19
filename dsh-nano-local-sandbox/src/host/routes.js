@@ -562,8 +562,11 @@ async function runSelftest(session, deps) {
   if (snap.engineAlive && snap.effective.httpBase) {
     try {
       const client = await clientFor(session, snap.effective.httpBase, deps)
-      version = (await client.send('Browser.getVersion'))?.product || null
-      if (!version || !driver.engineFingerprint.test(version)) version = null
+      // An engine may carry its marker in revision rather than product (a
+      // Chromium-compatible product string); match the whole label.
+      const info = await client.send('Browser.getVersion')
+      const label = [info?.product, info?.revision].filter(Boolean).join(' ')
+      version = label && driver.engineFingerprint.test(label) ? label : null
       const dom = await probeDom(session, snap.effective.httpBase, deps)
       blank = dom.skipped === true ? false : true
       const cap = await withPage(client, (sessionId) => client.send('Page.captureScreenshot', { format: 'png' }, sessionId))
@@ -587,8 +590,9 @@ async function runSelftest(session, deps) {
     base: bridgeBase,
     json: (pathname, timeoutMs = 900) => (bridgeBase ? probeHttp(`${bridgeBase}${pathname}`, timeoutMs) : Promise.reject(new Error('no bridge port'))),
   }
+  const declared = driver.selftest?.ids || SELFTEST_IDS
   for (const [id, probe] of Object.entries(driver.selftest?.probes || {})) {
-    if (!found.has(id)) continue
+    if (!declared.includes(id)) continue
     try {
       const result = await probe({ session, snapshot: snap, bridge })
       found.set(id, { id, ok: result?.ok === true, detail: result?.detail ?? '' })
@@ -598,7 +602,7 @@ async function runSelftest(session, deps) {
   }
 
   // Emit in the declared order so the response reads like the profile contract.
-  const checks = SELFTEST_IDS.map((id) => found.get(id) || { id, ok: false, detail: 'not run' })
+  const checks = declared.map((id) => found.get(id) || { id, ok: false, detail: 'not run' })
   const failed = checks.filter((row) => !row.ok).length
   // `ok` means the call ran; `passed` is the strict verdict. The snapshot rides
   // along at the top level and nested, so this response is the same document

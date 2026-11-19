@@ -63,9 +63,10 @@ PH0 ──▶ PH1 ──▶ PH2 ──▶ PH3 ──▶ PH6 ──▶ MERGE
   - 执行状态：complete · 2026-11-20T03:05+08:00 · 证据：commits `d7d9325`+`9b47…`(ui-rules fix)；npm test 171/171；check-ui-rules NPR 行 0 告警
   - 落点：`TasksSection.jsx`、`TasksView.jsx`、`ProgressBody.jsx`、`Turn.jsx`；删 `src/client/task-times.js` + `test/task-times.test.mjs`
   - 完成判据：T14/T15；面板改读 ledger wire；56px 列有回合耗时/非 completed 原因
-- [ ] `PH6` — 文档/版本/验证/一次合并
-  - 落点：`AGENTS.md`、`spec-v1.1.md`、FUS `:416` 一行、`package.json` version、本 todo、计划 §11
-  - 完成判据：T16/T17/T18；`npm test` 全过 + `node scripts/check-ui-rules.mjs` NPR 0 + `npm run build` + `test/built-host.mjs` + `npm pack --dry-run`；计划 §11 回填；merge → main；worktree 删除
+- [x] `PH6` — 文档/版本/验证/一次合并
+  - 执行状态：complete（文档/版本/验证全部收口；**合并 → main + worktree 删除** 属 T-O-17 收口动作，待 [业主] 授权点）· 2026-11-20
+  - 落点：`AGENTS.md`、`spec-v1.1.md`、FUS §11.4 一行、`package.json` 0.2.0、本 todo、计划 §11 回填；R1/R2/R3 审查修复随 `f6aba5a` 落盘
+  - 完成判据：T16/T17/T18 已过——`npm test` 179/179、`check-ui-rules` NPR 0、`npm run build` ✅、`test/built-host.mjs` 1/1、`npm pack --dry-run` 10 文件 145.6kB、`prod-replay --limit=1000` 33 会话/138 请求四数达标；`f6aba5a` 为审查修复提交
 
 ## 4. Check/状态台账
 
@@ -76,7 +77,7 @@ PH0 ──▶ PH1 ──▶ PH2 ──▶ PH3 ──▶ PH6 ──▶ MERGE
 
 ## 5. 交接 / handoff
 
-- 当前节点：PH6（文档/版本/验证/合并）进行中。
+- 当前节点：全部 Phase 完成；剩 T-O-17 收口动作（merge → main 后删 worktree），待 [业主] 授权点。
 - 完成 handoff：合并提交含 `npm test` 数、check-ui-rules NPR 行、pack 输出与 [PROD] 回放原文（或「本机未复跑」）→ 写回计划 §11 与 closure。deploy-local 由 [业主] 择时。
 
 ---

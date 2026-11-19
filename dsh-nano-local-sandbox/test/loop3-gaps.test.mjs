@@ -50,19 +50,18 @@ function depsWith(overrides = {}) {
   }
 }
 
-// ── bridgeControlBase: IPv6 must not double-bracket ──
+// ── bridgeControlBase: only the actual published tuple makes a base ──
 
-test('bridgeControlBase keeps IPv6 literal singly-bracketed', () => {
-  assert.equal(
-    bridgeControlBase({ httpBase: 'http://[::1]:8800' }),
-    'http://[::1]:8801',
-    'URL.hostname already brackets IPv6; wrapping again produced http://[[::1]]:8801'
-  )
-  assert.equal(bridgeControlBase({ httpBase: 'http://127.0.0.1:8800' }), 'http://127.0.0.1:8801')
-  // The bridge port is derived from the engine's; a stored override is retired.
-  assert.equal(bridgeControlBase({ httpBase: 'http://[::1]:8800', kiteMcpPort: 9901 }), 'http://[::1]:8801')
-  assert.equal(bridgeControlBase({ httpBase: 'not-a-url' }), null)
-  assert.equal(bridgeControlBase({ httpBase: 'http://127.0.0.1' }), null, 'no explicit port → refuse, never guess')
+test('bridgeControlBase uses the published tuple, never engine port +1', () => {
+  assert.equal(bridgeControlBase({ hostAddress: '::1', hostPort: 8801 }), 'http://[::1]:8801')
+  assert.equal(bridgeControlBase({ hostAddress: '127.0.0.1', hostPort: 8801 }), 'http://127.0.0.1:8801')
+  // The old +1 convention is gone: an adjacent guess must never materialize.
+  assert.equal(bridgeControlBase({ hostAddress: '0.0.0.0', hostPort: 8801 }), null, 'wildcard address is not a loopback base')
+  assert.equal(bridgeControlBase({ hostAddress: '10.0.0.5', hostPort: 8801 }), null, 'non-loopback is refused')
+  assert.equal(bridgeControlBase({ hostAddress: '127.0.0.1', hostPort: 0 }), null)
+  assert.equal(bridgeControlBase({ hostAddress: '127.0.0.1', hostPort: 65536 }), null)
+  assert.equal(bridgeControlBase(null), null)
+  assert.equal(bridgeControlBase({}), null, 'missing tuple → refuse, never guess')
 })
 
 // ── ops ring: 201st entry must evict, never grow unbounded ──
@@ -183,4 +182,90 @@ test('/shot forwards format/quality to captureScreenshot with the right shape', 
   const dft = sent.find((row) => row.method === 'Page.captureScreenshot')
   assert.equal(dft.params.format, 'webp')
   assert.equal(dft.params.quality, 82, 'default quality is 82, documented and honored')
+})
+
+// ── /control: bridge URL is the actual publication, never engine port +1 ──
+
+test('/control fetches the verified bridge tuple; the +1 honeypot sees zero', async (t) => {
+  const { createServer } = await import('node:http')
+  const listen = (handler) => new Promise((resolve) => {
+    const server = createServer(handler)
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }))
+  })
+  // The +1 honeypot sits exactly where the retired convention would have
+  // looked (engine hostPort +1); the REAL bridge publishes a non-adjacent
+  // tuple. Only the bridge may ever receive a request.
+  const honeypotHits = []
+  const honeypot = await listen((req, res) => { honeypotHits.push(req.url); res.end('{"ok":true,"control":{"writer":"honeypot"}}') })
+  t.after(() => honeypot.server.close())
+  const bridgeHits = []
+  const bridge = await listen((req, res) => { bridgeHits.push(req.url); res.end('{"ok":true,"control":{"writer":null,"humanHold":false,"lastAction":null}}') })
+  t.after(() => bridge.server.close())
+  const enginePort = honeypot.port - 1 // +1 convention would hit the honeypot
+  let publications = [
+    { containerPort: 8787, hostAddress: '127.0.0.1', hostPort: enginePort },
+    { containerPort: 8791, hostAddress: '127.0.0.1', hostPort: bridge.port },
+  ]
+  const deps = depsWith({
+    backend: {
+      async inspect() {
+        return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [...publications] } }]) }
+      },
+      async logs() { return { text: '' } },
+    },
+  })
+  const routes = routesFor(deps)
+  const got = await call(routes['/nano-local-sandbox/control'], { method: 'GET' })
+  assert.equal(got.status, 200)
+  assert.deepEqual(got.body.control, { writer: null, humanHold: false, lastAction: null })
+  assert.deepEqual(bridgeHits, ['/control'], 'bridge /control must be fetched on its real published tuple')
+  assert.equal(honeypotHits.length, 0, 'engine port +1 honeypot received zero requests — the convention is dead')
+
+  // Mapping withdrawn: the next dispatch must fail closed with no traffic.
+  publications = [{ containerPort: 8787, hostAddress: '127.0.0.1', hostPort: enginePort }]
+  const lost = await call(routes['/nano-local-sandbox/control'], { method: 'GET' })
+  assert.equal(lost.status, 502)
+  assert.equal(lost.body.ok, false)
+  assert.equal(bridgeHits.length, 1, 'no stale fetch after the mapping disappeared')
+  assert.equal(honeypotHits.length, 0)
+})
+
+// ── /control: +2 (any real tuple) proves the mapping; engine+1 stays untouched ──
+
+test('/control hits bridge at engine+2 exactly; the engine+1 address is never requested', async (t) => {
+  // Deterministic adapter: every fetch URL is recorded and answered only by
+  // its registered listener — no OS ports, no +1 possibility.
+  const requests = []
+  const listeners = new Map()
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    requests.push(String(url))
+    const listener = listeners.get(String(url))
+    if (!listener) throw new Error(`unmapped fetch: ${url}`)
+    return new Response(listener(), { status: 200 })
+  }
+  t.after(() => { globalThis.fetch = realFetch })
+  const enginePort = 40000
+  const bridgeBase = `http://127.0.0.1:${enginePort + 2}`
+  const honeypotBase = `http://127.0.0.1:${enginePort + 1}`
+  const bridgeControl = { writer: null, humanHold: false, lastAction: { action: 'takeover', at: 't' } }
+  listeners.set(`${bridgeBase}/control`, () => JSON.stringify({ ok: true, control: bridgeControl }))
+  listeners.set(`${honeypotBase}/control`, () => JSON.stringify({ ok: true, control: { writer: 'honeypot' } }))
+  const deps = depsWith({
+    backend: {
+      async inspect() {
+        return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [
+          { containerPort: 8787, hostAddress: '127.0.0.1', hostPort: enginePort },
+          { containerPort: 8791, hostAddress: '127.0.0.1', hostPort: enginePort + 2 },
+        ] } }]) }
+      },
+      async logs() { return { text: '' } },
+    },
+  })
+  const routes = routesFor(deps)
+  const got = await call(routes['/nano-local-sandbox/control'], { method: 'GET' })
+  assert.equal(got.status, 200)
+  assert.deepEqual(got.body.control, bridgeControl)
+  assert.deepEqual(requests.filter((u) => u.endsWith('/control')), [`${bridgeBase}/control`])
+  assert.equal(requests.some((u) => u.startsWith(honeypotBase)), false, 'engine+1 address was never requested')
 })

@@ -32,7 +32,18 @@ test('lifecycle suspend and resume follow the running session and history stays 
   t.after(() => rmSync(state, { recursive: true, force: true }))
   const stops = []
   const session = { phase: 'running', history: [], containerName: 'dnls-a' }
-  const routes = routesFor(session, { async stop(name) { stops.push(name) }, async start(name) { stops.push(`start:${name}`) } }, {
+  let liveState = 'running'
+  const routes = routesFor(session, {
+    async stop(name) { stops.push(name); liveState = 'stopped' },
+    async start(name) { stops.push(`start:${name}`); liveState = 'running' },
+    // A successful /open now needs the engine's actual published tuple; the
+    // session.cdp client is what the route talks to after that proof.
+    async inspect() {
+      return { raw: JSON.stringify([{ status: { state: liveState }, configuration: { publishedPorts: [
+        { containerPort: 8787, hostPort: 48798, hostAddress: '127.0.0.1' },
+      ] } }]) }
+    },
+  }, {
     prepareTimeoutMs: 0,
     env: { DNLS_STATE_ROOT: state },
     httpProbe: () => false,
@@ -41,8 +52,6 @@ test('lifecycle suspend and resume follow the running session and history stays 
       return {}
     } }),
   })
-  // A successful /open now needs an actual engine face, supplied by this fixture.
-  session.httpBase = 'http://engine.invalid'
   const opened = await call(routes['/nano-local-sandbox/open'], { method: 'POST', body: { url: 'https://example.com' } })
   assert.equal(opened.body.ok, true)
   const suspended = await call(routes['/nano-local-sandbox/lifecycle'], { method: 'POST', body: { action: 'suspend' } })

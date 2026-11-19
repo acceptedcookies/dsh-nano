@@ -27,9 +27,15 @@ runtime:
   services:
     - id: engine
       port: 8787
+      protocol: tcp
+      cwd: /opt/kitesurf/packages/engine
+      role: engine
       command: wrangler dev --env local -c wrangler.jsonc --persist-to volume
     - id: mcp-bridge
       port: 8791
+      protocol: tcp
+      cwd: /
+      role: bridge
       command: node /mcp-bridge.mjs
   state:
     kv: volume
@@ -38,6 +44,9 @@ runtime:
     resources:
       cpus: 4
       memory: 4G
+    limits:
+      cpus: 8
+      memoryBytes: 8589934592
 instance:
   name: kitesurf
   ports:

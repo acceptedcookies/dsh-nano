@@ -41,7 +41,10 @@ function fingerprintOf(action, sandboxId, params) {
 
 /** Normalized, approved submit params — never persisted, only fingerprinted. */
 function normalizeParams(action, args) {
-  const allowed = { create: ['name', 'requestId'], recreate: ['requestId'] }
+  const allowed = {
+    create: ['name', 'requestId', 'profileId'],
+    recreate: ['requestId', 'expectedRevision', 'interruptTerminals', 'preserveVolume'],
+  }
   const keys = new Set(allowed[action] ?? ['requestId'])
   const meta = new Set(['sandboxId', 'action', 'operationId']) // selectors, not params
   const params = {}
@@ -100,8 +103,68 @@ export function createObservationSource({ backend, profileFor }) {
       generation: createHash('sha256').update(`${configuration.id}\n${seconds}`).digest('hex').slice(0, 32),
       stateVolume: boundedText(recipe?.stateSource) ? recipe.stateSource : null,
       state,
+      creationDate: seconds,
+      publications: actualPublications(configuration),
+      resources: actualResources(configuration),
+      mounts: actualMounts(configuration),
+      imageDigest: typeof configuration.image?.descriptor?.digest === 'string'
+        && /^sha256:[0-9a-f]{64}$/.test(configuration.image.descriptor.digest)
+        ? configuration.image.descriptor.digest : null,
+      observedAt: new Date().toISOString(),
     }
   }
+}
+
+const LOOPBACK_ADDRS = new Set(['127.0.0.1', '::1'])
+const PUB_PROTOS = new Set(['tcp', 'udp'])
+
+/**
+ * Actual published tuples from inspect — the engine's own PublishPort
+ * record `{hostAddress,hostPort,containerPort,proto,count}`. Ambiguous
+ * (count>1), wildcard, non-loopback or unpublished entries are evidence
+ * that proves nothing, so they are dropped rather than normalized.
+ */
+function actualPublications(configuration) {
+  const ports = configuration?.publishedPorts
+  if (!Array.isArray(ports)) return null
+  const out = []
+  for (const port of ports) {
+    if (!port || typeof port !== 'object') return null
+    const containerPort = Number(port.containerPort)
+    const hostPort = Number(port.hostPort)
+    const protocol = String(port.proto ?? port.protocol ?? 'tcp').toLowerCase()
+    const hostAddress = String(port.hostAddress ?? '')
+    const count = port.count === undefined ? 1 : Number(port.count)
+    if (!LOOPBACK_ADDRS.has(hostAddress) || !PUB_PROTOS.has(protocol) || count !== 1 ||
+        !Number.isInteger(containerPort) || containerPort < 1 || containerPort > 65535 ||
+        !Number.isInteger(hostPort) || hostPort < 1 || hostPort > 65535) return null
+    out.push({ serviceId: null, containerPort, hostPort, protocol, hostAddress })
+  }
+  return out
+}
+
+function actualResources(configuration) {
+  const resources = configuration?.resources
+  if (!resources || typeof resources !== 'object') return {}
+  const out = {}
+  const cpus = Number(resources.cpus)
+  if (Number.isFinite(cpus) && cpus > 0) out.cpus = cpus
+  const memoryBytes = Number(resources.memoryInBytes ?? resources.memoryBytes)
+  if (Number.isInteger(memoryBytes) && memoryBytes > 0) out.memoryBytes = memoryBytes
+  return out
+}
+
+function actualMounts(configuration) {
+  const mounts = configuration?.mounts
+  if (!Array.isArray(mounts)) return []
+  return mounts
+    .filter((mount) => mount && typeof mount === 'object')
+    .map((mount) => ({
+      type: typeof mount.type === 'string' ? mount.type : Object.keys(mount.type ?? {})[0],
+      source: typeof mount.source === 'string' ? mount.source : null,
+      target: mount.destination ?? mount.target ?? null,
+      readOnly: mount.options?.includes?.('ro') === true || mount.readOnly === true,
+    }))
 }
 
 /**
@@ -144,7 +207,7 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
       tool: {
         name: 'sandbox.instance.create',
         description: 'Create a managed sandbox; returns an accepted operation, never an address.',
-        inputSchema: { type: 'object', properties: { name: { type: 'string' }, requestId: { type: 'string' } }, required: ['name', 'requestId'], additionalProperties: false },
+        inputSchema: { type: 'object', properties: { name: { type: 'string' }, profileId: { type: 'string' }, requestId: { type: 'string' } }, required: ['name', 'requestId'], additionalProperties: false },
       },
       target: 'none',
     }],
@@ -154,7 +217,10 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
         tool: {
           name: `sandbox.instance.${action}`,
           description: `Managed ${action} on one explicit sandboxId.`,
-          inputSchema: { type: 'object', properties: { sandboxId: { type: 'string' }, requestId: { type: 'string' } }, required: ['sandboxId', 'requestId'], additionalProperties: false },
+          inputSchema: { type: 'object', properties: { sandboxId: { type: 'string' }, requestId: { type: 'string' },
+            ...(action === 'recreate' ? { expectedRevision: { type: 'integer' }, interruptTerminals: { const: true },
+              preserveVolume: { const: true } } : {}) }, required: ['sandboxId', 'requestId',
+            ...(action === 'recreate' ? ['expectedRevision', 'interruptTerminals', 'preserveVolume'] : [])], additionalProperties: false },
         },
         target: 'object',
       },
@@ -211,8 +277,13 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
       return refusal(403, 'denied')
     }
     let createIntent
+    let portPlan = null
+    let profile = null
+    if (action === 'create' || action === 'recreate') {
+      profile = await profileFor({ envId, profileId: action === 'create' ? params.profileId : registry.get(sandboxId)?.profileId })
+      portPlan = action === 'create' && typeof profile.portPlan === 'function' ? profile.portPlan() : null
+    }
     if (action === 'create') {
-      const profile = await profileFor({ envId })
       createIntent = { name: params.name, profileId: profile.profileId, principal: principal.key, recipeRef: profile.recipeRef }
       if (!boundedText(createIntent.recipeRef)) throw paramsError('recipeRef')
     }
@@ -224,6 +295,8 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
       sandboxId: sandboxId ?? null,
       createIntent: createIntent ?? null,
       fingerprint,
+      portPlan,
+      argsJson: action === 'recreate' ? JSON.stringify({ expectedRevision: params.expectedRevision ?? null, interruptTerminals: params.interruptTerminals === true, preserveVolume: params.preserveVolume === true }) : null,
     })
     auditSafe({ principal: principal.key, sandboxId: operation.sandboxId, action, result: isNew ? 'accepted' : 'duplicate', operationId: operation.operationId })
     if (isNew) {
@@ -296,7 +369,7 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
     try {
       return registry.transition(operationId, 'running', outcome)
     } catch (error) {
-      throw Object.assign(new Error('durable commit failed'), { cause: error })
+      throw Object.assign(new Error('durable commit failed'), { cause: error, code: 'DNLS_COMMIT_FAILED' })
     }
   }
 
@@ -315,7 +388,7 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
     const done = (result, patch, auditResult) => {
       let ended
       try {
-        ended = finish(operationId, { state: result, step: patch?.step ?? result, binding: patch?.binding, removed: patch?.removed })
+        ended = finish(operationId, { state: result, step: patch?.step ?? result, binding: patch?.binding, removed: patch?.removed, appliedRevision: patch?.appliedRevision })
       } catch (error) {
         auditSafe({ principal: operation.principal, sandboxId, action: operation.action, result: 'uncertain', operationId })
         throw error
@@ -340,32 +413,104 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
     }
     if (!(await stillAuthorized())) return
     const locator = row.binding.locator
+    let createDispatched = false
     try {
       if (operation.action === 'create') {
         const profile = await profileFor({ envId, profileId: row.profileId })
         const spec = typeof profile?.createSpec === 'function' ? profile.createSpec(row) : null
+        const evidence = profile?.verifySpec && spec ? await backend.imageEvidence(spec.image) : null
+        if (profile?.verifySpec && !/^sha256:[0-9a-f]{64}$/.test(evidence?.digest)) return done('failed', { step: 'image-precheck', removed: true })
         const mounts = Array.isArray(spec?.mounts) ? spec.mounts : []
         if (spec?.containerName !== locator ||
             typeof spec.image !== 'string' || spec.image.length === 0 ||
             !mounts.some((mount) => mount?.source === row.stateVolume)) {
-          return done('failed', { step: 'precheck' })
+          return done('failed', { step: 'precheck', removed: true })
         }
         if (!(await stillAuthorized())) return
+        createDispatched = true
         await backend.create(spec)
         const obs = await observed(locator, row)
         // A fresh object proves itself: same locator+mount, running, with a
-        // real generation to bind — never a trusted-by-name success.
+        // real generation to bind — never a trusted-by-name success. When
+        // the profile can verify the whole spec, ports/resources/digest are
+        // checked against live inspect evidence too.
         if (!obs || obs.state !== 'running' || obs.locator !== locator ||
             obs.stateVolume !== row.stateVolume || !boundedText(obs.generation)) {
-          return done(obs ? 'failed' : 'indeterminate', { step: 'verify' })
+          return done('indeterminate', { step: 'verify' })
         }
-        return done('succeeded', { step: 'verify', binding: { locator, generation: obs.generation } })
+        if (profile.verifySpec && !profile.verifySpec(obs, row, { spec, imageDigest: evidence.digest })) {
+          return done('indeterminate', { step: 'verify' })
+        }
+        const appliedRevision = evidence ? { revision: row.desiredRevision?.revision ?? 0,
+          generation: obs.generation, recipeRef: row.recipeRef, imageDigest: evidence.digest, verifiedAt: new Date().toISOString() } : undefined
+        return done('succeeded', { step: 'verify', binding: { locator, generation: obs.generation }, appliedRevision })
       }
 
       if (operation.action === 'recreate') {
-        // Strictly disabled until P6's real preflight+replace adapter —
-        // never simulated by create-on-existing.
-        return done('failed', { step: 'precheck' })
+        // Verified resource-only replace: explicit consent args, frozen
+        // desired revision, evidence gathered before the first stop, and
+        // the prior applied receipt is only advanced on a proven new
+        // generation — never on an uncertain one.
+        let args
+        try {
+          args = JSON.parse(operation.args ?? '{}')
+        } catch {
+          args = {}
+        }
+        if (args.interruptTerminals !== true || args.preserveVolume !== true || !Number.isInteger(args.expectedRevision)) {
+          return done('failed', { step: 'precheck' })
+        }
+        if (!(await stillAuthorized())) return
+        const pre = await observed(locator, row)
+        if (!pre || !verified(row, pre)) return done(pre ? 'failed' : 'indeterminate', { step: 'pre-inspect' })
+        const profile = await profileFor({ envId, profileId: row.profileId })
+        if (typeof profile?.preflight !== 'function' || !profile.verifySpec || !profile.createSpec || !backend.imageEvidence) return done('failed', { step: 'precheck' })
+        const overrides = row.desiredRevision?.overrides ?? {}
+        const spec = profile.createSpec(row, { overrides })
+        const evidence = await backend.imageEvidence(spec.image)
+        let plan
+        try {
+          plan = profile.preflight(row, { operationId, spec, existing: pre, expectedRevision: args.expectedRevision, overrides, evidence: { imageDigest: evidence?.digest } })
+        } catch {
+          return done('failed', { step: 'precheck' })
+        }
+        const fresh = await observed(locator, row)
+        if (!verified(row, fresh) || fresh.state !== pre.state || fresh.imageDigest !== plan.imageDigest) return done('indeterminate', { step: 'pre-inspect' })
+        if (!(await stillAuthorized())) return
+        // Verified stop → end owned terminals → verified absence → recreate
+        // with the same locator, volume and reserved tuples.
+        if (pre.state !== 'stopped') {
+          await backend.stop(locator)
+          const mid = await observed(locator, row)
+          if (!mid || mid.state !== 'stopped' || !verified(row, mid)) return done('indeterminate', { step: 'stop-verify' })
+        }
+        for (const terminal of row.terminals ?? []) {
+          if (terminal.state !== 'ended' && terminal.generation === row.binding.generation) {
+            registry.transitionTerminal(row.sandboxId, terminal.terminalId, { state: 'ended', generation: terminal.generation })
+          }
+        }
+        const stopped = await observed(locator, row)
+        if (!verified(row, stopped) || stopped.state !== 'stopped') return done('indeterminate', { step: 'remove-precheck' })
+        if (!(await stillAuthorized())) return
+        await backend.remove(locator)
+        const absent = await observed(locator, row)
+        if (!absent || absent.state !== 'missing' || absent.locator !== locator) return done('indeterminate', { step: 'remove-verify' })
+        if (!(await stillAuthorized())) return
+        await backend.create(spec)
+        const post = await observed(locator, row)
+        if (!post || post.state !== 'running' || post.locator !== locator ||
+            post.stateVolume !== row.stateVolume || !boundedText(post.generation) ||
+            post.generation === row.binding.generation ||
+            !profile.verifySpec(post, row, { spec, imageDigest: plan.imageDigest })) {
+          return done('indeterminate', { step: 'verify' })
+        }
+        return done('succeeded', { step: 'verify', binding: { locator, generation: post.generation }, appliedRevision: {
+          revision: plan.revision,
+          generation: post.generation,
+          recipeRef: row.recipeRef,
+          imageDigest: plan.imageDigest,
+          verifiedAt: new Date().toISOString(),
+        } })
       }
 
       const pre = await observed(locator, row)
@@ -420,7 +565,8 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
       }
       return done('failed', { step: 'dispatch' })
     } catch (error) {
-      if (error?.cause) throw error // failed durable commit already surfaced
+      if (error?.code === 'DNLS_COMMIT_FAILED') throw error
+      if (operation.action === 'create' && !createDispatched) return done('failed', { step: 'precheck', removed: true })
       // IO may already have left the process; evidence is unknown.
       return done('indeterminate', { step: 'dispatch' })
     }

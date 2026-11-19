@@ -245,6 +245,20 @@ export function createAppleBackend(spec = {}, io = {}) {
         throw error
       }
     },
+    /**
+     * Read-only image proof: `container image inspect <tag>` must yield
+     * exactly one ImageResource; its `configuration.descriptor.digest` is
+     * the only digest evidence — a tag or repo hash is never equated.
+     */
+    async imageEvidence(tag) {
+      const text = await runFile(bound, ['image', 'inspect', tag])
+      let data
+      try { data = JSON.parse(text) } catch { data = null }
+      if (!Array.isArray(data) || data.length !== 1) return null
+      const digest = data[0]?.configuration?.descriptor?.digest
+      if (typeof digest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(digest)) return null
+      return { tag: String(tag), digest }
+    },
     async exec(name, argv) {
       calls.exec += 1
       await run(bound, ['exec', name, ...argv])

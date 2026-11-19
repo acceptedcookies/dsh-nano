@@ -113,10 +113,11 @@ export function createTerminalOwner({ registry, envId, observe, resolvePrincipal
     const cols = args.cols ?? 80
     const rows = args.rows ?? 24
     // Trusted driver resolves/validates the guest cwd; host paths are never cwd.
+    if (!resolveCwd && (args.service !== undefined || args.cwd !== undefined)) throw paramsError('cwd')
     const cwd = resolveCwd ? await resolveCwd(row, { cwd: args.cwd, service: args.service }) : '/'
     if (typeof cwd !== 'string' || !cwd.startsWith('/')) throw fail(400, 'cwd rejected')
     // resolveCwd awaited: the binding may have moved — recheck before spawn.
-    if (!freshRow(row.sandboxId, row)) throw fail(503, 'unavailable')
+    if ((await guarded(peer, 'terminal.create', row)).principal.key !== principal.key) throw fail(403, 'denied')
     const fingerprint = openFingerprint({ paneId: args.paneId, cols, rows, cwd, service: args.service ?? null })
     const { isNew, ref } = registry.reserveTerminal(row.sandboxId, {
       principal: principal.key,

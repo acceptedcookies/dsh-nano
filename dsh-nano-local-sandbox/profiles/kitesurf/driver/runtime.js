@@ -101,11 +101,15 @@ export function assertRuntime(manifest, deps = {}) {
 }
 
 export function mounts(manifest, deps, stateDir) {
+  return managedMounts(manifest, deps, stateDir).map(({ arg }) => ({ arg }))
+}
+
+export function managedMounts(manifest, deps, stateDir) {
   const runtime = assertRuntime(manifest, deps)
   mkdirSync(stateDir, { recursive: true })
   return [
-    { arg: `type=virtiofs,source=${runtime},target=/opt/kitesurf,readonly` },
-    { arg: 'type=tmpfs,target=/opt/kitesurf/packages/engine/.wrangler' },
-    { arg: `type=virtiofs,source=${stateDir},target=/var/lib/kitesurf-state` },
+    { arg: `type=virtiofs,source=${runtime},target=/opt/kitesurf,readonly`, type: 'virtiofs', source: runtime, target: '/opt/kitesurf', readOnly: true },
+    { arg: 'type=tmpfs,target=/opt/kitesurf/packages/engine/.wrangler', type: 'tmpfs', source: null, target: '/opt/kitesurf/packages/engine/.wrangler', readOnly: false },
+    { arg: `type=virtiofs,source=${stateDir},target=/var/lib/kitesurf-state`, type: 'virtiofs', source: stateDir, target: '/var/lib/kitesurf-state', readOnly: false },
   ]
 }

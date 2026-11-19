@@ -16,8 +16,17 @@ function harness(t, navigate) {
     if (method === 'Page.navigate') return navigate(params)
     return {}
   } }
-  const session = { phase: 'running', history: [], httpBase: 'http://engine.invalid', cdp: client }
-  const route = routeSpecs({ session, env: { DNLS_STATE_ROOT: home } }).find(row => row.path.endsWith('/open'))
+  const session = { phase: 'running', history: [], cdp: client }
+  const backend = {
+    // A successful /open now needs the engine's actual published tuple;
+    // the session.cdp client is what the route talks to after that proof.
+    async inspect() {
+      return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [
+        { containerPort: 8787, hostPort: 48798, hostAddress: '127.0.0.1' },
+      ] } }]) }
+    },
+  }
+  const route = routeSpecs({ session, env: { DNLS_STATE_ROOT: home }, backend }).find(row => row.path.endsWith('/open'))
   const open = async url => {
     let body
     const res = { statusCode: 0, end(raw) { body = JSON.parse(raw) } }
@@ -87,8 +96,9 @@ function harnessBlocked(t, { bodyText = 'kitesurf: egress timeout after 4000ms',
     if (method === 'Runtime.evaluate') return { result: { value: { url: 'http://dead.invalid/', title: '', readyState: 'complete', root: true, bodyBytes: bodyText.length, bodyText } } }
     return {}
   } }
-  const session = { phase: 'running', history: [], httpBase: 'http://engine.invalid', cdp: client, network }
-  const route = routeSpecs({ session, env: { DNLS_STATE_ROOT: home } }).find(row => row.path.endsWith('/open'))
+  const session = { phase: 'running', history: [], cdp: client, network }
+  const backend = { async inspect() { return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [{ containerPort: 8787, hostPort: 48798, hostAddress: '127.0.0.1' }] } }]) } } }
+  const route = routeSpecs({ session, env: { DNLS_STATE_ROOT: home }, backend }).find(row => row.path.endsWith('/open'))
   const open = async url => {
     let body
     const res = { statusCode: 0, end(raw) { body = JSON.parse(raw) } }

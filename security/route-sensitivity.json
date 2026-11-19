@@ -1083,7 +1083,7 @@
       "capability": "write:engine",
       "bodyLimit": 4096,
       "sessionBinding": false,
-      "justification": "CONTROL_ROUTE (HITL) — proxies the container MCP bridge loopback /control (engine port +1): GET reads writer/humanHold/lastAction, POST {action:takeover|release} toggles the sticky human override refusing agent MCP writes. Shared-engine control, L2.",
+      "justification": "CONTROL_ROUTE (HITL) — proxies the container MCP bridge loopback /control at its actual verified published tuple (re-inspected per dispatch; no +1 convention, no stored base): GET reads writer/humanHold/lastAction, POST {action:takeover|release} toggles the sticky human override refusing agent MCP writes. Shared-engine control, L2.",
       "id": "dnls.control",
       "channel": "http",
       "match": "exact"

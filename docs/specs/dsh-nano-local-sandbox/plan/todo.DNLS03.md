@@ -42,9 +42,9 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - [x] **P5-03** [DNT] `McpLane` 按公告合同消费，local 与第三方仍使用原协议；已重建 client（`DNLS03-T42`）。
 
 ### Phase 6
-- [ ] **P6-01** 服务预留 — `routes.js:1114-1127`；`profile-drivers.js:138-149`；`profile.yaml:25-56`；地址只来自同一对象的 inspect；邻号被占不影响（`DNLS03-T50`）
-- [ ] **P6-02** 修订 — `control-registry.js`；保存候选不启停；`appliedRevision` 只是回执（`DNLS03-T51`）
-- [ ] **P6-03** 分钟库 — `src/host/usage-minutes.js`（新）；`backend-apple.js:190-197`；24h/7d/30d 查同一份槽；断段不插值（`DNLS03-T52`）
+- [x] **P6-01** 服务预留与 inspect 实际映射（`DNLS03-T50`）；实测相邻端口不被请求，映射消失停止请求。
+- [x] **P6-02** 保存候选不启停；核实换代后原子提交操作、代次与 `appliedRevision` 回执（`DNLS03-T51`）。
+- [x] **P6-03** 单写者分钟库；三个窗口共用一份槽，断段不插值（`DNLS03-T52`）。
 
 ### Phase 7
 - [ ] **P7-01** fleet 投影 — `routes.js` 新只读路由；`observe.js:34` 不得升格为恢复真源；窄行不含正文/路径/凭证；进程默认 50、上限 200（`DNLS03-T60`）
@@ -79,8 +79,16 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 
 校时：17:46:28Z 首轮为 21/21 与 20/20；上列 22/22 与 26/26 是 18:02:46Z 复审后的结果。
 
+- Phase 6 staged 代码流 P6-01/02 部分落地（公开激活待原子同切；基于 Phase 5 提交 `b7f3d34` 工作树）：2026-11-19T18:14:35Z，`node --test test/{service-ports,managed-revision,lifecycle-operation,control-registry}.test.mjs`，47 pass / 0 fail。已落地：台账行 schema 增 `ports[]`（{serviceId,containerPort,hostPort,protocol,hostAddress} 环回/tcp|udp/无重复元组，墓碑释放、重开拒绝活行冲突）、`managedAt` epoch-ms、`desiredRevision`、`appliedRevision`、`saveRevision`/`applyRevision`、create intent 内同步全量端口分配（跨 profile 扫活行）、adopt 精确发布元组、operation.args 持久化规范化参数；`managed-profile.js` `createManagedProfileSource`/`serviceMappings`（driver 装载、服务声明验证 cwd/protocol/role、env 端口池 prod/dev/desktop 不相交、覆盖限值校验、preflight/verifySpec/createSpec/resolveCwd/portPlan 接缝）；`profile.yaml` 服务 decl 增 protocol/cwd/role 与 isolation.limits；observation 保留 publications/resources/mounts/imageDigest/creationDate/observedAt（PublishPort 拒绝 count>1/通配/非环回）；`backend.imageEvidence(tag)`（ImageResource 长度1 descriptor.digest sha256）；lifecycle create 走 createSpec+verifySpec+按 desiredRevision 落 applied 凭据，recreate 显式 expectedRevision/interruptTerminals/preserveVolume 预检→验停→终断终端→验缺席→同 locator/volume/ports 重建→verifySpec 后先绑世代再记 applied 凭据，partial 一律 indeterminate 不伪造。阻塞未落地：routes.js bridgeControlBase/ensureBase/observeOnce 全面改经 verified publications 与移除 +1/hostname 回退（2582 行大手术未做）、docs bindings +1 安全论证文本、term-bridge resolveCwd 走服务 cwd allowlist、capability 路由对外暴露 revision/service 面。recipe digest 不受影响（yaml 与 driver 在配方外）。
+
 ## 5. 交接
-Phase 5 staged 托管数据面已完成（公开激活待原子同切）；当前节点 Phase 6。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
+Phase 5 提交 `b7f3d34`。Phase 6 内核验证完成；下游待 Phase 7 与 Phase 8 的公开同切。记录均来自独立工作树，不是 Apple 实机部署证明：
+
+- T50：2026-11-19T18:23:21Z，`node --test dsh-nano-local-sandbox/test/{loop3-gaps,routes,instances-ensure,elements-route,dom-health-routes,navigation-route,network-route,page-routes,lifecycle-route,adopt-running,kitesurf-runtime,repin-reconciliation,delivery-guard}.test.mjs`，131 pass / 0 fail。`/control` 只命中 `engine+2`，`engine+1` 接收零请求；另有真实回环监听验证撤掉映射后无后续流量。
+- T51：2026-11-19T18:28:54Z，`node --test dsh-nano-local-sandbox/test/{environment-owner,term-bridge,managed-revision,lifecycle-operation,service-ports}.test.mjs`，50 pass / 0 fail / 0 skip。实际 profile 与 MCP 路由组合；保存不调 backend，第二次用旧修订返回 409；实测资源不符保留最后回执。较早的 47 项仅是内核夹具，不作为端到端证明。
+- T52：2026-11-19T18:24:20Z，`node --test dsh-nano-local-sandbox/test/usage-minutes.test.mjs`，2 pass / 0 fail / 0 skip。删除临时库中的一分钟后，CPU 不跨缺口；第二写者被拒，读窗口不采样。
+
+当前节点 Phase 7；审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`，closure 存放 `../closure/DNLS03-closure.md`。
 
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。

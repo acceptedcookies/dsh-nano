@@ -71,6 +71,7 @@ export default function createDriver(api) {
     runtimeRoot: runtime.runtimeRoot,
     assertRuntime: runtime.assertRuntime,
     mounts: runtime.mounts,
+    managedMounts: runtime.managedMounts,
     inspectedRecipe: reconciliation.inspectedRecipe,
     drift: reconciliation.recipeDrift,
     recreatePorts: reconciliation.recreatePorts,

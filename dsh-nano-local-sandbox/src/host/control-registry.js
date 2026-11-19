@@ -37,12 +37,18 @@ const MAX_PATH = 4096
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const KNOWN_STATES = new Set(['running', 'stopped', 'missing'])
 const DOC_KEYS = ['version', 'envId', 'sandboxes']
-const ROW_KEYS = ['sandboxId', 'name', 'profileId', 'principal', 'recipeRef', 'origin', 'stateVolume', 'binding', 'ports', 'operations', 'terminals', 'removed']
+const ROW_KEYS = ['sandboxId', 'name', 'profileId', 'principal', 'recipeRef', 'origin', 'stateVolume', 'binding', 'ports', 'managedAt', 'desiredRevision', 'appliedRevision', 'operations', 'terminals', 'removed']
+const PORT_KEYS = ['serviceId', 'containerPort', 'hostPort', 'protocol', 'hostAddress']
+const HOST_ADDRS = new Set(['127.0.0.1', '::1'])
+const PORT_PROTOS = new Set(['tcp', 'udp'])
+const REVISION_KEYS = ['revision', 'overrides']
+const OVERRIDE_KEYS = ['cpus', 'memoryBytes']
+const APPLIED_KEYS = ['revision', 'generation', 'recipeRef', 'imageDigest', 'verifiedAt']
 const BINDING_KEYS = ['locator', 'generation']
 const INTENT_KEYS = ['name', 'profileId', 'principal', 'recipeRef']
 const OBSERVATION_KEYS = ['locator', 'generation', 'stateVolume', 'state']
 const ORIGINS = new Set(['created', 'adopted'])
-const OP_KEYS = ['operationId', 'requestId', 'principal', 'action', 'sandboxId', 'fingerprint', 'state', 'step', 'at', 'finishedAt']
+const OP_KEYS = ['operationId', 'requestId', 'principal', 'action', 'sandboxId', 'fingerprint', 'args', 'state', 'step', 'at', 'finishedAt']
 const OP_STATES = new Set(['accepted', 'running', 'succeeded', 'failed', 'indeterminate', 'cancelled'])
 const OP_PENDING = new Set(['accepted', 'running', 'indeterminate'])
 const OP_TERMINAL = new Set(['succeeded', 'failed', 'cancelled'])
@@ -121,6 +127,7 @@ function validateStoredOperation(operation, sandboxId, what) {
   for (const key of ['requestId', 'principal', 'action', 'fingerprint', 'step', 'at']) {
     if (!boundedText(operation[key])) throw conflict(`${what} ${key} out of bounds`)
   }
+  if (operation.args !== null && !boundedText(operation.args)) throw conflict(`${what} args out of bounds`)
   if (!WRITE_ACTIONS.has(operation.action)) throw conflict(`${what} action is not a managed write`)
   if (operation.sandboxId !== sandboxId) throw conflict(`${what} sandboxId does not match its row`)
   if (!OP_STATES.has(operation.state)) throw conflict(`${what} state is not a known operation state`)
@@ -130,6 +137,45 @@ function validateStoredOperation(operation, sandboxId, what) {
   if (OP_TERMINAL.has(operation.state) && operation.finishedAt === null) {
     throw conflict(`${what} terminal state without finishedAt`)
   }
+}
+
+function isEpochMs(value) {
+  return Number.isInteger(value) && value >= 0
+}
+
+function isRevision(value) {
+  return Number.isInteger(value) && value >= 1
+}
+
+/**
+ * One published port reservation — the exact tuple form only:
+ * `{serviceId,containerPort,hostPort,protocol,hostAddress}` with loopback
+ * addresses and tcp|udp. No ranges, no wildcards, no guest-chosen binds.
+ */
+function validateStoredPort(port) {
+  exactKeys(port, PORT_KEYS, 'stored port')
+  for (const key of PORT_KEYS) if (!Object.hasOwn(port, key)) throw conflict(`stored port missing ${key}`)
+  if (!boundedText(port.serviceId)) throw conflict('stored port serviceId out of bounds')
+  for (const key of ['containerPort', 'hostPort']) {
+    if (!Number.isInteger(port[key]) || port[key] < 1 || port[key] > 65535) throw conflict(`stored port ${key} out of range`)
+  }
+  if (!PORT_PROTOS.has(port.protocol)) throw conflict('stored port protocol is not tcp|udp')
+  if (!HOST_ADDRS.has(port.hostAddress)) throw conflict('stored port hostAddress is not loopback')
+}
+
+/** `{revision:<monotonic int>,overrides:{cpus?,memoryBytes?}}` or null. */
+function validateStoredRevision(revision, what) {
+  if (revision === null) return
+  exactKeys(revision, REVISION_KEYS, what)
+  for (const key of REVISION_KEYS) if (!Object.hasOwn(revision, key)) throw conflict(`${what} missing ${key}`)
+  if (!isRevision(revision.revision)) throw conflict(`${what} revision is not a positive integer`)
+  const overrides = revision.overrides
+  if (overrides === null || typeof overrides !== 'object' || Array.isArray(overrides)) throw conflict(`${what} overrides must be an object`)
+  for (const key of Object.keys(overrides)) {
+    if (!OVERRIDE_KEYS.includes(key)) throw conflict(`${what} override key is not supported: ${key}`)
+  }
+  if (overrides.cpus !== undefined && !(Number.isFinite(overrides.cpus) && overrides.cpus > 0)) throw conflict(`${what} overrides.cpus out of range`)
+  if (overrides.memoryBytes !== undefined && !(Number.isInteger(overrides.memoryBytes) && overrides.memoryBytes > 0)) throw conflict(`${what} overrides.memoryBytes out of range`)
 }
 
 /**
@@ -168,8 +214,33 @@ function validateStoredRow(row, rootPath, seen) {
   if (row.origin === 'created' && row.stateVolume !== join(rootPath, row.profileId, row.sandboxId)) {
     throw conflict('stored created volume does not match its allocated path')
   }
-  // Port allocations arrive with P6's validated schema; until then only `[]`.
-  if (!Array.isArray(row.ports) || row.ports.length !== 0) throw conflict('stored ports must be an empty array')
+  if (!Array.isArray(row.ports)) throw conflict('stored ports is not an array')
+  const portServices = new Set()
+  for (const port of row.ports) {
+    validateStoredPort(port)
+    if (portServices.has(port.serviceId)) throw conflict('duplicate serviceId in stored ports')
+    portServices.add(port.serviceId)
+    // Tombstones retain their persisted tuples but release the reservation;
+    // only live rows compete for published tuples on reopen.
+    const tuple = `${port.hostAddress}\n${port.hostPort}\n${port.protocol}`
+    if (row.removed !== true) {
+      if (seen.tuples.has(tuple)) throw conflict('duplicate published port tuple in stored registry')
+      seen.tuples.add(tuple)
+    }
+  }
+  if (!isEpochMs(row.managedAt)) throw conflict('stored managedAt is not a finite epoch-ms')
+  validateStoredRevision(row.desiredRevision, 'stored desiredRevision')
+  if (row.appliedRevision !== null) {
+    exactKeys(row.appliedRevision, APPLIED_KEYS, 'stored appliedRevision')
+    for (const key of APPLIED_KEYS) if (!Object.hasOwn(row.appliedRevision, key)) throw conflict(`stored appliedRevision missing ${key}`)
+    if (!Number.isSafeInteger(row.appliedRevision.revision) || row.appliedRevision.revision < 0 ||
+        row.appliedRevision.revision > (row.desiredRevision?.revision ?? 0) ||
+        !/^sha256:[0-9a-f]{64}$/.test(row.appliedRevision.imageDigest) ||
+        !Number.isFinite(Date.parse(row.appliedRevision.verifiedAt))) throw conflict('invalid stored appliedRevision')
+    for (const key of ['generation', 'recipeRef', 'imageDigest', 'verifiedAt']) {
+      if (!boundedText(row.appliedRevision[key])) throw conflict(`stored appliedRevision ${key} out of bounds`)
+    }
+  }
   if (row.removed !== true && row.removed !== false) throw conflict('stored removed is not a boolean')
   if (!Array.isArray(row.operations)) throw conflict('stored operations is not an array')
   for (const operation of row.operations) {
@@ -214,7 +285,7 @@ function parseDocument(text, rootPath, envId) {
   if (doc.version !== DOC_VERSION) throw conflict('registry document version is not supported')
   if (doc.envId !== envId) throw conflict('registry document belongs to a different env')
   if (!Array.isArray(doc.sandboxes)) throw conflict('registry sandboxes is not an array')
-  const seen = { sandboxId: new Set(), name: new Set(), locator: new Set(), stateVolume: new Set(), operationId: new Set(), dedupe: new Set(), terminalId: new Set() }
+  const seen = { sandboxId: new Set(), name: new Set(), locator: new Set(), stateVolume: new Set(), operationId: new Set(), dedupe: new Set(), terminalId: new Set(), tuples: new Set() }
   for (const row of doc.sandboxes) validateStoredRow(row, rootPath, seen)
   return doc.sandboxes
 }
@@ -314,6 +385,9 @@ export function openControlRegistry({ root, envId } = {}) {
         stateVolume: row.stateVolume,
         binding: { locator: row.binding.locator, generation: row.binding.generation },
         ports: row.ports.map((port) => structuredClone(port)),
+        managedAt: row.managedAt,
+        desiredRevision: structuredClone(row.desiredRevision),
+        appliedRevision: structuredClone(row.appliedRevision),
         operations: row.operations.map((operation) => structuredClone(operation)),
         terminals: (row.terminals ?? []).map((terminal) => structuredClone(terminal)),
         removed: row.removed,
@@ -388,11 +462,70 @@ export function openControlRegistry({ root, envId } = {}) {
       sandboxId,
       stateVolume: join(rootPath, input.profileId, sandboxId),
       ports: [],
+      managedAt: Date.now(),
+      desiredRevision: null,
+      appliedRevision: null,
       operations: [],
       terminals: [],
       removed: false,
       ...overrides,
     }
+  }
+
+  /**
+   * Every published tuple claimed by a live row, env-wide across profiles.
+   * Tombstones keep their volume but release their reservations.
+   */
+  function liveTuples() {
+    const claimed = new Map()
+    for (const row of rows) {
+      if (row.removed) continue
+      for (const port of row.ports) {
+        claimed.set(`${port.hostAddress}\n${port.hostPort}\n${port.protocol}`, port.serviceId)
+      }
+    }
+    return claimed
+  }
+
+  /**
+   * Allocate a full set of published tuples for the declared services inside
+   * one synchronous call — before any backend dispatch. `requests` is the
+   * trusted plan `[{serviceId,containerPort,protocol,hostAddress,portRange:[lo,hi]}]`;
+   * each tuple picks the smallest free hostPort in its range, failing closed
+   * when the range is exhausted or a live row already claims the tuple.
+   */
+  function allocatePorts(requests) {
+    if (!Array.isArray(requests)) throw conflict('port requests is not an array')
+    const claimed = liveTuples()
+    const allocated = []
+    const services = new Set()
+    for (const request of requests) {
+      const plan = exactKeys(request, ['serviceId', 'containerPort', 'protocol', 'hostAddress', 'portRange'], 'port request')
+      for (const key of ['serviceId', 'containerPort', 'protocol', 'hostAddress', 'portRange']) {
+        if (!Object.hasOwn(plan, key)) throw conflict(`port request missing ${key}`)
+      }
+      if (!boundedText(plan.serviceId)) throw conflict('port request serviceId out of bounds')
+      if (!Number.isInteger(plan.containerPort) || plan.containerPort < 1 || plan.containerPort > 65535) {
+        throw conflict('port request containerPort out of range')
+      }
+      if (!PORT_PROTOS.has(plan.protocol)) throw conflict('port request protocol is not tcp|udp')
+      if (!HOST_ADDRS.has(plan.hostAddress)) throw conflict('port request hostAddress is not loopback')
+      const [lo, hi] = plan.portRange
+      if (!Number.isInteger(lo) || !Number.isInteger(hi) || lo < 1 || hi > 65535 || lo > hi) {
+        throw conflict('port request portRange out of bounds')
+      }
+      if (services.has(plan.serviceId)) throw conflict(`duplicate serviceId in port plan: ${plan.serviceId}`)
+      services.add(plan.serviceId)
+      let hostPort = null
+      for (let candidate = lo; candidate <= hi; candidate += 1) {
+        if (!claimed.has(`${plan.hostAddress}\n${candidate}\n${plan.protocol}`)) { hostPort = candidate; break }
+      }
+      if (hostPort === null) throw registryError('sandbox.port_exhausted', 'no free host port in the configured environment range')
+      const tuple = { serviceId: plan.serviceId, containerPort: plan.containerPort, hostPort, protocol: plan.protocol, hostAddress: plan.hostAddress }
+      claimed.set(`${plan.hostAddress}\n${hostPort}\n${plan.protocol}`, plan.serviceId)
+      allocated.push(tuple)
+    }
+    return allocated
   }
 
   /** Persist a create intent first; no backend call is made here. */
@@ -426,7 +559,7 @@ export function openControlRegistry({ root, envId } = {}) {
    * persists its reservation AND its accepted operation in one publish,
    * before any privileged action runs.
    */
-  function accept({ principal, requestId, action, sandboxId, createIntent, fingerprint } = {}) {
+  function accept({ principal, requestId, action, sandboxId, createIntent, fingerprint, portPlan, argsJson = null } = {}) {
     assertLive()
     for (const [key, value] of [['principal', principal], ['requestId', requestId], ['action', action], ['fingerprint', fingerprint]]) {
       if (!boundedText(value)) throw conflict(`accept ${key} is required`)
@@ -446,8 +579,12 @@ export function openControlRegistry({ root, envId } = {}) {
       if (sandboxId !== null && sandboxId !== undefined) throw conflict('create takes no object selector')
       const input = checkedIntent(createIntent)
       if (rows.some((entry) => entry.name === input.name)) throw nameTaken(`sandbox name already registered: ${input.name}`)
-      row = newRow(input, { origin: 'created', binding: { locator: `dnls-${randomUUID()}`, generation: null } })
+      // The port plan is trusted profile/env config, never untrusted params;
+      // the whole set reserves synchronously before any backend dispatch.
+      const ports = portPlan === undefined || portPlan === null ? [] : allocatePorts(portPlan)
+      row = newRow(input, { origin: 'created', binding: { locator: `dnls-${randomUUID()}`, generation: null }, ports })
     } else {
+      if (portPlan !== undefined && portPlan !== null) throw conflict('only create carries a port plan')
       if (createIntent !== undefined && createIntent !== null) throw conflict('only create carries an intent')
       if (typeof sandboxId !== 'string' || !UUID_PATTERN.test(sandboxId)) throw conflict('a canonical sandboxId is required')
       row = findVisible(sandboxId)
@@ -463,6 +600,7 @@ export function openControlRegistry({ root, envId } = {}) {
       action,
       sandboxId: row.sandboxId,
       fingerprint,
+      args: argsJson === null ? null : (() => { if (!boundedText(argsJson)) throw conflict('accept args out of bounds'); return argsJson })(),
       state: 'accepted',
       step: 'accepted',
       at: new Date().toISOString(),
@@ -489,7 +627,7 @@ export function openControlRegistry({ root, envId } = {}) {
    * on a verified remove success or a predispatch-cancelled create (which
    * frees its quota slot). There is no undo of IO already sent.
    */
-  function transition(operationId, from, { state, step, binding, removed } = {}) {
+  function transition(operationId, from, { state, step, binding, removed, appliedRevision } = {}) {
     assertLive()
     if (!OP_STATES.has(state)) throw conflict('transition target is not a known operation state')
     const found = findOperation(operationId)
@@ -507,20 +645,29 @@ export function openControlRegistry({ root, envId } = {}) {
         throw conflict('only create/recreate may rebind')
       }
       exactKeys(binding, BINDING_KEYS, 'transition binding')
-      if (!boundedText(binding.locator) || !boundedText(binding.generation)) {
+      if (state !== 'succeeded' || binding.locator !== row.binding.locator || !boundedText(binding.generation)) {
         throw conflict('transition binding needs locator and generation')
       }
+    }
+    if (appliedRevision !== undefined) {
+      exactKeys(appliedRevision, APPLIED_KEYS, 'appliedRevision')
+      if (!binding || appliedRevision.generation !== binding.generation || appliedRevision.recipeRef !== row.recipeRef ||
+          appliedRevision.revision !== (row.desiredRevision?.revision ?? 0) ||
+          !/^sha256:[0-9a-f]{64}$/.test(appliedRevision.imageDigest) ||
+          !Number.isFinite(Date.parse(appliedRevision.verifiedAt))) throw conflict('invalid applied revision proof')
     }
     if (removed === true) {
       const allowed =
         (operation.action === 'remove' && state === 'succeeded') ||
-        (operation.action === 'create' && state === 'cancelled')
+        (operation.action === 'create' && (state === 'cancelled' ||
+          (state === 'failed' && ['precheck', 'image-precheck'].includes(step) && row.binding.generation === null)))
       if (!allowed) throw conflict('tombstone requires a verified remove or a predispatch cancelled create')
     }
     operation.state = state
     if (step !== undefined) operation.step = step
     if (OP_TERMINAL.has(state)) operation.finishedAt = new Date().toISOString()
     if (binding !== undefined) row.binding = { locator: binding.locator, generation: binding.generation }
+    if (appliedRevision !== undefined) row.appliedRevision = clone(appliedRevision)
     if (removed === true) row.removed = true
     publish()
     return clone(operation)
@@ -604,7 +751,7 @@ export function openControlRegistry({ root, envId } = {}) {
    * path. Re-adopting the same verified binding returns the same row; a
    * conflicting owner, profile or name is rejected.
    */
-  function adopt(intent, observation) {
+  function adopt(intent, observation, ports = []) {
     assertLive()
     const input = checkedIntent(intent)
     const obs = checkedObservation(observation, ['locator', 'generation', 'stateVolume'], 'adoption observation')
@@ -628,13 +775,29 @@ export function openControlRegistry({ root, envId } = {}) {
     if (rows.some((row) => row.stateVolume === obs.stateVolume)) {
       throw conflict('another object already uses this physical state volume')
     }
+    // Adoption populates the EXACT published tuples the engine reported —
+    // never a recomputed plan, and never colliding with a live row.
+    const claimed = liveTuples()
+    const services = new Set()
+    const adoptedPorts = ports.map((port) => {
+      validateStoredPort(port)
+      if (services.has(port.serviceId)) throw conflict('duplicate adopted service')
+      services.add(port.serviceId)
+      const tuple = `${port.hostAddress}\n${port.hostPort}\n${port.protocol}`
+      if (claimed.has(tuple)) throw conflict(`published tuple already claimed by another object: ${port.hostPort}`)
+      claimed.set(tuple, port.serviceId)
+      return { serviceId: port.serviceId, containerPort: port.containerPort, hostPort: port.hostPort, protocol: port.protocol, hostAddress: port.hostAddress }
+    })
     const row = {
       ...input,
       sandboxId: randomUUID(),
       origin: 'adopted',
       stateVolume: obs.stateVolume,
       binding: { locator: obs.locator, generation: obs.generation },
-      ports: [],
+      ports: adoptedPorts,
+      managedAt: Date.now(),
+      desiredRevision: null,
+      appliedRevision: null,
       operations: [],
       terminals: [],
       removed: false,
@@ -702,6 +865,35 @@ export function openControlRegistry({ root, envId } = {}) {
     return { state: obs.state, generation: row.binding.generation }
   }
 
+  /**
+   * Durable desired-revision save — bookkeeping only, never an action. The
+   * caller must prove `expectedRevision` equals the current desired revision
+   * (0 when none is set); a stale expectation or an in-flight operation
+   * rejects. Overrides are validated keys only; the profile bounds check is
+   * the caller's. Restoring defaults saves `{overrides:{}}` under the same
+   * expectedRevision rules.
+   */
+  function saveRevision(sandboxId, { expectedRevision, overrides } = {}) {
+    assertLive()
+    const row = findVisible(sandboxId)
+    if (!row) throw conflict('unknown sandboxId')
+    if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw conflict('expectedRevision is required')
+    if (row.operations.some((entry) => OP_PENDING.has(entry.state))) {
+      throw conflict('lifecycle operation in progress on this sandbox')
+    }
+    const current = row.desiredRevision?.revision ?? 0
+    if (expectedRevision !== current) {
+      const error = conflict('stale expectedRevision')
+      error.code = 'revision.stale'
+      throw error
+    }
+    const request = { revision: current + 1, overrides: overrides ?? {} }
+    validateStoredRevision(request, 'desiredRevision')
+    row.desiredRevision = { revision: request.revision, overrides: structuredClone(request.overrides) }
+    publish()
+    return clone(row.desiredRevision)
+  }
+
   function rename(sandboxId, name) {
     assertLive()
     if (!boundedText(name, MAX_NAME)) throw conflict('name out of bounds')
@@ -724,5 +916,5 @@ export function openControlRegistry({ root, envId } = {}) {
     db.close()
   }
 
-  return { get, list, reserve, adopt, rename, confirm, reconcile, accept, transition, operation, dedupe, reserveTerminal, transitionTerminal, close }
+  return { get, list, reserve, adopt, rename, confirm, reconcile, accept, transition, operation, dedupe, reserveTerminal, transitionTerminal, saveRevision, close }
 }

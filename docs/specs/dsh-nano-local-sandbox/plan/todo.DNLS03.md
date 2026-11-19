@@ -11,7 +11,7 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 
 ### Phase 0
 - [x] **P0-01** 语义 worktree — `.agents/worktrees/dnls03-managed-sandbox-control`；后续改动不落在当前 `main` 工作区（`DNLS03-T00`）— 已收口：worktree 位于 `18ea26f`（`git worktree list` / 分支 `dnls03-managed-sandbox-control`），UTC `2026-11-19T16:09:42Z`
-- [ ] **P0-02** 复核测量锚 — §7.1 锚表；任一锚不符则停，回 QNA，不改目标态（`DNLS03-T00`）
+- [x] **P0-02** 复核测量锚 — `DNLS03-T00`，`observed-OK-at-closure`，2026-11-19T16:13:58Z；27/27 符号命中、0 skip。命令见 §4。非产品验收。
 
 ### Phase 1
 - [ ] **P1-01** 控制台账 — `src/host/control-registry.js`（新）；`profile-drivers.js:152` `stateRootFor`；每 env 一份 `registry.json`，同目录临时文件后原子替换（`DNLS03-T01`）
@@ -64,10 +64,15 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - [ ] **STEP.8** — 回收、汇聚、核实全部审查报告，执行更新或修复并重入 测试↔修复 循环直至收口，更新 closure
 
 ## 4. 执行记录与证据
-执行状态：P0 进行中。开工点 `18ea26f`。主工作区保存原状：`9061673` [DNPR]，`909fa3f` 已移除的清单，`18ea26f` 计划与问答。`git fetch origin main` 后本地无落后提交。每笔 PASS 记录提交、命令、观测与 UTC；测试 ID 的否证以计划 §8.1、§8.5 为准。
+开工点 `18ea26f`。主工作区保存原状：`9061673` [DNPR]，`909fa3f` 已移除的清单，`18ea26f` 计划与问答。`git fetch origin main` 后本地无落后提交。每笔 PASS 记录提交、命令、观测与 UTC；测试 ID 的否证以计划 §8.1、§8.5 为准。
+
+- 横向：`index.apply → registerRoutes → routeSpecs`。现 `/mcp` 的 `buildOwners` 在同一 env 的现场上按 session 登记实例；`callTermTool` 的 create/list 走宿主 `active` 表；`observeOnce` 读 inspect，而 bridge 定位仍从 engine 推导。目标是替换权威来源，不是增加旁路台账。
+- 历史图谱（按职责演进，不表示直接父子）：`2b9ac0f` session 实例/空闲回收 → `ed99c71` 实际路由接线 → `74d734f` 容器 PTY 与观察快照 → `ede7e45` PTY resize/错误边界 → `43e83d1` kernel/driver 切割 → `d0ddac4` 状态卷归 kernel 分配 → `1e41d91` 计划取样。`git diff 1e41d91 18ea26f -- dsh-nano-local-sandbox dsh-nano-terminal dsh-nano-kitesurf` 无源码差异。
+- 正反例：唯一锚表为计划 §7.1；`test/lifecycle.spike.test.mjs` 的删行、`test/term-bridge.test.mjs` 的 create 发 URL 是旧语义；`threat.spike.test.mjs` 的 local 协议不是它们的替代断言。`context/apple-container`、`context/deepseek-harness` 仅供参考，不是构建输入。
+- T00：从 worktree 根执行 `DNLS_MEASURE_HOST_PIN="$(git rev-parse --path-format=absolute --git-common-dir)/../.dependencies/pinned/deepseek-harness" node --test dsh-nano-local-sandbox/test/once/dnls03-anchors.once.test.mjs`。一次性历史测量，不加入包测试；以本阶段提交重现。A-23 命中 `admit(request)`；当前 pin `9c2670d` / [dsh] rc.5，与 Q41 原取样 rc.1 `66491b0` 的 `rpc.ts`、`rpc-host.ts`、`peer.ts` Git blob 分别同为 `aec79d0`、`88e7b48`、`3978399`。不推论运行时的业务权限或页签已可用。
 
 ## 5. 交接
-当前节点 P0-02。下一步：在隔离树核对计划 §7.1；不把旧包的绿灯当作新实现。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
+Phase 0 已完成；下一节点 Phase 1。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
 
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。

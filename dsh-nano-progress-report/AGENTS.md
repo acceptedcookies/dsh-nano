@@ -2,7 +2,7 @@
 
 只处理这一个包。不要安装、不要修改、也不要假设旁边还有别的 nano 插件。
 周围仓库、`context/`、本机手册都不在这个包里。
-装好的标志：会话右侧栏出现「Progress」标签（或 guide 页的 Progress 卡片），里面有按时间排的执行事件流、过滤条与可升降的 Tasks/Jobs 抽屉。
+装好的标志：会话视图出现「Progress」，头部动作也可把它打开到右侧 [dsh工作台]。视图含执行事件流、过滤条和 Tasks/Jobs 抽屉。
 
 ## 身份
 
@@ -13,11 +13,11 @@
 | 版本 | 读 `package.json` 的 `version`，不要写死 |
 | dsh 引擎 | 读 `package.json` 的 `engines.dsh` |
 | 平台 | 仅 web |
-| 宿主入口 | `index.js`（无宿主路由、无宿主状态） |
+| 宿主入口 | `index.js`（无宿主路由；加载宿主进度摘要与 PromptContext） |
 | 浏览器入口 | `lib/client.js` |
-| 宿主 inject | `slots`、`locale`、`sessions`、`sidebarRight`、`sidebarRightTabs`、`uiConversation`、`uiSession`、`jobs` |
+| 宿主 inject | `sessionProjections`、`systemPrompt`、`agents`；可选读取 goal、jobs |
 
-缺任何一个宿主 inject，插件在启动时失败，而不是单次请求失败。
+宿主必需服务缺失时，宿主贡献不会激活。
 
 ## 交付物
 
@@ -25,7 +25,7 @@
 |---|---|
 | `package.json` | 包名、`engines.dsh`、`files`、bundle patch、`dsh.client.inject` |
 | `cordis.patch.yml` | 插入插件 id。`name` 是包名 |
-| `index.js` | 宿主入口（空壳，插件全部工作在浏览器侧）。运行时必需 |
+| `index.js`、`lib/host.js` | 宿主入口及构建好的宿主包。运行时必需 |
 | `lib/client.js` | 浏览器包：Progress 视图目标 + [dsh工作台] 标签 + 时间线渲染。运行时必需。安装时不重建 |
 | `lib/perf-declaration.js` | `dsh-performance-review` 的烤入声明。运行时必需 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
@@ -67,7 +67,7 @@ dsh plugin --profile web add <spec>
 
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
 2. 重启并刷新后，页面里能找到本包的 client 模块（包名）。找不到说明 client 没进页面。
-3. 右栏 guide 页里有「Progress」卡片，任一会话的 tab 菜单里也有「打开 Progress」。点开得到 `[data-nano-progress-report]` 根节点。
+3. 打开会话内的「Progress」得到 `[data-nano-progress-report]` 根节点；会话头部动作打开右侧同一会话的进度视图。右栏 guide 与 tab 菜单入口仍可用。
 4. 已运行过 tool 调用的会话在 Progress 里能看到按时间排序的事件行（提示、shell、文件、工具、todo、turn），行首 glyph 按行型上色、人类输入行有底色；底部抽屉（Tasks/Jobs）可拖拽抬升、可折叠，Tasks 与 `session.projections.faceOf('todos')` 同步。
 
 ## 初次运行
@@ -92,7 +92,7 @@ dsh plugin --profile web add <spec>
 
 ## 配置与状态
 
-宿主配置：无。
+宿主配置：无本包专用开关。安装后通过 [dsh] 的可选 runtime context 提供当前会话进度；宿主抑制可选 runtime context 时不提供。摘要没有原始命令、结果、任务或团队消息正文。变化由宿主写入当前会话日志；宿主可缓存投影 checkpoint，本包不创建独立数据库或状态文件。
 
 浏览器键（都只是视图态，不进宿主）：
 
@@ -124,7 +124,7 @@ npm install
 npm run build
 ```
 
-然后确认 `lib/client.js` 与 `lib/perf-declaration.js` 非空。不要安装一份缺少这些文件、又不是你刚刚构建的树。
+然后确认 `lib/host.js`、`lib/client.js` 与 `lib/perf-declaration.js` 非空。不要安装一份缺少这些文件、又不是你刚刚构建的树。
 
 ## 故障
 

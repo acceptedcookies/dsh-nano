@@ -35,6 +35,13 @@ function bundle(options) {
   }
 }
 
+bundle({
+  entryPoints: ['src/host/index.js'],
+  outfile: 'lib/host.js',
+  format: 'esm',
+  platform: 'node',
+})
+
 // Browser half: an IIFE wrapped in the client module-loader factory format.
 bundle({
   entryPoints: ['src/client/index.js'],

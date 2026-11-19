@@ -22,11 +22,12 @@
     "cordis.patch.yml",
     "icon.svg",
     "locale",
+    "lib/host.js",
     "lib/client.js",
     "lib/perf-declaration.js"
   ],
   "engines": {
-    "dsh": ">=0.2.2-rc.1 <0.3.0"
+    "dsh": ">=0.2.2-rc.5 <0.3.0"
   },
   "dsh": {
     "bundle": {

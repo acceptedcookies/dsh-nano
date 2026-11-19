@@ -60,10 +60,10 @@ test('no host-DOM grafting patterns in src/client', () => {
   }
 })
 
-test('host entry registers no routes (AGENTS.md: 无宿主路由)', () => {
-  const src = read('index.js')
-  assert.doesNotMatch(src, /\.route\s*\(|registerRoute|routes\s*[:=]/,
-    'index.js must not declare host routes — route-scan/contract do not cover this plugin')
+test('host entry and its bundle register no routes', () => {
+  for (const path of ['index.js', 'lib/host.js']) {
+    assert.doesNotMatch(read(path), /\.route\s*\(|registerRoute|routes\s*[:=]/)
+  }
 })
 
 test('baked artifacts match their sources (freshness)', async () => {
@@ -84,6 +84,7 @@ test('package identity fields', () => {
   assert.ok(typeof pkg.engines.dsh === 'string' && pkg.engines.dsh.includes('>='),
     'engines.dsh must declare a range (read, not hardcode)')
   assert.ok(pkg.files.includes('lib/client.js'))
+  assert.ok(pkg.files.includes('lib/host.js'))
   const patch = read('cordis.patch.yml')
   assert.match(patch, /id:\s*nano-progress-report/)
   assert.match(patch, /name:\s*dsh-nano-progress-report/)

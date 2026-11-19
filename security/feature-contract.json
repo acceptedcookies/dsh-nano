@@ -1119,7 +1119,7 @@
       "tab": "sidebar-right tab kind \"progress\" (id dsh-nano-progress-report.workbench, priority extension, keepMounted): execution event timeline rows (type/status icon, summary, duration), filter input with type:/status:/negation tokens + chips, expandable row detail (args/result/duration), Tasks panel",
       "menuItem": "sidebar-right tab context menu entry \"Open Progress\"/\"打开 Progress\" (slot sidebar.right.tab.menu.item, opens Progress tab in that session)",
       "guide": "sidebar-right add-tab guide lists \"Progress\" entry",
-      "hostData": "none — renders only the host uiConversation progress projection (no side-channel fetches)"
+      "hostData": "Browser renders the uiConversation progress projection (no side-channel fetches). A separate host-only summary contributes optional same-session PromptContext."
     }
   },
   "dataLocations": {
@@ -1161,7 +1161,7 @@
     },
     "dsh-nano-progress-report": {
       "filter": "localStorage 'dsh-nano-progress-report:filter:<sessionId>' — per browser origin, last filter text per session",
-      "hostData": "none — no host routes, no host files; all state lives in the host session/conversation runtime"
+      "hostData": "No plugin routes or state files. Host-owned projection checkpoints are rebuildable; optional progress snapshots are logged in the owning session by the host."
     }
   }
 }

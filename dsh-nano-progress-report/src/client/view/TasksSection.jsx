@@ -31,10 +31,10 @@ const VIEW_COUNTS = item => ({
  *   collapsed: boolean, onCollapsed: (v: boolean) => void,
  *   height: number, onResize: (px: number) => void,
  *   item: object|null, jobs: object[],
- *   onFailureJump?: (callId: string) => void }} props
+ *   failureTitleOf?: (callId: string) => string|null }} props
  *   `item` is the ledger's current full-tier work item (or null).
  */
-export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, onResize, item, jobs, onFailureJump }) {
+export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, onResize, item, jobs, failureTitleOf }) {
   const counts = VIEW_COUNTS(item)
   const options = [
     { id: 'tasks', count: counts.tasks },
@@ -153,7 +153,7 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
     ? null
     : h('div', { className: 'npr-taskbar-body', 'data-npr': 'tasks-body' },
       active === 'files' ? h(FilesView, { files: item?.files ?? [], truncated: truncated.files ?? 0, t })
-        : active === 'failures' ? h(FailuresView, { failures: item?.failures ?? [], onJump: onFailureJump, t })
+        : active === 'failures' ? h(FailuresView, { failures: item?.failures ?? [], titleOf: failureTitleOf ?? (() => null), t })
           : active === 'jobs' ? h(JobsView, { jobs, t })
             : h(TasksView, { tasks, truncated: truncated.tasks ?? 0, t })))
 }

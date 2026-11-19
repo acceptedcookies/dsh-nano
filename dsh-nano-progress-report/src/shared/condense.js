@@ -139,21 +139,6 @@ export function condenseGroup(group, opts = {}) {
   for (const row of group.rows) body.push({ layer: classify(row), row })
   if (includeEnd && group.end !== null) body.push({ layer: classify(group.end), row: group.end })
 
-  // Reasoning-only assistant rows ride onto the next visible row's detail.
-  const carried = new Map()
-  let pendingReasoning = null
-  for (let i = 0; i < body.length; i += 1) {
-    const item = body[i]
-    if (item.layer === 'c' && item.row.type === 'message' && item.row.detail?.reasoning) {
-      pendingReasoning = item.row.detail.reasoning
-      continue
-    }
-    if (pendingReasoning !== null && item.layer !== 'c') {
-      carried.set(item.row.key, pendingReasoning)
-      pendingReasoning = null
-    }
-  }
-
   // Promote: the outcome message stays visible; a todo snapshot whose counts
   // changed is a milestone.
   let prevCounts = null
@@ -171,7 +156,7 @@ export function condenseGroup(group, opts = {}) {
   let run = []
   const flushRun = () => {
     if (run.length === 0) return
-    emitRun(run, out, carried)
+    emitRun(run, out)
     run = []
   }
   for (const item of body) {
@@ -181,10 +166,10 @@ export function condenseGroup(group, opts = {}) {
     }
     if (item.layer === 'a') {
       flushRun()
-      const text = carried.get(item.row.key)
-      out.push(text === undefined ? item.row : { ...item.row, detail: { ...item.row.detail, text } })
+      out.push(item.row)
     }
-    // 'c' rows drop; 'b' accumulation continues across them.
+    // 'c' rows drop (reasoning text included — it never reaches the view);
+    // 'b' accumulation continues across them.
   }
   flushRun()
   return { rows: out, tail }
@@ -204,7 +189,7 @@ export function tailOf(group) {
     : { durationMs }
 }
 
-function emitRun(run, out, carried) {
+function emitRun(run, out) {
   // Pass 1: fingerprint bookkeeping across the whole B-run (a retry may cross
   // a category block boundary within the run).
   const rec = new Map()
@@ -231,7 +216,7 @@ function emitRun(run, out, carried) {
   let block = []
   const flushBlock = () => {
     if (block.length === 0) return
-    out.push(makeSegment(block, recoveredCount, carried))
+    out.push(makeSegment(block, recoveredCount))
     block = []
   }
   for (let idx = 0; idx < run.length; idx += 1) {
@@ -247,7 +232,7 @@ function emitRun(run, out, carried) {
   flushBlock()
 }
 
-function makeSegment(block, recoveredCount, carried) {
+function makeSegment(block, recoveredCount) {
   const category = segmentCategory(block[0].row)
   const rows = block.map(item => item.row)
   const steps = rows.map(row => ({ name: row.tool, summary: row.summary, status: row.status }))
@@ -315,8 +300,5 @@ function makeSegment(block, recoveredCount, carried) {
     default:
       seg.summary = `Tools · ${rows.length} ${rows.length > 1 ? 'steps' : 'step'}`
   }
-  // Fold reasoning carried onto a merged step into the segment detail.
-  const texts = rows.map(row => carried.get(row.key)).filter(Boolean)
-  if (texts.length > 0) seg.detail.text = texts[texts.length - 1]
   return seg
 }

@@ -63,47 +63,43 @@ export function FilesView({ files, truncated = 0, t }) {
   if (files.length === 0) {
     return h('div', { className: 'npr-empty', 'data-npr': 'files-empty' }, t('files.empty'))
   }
+  // T-O-16: newest first, one path per row, nothing in the meta column.
+  const ordered = [...files].sort((a, b) => (b?.firstSeq ?? 0) - (a?.firstSeq ?? 0))
   return h('div', { className: 'npr-task-list', 'data-npr': 'files' },
-    files.map((file, index) => h('div', {
+    ordered.map((file, index) => h('div', {
       key: `${String(index)}:${String(file?.path ?? '')}`,
       className: 'npr-task npr-file',
       'data-npr': 'file',
     },
     h('span', { className: 'npr-task-glyph', 'aria-hidden': 'true' }, h(StateDot, { state: 'done' })),
-    h('span', { className: 'npr-task-num' }, `#${String(index + 1)}`),
-    h('span', { className: 'npr-task-text', title: String(file?.path ?? '') }, String(file?.path ?? '')),
-    h('span', { className: 'npr-task-meta' }, file?.lastSeq !== file?.firstSeq
-      ? `seq ${String(file.firstSeq)}–${String(file.lastSeq)}`
-      : `seq ${String(file.firstSeq)}`))),
+    h('span', { className: 'npr-task-text npr-path', title: String(file?.path ?? '') }, String(file?.path ?? '')))),
     h(Truncated, { t, extra: truncated }))
 }
 
 /**
  * @param {{ failures: object[], onJump?: (callId: string) => void, t: Function }} props
  */
-export function FailuresView({ failures, onJump, t }) {
+export function FailuresView({ failures, titleOf = () => null, t }) {
   if (failures.length === 0) {
     return h('div', { className: 'npr-empty', 'data-npr': 'failures-empty' }, t('failures.empty'))
   }
+  // T-O-16: file failures label the path; bash failures borrow the timeline's
+  // action title by callId (not a new args render); others show the tool only.
+  // Rows are display-only — list entries are not clickable.
   return h('div', { className: 'npr-task-list', 'data-npr': 'failures' },
     failures.map((failure, index) => {
-      const seqs = failure?.firstSeq === failure?.lastSeq
-        ? String(failure.firstSeq) : `${String(failure.firstSeq)}–${String(failure.lastSeq)}`
-      const label = `${failure?.tool ?? 'tool'}${failure?.path ? ` ${failure.path}` : ''}`
+      const borrowed = failure?.callId !== undefined ? titleOf(failure.callId) : null
+      const label = failure?.path !== null && failure?.path !== undefined && failure.path !== ''
+        ? String(failure.path)
+        : borrowed !== null && borrowed !== undefined ? String(borrowed)
+          : `${failure?.tool ?? 'tool'}${failure?.count > 1 ? ` ×${String(failure.count)}` : ''}`
       return h('div', {
         key: `${String(index)}:${String(failure?.key ?? 'none')}`,
         className: 'npr-task npr-failure',
         'data-npr': 'failure',
         'data-status': 'failed',
-        role: 'button',
-        tabIndex: 0,
-        onClick: () => onJump?.(failure?.callId),
-        onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') onJump?.(failure?.callId) },
       },
       h('span', { className: 'npr-task-glyph', 'aria-hidden': 'true' }, h(StateDot, { state: 'error' })),
-      h('span', { className: 'npr-task-num' }, `#${String(index + 1)}`),
-      h('span', { className: 'npr-task-text', title: label }, label),
-      h('span', { className: 'npr-task-meta' },
-        `${failure?.count > 1 ? `×${String(failure.count)} ` : ''}seq ${seqs}`))
+      h('span', { className: 'npr-task-text', title: label }, label))
     }))
 }

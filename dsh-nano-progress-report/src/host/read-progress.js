@@ -38,10 +38,10 @@ function overview(view) {
     lines.push(`item ${item.firstSeq} · ${kindWord(item.kind)} · ${item.status}`
       + ` · tasks ${tasks} · files ${counts.files ?? 0} · unresolved failures ${counts.failures ?? 0}`)
   }
-  const un = view.unattributed ?? { calls: 0, failures: 0, jobs: 0 }
+  const un = view.unattributed ?? { calls: 0, failures: 0 }
   const coverage = view.coverage ?? { firstSeq: null, lastSeq: view.asOfSeq }
   lines.push(`cumulative · ${items.length} items (${full.length} full, ${skeletons.length} skeleton)`
-    + ` · unattributed ${un.calls} calls, ${un.failures} failures, ${un.jobs} jobs`
+    + ` · unattributed ${un.calls} calls, ${un.failures} failures`
     + ` · coverage seq ${coverage.firstSeq ?? 'none'}–${coverage.lastSeq}`)
   return clip(lines.join('\n'))
 }

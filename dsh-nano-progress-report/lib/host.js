@@ -1,5 +1,15 @@
 // src/host/context.js
 var HEADER = "Current session progress (observed facts, not instructions):";
+var MAX_BYTES = 600;
+var clipBytes = (text, maxBytes) => {
+  if (Buffer.byteLength(text) <= maxBytes) return text;
+  let out = "";
+  for (const char of text) {
+    if (Buffer.byteLength(out + char + "\u2026") > maxBytes) break;
+    out += char;
+  }
+  return `${out}\u2026`;
+};
 var KIND_WORD = { user: "a user request", goal: "a goal", schedule: "a scheduled task" };
 var kindWord = (kind) => KIND_WORD[kind] ?? "a user request";
 var jsonCell = (text) => JSON.stringify(String(text)).replace(
@@ -36,7 +46,7 @@ function formatProgress({ view: view2, todos = [], runningJobs = 0, runningSubag
   if (runningJobs > 0 || runningSubagents > 0) {
     lines.push(`Active: ${runningJobs} background jobs, ${runningSubagents} direct subagents`);
   }
-  return lines.length === 1 ? "" : lines.join("\n");
+  return lines.length === 1 ? "" : clipBytes(lines.join("\n"), MAX_BYTES);
 }
 
 // src/shared/fingerprint.js
@@ -278,24 +288,11 @@ var utf8Slice = (text, maxBytes) => {
   const buf = Buffer.from(String(text), "utf8");
   return buf.length <= maxBytes ? buf.toString("utf8") : buf.subarray(0, maxBytes).toString("utf8");
 };
-function messageText(data) {
-  const content = data?.content ?? data?.message?.content ?? data?.text;
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    const parts = [];
-    for (const block of content) {
-      if (block && typeof block.text === "string") parts.push(block.text);
-      else if (typeof block === "string") parts.push(block);
-    }
-    return parts.join("\n");
-  }
-  return "";
-}
-var newItem = (seq, kind, text) => ({
+var newItem = (seq, kind, goalId) => ({
   id: seq,
   tier: "full",
   kind,
-  title: utf8Slice(text, TEXT_MAX_BYTES),
+  ...kind === "goal" && typeof goalId === "string" ? { goalId } : {},
   endReason: null,
   awaiting: 0,
   firstSeq: seq,
@@ -305,21 +302,21 @@ var newItem = (seq, kind, text) => ({
   files: [],
   failures: [],
   tasks: [],
-  jobs: [],
   truncated: { files: 0, failures: 0, tasks: 0 }
 });
 var skeletonOf = (item) => ({
   id: item.id,
   tier: "skeleton",
   kind: item.kind,
-  title: item.title,
+  ...item.goalId !== void 0 ? { goalId: item.goalId } : {},
   endReason: item.endReason,
   firstSeq: item.firstSeq,
   lastSeq: item.lastSeq,
   calls: item.calls,
   failedCalls: item.failedCalls,
   filesCount: item.files.length,
-  tasksCount: item.tasks.length
+  tasksCount: item.tasks.length,
+  unresolvedCount: item.failures.reduce((n, f) => n + f.count, 0)
 });
 function patchItem(state, item, next) {
   const index = state.items.indexOf(item);
@@ -337,11 +334,8 @@ function rebalance(items) {
     next[i] = skeletonOf(next[i]);
     full -= 1;
   }
-  let evicted = 0;
-  while (next.length > ITEMS_MAX) {
-    next.pop();
-    evicted += 1;
-  }
+  const evicted = [];
+  while (next.length > ITEMS_MAX) evicted.push(next.pop());
   return { items: next, evicted };
 }
 function apply(state, event) {
@@ -354,6 +348,7 @@ function apply(state, event) {
         ...touch(state, seq),
         turn: state.turn + 1,
         turnOpen: true,
+        openedThisTurn: false,
         pending: {}
       };
       const current = next.items[0];
@@ -369,6 +364,13 @@ function apply(state, event) {
       if (current !== void 0) {
         next = patchItem(next, current, { ...current, endReason: reason, lastSeq: seq });
       }
+      if (Object.keys(next.approvals).length > 0) {
+        const items = next.items.map((item) => {
+          const pend = Object.values(next.approvals).filter((id) => id === item.id).length;
+          return pend > 0 ? { ...item, awaiting: Math.max(0, item.awaiting - pend) } : item;
+        });
+        next = { ...next, items, approvals: {} };
+      }
       return next;
     }
     case "working-directory/change": {
@@ -379,9 +381,22 @@ function apply(state, event) {
     case "user/message": {
       const kind = openKind(data.source?.kind);
       if (kind !== null) {
-        const { items, evicted } = rebalance([newItem(seq, kind, messageText(data)), ...state.items]);
-        const next = { ...touch(state, seq), items };
-        return evicted > 0 ? { ...next, truncated: { ...next.truncated, items: next.truncated.items + evicted } } : next;
+        const current2 = state.items[0];
+        if (kind === "goal" && current2 !== void 0 && current2.goalId !== void 0 && current2.goalId === data.source?.goalId) {
+          return touch(patchItem(state, current2, { ...current2, lastSeq: seq }), seq);
+        }
+        if (state.turnOpen && state.openedThisTurn && current2 !== void 0) {
+          return touch(patchItem(state, current2, { ...current2, lastSeq: seq }), seq);
+        }
+        const goalId = kind === "goal" ? data.source?.goalId : void 0;
+        const { items, evicted } = rebalance([newItem(seq, kind, goalId), ...state.items]);
+        const evictedLast = evicted.reduce((max, item) => Math.max(max, item.lastSeq), state.truncated.lastSeq);
+        return {
+          ...touch(state, seq),
+          items,
+          openedThisTurn: state.turnOpen,
+          truncated: evicted.length > 0 ? { items: state.truncated.items + evicted.length, lastSeq: evictedLast } : state.truncated
+        };
       }
       const current = state.items[0];
       if (current === void 0) return state;
@@ -538,42 +553,6 @@ function apply(state, event) {
       }
       return next;
     }
-    case "job/registered": {
-      if (data.jobId === void 0 || data.jobId === null) return state;
-      const item = state.items[0];
-      if (item === void 0 || item.tier !== "full") {
-        return {
-          ...touch(state, seq),
-          unattributed: { ...state.unattributed, jobs: state.unattributed.jobs + 1 }
-        };
-      }
-      const entry = {
-        jobId: String(data.jobId),
-        label: utf8Slice(String(data.label ?? data.kind ?? data.jobId), TEXT_MAX_BYTES),
-        status: "running",
-        firstSeq: seq,
-        callId: data.callId === void 0 ? void 0 : String(data.callId)
-      };
-      const jobs = [...item.jobs.filter((job) => job.jobId !== entry.jobId), entry];
-      return touch(patchItem(state, item, { ...item, jobs, lastSeq: seq }), seq);
-    }
-    case "job/settled": {
-      if (data.jobId === void 0 || data.jobId === null) return state;
-      const jobId = String(data.jobId);
-      const status = data.status === "failed" || data.status === "killed" ? "failed" : "done";
-      let changed = false;
-      const items = state.items.map((item) => {
-        const index = item.jobs?.findIndex((job) => job.jobId === jobId) ?? -1;
-        if (index < 0) return item;
-        changed = true;
-        return {
-          ...item,
-          lastSeq: seq,
-          jobs: item.jobs.map((job, i) => i === index ? { ...job, status } : job)
-        };
-      });
-      return changed ? { ...touch(state, seq), items } : state;
-    }
     case "goal/change": {
       const current = state.items[0];
       if (current === void 0) return state;
@@ -595,7 +574,7 @@ function itemView(item, index, state) {
     return {
       tier: "skeleton",
       kind: item.kind,
-      title: item.title,
+      ...item.goalId !== void 0 ? { goalId: item.goalId } : {},
       status: itemStatus(item, false, state),
       endReason: item.endReason,
       firstSeq: item.firstSeq,
@@ -604,14 +583,15 @@ function itemView(item, index, state) {
         calls: item.calls,
         failures: item.failedCalls,
         files: item.filesCount,
-        tasks: item.tasksCount
+        tasks: item.tasksCount,
+        unresolved: item.unresolvedCount
       }
     };
   }
   return {
     tier: "full",
     kind: item.kind,
-    title: item.title,
+    ...item.goalId !== void 0 ? { goalId: item.goalId } : {},
     status: itemStatus(item, index === 0, state),
     endReason: item.endReason,
     firstSeq: item.firstSeq,
@@ -619,13 +599,11 @@ function itemView(item, index, state) {
     files: item.files,
     failures: item.failures.map(({ tool, key, path, count, firstSeq, lastSeq, callId }) => ({ tool, key, path, count, firstSeq, lastSeq, callId })),
     tasks: item.tasks,
-    jobs: item.jobs,
     counts: {
       calls: item.calls,
       failures: item.failedCalls,
       files: item.files.length,
-      tasks: item.tasks.length,
-      jobs: item.jobs.length
+      tasks: item.tasks.length
     },
     truncated: item.truncated
   };
@@ -634,14 +612,30 @@ var isCount = (value) => Number.isSafeInteger(value) && value >= 0;
 var isPath = (value) => typeof value === "string" && Buffer.byteLength(value) <= PATH_MAX_BYTES;
 var isText = (value) => typeof value === "string" && Buffer.byteLength(value) <= TEXT_MAX_BYTES;
 function parseItem(value) {
-  if (!value || typeof value !== "object" || !isCount(value.id) || value.tier !== "full" && value.tier !== "skeleton" || typeof value.kind !== "string" || !isText(value.title) || !isCount(value.firstSeq) || !isCount(value.lastSeq)) {
+  if (!value || typeof value !== "object" || !isCount(value.id) || value.tier !== "full" && value.tier !== "skeleton" || typeof value.kind !== "string" || value.goalId !== void 0 && typeof value.goalId !== "string" || !isCount(value.firstSeq) || !isCount(value.lastSeq)) {
     throw new Error("Invalid progress ledger item");
+  }
+  rejectUnknown(value, value.tier === "full" ? ALLOWED_ITEM_FULL : ALLOWED_ITEM_SKEL, `item ${value.tier}`);
+  if (value.truncated !== void 0) rejectUnknown(value.truncated, ALLOWED_ITEM_TRUNC, "item.truncated");
+  if (value.tier === "full") {
+    if (!Array.isArray(value.files) || value.files.length > FILES_MAX || !Array.isArray(value.failures) || value.failures.length > FAILURES_MAX || !Array.isArray(value.tasks) || value.tasks.length > TASKS_MAX) {
+      throw new Error("Invalid progress ledger item: collection over limit");
+    }
+    for (const f of value.files) {
+      if (f && typeof f === "object") rejectUnknown(f, ALLOWED_FILE, "file");
+    }
+    for (const f of value.failures) {
+      if (f && typeof f === "object") rejectUnknown(f, ALLOWED_FAILURE, "failure");
+    }
+    for (const t of value.tasks) {
+      if (t && typeof t === "object") rejectUnknown(t, ALLOWED_TASK, "task");
+    }
   }
   const base = {
     id: value.id,
     tier: value.tier,
     kind: value.kind,
-    title: value.title,
+    ...value.goalId !== void 0 ? { goalId: value.goalId } : {},
     endReason: typeof value.endReason === "string" ? value.endReason : null,
     firstSeq: value.firstSeq,
     lastSeq: value.lastSeq,
@@ -652,7 +646,8 @@ function parseItem(value) {
     return {
       ...base,
       filesCount: isCount(value.filesCount) ? value.filesCount : 0,
-      tasksCount: isCount(value.tasksCount) ? value.tasksCount : 0
+      tasksCount: isCount(value.tasksCount) ? value.tasksCount : 0,
+      unresolvedCount: isCount(value.unresolvedCount) ? value.unresolvedCount : 0
     };
   }
   return {
@@ -674,13 +669,6 @@ function parseItem(value) {
       firstSeq: t.firstSeq,
       ...t.completedSeq !== void 0 ? { completedSeq: t.completedSeq, completedAt: t.completedAt } : {}
     })),
-    jobs: (value.jobs ?? []).filter((j) => j && typeof j.jobId === "string").map((j) => ({
-      jobId: j.jobId,
-      label: j.label ?? "",
-      status: j.status ?? "running",
-      firstSeq: isCount(j.firstSeq) ? j.firstSeq : 0,
-      ...j.callId !== void 0 ? { callId: String(j.callId) } : {}
-    })),
     truncated: {
       files: isCount(value.truncated?.files) ? value.truncated.files : 0,
       failures: isCount(value.truncated?.failures) ? value.truncated.failures : 0,
@@ -692,10 +680,17 @@ function parseState(value) {
   if (!value || typeof value !== "object" || value.v !== STATE_VERSION || !isCount(value.inherited) || !isDigest(value.cwd) || !Array.isArray(value.items) || value.items.length > ITEMS_MAX || value.items.filter((item) => item?.tier === "full").length > FULL_MAX || !value.pending || typeof value.pending !== "object" || Array.isArray(value.pending) || !value.approvals || typeof value.approvals !== "object" || Array.isArray(value.approvals) || !value.unattributed || typeof value.unattributed !== "object" || !value.truncated || typeof value.truncated !== "object") {
     throw new Error("Invalid progress ledger checkpoint");
   }
+  rejectUnknown(value, ALLOWED_STATE, "state");
+  if (Object.keys(value.pending).length > PENDING_MAX) throw new Error("Invalid progress ledger checkpoint: pending over limit");
+  rejectUnknown(value.unattributed, ALLOWED_UNATTR, "unattributed");
+  rejectUnknown(value.truncated, ALLOWED_TRUNC, "truncated");
   const pending = {};
   for (const [id, call] of Object.entries(value.pending)) {
     if (call && typeof call.name === "string" && isCount(call.seq) && Array.isArray(call.keys) && call.keys.every(isDigest) && Array.isArray(call.paths) && call.paths.every(isPath)) {
+      rejectUnknown(call, ALLOWED_PENDING, "pending");
       pending[id] = { name: call.name, keys: [...call.keys], paths: [...call.paths], seq: call.seq };
+    } else {
+      throw new Error("Invalid progress ledger checkpoint: pending entry");
     }
   }
   const approvals = {};
@@ -710,18 +705,76 @@ function parseState(value) {
     asOfSeq: isCount(value.asOfSeq) ? value.asOfSeq : value.inherited,
     turn: isCount(value.turn) ? value.turn : 0,
     turnOpen: value.turnOpen === true,
+    openedThisTurn: value.openedThisTurn === true,
     items: value.items.map(parseItem),
     pending,
     approvals,
     unattributed: {
       calls: isCount(value.unattributed.calls) ? value.unattributed.calls : 0,
-      failures: isCount(value.unattributed.failures) ? value.unattributed.failures : 0,
-      jobs: isCount(value.unattributed.jobs) ? value.unattributed.jobs : 0
+      failures: isCount(value.unattributed.failures) ? value.unattributed.failures : 0
     },
     truncated: {
-      items: isCount(value.truncated.items) ? value.truncated.items : 0
+      items: isCount(value.truncated.items) ? value.truncated.items : 0,
+      lastSeq: isCount(value.truncated.lastSeq) ? value.truncated.lastSeq : 0
     }
   };
+}
+var ALLOWED_STATE = /* @__PURE__ */ new Set([
+  "v",
+  "inherited",
+  "cwd",
+  "firstSeq",
+  "asOfSeq",
+  "turn",
+  "turnOpen",
+  "openedThisTurn",
+  "items",
+  "pending",
+  "approvals",
+  "unattributed",
+  "truncated"
+]);
+var ALLOWED_ITEM_FULL = /* @__PURE__ */ new Set([
+  "id",
+  "tier",
+  "kind",
+  "goalId",
+  "endReason",
+  "awaiting",
+  "firstSeq",
+  "lastSeq",
+  "calls",
+  "failedCalls",
+  "files",
+  "failures",
+  "tasks",
+  "truncated"
+]);
+var ALLOWED_ITEM_SKEL = /* @__PURE__ */ new Set([
+  "id",
+  "tier",
+  "kind",
+  "goalId",
+  "endReason",
+  "firstSeq",
+  "lastSeq",
+  "calls",
+  "failedCalls",
+  "filesCount",
+  "tasksCount",
+  "unresolvedCount"
+]);
+var ALLOWED_PENDING = /* @__PURE__ */ new Set(["name", "keys", "paths", "seq"]);
+var ALLOWED_FAILURE = /* @__PURE__ */ new Set(["tool", "key", "path", "count", "firstSeq", "lastSeq", "callId"]);
+var ALLOWED_FILE = /* @__PURE__ */ new Set(["path", "firstSeq", "lastSeq"]);
+var ALLOWED_TASK = /* @__PURE__ */ new Set(["content", "status", "firstSeq", "completedSeq", "completedAt"]);
+var ALLOWED_UNATTR = /* @__PURE__ */ new Set(["calls", "failures"]);
+var ALLOWED_TRUNC = /* @__PURE__ */ new Set(["items", "lastSeq"]);
+var ALLOWED_ITEM_TRUNC = /* @__PURE__ */ new Set(["files", "failures", "tasks"]);
+function rejectUnknown(value, allowed, what) {
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) throw new Error(`Invalid progress ledger checkpoint: ${what}.${key}`);
+  }
 }
 var itemViewCache = /* @__PURE__ */ new WeakMap();
 var stateViewCache = /* @__PURE__ */ new WeakMap();
@@ -758,6 +811,7 @@ function view(state) {
     asOfSeq: state.asOfSeq,
     inherited: state.inherited,
     coverage: { firstSeq: state.firstSeq, lastSeq: state.asOfSeq },
+    // cumulative layer coverage boundary: newest evicted item's lastSeq
     unattributed: state.unattributed,
     truncated: state.truncated,
     items: state.items.map((item, index) => cachedItemView(item, index, state))
@@ -785,23 +839,24 @@ var progressLedger = {
     asOfSeq: inherited,
     turn: 0,
     turnOpen: false,
+    openedThisTurn: false,
     items: [],
     pending: {},
     approvals: {},
-    unattributed: { calls: 0, failures: 0, jobs: 0 },
-    truncated: { items: 0 }
+    unattributed: { calls: 0, failures: 0 },
+    truncated: { items: 0, lastSeq: 0 }
   }),
   apply,
   wire: { viewSchema, view, summary: false }
 };
 
 // src/host/read-progress.js
-var MAX_BYTES = 16 * 1024;
+var MAX_BYTES2 = 16 * 1024;
 var OVERVIEW_MAX_LINES = 80;
 var READ_PROGRESS_NAME = "read_progress";
 var clip = (text) => {
   const buf = Buffer.from(text, "utf8");
-  return buf.length <= MAX_BYTES ? buf.toString("utf8") : `${buf.subarray(0, MAX_BYTES - 40).toString("utf8")}
+  return buf.length <= MAX_BYTES2 ? buf.toString("utf8") : `${buf.subarray(0, MAX_BYTES2 - 40).toString("utf8")}
 [truncated at 16 KiB]`;
 };
 var taskDone = (item) => item.tier === "full" ? item.tasks.filter((task) => task.status === "completed").length : 0;
@@ -817,9 +872,9 @@ function overview(view2) {
     const tasks = item.tier === "full" ? `${taskDone(item)}/${item.tasks.length}` : `${counts.tasks ?? 0}`;
     lines.push(`item ${item.firstSeq} \xB7 ${kindWord(item.kind)} \xB7 ${item.status} \xB7 tasks ${tasks} \xB7 files ${counts.files ?? 0} \xB7 unresolved failures ${counts.failures ?? 0}`);
   }
-  const un = view2.unattributed ?? { calls: 0, failures: 0, jobs: 0 };
+  const un = view2.unattributed ?? { calls: 0, failures: 0 };
   const coverage = view2.coverage ?? { firstSeq: null, lastSeq: view2.asOfSeq };
-  lines.push(`cumulative \xB7 ${items.length} items (${full.length} full, ${skeletons.length} skeleton) \xB7 unattributed ${un.calls} calls, ${un.failures} failures, ${un.jobs} jobs \xB7 coverage seq ${coverage.firstSeq ?? "none"}\u2013${coverage.lastSeq}`);
+  lines.push(`cumulative \xB7 ${items.length} items (${full.length} full, ${skeletons.length} skeleton) \xB7 unattributed ${un.calls} calls, ${un.failures} failures \xB7 coverage seq ${coverage.firstSeq ?? "none"}\u2013${coverage.lastSeq}`);
   return clip(lines.join("\n"));
 }
 function itemDetail(view2, itemId) {

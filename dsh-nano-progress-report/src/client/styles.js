@@ -218,7 +218,7 @@ export const PROGRESS_CSS = `
   color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11);
 }
 .npr-file { }
-.npr-failure { cursor: pointer; }
+.npr-path { direction: rtl; text-align: left; } /* long paths truncate from the left */
 .npr-failure .npr-task-text { color: var(--dsw-alias-state-error-primary); }
 .npr-truncated .npr-task-text { color: var(--dsw-alias-label-tertiary); font-style: italic; }
 .npr-task-meta {

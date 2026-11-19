@@ -56,6 +56,12 @@ export function denoise(sorted) {
       dropped.add(row.key)
       continue
     }
+    // C0-01: a todo_write tool row folds into its todo/write event row —
+    // both carry the same snapshot; the event row keeps the counts.
+    if (row.type === 'tool' && row.tool === 'todo_write' && row.status !== 'failed') {
+      dropped.add(row.key)
+      continue
+    }
     if (row.type === 'message' && row.empty === true) {
       const tools = row.step >= 0 ? toolsByStep.get(stepKey(row)) : undefined
       if (tools === undefined) {

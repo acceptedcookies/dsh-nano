@@ -149,10 +149,20 @@ files.sort((a, b) => b.mtime - a.mtime)
 
 const sessions = []
 for (const { f } of files) {
-  if (sessions.length >= LIMIT * 3) break
+  if (sessions.length >= LIMIT) break
   let text
   try { text = execFileSync('zstd', ['-dc', f], { maxBuffer: 1 << 28 }).toString('utf8') } catch { continue }
   const lines = text.split('\n')
+  // R3-A1: subagent sessions must be filtered BEFORE the --limit quota is
+  // spent, or they crowd out top-level sessions.
+  let first = null
+  for (const line of lines) {
+    if (line.startsWith('{')) {
+      try { first = JSON.parse(line) } catch { /* skip */ }
+      break
+    }
+  }
+  if (first?.type !== 'session' || first.origin === 'subagent') continue
   let openers = 0
   let calls = 0
   for (const line of lines) {
@@ -160,8 +170,7 @@ for (const { f } of files) {
       if (/"kind":"(user|goal|schedule)"/.test(line)) openers += 1
     } else if (line.includes('"tool/call"')) calls += 1
   }
-  if (openers >= MIN_OPENERS && calls >= 1) sessions.push({ f, lines })
-  if (sessions.length >= LIMIT) break
+  if (openers >= MIN_OPENERS && calls >= 1) sessions.push({ f, lines, sessionEvent: first })
 }
 
 const totals = {
@@ -170,9 +179,7 @@ const totals = {
   buildMsMax: 0, buildMsTotal: 0, events: 0,
 }
 const perSession = []
-for (const { f, lines } of sessions) {
-  const sessionEvent = JSON.parse(lines[0])
-  if (sessionEvent.type !== 'session' || sessionEvent.origin === 'subagent') continue
+for (const { f, lines, sessionEvent } of sessions) {
   let state = progressLedger.init(sessionEvent, 0)
   let old = { cwd: digest(sessionEvent.cwd ?? ''), paths: [], failures: [], pending: [] }
   let todos = []

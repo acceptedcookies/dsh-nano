@@ -107,10 +107,11 @@ test('non-completed end stays a row and its reason goes to the tail column', () 
   assert.equal(tailOf(group([], { end: null })), null)
 })
 
-test('reasoning-only message folds into the next visible row detail', () => {
+test('reasoning text never reaches the condensed view (T-O-3)', () => {
   const reasoning = row({ type: 'message', summary: '', detail: { reasoning: 'thinking about it' } })
   const wait = row({ type: 'wait', status: 'awaiting', summary: 'Approval requested', detail: {} })
   const { rows } = condenseGroup(group([reasoning, wait]))
   assert.equal(rows.length, 1)
-  assert.equal(rows[0].detail.text, 'thinking about it')
+  assert.equal(rows[0].detail.text, undefined)
+  assert.equal(rows[0].detail.reasoning, undefined)
 })

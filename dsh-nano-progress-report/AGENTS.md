@@ -100,7 +100,7 @@ dsh plugin --profile web add <spec>
 
 ## 配置与状态
 
-宿主配置：无本包专用开关。宿主侧注册会话投影 `nano-progress-report:ledger`（`stateVersion` 1，`summary:false`，wire `view` 带 `v:1`）：按 `user/message` 开项白名单（user/goal/schedule）切工作项，最多 16 个完整项 + 64 个骨架项；每项记录调用计数、文件（≤32，path+seq）、未恢复失败（≤16，工具+指纹 key+count+seq）、任务（≤32，含 `completedSeq`/`completedAt`）与后台 jobs。PromptContext 是四行锚（`Current work` / `Tasks` / `Unresolved tool failures in current work` / `Active`，计数为 0 不输出），`read_progress {item?}` 是模型的只读明细通道（概览 ≤80 行、纯文本 ≤16KiB）。账本不存 args/result/消息正文；宿主可缓存投影 checkpoint，本包不创建独立数据库或状态文件。
+宿主配置：无本包专用开关。宿主侧注册会话投影 `nano-progress-report:ledger`（`stateVersion` 1，`summary:false`，wire `view` 带 `v:1`）：按 `user/message` 开项白名单（user/goal/schedule）切工作项（goal 按 `goalId` 合并、每回合开项一次），最多 16 个完整项 + 64 个骨架项；每项记录调用计数、文件（≤32，path+seq）、未恢复失败（≤16，工具+指纹 key+count+seq）、任务（≤32，含 `completedSeq`/`completedAt`）；后台 jobs 只进 `jobs {settled, running}` 计数，不占条目。PromptContext 是四行锚（`Current work` / `Tasks` / `Unresolved tool failures in current work` / `Active`，计数为 0 不输出，整段 ≤600B），`read_progress {item?}` 是模型的只读明细通道（概览 ≤80 行、纯文本 ≤16KiB）。账本不存 args/result/消息正文/开项标题；宿主可缓存投影 checkpoint，恢复时 `stateSchema` 拒未知键与超限计数；本包不创建独立数据库或状态文件。
 
 浏览器键（都只是视图态，不进宿主）：
 

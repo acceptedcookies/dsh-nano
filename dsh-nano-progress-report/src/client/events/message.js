@@ -1,6 +1,7 @@
 /** Message-row Definitions: real user prompts and assistant text replies. */
 import { TARGET } from '../constants.js'
 import { blocksText } from '../args.js'
+import { openKind } from '../../shared/open.js'
 
 /** `user/message` whose source is a human → 'prompt' row; a goal continuation
  *  (`source: {kind:'goal', goalId, revision, round}`) → 'goal' row. Both open a
@@ -11,8 +12,7 @@ export const progressPromptDefinition = {
   target: TARGET,
   match(event) {
     if (event.type !== 'user/message') return null
-    const kind = event.data?.source?.kind
-    return kind === 'user' || kind === 'goal' || kind === 'schedule'
+    return openKind(event.data?.source?.kind) !== null
       ? { id: String(event.seq), role: 'start' } : null
   },
   start(context, match) {

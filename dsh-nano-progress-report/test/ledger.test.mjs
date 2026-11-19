@@ -7,8 +7,11 @@ import { progressLedger as ledger } from '../src/host/ledger.js'
 import { bashFingerprint, digest } from '../src/shared/fingerprint.js'
 
 const ev = (seq, type, data = {}, time = seq * 1000) => ({ seq, type, data, time })
-const prompt = (seq, text, kind = 'user') =>
-  ev(seq, 'user/message', { source: { kind }, content: [{ type: 'text', text }] })
+const prompt = (seq, text, kind = 'user', goalId) =>
+  ev(seq, 'user/message', {
+    source: { kind, ...(goalId !== undefined ? { goalId } : {}) },
+    content: [{ type: 'text', text }],
+  })
 const call = (seq, callId, name, args = {}) =>
   ev(seq, 'tool/call', { callId, name, arguments: JSON.stringify(args) })
 const result = (seq, callId, { failed = false, meta, text = 'done' } = {}) =>
@@ -24,7 +27,7 @@ test('openers: user/goal/schedule open items; inter-agent and second-open do not
   let state = fold([prompt(1, 'first task')])
   assert.equal(state.items.length, 1)
   assert.equal(state.items[0].kind, 'user')
-  assert.equal(state.items[0].title, 'first task')
+  assert.equal(state.items[0].title, undefined) // T-O-9: no prompt text in the ledger
   // agent relay does not open a new item but extends coverage
   state = fold([ev(2, 'user/message', { source: { kind: 'agent-message' }, content: 'hi' })], state)
   assert.equal(state.items.length, 1)
@@ -35,6 +38,40 @@ test('openers: user/goal/schedule open items; inter-agent and second-open do not
   state = fold([call(5, 'c1', 'read', {}), result(6, 'c1', { meta: {} })], state)
   assert.equal(state.items[0].calls, 1)
   assert.equal(state.items[2].calls, 0)
+})
+
+test('goal merge: same goalId merges into the item; different goalId opens a new one (T-O-7/9)', () => {
+  let state = fold([
+    prompt(1, 'goal r1', 'goal', 'g1'),
+    call(2, 'a', 'read', {}), result(3, 'a', { meta: {} }),
+    prompt(4, 'goal r2', 'goal', 'g1'),
+    call(5, 'b', 'read', {}), result(6, 'b', { meta: {} }),
+  ])
+  assert.equal(state.items.length, 1)
+  assert.equal(state.items[0].goalId, 'g1')
+  assert.equal(state.items[0].calls, 2)
+  state = fold([prompt(7, 'goal other', 'goal', 'g2')], state)
+  assert.equal(state.items.length, 2)
+  assert.equal(state.items[0].goalId, 'g2')
+  // item id stays the first opening seq
+  assert.equal(state.items[0].id, 7)
+  assert.equal(state.items[1].id, 1)
+})
+
+test('same-turn second whitelist message does not reopen; next turn does (T-O-9)', () => {
+  // First whitelist hit inside the turn opens the item; later hits attach.
+  let state = fold([
+    ev(1, 'turn/start'), prompt(2, 'first'), prompt(3, 'second in same turn'),
+    call(4, 'a', 'read', {}), result(5, 'a', { meta: {} }),
+  ])
+  assert.equal(state.items.length, 1)
+  assert.equal(state.items[0].id, 2)
+  assert.equal(state.items[0].calls, 1)
+  assert.equal(state.items[0].lastSeq, 5)
+  // A new turn resets: the next user message opens its own item.
+  state = fold([ev(6, 'turn/end', { reason: 'completed' }), ev(7, 'turn/start'), prompt(8, 'new')], state)
+  assert.equal(state.items.length, 2)
+  assert.equal(state.items[0].id, 8)
 })
 
 test('demotion at 17 full; skeleton eviction past 16+64; asOfSeq tracks fact seq only', () => {
@@ -48,7 +85,7 @@ test('demotion at 17 full; skeleton eviction past 16+64; asOfSeq tracks fact seq
   state = fold(Array.from({ length: 81 }, (_, i) => prompt(100 + i, `t${i}`)), init())
   assert.equal(state.items.length, 80)
   assert.equal(state.items.filter(i => i.tier === 'skeleton').length, 64)
-  assert.equal(state.items.at(-1).title, 't1')
+  assert.equal(state.items.at(-1).id, 101) // oldest retained skeleton
   assert.equal(state.truncated.items, 1)
   // a no-fact event does not move asOfSeq backwards/forwards weirdly
   const before = state.asOfSeq
@@ -127,18 +164,19 @@ test('waiting: undecided approval flips status; decision flips back; approval su
   state = fold([prompt(4, 'new item'), ev(5, 'approval/decided', { id: 'ap1', outcome: 'approved' })], state)
   // decided closes the approval attributed to the OLD item
   assert.equal(state.approvals['ap1'], undefined)
-  const old = state.items.find(i => i.title === 't')
+  const old = state.items.find(i => i.id === 1)
   assert.equal(old.awaiting, 0)
 })
 
-test('unattributed: results and jobs before any item count separately; view exposes counters', () => {
+test('unattributed: results before any item count separately; jobs are not ledger facts (T-O-10)', () => {
   let state = fold([
     call(1, 'a', 'bash', { command: 'ls' }), result(2, 'a', { failed: true }),
     ev(3, 'job/registered', { jobId: 'j1', kind: 'bash' }),
   ])
   assert.equal(state.unattributed.calls, 1)
   assert.equal(state.unattributed.failures, 1)
-  assert.equal(state.unattributed.jobs, 1)
+  assert.equal(state.unattributed.jobs, undefined)
+  assert.equal(state.items.length, 0)
   const view = viewOf(state)
   assert.equal(view.unattributed.calls, 1)
   assert.equal(view.items.length, 0)
@@ -156,6 +194,9 @@ test('inherited prefix cut: events below inherited are skipped; checkpoint round
   assert.strictEqual(ledger.apply(child, ev(9, 'turn/start')), child)
   // checkpoint cannot smuggle payloads
   assert.throws(() => ledger.stateSchema.parse({ ...restored, items: [{ tier: 'full', id: 0, kind: 'u', title: '', firstSeq: 1, lastSeq: 1, files: 'nope' }] }))
+  assert.throws(() => ledger.stateSchema.parse({ ...restored, items: [{ tier: 'full', id: 0, kind: 'u', firstSeq: 1, lastSeq: 1, files: [], failures: [], tasks: [], truncated: { files: 0, failures: 0, tasks: 0 }, awaiting: 0, calls: 0, failedCalls: 0, evidence: ['x'] }] }),
+    /evidence/)
+  assert.throws(() => ledger.stateSchema.parse({ ...restored, smuggle: 1 }), /state\.smuggle/)
 })
 
 test('wire view: reference stability for unchanged items + summary:false + shape', () => {

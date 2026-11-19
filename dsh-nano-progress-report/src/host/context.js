@@ -3,11 +3,23 @@
  *    Current work: <a user request | a goal | a scheduled task>
  *    Tasks: <c> complete, <i> in progress, <p> pending; in progress: <"content">
  *    Unresolved tool failures in current work: <n> (<tool> <k>, …)
- *    Active: <j> background jobs, <s> direct subagents>
+ *    Active: <j> background jobs, <s> direct subagents
  *  A line with a zero count is not emitted; when only the header remains the
  *  whole anchor returns ''. No Goal:/path/old-bash-failure lines, no waiting
  *  line, and tool text never carries commands or paths. */
 const HEADER = 'Current session progress (observed facts, not instructions):'
+const MAX_BYTES = 600 // T-O-8: the pushed anchor is ≤600B for the model contract
+
+/** Whole-text clip at the byte budget, codepoint-safe, ending `…`. */
+const clipBytes = (text, maxBytes) => {
+  if (Buffer.byteLength(text) <= maxBytes) return text
+  let out = ''
+  for (const char of text) {
+    if (Buffer.byteLength(out + char + '…') > maxBytes) break
+    out += char
+  }
+  return `${out}…`
+}
 
 const KIND_WORD = { user: 'a user request', goal: 'a goal', schedule: 'a scheduled task' }
 export const kindWord = kind => KIND_WORD[kind] ?? 'a user request'
@@ -53,5 +65,5 @@ export function formatProgress({ view, todos = [], runningJobs = 0, runningSubag
   if (runningJobs > 0 || runningSubagents > 0) {
     lines.push(`Active: ${runningJobs} background jobs, ${runningSubagents} direct subagents`)
   }
-  return lines.length === 1 ? '' : lines.join('\n')
+  return lines.length === 1 ? '' : clipBytes(lines.join('\n'), MAX_BYTES)
 }

@@ -648,4 +648,68 @@ Active: <j> background jobs, <s> direct subagents
 
 ## 11. 执行日志回填（仅 `executed` 状态使用）
 
-文档状态为 `draft`。本节不预填命令结果、用例数或回放数字。执行完成后再把合并提交、`npm test` 用例数、`check-ui-rules` 的 NPR 行、spec-v1.1 §7.3 的回放原文（或「本机未复跑」及原因）写回这里。不另立收口文档。
+> 执行者：`lead`（DNPR01 worktree）
+> 执行时间：2026-11-19T23:40 ~ 2026-11-20T03:30（Asia/Shanghai）
+> 文档状态：`draft → executing → executed`
+> 代码改动统计：7 新建源码 + 3 删除源码、8 新建/重写测试 + 2 删除测试、4 文档回写、`version` 0.1.0 → 0.2.0
+
+- **实际执行摘要**：PH0 worktree + §7 锚复核（`T00`）；PH1 `src/shared/{fingerprint,open,condense}.js`；PH2 `src/host/ledger.js` 全量投影；PH3 四行锚 + `read_progress` 硬切删 summary；PH4 A/B/C 默认精简 + schedule 开组；PH5 面板读账本四列表 + 删 `task-times.js`；PH6 文档/版本/回放/验证。全部在 `dnpr01-progress-ledger` 分支，基线 `0dd99ab`。
+- **Phase 偏差（计划 vs 实际）**：① P4-01 段行只在前置空过滤时启用，按计划；`includeEnd` 语义改为「completed turn 行并入 opener 尾列」，与计划 §8.4 一致。② P5-01 `TASKS_KEY` 的 `view` 在打开时归零即回 Tasks（计划写的是「切到该列表后归零回 Tasks」，实现为持久 view 校验 + `useEffect` 回写，行为等价）。③ P6-02 回放四项中「归属一致率」如实登记范围外未跑，其余三项实测（见 §11.4）。④ `schedule` 开组在 `message.js` 一处完成而非 `group.js` 两处——开项判定在 `openKind` 单点，`groupRows` 只加 `'schedule'` 进 `OPENERS`。
+- **阻塞与处理**：`context.js` 的 `jsonCell` 正则曾写进字面控制字符使文件变二进制，`edit` 拒绝（"cannot edit … binary file"）→ 用 python 重写该行修回。`read_progress` 恢复计数起初按条目而非按失败数 → 改 `unresolved = Σ count`。16KiB 裁剪测试因真实明细被上限约束约 13KB 而失败 → 用伪造超大视图演练裁剪。`check-ui-rules` NPR 行 PH5 后出现 U2（`.npr-taskbar-switch`）+ U9（两个未定义类）→ 改类名 `npr-taskbar-view` + 补样式定义，回 0 告警。
+- **测试发现**：`npm test` 177/177 PASS（含新增 `fingerprint` 11、`condense` 9、`ledger` 10、`read-progress` 6、`ledger-register` 2、`host-boundary` 2、`timeline-condense` 5、`release-cut` 5、`built-host` 1）；`node ../scripts/check-ui-rules.mjs` NPR 行 0 告警（`NPR 27 0 0 0 0 0 0 0 0 1`，尾 1 为 U10 豁免登记）；`node --test test/built-host.mjs` PASS（构建后）；`npm pack --dry-run`：10 文件 49.1kB，`src/`/`test/` 不进 tarball。
+- **后续 handoff**：`deploy-local` 由 [业主] 决定；`test/live/*.live.mjs`（浏览器实测）未跑，非闸门；`conversation.view` 按 R5 裁决不注册；C1-03 与附录 B 各项保留范围外重开条件。
+
+### 11.1 逐工作项状态
+
+| 工作项 | 状态 | 提交 | 实际落点（file:line） | 备注 |
+|--------|------|----|------------------------|------|
+| `P0-01` | ✅ done | `6174f7d` 附提交说明 | `.agents/worktrees/dnpr01-progress-ledger` | `T00` 干净工作树 + §7 锚逐项对上 |
+| `P1-01` | ✅ done | `6174f7d` | `src/shared/fingerprint.js:1-150` | `digest` 与 `node:crypto` 逐字节比对通过（含多字节/emoji） |
+| `P1-02` | ✅ done | `6174f7d` | `src/shared/open.js`、`src/shared/condense.js:34-211` | `openKind` 单一判定；`classify`/`condenseGroup` 纯函数 9 用例 |
+| `P2-01` | ✅ done | `e5fefb2` | `src/host/ledger.js:1-580` | 16+64 分层、files32/failures16/tasks32/pending64、不可变、WeakMap view 缓存、10 用例 |
+| `P2-02` | ✅ done | `e5fefb2` | `src/host/index.js` | `LEDGER_KEY`、`stateVersion:1`、`summary:false`、wire `v:1` |
+| `P3-01` | ✅ done | `7495b9c` | `src/host/context.js:1-80` | 四行锚逐字 `T-O-12`；`Goal:`/路径/旧失败行删除且有否定断言 |
+| `P3-02` | ✅ done | `7495b9c` | `src/host/read-progress.js:1-260` | 逐字描述、`when`、概览 ≤80 行、明细、未知 id、16KiB 裁剪、`isConcurrencySafe` |
+| `P3-03` | ✅ done | `7495b9c` | 删除 `projection.js`、`summary.js`、`host-projection.test.mjs` | 注册表单一 key 由 `release-cut.test.mjs` 锁定 |
+| `P4-01` | ✅ done | `ec513bb` | `src/client/view/Turn.jsx:34-58`、`ProgressBody.jsx` | 空过滤走 `condenseGroup`；尾列给 `tailOf`；Row 不再渲染 args/result/reasoning |
+| `P4-02` | ✅ done | `ec513bb` | `message.js`、`group.js:15`、`constants.js:13`、`filter-menu.js`、`rows.js` | `foldInjected` 剥前导 `<tag>` 块；0 计数菜单项隐藏；`schedule` 开组 |
+| `P5-01` | ✅ done | `d7d9325` | `TasksSection.jsx`、`TasksView.jsx`、`ProgressBody.jsx` | 面板读 `faceOf('nano-progress-report:ledger')` 当前项；四列表 ghost 开关；归零回 Tasks |
+| `P5-02` | ✅ done | `d7d9325` | 删除 `task-times.js`+测试；`Turn.jsx:27-33` | 尾列 = 非 `completed` 结束原因 + 耗时 |
+| `P6-01` | ✅ done | 本提交 | `AGENTS.md`、`spec-v1.1.md` 头+§5+§7.1+§7.3+附录 A/B、FUS `:416`、`package.json:3` | 版本 0.2.0、engines 不变、字段表落包 AGENTS |
+| `P6-02` | ✅ done | 本提交 | 本节 | 验证计数已回填；合并提交待 [业主] 授权合并；worktree 待删 |
+
+### 11.2 关键指标
+
+| 指标 | 基线（0.1.0 / spec-v1.1 §7.3 基线列） | 本次（0.2.0） | Δ |
+|------|--------------------------------------|---------------|---|
+| `npm test` | 152 | 177 | +25 用例 |
+| `check-ui-rules` NPR 行告警 | 0 | 0 | 不变 |
+| 进度锚文本变化次数（`[PROD]` 33 顶层会话 138 次 `request/context` 逐字比对） | 127（旧格式：路径行+失败行驱动） | 84（四行锚） | **−34%** |
+| 可见行数（`[PROD]` 同批会话、按工作项分组） | 100 016（tool/call + assistant/message 原行） | 48 472（类别合并近似，不含 C 层剥除） | **−52%** |
+| 账本 wire view | — | 1 983 854 B / 33 会话（均值 60 117 B，单会话最大 151 492 B） | 只记录 |
+| 冷构建耗时（最大会话 49 387 事件） | — | 912.7ms（33 会话均值 148.4ms） | 只记录 |
+
+### 11.3 时序执行日志
+
+| 时点 | 步骤 | 决策 / 产出 |
+|------|------|-------------|
+| T0 | PH0 | `dnpr01-progress-ledger` worktree 干净落地，`T00` 过 |
+| T1 | PH1 | shared 三模块 + 指纹/condense 用例；`6174f7d` |
+| T2 | PH2 | ledger 全量投影 10 用例；`e5fefb2` |
+| T3 | PH3 | 四行锚 + read_progress 硬切；`jsonCell` 二进制事故修复；`7495b9c` |
+| T4 | PH4 | 时间线精简 + schedule 开组；`ec513bb` |
+| T5 | PH5 | 面板读账本四列表 + 删 task-times + ui-rules 修复；`d7d9325`+`4c04177` |
+| T6 | PH6 | 文档回写 + 版本 0.2.0 + 回放 + release-cut 用例 + 177 全绿 |
+
+### 11.4 `[PROD]` 回放原文（spec-v1.1 §7.3 同源）
+
+`test/live/prod-replay.mjs` 于 2026-11-20 对 `~/.dsh-desktop/sessions/**` 全部 341 个 `session.v4.jsonl.zstd` 做只读回放：33 个顶层会话过门槛（≥1 开项 `user/message` + ≥1 `tool/call`，排除 `origin:"subagent"`），138 次 `request/context` 为锚发射点逐字比对。四个数：锚文本变化 **127 → 84**；wire view 总量 **1 983 854 B**（均值 60 117 B）；最大会话（49 387 事件）冷构建 **912.7ms**（均值 148.4ms）；按工作项分组的可见行 **100 016 → 48 472**（类别序列合并口径，C 层剥除未计入，实际界面行数更低）。输出 `evidence/prod-replay.json` 按 `.gitignore:108-110` 不入库。归属一致率（C1-03）如实登记：本机未复跑，因 C1-03 在 DNPR01 范围外（§2.3），不做归因推断。
+
+### 11.5 pre-existing 失败甩锅
+
+无——本阶段未发现早于本轮的失败；`check-ui-rules` 对 DNMS/DNN 的既有 WARN 与本包无关（`NPR` 行 0）。
+
+### 11.6 文档状态
+
+`draft → executing → executed（2026-11-20）`。合并到 `main` 与 worktree 删除是 `executed` 的前置，随本阶段同次收尾；`deploy-local` 不执行（[业主] 授权范围外）。
+residual / follow-up → 附录 B 重开条件；`test/live/*.live.mjs` 浏览器侧实测；C1-03 归属标注。

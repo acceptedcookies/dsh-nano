@@ -14,10 +14,10 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - [x] **P0-02** 复核测量锚 — `DNLS03-T00`，`observed-OK-at-closure`，2026-11-19T16:13:58Z；27/27 符号命中、0 skip。命令见 §4。非产品验收。
 
 ### Phase 1
-- [ ] **P1-01** 控制台账 — `src/host/control-registry.js`（新）；`profile-drivers.js:152` `stateRootFor`；每 env 一份 `registry.json`，同目录临时文件后原子替换（`DNLS03-T01`）
-- [ ] **P1-02** 身份上移 — `instance-registry.js:18,28-43`；`sandboxId` 分配一次；session 只是使用绑定（`DNLS03-T02`）
-- [ ] **P1-03** 单写者 — `control-registry.js`；第二宿主写者被拒，无最后写入者胜出（`DNLS03-T03`）
-- [ ] **P1-04** 重启对账 — `control-registry.js`；损坏、缺失有存量、版本不识别时不空表认领（`DNLS03-T04`）
+- [x] **P1-01** 控制台账 — `src/host/control-registry.js`（新）；`profile-drivers.js:152` `stateRootFor`；每 env 一份 `registry.json`，同目录临时文件后原子替换（`DNLS03-T01`）
+- [x] **P1-02** 身份上移 — `instance-registry.js:18,28-43`；`sandboxId` 分配一次；session 只是使用绑定（`DNLS03-T02`）
+- [x] **P1-03** 单写者 — `control-registry.js`；第二宿主写者被拒，无最后写入者胜出（`DNLS03-T03`）
+- [x] **P1-04** 重启对账 — `control-registry.js`；损坏、缺失有存量、版本不识别时不空表认领（`DNLS03-T04`）
 
 ### Phase 2
 - [ ] **P2-01** 合同发现 — `routes.js` `registerRoutes`；`mcp-sandbox.js:189-229`；`GET /contract` 与 `sandbox.contract` 同源返回版本与能力，不授权（`DNLS03-T10`）
@@ -70,9 +70,10 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - 历史图谱（按职责演进，不表示直接父子）：`2b9ac0f` session 实例/空闲回收 → `ed99c71` 实际路由接线 → `74d734f` 容器 PTY 与观察快照 → `ede7e45` PTY resize/错误边界 → `43e83d1` kernel/driver 切割 → `d0ddac4` 状态卷归 kernel 分配 → `1e41d91` 计划取样。`git diff 1e41d91 18ea26f -- dsh-nano-local-sandbox dsh-nano-terminal dsh-nano-kitesurf` 无源码差异。
 - 正反例：唯一锚表为计划 §7.1；`test/lifecycle.spike.test.mjs` 的删行、`test/term-bridge.test.mjs` 的 create 发 URL 是旧语义；`threat.spike.test.mjs` 的 local 协议不是它们的替代断言。`context/apple-container`、`context/deepseek-harness` 仅供参考，不是构建输入。
 - T00：从 worktree 根执行 `DNLS_MEASURE_HOST_PIN="$(git rev-parse --path-format=absolute --git-common-dir)/../.dependencies/pinned/deepseek-harness" node --test dsh-nano-local-sandbox/test/once/dnls03-anchors.once.test.mjs`。一次性历史测量，不加入包测试；以本阶段提交重现。A-23 命中 `admit(request)`；当前 pin `9c2670d` / [dsh] rc.5，与 Q41 原取样 rc.1 `66491b0` 的 `rpc.ts`、`rpc-host.ts`、`peer.ts` Git blob 分别同为 `aec79d0`、`88e7b48`、`3978399`。不推论运行时的业务权限或页签已可用。
+- Phase 0 提交 `ba55bf7`。Phase 1 内核（不声明公开路由已切）：2026-11-19T16:22:30Z，`node --test dsh-nano-local-sandbox/test/control-registry.test.mjs dsh-nano-local-sandbox/test/instances-ensure.test.mjs`，26 pass / 0 fail；T01 文件字节可重开、原子写失败不报成功；T02 两个 session 释放后重开同一对象；T03 子进程持锁时第二写者失败，进程退出后原行可读；T04 有卷无账、损坏及不明代次失败关闭。原有 session 路由和旧用例等待原子同切，不作 T02 或产品交付证据。
 
 ## 5. 交接
-Phase 0 已完成；下一节点 Phase 1。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
+Phase 1 内核已完成；下一节点 Phase 2。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
 
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。

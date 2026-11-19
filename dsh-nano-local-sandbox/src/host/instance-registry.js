@@ -118,3 +118,59 @@ export function createInstanceRegistry({ backend, profile, volumeFor, now = () =
 
   return { ensure, reconcile, sweep, recordHistory, list, instances }
 }
+
+/**
+ * Object-targeted use bindings: session/pane usage on top of the managed
+ * control ledger, keyed by `sandboxId`, never by session or locator guesses.
+ * The ledger row is the physical identity; a use only records that one
+ * session consumes it, so a session ending never deletes the object.
+ */
+export function createUseBindings(registry) {
+  const uses = new Map()
+
+  const usableId = (value) => typeof value === 'string' && value.length > 0 && value.length <= 256
+
+  function ensure({ sandboxId, sessionId, policy } = {}) {
+    if (!usableId(sandboxId) || !usableId(sessionId)) return { ok: false, status: 400 }
+    const sandbox = registry.get(sandboxId)
+    if (!sandbox) return { ok: false, status: 404 }
+    const tuple = tupleFromPolicy({ ...policy, sessionId })
+    const fingerprint = policyFingerprint(tuple)
+    let bySession = uses.get(sandboxId)
+    if (!bySession) {
+      bySession = new Map()
+      uses.set(sandboxId, bySession)
+    }
+    const existing = bySession.get(sessionId)
+    if (existing) {
+      if (existing.policyFingerprint === fingerprint) {
+        return { ok: true, status: 200, sandbox, use: structuredClone(existing) }
+      }
+      return {
+        ok: false,
+        status: 409,
+        errorId: 'sandbox.instance.policy-stale',
+        expectedFingerprint: fingerprint,
+      }
+    }
+    const use = { sandboxId, sessionId: tuple.sessionId, policyFingerprint: fingerprint, tuple }
+    bySession.set(sessionId, use)
+    return { ok: true, status: 201, sandbox, use: structuredClone(use) }
+  }
+
+  function release({ sandboxId, sessionId } = {}) {
+    if (!usableId(sandboxId) || !usableId(sessionId)) return false
+    const bySession = uses.get(sandboxId)
+    if (!bySession) return false
+    const dropped = bySession.delete(sessionId)
+    if (bySession.size === 0) uses.delete(sandboxId)
+    return dropped
+  }
+
+  /** Uses of one object, addressed by sandboxId only. */
+  function list(sandboxId) {
+    return [...(uses.get(sandboxId)?.values() ?? [])].map((use) => structuredClone(use))
+  }
+
+  return { ensure, release, list }
+}

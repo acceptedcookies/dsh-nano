@@ -352,7 +352,7 @@ function bareTermStamp(input) {
   return /^[0-9a-f]{8}$/i.test(input ?? "") ? input.toLowerCase() : null;
 }
 
-// ../../../../packages/dsh-interface/src/contracts/jsonOutcome.js
+// ../packages/dsh-interface/src/contracts/jsonOutcome.js
 var FAILURE_KIND = Object.freeze({
   /** signal aborted; issued-before cancellation makes no server-side claim. */
   CANCELLED: "cancelled",
@@ -367,7 +367,7 @@ var FAILURE_KIND = Object.freeze({
 });
 var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
 
-// ../../../../packages/dsh-interface/src/contracts/observeEvent.js
+// ../packages/dsh-interface/src/contracts/observeEvent.js
 var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
 var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
 var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
@@ -426,7 +426,7 @@ function assertObserveEvent(event) {
   return event;
 }
 
-// ../../../../packages/dsh-performance-review/src/state.js
+// ../packages/dsh-performance-review/src/state.js
 var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
 var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
 var BUILD_STAMP = typeof __DNPR_BUILD__ === "string" ? __DNPR_BUILD__ : "dev";
@@ -498,7 +498,7 @@ function roundMs(value) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
-// ../../../../packages/dsh-performance-review/src/host.js
+// ../packages/dsh-performance-review/src/host.js
 var WINDOW_SAMPLE_CAP = 512;
 var EVENT_CAP = 32;
 var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";

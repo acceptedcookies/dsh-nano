@@ -10,12 +10,14 @@ POST /nano-local-sandbox/settings {
   "extraHeaders": { "X-Debug": "1" },     # ≤20 项，键 1..64 字符值 ≤200；禁 cookie/authorization/host 等
   "locale": "zh-CN",                       # BCP-47；影响 navigator.language/accept-language
   "geolocation": { "latitude": 31.2, "longitude": 121.5, "accuracy": 20 }, # 数值键 latitude/longitude/accuracy?
-  "colorScheme": "dark"                    # "light" | "dark" | null
+  "colorScheme": "dark",                   # "light" | "dark" | null
+  "cookies": "sid=abc123\nsession_check=1"  # name=value 换行串 ≤20000 字符；按当前页 origin 种；null 清空
 }
 POST /nano-local-sandbox/settings { "viewport": null, "media": null, "extraHeaders": null }
-# 状态面（非仿真）：种 cookie 给当前页 origin——本地 dev 站的登录态必须显式种，
-# 宿主浏览器 cookie 不会跨 hostGateway 域跟过来：
-POST /nano-local-sandbox/settings { "cookies": [ { "name":"sid","value":"…","domain":"<hostGateway>","path":"/" } ] }
+# 状态面（非仿真）：cookie 是「name=value」换行分隔文本串，按【当前页 origin】种入
+# ——本地 dev 站登录态必须显式种，宿主浏览器 cookie 不会跨 hostGateway 域跟过来；
+# cookies 不指定 domain，一律落在 cookieScope（session.pageUrl 的 origin）上：
+POST /nano-local-sandbox/settings { "cookies": "sid=abc123\nsession_check=1" }   # ≤20000 字符文本；null 清空
 ```
 
 `viewport.width` 任意 320..3840 整数；只给 `width` 按预设补 height 与 mobile 默认。`height` 240..2160。

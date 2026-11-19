@@ -40,22 +40,27 @@ PH0 ──▶ PH1 ──▶ PH2 ──▶ PH3 ──▶ PH6 ──▶ MERGE
 - [x] `PH0` — worktree 与锚复核
   - 落点：`.agents/worktrees/dnpr01-progress-ledger`；计划 §7 全表
   - 执行状态：complete · 2026-11-20T02:20+08:00 · 证据：本文件；13 个符号 grep 全命中（A-1..A-25 抽查 + version/engines 行）
-- [ ] `PH1` — 共用指纹与分层纯函数
+- [x] `PH1` — 共用指纹与分层纯函数
+  - 执行状态：complete · 2026-11-20T02:35+08:00 · 证据：commit `6174f7d`；npm test 152/152（T01/T02 新增 11 用例）
   - 落点：`src/shared/fingerprint.js`、`src/shared/open.js`、`src/shared/condense.js`；`src/host/projection.js` 改引 shared
   - 完成判据：`test/host-projection.test.mjs` 字节不变仍全过；`test/fingerprint.test.mjs`、`test/condense.test.mjs` PASS
   - 验证映射：T01/T02
-- [ ] `PH2` — 账本投影
+- [x] `PH2` — 账本投影
+  - 执行状态：complete · 2026-11-20T02:50+08:00 · 证据：commit `e5fefb2`；test/ledger.test.mjs 10 用例覆盖 §5.3 预期；npm test 162/162
   - 落点：`src/host/ledger.js`、`test/ledger.test.mjs`、`src/host/index.js` 注册
   - 完成判据：§5.3 的 12 条预期均有红绿断言；状态对象无 `evidence` 键；T06 注册测试通过
   - 验证映射：T03/T04/T05/T06
-- [ ] `PH3` — 模型通道硬切
+- [x] `PH3` — 模型通道硬切
+  - 执行状态：complete · 2026-11-20T03:15+08:00 · 证据：commit `7495b9c`；npm test 169/169；T18 built-host PASS（npm run build 后）；summary.js/projection.js 已删
   - 落点：`src/host/context.js`、`src/host/read-progress.js`、`src/host/index.js`；删 `summary.js` + `progressProjection`
   - 完成判据：锚逐字模板 + 旧三行否定断言 + 工具字面/schema/when/未知 id/16KiB + 注册表无 summary key
   - 验证映射：T07/T08/T09/T10/T11/T19
-- [ ] `PH4` — 人类时间线 C0/C7 + schedule 开组
+- [x] `PH4` — 人类时间线 C0/C7 + schedule 开组
+  - 执行状态：complete · 2026-11-20T02:55+08:00 · 证据：commit `ec513bb`；test/timeline-condense.test.mjs（T12/T13）；npm test 174/174
   - 落点：`ProgressBody.jsx`、`Row.jsx`、`Turn.jsx`、`group.js`、`message.js`、`filter-menu` 菜单构造、`TasksView.jsx` pending glyph、`rows.js`
   - 完成判据：T12/T13；src/client 无 args/result/reasoning data-field；`schedule` 开组
-- [ ] `PH5` — 面板三列表 + 删 task-times + C2-05
+- [x] `PH5` — 面板三列表 + 删 task-times + C2-05
+  - 执行状态：complete · 2026-11-20T03:05+08:00 · 证据：commits `d7d9325`+`9b47…`(ui-rules fix)；npm test 171/171；check-ui-rules NPR 行 0 告警
   - 落点：`TasksSection.jsx`、`TasksView.jsx`、`ProgressBody.jsx`、`Turn.jsx`；删 `src/client/task-times.js` + `test/task-times.test.mjs`
   - 完成判据：T14/T15；面板改读 ledger wire；56px 列有回合耗时/非 completed 原因
 - [ ] `PH6` — 文档/版本/验证/一次合并
@@ -71,7 +76,7 @@ PH0 ──▶ PH1 ──▶ PH2 ──▶ PH3 ──▶ PH6 ──▶ MERGE
 
 ## 5. 交接 / handoff
 
-- 当前节点：PH1 进行中。
+- 当前节点：PH6（文档/版本/验证/合并）进行中。
 - 完成 handoff：合并提交含 `npm test` 数、check-ui-rules NPR 行、pack 输出与 [PROD] 回放原文（或「本机未复跑」）→ 写回计划 §11 与 closure。deploy-local 由 [业主] 择时。
 
 ---

@@ -166,6 +166,11 @@ ${NANO_STYLES}
 .np-tab-x { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border: 0; background: transparent; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-tertiary); font: inherit; padding: 0; cursor: pointer; opacity: 0; pointer-events: none; }
 .np-tab-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tab:hover .np-tab-x, .np-tab:focus-within .np-tab-x, .np-tab[data-active="true"] .np-tab-x { opacity: 1; pointer-events: auto; }
+ /* The conversation card has no action slot. This button is ours; the card only gets inline padding. */
+ .np-to-notepad { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); height: 28px; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm, 8px); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: var(--np-font-size-sm); line-height: 20px; cursor: pointer; white-space: nowrap; }
+ .np-to-notepad[data-row="true"] { position: static; transform: none; height: 22px; padding: 0 8px; flex: none; }
+ .np-to-notepad:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+ .np-to-notepad:disabled { opacity: .55; cursor: default; }
 /* Fade only across the close button. The button is 16px of padding; the ramp
    is that same strip, so letters stay solid until they enter the ×. */
 .np-tab-name[data-clipped="true"] { text-overflow: clip; mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
@@ -4806,6 +4811,88 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
       input.disabled = false
     }
   }
+
+  /** The host card's hidden span is `resolveWorkspacePath(cwd, path)`: an
+   *  absolute source when the session has a workspace. Save-as anchors on that
+   *  path, so a relative display name is not a source. */
+  function absoluteChangedPath(node) {
+    const value = node.querySelector(':scope > span[hidden]')?.textContent?.trim() ?? ''
+    if (value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value)) return value
+    return ''
+  }
+
+  async function copyChangedFile(path, button) {
+    button.disabled = true
+    const out = await import('./jsonClient.js').then(m => m.post('/nano-notepad/read', { path }))
+    if (out?.ok !== true) throw new Error(out?.message || out?.reason || 'read failed')
+    const workspaceId = workspaceCatalog().currentId
+    state.ui.workspaceChoice = workspaceId ?? 'unassigned'
+    restoreWorkspaceFile()
+    state.ui.open = true
+    await controller.import(out.name, out.content, { sourcePath: path })
+    button.textContent = text().copiedToNotepad
+  }
+
+  function placeNotepadButton(parent, path, row) {
+    if (!(parent instanceof HTMLElement) || parent.querySelector(':scope > .np-to-notepad')) return
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'np-to-notepad'
+    if (row) button.dataset.row = 'true'
+    button.textContent = text().copyToNotepad
+    const stop = event => { event.preventDefault(); event.stopPropagation() }
+    button.addEventListener('pointerdown', stop)
+    button.addEventListener('click', event => {
+      stop(event)
+      void copyChangedFile(path, button).catch(error => {
+        button.disabled = false
+        button.textContent = text().copyToNotepad
+        showError(error)
+      })
+    })
+    parent.append(button)
+  }
+
+  /** The host ChangedFiles card has no action slot. The owner asked for the
+   *  copy button back on the conversation card, carrying the absolute path. */
+  function attachNotepadCtas(root) {
+    if (!(root instanceof Element)) return
+    const cards = []
+    if (root.matches('[data-changed-files]')) cards.push(root)
+    cards.push(...root.querySelectorAll('[data-changed-files]'))
+    const around = root.closest('[data-changed-files]')
+    if (around instanceof HTMLElement && !cards.includes(around)) cards.push(around)
+    for (const card of cards) {
+      if (!(card instanceof HTMLElement)) continue
+      if (card.getAttribute('data-single') !== null) {
+        const path = absoluteChangedPath(card)
+        if (!path) continue
+        card.style.position = 'relative'
+        card.style.paddingRight = '168px'
+        placeNotepadButton(card, path, false)
+        continue
+      }
+      for (const row of card.querySelectorAll(':scope > ul > li')) {
+        const path = absoluteChangedPath(row)
+        if (!path) continue
+        row.style.display = 'flex'
+        row.style.alignItems = 'center'
+        row.style.gap = '8px'
+        placeNotepadButton(row, path, true)
+      }
+    }
+  }
+
+  attachNotepadCtas(document)
+  const ctaWatch = new MutationObserver(records => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node instanceof Element) attachNotepadCtas(node)
+      }
+    }
+  })
+  ctaWatch.observe(document.body, { childList: true, subtree: true })
+  disposers.push(() => ctaWatch.disconnect())
 
   void openDatabase().then(async db => {
     state.db = db

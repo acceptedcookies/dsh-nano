@@ -51,8 +51,6 @@ const ZERO_PATTERNS = [
   ['[data-nano-theme= selector', /\[data-nano-theme=/g],
   ['the hand-copied dark palette', /#303136a3|#fcfdfeb3/g],
   ['a hand-copied --dsw value', /--dsw-alias-label-primary:\s*#/g],
-  ['data-changed-files (host ChangedFiles card injection)', /data-changed-files/g],
-  ['np-to-notepad (host ChangedFiles card action)', /np-to-notepad/g],
 ]
 
 const count = (text, re) => (text.match(re) ?? []).length
@@ -102,7 +100,6 @@ test('T25 control: every zero pattern still fires on a fixture that carries it',
     '[data-nano-theme="light"] { color-scheme: light }',
     '--dsw-alias-label-primary: #0f1115;',
     '.np-window[data-theme="dark"] { --dsw-menu-surface-fill: #303136a3 }',
-    '<li data-changed-files data-single><button class="np-to-notepad" type="button">x</button></li>',
   ].join('\n')
   for (const [name, re] of ZERO_PATTERNS) {
     assert.ok(count(fixture, re) > 0, `fixture carries ${name}`)

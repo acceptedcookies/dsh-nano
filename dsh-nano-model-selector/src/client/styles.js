@@ -290,19 +290,23 @@ select.nms-compact-input { flex: none; width: 210px; cursor: pointer; }
 .nms-hist-tick[data-tone="health"] { border-left-color: var(--dsw-alias-state-success-primary, #3fb950); }
 .nms-hist-tick[data-tone="buffer"] { border-left-style: solid; border-left-color: var(--dsw-alias-state-warn-primary); }
 .nms-hist-tick[data-tone="safety"] { border-left-color: var(--dsw-alias-state-error-primary, #f25a5a); }
-.nms-hist-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 6px 10px; margin-top: 8px; }
-.nms-hist-legend-item { display: flex; align-items: flex-start; gap: 5px; min-width: 0; opacity: .72; }
+/* Legend is a vertical stack: a horizontal row of labels can never line up
+   with zones of different widths and reads as misaligned. Each row keeps
+   name → range → hint on one baseline and lets the hint wrap on narrow
+   widths so the dialog and the compact panel stay legible at any size. */
+.nms-hist-legend { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
+.nms-hist-legend-item { display: flex; align-items: baseline; gap: 8px; min-width: 0; opacity: .72; }
 .nms-hist-legend-item[data-current="true"] { opacity: 1; }
 .nms-hist-legend-item[data-current="true"] .nms-hist-legend-name { color: var(--dsw-alias-label-primary); font-weight: 600; }
-.nms-hist-legend-swatch { flex: none; width: 8px; height: 8px; margin-top: 3px; border-radius: 2px; }
+.nms-hist-legend-swatch { flex: none; width: 8px; height: 8px; align-self: center; border-radius: 2px; }
 .nms-hist-legend-item[data-zone="health"] .nms-hist-legend-swatch { background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 60%, transparent); }
 .nms-hist-legend-item[data-zone="buffer"] .nms-hist-legend-swatch { background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 45%, transparent); }
 .nms-hist-legend-item[data-zone="async"] .nms-hist-legend-swatch { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 70%, transparent); }
 .nms-hist-legend-item[data-zone="force"] .nms-hist-legend-swatch { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 70%, transparent); }
-.nms-hist-legend-copy { display: flex; flex-direction: column; min-width: 0; }
-.nms-hist-legend-name { font-size: 11px; line-height: 14px; color: var(--dsw-alias-label-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.nms-hist-legend-range { font-size: 10px; line-height: 13px; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
-.nms-hist-legend-hint { font-size: 10px; line-height: 13px; color: var(--dsw-alias-label-tertiary); }
+.nms-hist-legend-copy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; min-width: 0; }
+.nms-hist-legend-name { font-size: 11px; line-height: 15px; color: var(--dsw-alias-label-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.nms-hist-legend-range { font-size: 10px; line-height: 15px; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nms-hist-legend-hint { font-size: 10px; line-height: 15px; color: var(--dsw-alias-label-tertiary); min-width: 0; }
 /* Tab switch + counters share one row. */
 .nms-hist-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .nms-hist-stats { display: flex; align-items: center; gap: 12px; }

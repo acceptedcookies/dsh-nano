@@ -19,9 +19,11 @@ const h = React.createElement
  * The track is split into the four zones the engine actually acts on (healthy
  * below H, buffer between H and B, async between B and S, forced above S), so
  * the colour under the fill pointer already says what happens next; a legend
- * under the track names each zone in words. The line labels sit on an axis
- * ABOVE the track, each anchored at its own threshold, because a row under the
- * track collides with whatever follows the gauge.
+ * under the track names each zone in words. The legend is a vertical stack of
+ * rows — a horizontal row of labels can never line up with zones of different
+ * widths and read as misaligned (2026-11-19 owner review). The line labels
+ * sit on an axis ABOVE the track, each anchored at its own threshold, because
+ * a row under the track collides with whatever follows the gauge.
  *
  * @param {{fill: number|null, fillFromDecision?: boolean, health: number, buffer: number, safety: number, copy: object, live?: boolean, windowTokens?: number|null, legend?: boolean}} props
  */

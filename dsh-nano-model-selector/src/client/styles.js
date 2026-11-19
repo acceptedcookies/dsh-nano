@@ -238,15 +238,12 @@ select.nms-compact-input { flex: none; width: 210px; cursor: pointer; }
    Every value is a shell token: the card must follow the active theme without
    a second palette. Layout only — no control is restyled here. */
 .nms-hist { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
-/* Verdict: the plain-language answer, read before any number. */
+/* Verdict: the plain-language answer, read before any number. No tone accent —
+   the left colour bar was a hand-drawn marker nano-ui does not have, removed
+   2026-11-19 on owner review; data-tone stays as neutral metadata only. */
 .nms-hist-verdict { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--dsw-radius-sm, 8px);
-  background: var(--dsw-alias-bg-layer-1, #202020); color: var(--dsw-alias-label-primary); font-size: 12px; line-height: 18px;
-  box-shadow: inset 2px 0 0 var(--dsw-alias-label-tertiary); }
+  background: var(--dsw-alias-bg-layer-1, #202020); color: var(--dsw-alias-label-primary); font-size: 12px; line-height: 18px; }
 .nms-hist-verdict p { margin: 0; }
-.nms-hist-verdict[data-tone="success"] { box-shadow: inset 2px 0 0 var(--dsw-alias-state-success-primary, #3fb950); }
-.nms-hist-verdict[data-tone="info"] { box-shadow: inset 2px 0 0 var(--dsw-alias-state-business-primary); }
-.nms-hist-verdict[data-tone="warning"] { box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary); }
-.nms-hist-verdict[data-tone="danger"] { box-shadow: inset 2px 0 0 var(--dsw-alias-state-error-primary, #f25a5a); }
 .nms-hist-water { display: flex; flex-direction: column; gap: 0; }
 .nms-hist-water-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; }
 .nms-hist-water-label { font-size: 12px; color: var(--dsw-alias-label-secondary); }
@@ -344,8 +341,12 @@ select.nms-compact-input { flex: none; width: 210px; cursor: pointer; }
   font-family: var(--dsw-font-markdown-code-font-family);
   font-size: 11px; line-height: 16px; white-space: pre-wrap; word-break: break-word;
   overflow: auto; max-height: 240px; }
-.nms-hist-diag { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-.nms-hist-diag .nms-hist-raw { margin: 0; max-height: none; background: var(--dsw-alias-bg-layer-1, #202020); }
+.nms-hist-diag { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
+/* Diagnostics: the facts grid stays put and only the raw snapshot scrolls.
+   A panel-level scrollbar squeezed the whole pane left and misaligned the
+   grid; moving the scrollbar inside .nms-hist-raw removes that offset. */
+.nms-hist-panel[data-tab="diagnostics"] { overflow-y: hidden; display: flex; flex-direction: column; }
+.nms-hist-diag .nms-hist-raw { margin: 0; max-height: none; flex: 1; min-height: 0; background: var(--dsw-alias-bg-layer-1, #202020); }
 .nms-hist-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .nms-hist-fact { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 6px 8px; border-radius: var(--dsw-radius-sm, 8px);
   background: var(--dsw-alias-bg-layer-1, #202020); box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-border-l2); }

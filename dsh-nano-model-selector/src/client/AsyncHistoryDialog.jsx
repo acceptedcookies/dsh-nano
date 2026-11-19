@@ -270,8 +270,9 @@ export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
           h('span', { className: 'nms-hist-stat-label' }, copy.historyStat[key]),
           h('span', { className: 'nms-hist-stat-value' }, String(value)))))),
     // Keyed by tab so a switch starts at the top instead of inheriting the
-    // other tab's scroll offset.
-    h('div', { key: tab, className: 'nms-hist-panel' }, tab === 'timeline' ? timeline : diagnosticsTab)))
+    // other tab's scroll offset. data-tab lets CSS give the diagnostics pane
+    // its own scroll region (the raw snapshot scrolls, the facts stay put).
+    h('div', { key: tab, className: 'nms-hist-panel', 'data-tab': tab }, tab === 'timeline' ? timeline : diagnosticsTab)))
 }
 
 /** The session-header menu entry: one glyph, one label, one dialog. */

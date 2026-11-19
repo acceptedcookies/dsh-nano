@@ -10,7 +10,7 @@ import { NanoDialog, NanoMenu, NANO_STYLES, Toolbar } from 'dsh-nano-ui'
 const { Button, Input, Switch, StateDot, Tag } = primitives
 import { loadCore, WasmTerm, MODES } from './wasm.js'
 import { TermCanvas, buildPalette } from './render.js'
-import { encodeKey, encodePaste, encodeMouse, encodeFocus } from './keys.js'
+import { encodeKey, encodePaste, encodeMouse, encodeFocus, encodeText } from './keys.js'
 import { makeLane } from './lanes.js'
 import {
   unmountAction, freezeGap, shouldRepaintNow, createFitCoalescer, noteFit, flushFit, resizeMode, watchDevicePixelRatio,
@@ -143,6 +143,18 @@ ${NANO_STYLES}
 .dnt-rotate{transform:rotate(90deg)}
 .dnt-header-actions{display:flex;align-items:center;gap:1px;flex:0 0 auto;margin-left:auto}
 .dnt-canvas-host{position:absolute;top:26px;left:0;right:0;bottom:0;overflow:hidden;cursor:text}
+/* IME surface: composition events only fire on editable elements — a plain
+   div with tabIndex never receives CJK text commits. The hidden textarea
+   tracks the cursor cell so the candidate window anchors where typing
+   happens; opacity:0 keeps it invisible but still caret-positioned. */
+.dnt-ime{position:absolute;overflow:hidden;resize:none;padding:0;border:0;outline:none;margin:0;background:transparent;color:transparent;caret-color:transparent;opacity:0;z-index:0;pointer-events:none;white-space:pre}
+/* The host renders transcript width handles as siblings of the scroll body
+   whenever the conversation phase is 'active' — it cannot know a terminal
+   view owns the column, so they float over our panes. The mount effect marks
+   the enclosing conversation body data-dnt-live; this rule (on the public
+   data-width-handle attribute) hides them inside that subtree only. Same
+   public-attribute pattern as the scrollport fix in index.js. */
+[data-conversation-content][data-dnt-live] [data-width-handle]{display:none}
 .dnt-scrollbar-track{position:absolute;right:3px;top:32px;bottom:8px;width:6px;pointer-events:none;z-index:var(--nano-layer-local4)}
 .dnt-scrollbar-thumb{position:absolute;right:0;width:6px;border-radius:3px;background:var(--dsw-alias-label-dimmed);opacity:.55;transition:opacity .15s}
 .dnt-pane:hover .dnt-scrollbar-thumb{opacity:.9}
@@ -350,6 +362,18 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
   }, [])
 
   const rootRef = useRef(null)
+
+  // While this view is mounted its column is a terminal surface — the host's
+  // transcript width handles have no purpose here. Mark the enclosing
+  // [data-conversation-content] so the scoped CSS rule hides them; the
+  // attribute and the rule live/die with this mount.
+  useEffect(() => {
+    if (!ready) return undefined
+    const convBody = rootRef.current?.closest('[data-conversation-content]')
+    if (!convBody) return undefined
+    convBody.setAttribute('data-dnt-live', '1')
+    return () => convBody.removeAttribute('data-dnt-live')
+  }, [ready])
 
   useEffect(() => {
     let live = true
@@ -883,6 +907,7 @@ const PANE_PAD = { padX: 8, padY: 4 }
 function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onClose, onSplit, paneSessions, zh, settings, reportStatus }) {
   const boxRef = useRef(null)
   const canvasHostRef = useRef(null)
+  const imeRef = useRef(null)
   const [status, setStatus] = useState({ lane: laneSpec.lane, phase: 'opening', scroll: '0/0', title: '' })
   const [retrySeq, setRetrySeq] = useState(0)
   const [menuAt, setMenuAt] = useState(null)
@@ -948,6 +973,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
         lastViewStart = packed.viewStart ?? 0
         // 选区层跟随视口滚动重新定位（滚动/输出移位时高亮不漂移）
         canvas.paintSelection(rec.sel?.a, rec.sel?.f, lastViewStart, contentCols)
+        positionIme()
         const total = term.totalLines()
         const key = `${total}/${lastViewStart}/${canvas.rows}`
         if (key !== lastScrollKey) {
@@ -1069,6 +1095,10 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
 
     // input
     const keydown = (ev) => {
+      // IME composition owns the key stream until compositionend — forwarding
+      // its navigation keys (candidate selection, Esc-cancel, arrows between
+      // segments) into the pty corrupts both the preedit and the program.
+      if (ev.isComposing || ev.keyCode === 229) return
       // ⌘C 复制当前选区（选区存在时不该落到程序手里）
       if (ev.metaKey && ev.key === 'c' && rec.sel) {
         ev.preventDefault(); ev.stopPropagation()
@@ -1195,7 +1225,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     }
     const mousedown = (ev) => {
       onFocus()
-      box.focus()
+      imeRef.current?.focus()
       const { x, y } = cellAt(ev)
       const captured = mouseCaptured()
       // 本地选取优先：未被程序接管鼠标时左键始终可选取；被接管时用 Shift 绕过
@@ -1258,9 +1288,60 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     const contextmenu = (ev) => {
       ev.preventDefault()
       onFocus()
-      box.focus()
+      imeRef.current?.focus()
       setMenuAt({ x: ev.clientX, y: ev.clientY })
     }
+
+    // IME 输入面：composition 事件只在可编辑元素上触发——裸 div + tabIndex
+    // 永远收不到 CJK 提交。隐藏 textarea 跟随光标 cell，让输入法候选窗落
+    // 在正在打字的位置；普通键仍走 keydown（preventDefault 挡住字面量进入
+    // 此框），dead-key/OSK/听写这类没经 keydown 的文本经 input 兜底提交。
+    const ime = document.createElement('textarea')
+    ime.className = 'dnt-ime'
+    ime.dataset.dntIme = '1'
+    ime.setAttribute('aria-label', zh ? '终端输入' : 'terminal input')
+    ime.setAttribute('autocapitalize', 'off')
+    ime.setAttribute('autocomplete', 'off')
+    ime.setAttribute('autocorrect', 'off')
+    ime.setAttribute('spellcheck', 'false')
+    ime.tabIndex = -1
+    host.appendChild(ime)
+    imeRef.current = ime
+    const positionIme = () => {
+      const cw = canvas.charW || 8
+      const ch = canvas.charH || 16
+      const col = Math.max(0, Math.min((canvas.cols || 1) - 1, canvas.cursorX ?? 0))
+      const row = Math.max(0, Math.min((canvas.rows || 1) - 1, canvas.cursorRow ?? 0))
+      ime.style.left = `${canvas.padX + col * cw}px`
+      ime.style.top = `${canvas.padY + row * ch}px`
+      ime.style.width = `${Math.ceil(cw * 2)}px`
+      ime.style.height = `${Math.ceil(ch)}px`
+    }
+    const commitText = (text) => {
+      if (!text) return
+      stateRef.current.keySent = performance.now()
+      lane.write(encodeText(text))
+      term.scrollBottom()
+      schedulePaint()
+    }
+    const imeInput = (ev) => {
+      // 非组合文本落地（dead key 闭合、屏上键盘、听写）；组合中输入法自管。
+      if (ev.isComposing || !ime.value) return
+      commitText(ime.value)
+      ime.value = ''
+    }
+    const imeCompositionStart = () => {
+      // 先清残留：异常终止的上一段预编辑不该混进这一次的提交里。
+      ime.value = ''
+    }
+    const imeCompositionEnd = (ev) => {
+      commitText(typeof ev.data === 'string' && ev.data !== '' ? ev.data : ime.value)
+      ime.value = ''
+    }
+    ime.addEventListener('input', imeInput)
+    ime.addEventListener('compositionstart', imeCompositionStart)
+    ime.addEventListener('compositionend', imeCompositionEnd)
+    positionIme()
 
     box.addEventListener('keydown', keydown)
     box.addEventListener('paste', paste)
@@ -1336,6 +1417,11 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       host.removeEventListener('mousemove', mousemove)
       box.removeEventListener('focusin', focusin)
       box.removeEventListener('focusout', focusout)
+      ime.removeEventListener('input', imeInput)
+      ime.removeEventListener('compositionstart', imeCompositionStart)
+      ime.removeEventListener('compositionend', imeCompositionEnd)
+      ime.remove()
+      imeRef.current = null
       rec.hooks.schedulePaint = undefined
       rec.hooks.applyStatus = undefined
       stateRef.current.copyMode?.()
@@ -1357,7 +1443,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
   // 焦的窗格要在第一次击键前就持有键盘；终端只在 focused pane 的 box 上
   // 消费键事件，不主动 focus() 会让击键落到 body 被宿主吞掉。
   useEffect(() => {
-    if (focused) boxRef.current?.focus()
+    if (focused) (imeRef.current ?? boxRef.current)?.focus()
   }, [focused])
 
   // five-level state (W-P0-6): lifecycle phase {opening,live,exited,error}

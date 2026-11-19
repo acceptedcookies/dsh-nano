@@ -94,6 +94,11 @@ function bytesOf(arr) {
 
 const ESC_SEQ = new Uint8Array([0x1b])
 
+/** Encode already-composed text (IME commits, dead-key output, dictation). */
+export function encodeText(text) {
+  return encoder.encode(text)
+}
+
 /** Encode pasted text honoring bracketed-paste mode. */
 export function encodePaste(text, modes) {
   const normalized = text.replace(/\r?\n/g, '\r')

@@ -522,7 +522,7 @@ const KITESURF_TOOLS = [
   },
   {
     name: 'sandbox.control',
-    description: 'Page control/ownership state: which MCP writer holds the page (owner client name, since when, last write). One page is shared by a human and agents; a second MCP writer is refused kitesurf.control.busy rather than tearing navigation. The host pane writes over REST without this lock, so a human action is never blocked. action: status|claim|release — claim to take the page, release to free it.',
+    description: 'Page control/ownership state: one MCP writer moves the page at a time; status shows which MCP writer holds it (owner client name, since when, last write). One page is shared by a human and agents; a second MCP writer is refused kitesurf.control.busy rather than tearing navigation. The host pane writes over REST without this lock, so a human action is never blocked. action: status|claim|release — claim to take the page, release to free it.',
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['status', 'claim', 'release', 'takeover'] } }, additionalProperties: false },
   },
   {

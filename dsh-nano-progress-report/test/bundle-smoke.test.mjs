@@ -92,9 +92,17 @@ test('lib/client.js keeps host externals external (spec §7.1)', () => {
   // esbuild externalizes to te("<id>") calls routed through the loader's
   // require — the literal module id must appear, not bundled source.
   for (const external of ['react', '@deepseek-ai/dsh-client-ui-primitives']) {
-    assert.ok(code.includes(`te("${external}")`) || code.includes(`require("${external}")`),
-      `bundle must reference external ${external} — it must not be bundled`)
+    // The loader shim is minified (helper name changes per build), so assert the
+    // module id is passed to a require call — not that a specific name survived.
+    assert.ok(code.includes(`("${external}")`),
+      `bundle must require external ${external} — it must not be bundled`)
   }
+  assert.ok(!code.includes('react.element'), 'React runtime must not be bundled')
   assert.match(code, /__ModuleLoader__\.load\(/)
   assert.match(code, /__nprExport/)
+  // The official chrome must survive into the artifact: these property names
+  // are not mangled, so their absence means the row/task chrome was replaced.
+  for (const primitive of ['DisclosureRow', 'AnimatedRows', 'StateDot', 'SegmentedControl', 'relativeTime']) {
+    assert.ok(code.includes(primitive), `bundle does not use host primitive ${primitive}`)
+  }
 })

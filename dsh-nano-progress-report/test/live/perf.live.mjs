@@ -31,13 +31,82 @@ async function waitFor(page, fn, arg, ms = 8000) {
   return false
 }
 
+/** Navigate to the dev GUI. The token redirect mints a single-use token, so a
+ *  consumed/expired URL surfaces as an HTTP error status; fall back to the bare
+ *  origin (which mints a fresh one) before giving up. */
+async function gotoApp(page, url) {
+  const attempts = [url, 'https://dsh-dev.local/', url]
+  let lastError = null
+  for (const target of attempts) {
+    try {
+      await page.goto(target, { timeout: 60000 })
+      await page.waitForLoadState()
+      const failed = await page.evaluate(() => {
+        const text = document.body?.innerText ?? ''
+        return text.length < 20 || /HTTP ERROR|ERR_|not found/i.test(text.slice(0, 200))
+      }).catch(() => true)
+      if (!failed) return true
+    } catch (error) { lastError = error }
+    await new Promise(resolve => setTimeout(resolve, 1500))
+  }
+  if (lastError) throw lastError
+  return false
+}
+
+/** Bring the Progress pane on screen: activate the tab chip when the host has
+ *  one (inactive panes are unmounted, so "mounted" means "active"), otherwise
+ *  reveal the right pane and use its guide card. */
+async function ensureProgressPane(page) {
+  const mountedNow = () => page.evaluate(src => eval(src) !== null, ROOT_SRC)
+  if (await mountedNow()) return true
+  const steps = [
+    async () => page.evaluate(() => {
+      const chip = [...document.querySelectorAll('[role="tab"], button')]
+        .find(e => (e.textContent ?? '').trim() === 'Progress' && e.getBoundingClientRect().y < 90)
+      if (!chip) return false
+      chip.click()
+      return true
+    }),
+    async () => page.evaluate(() => {
+      const b = [...document.querySelectorAll('button[aria-label]')]
+        .find(e => /打开右侧边栏/.test(e.getAttribute('aria-label') || ''))
+      b?.click()
+      return Boolean(b)
+    }),
+    async () => page.evaluate(() => {
+      const chip = [...document.querySelectorAll('[role="tab"], button')]
+        .find(e => (e.textContent ?? '').trim() === 'Progress' && e.getBoundingClientRect().y < 90)
+      if (!chip) return false
+      chip.click()
+      return true
+    }),
+    async () => page.evaluate(() => {
+      const el = [...document.querySelectorAll('button, [role="button"], [role="menuitem"], li')]
+        .find(e => e.textContent?.trim() === 'Progress' && e.getBoundingClientRect().x > 700)
+      if (!el) return false
+      el.click()
+      return true
+    }),
+  ]
+  for (const step of steps) {
+    const acted = await step()
+    if (acted !== false) {
+      for (let i = 0; i < 12; i += 1) {
+        if (await mountedNow()) return true
+        await new Promise(r => setTimeout(r, 400))
+      }
+    }
+    await new Promise(r => setTimeout(r, 400))
+  }
+  return await mountedNow()
+}
+
 async function main() {
   const task = await taskSpace(SPACE)
   const managed = await task.pages()
   const page = managed[0] || task.page('p1')
 
-  await page.goto(GUI, { timeout: 60000 })
-  await page.waitForLoadState()
+  await gotoApp(page, GUI)
   await new Promise(r => setTimeout(r, 3000))
   // The token redirect drops query params — arm the localStorage flag and reload.
   await page.evaluate(() => localStorage.setItem('dsh-perf-review', '1'))
@@ -48,34 +117,14 @@ async function main() {
   const flag = await page.evaluate(src => typeof eval(src)?.read === 'function', PERF_SRC)
   record('perfReview installed', flag, '')
 
-  // Exercise the tab if not already open.
-  let mounted = await page.evaluate(src => eval(src) !== null, ROOT_SRC)
-  if (!mounted) {
-    const plus = await page.evaluate(() => {
-      const el = [...document.querySelectorAll('button[aria-label]')].find(b => {
-        const r = b.getBoundingClientRect()
-        return r.x > 900 && r.y < 60 && r.width < 60
-      })
-      if (!el) return null
-      const r = el.getBoundingClientRect()
-      return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
-    })
-    if (plus) await page.mouse.click(plus.x, plus.y)
-    await new Promise(r => setTimeout(r, 1500))
-    await page.evaluate(() => {
-      const el = [...document.querySelectorAll('[role="menuitem"], [role="menu"] *, [role="dialog"] *, [role="listbox"] *')]
-        .find(e => e.textContent?.trim() === 'Progress')
-      el?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    mounted = await waitFor(page, src => eval(src) !== null, ROOT_SRC, 6000)
-  }
+  const mounted = await ensureProgressPane(page)
   record('progress mounted for perf', mounted, '')
 
   if (mounted) {
     // Trigger counts: filter-apply (unique text so a persisted value can't no-op),
     // row-expand, load-older (if the button exists).
     await page.evaluate(src => {
-      const input = eval(src)?.querySelector('.npr-filter input')
+      const input = eval(src)?.querySelector('[data-npr="search"]')
       if (input) {
         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
         setter.call(input, 'status:ok')
@@ -88,12 +137,12 @@ async function main() {
     await page.evaluate(src => {
       const root = eval(src)
       if (!root) return
-      const detail = root.querySelector('.npr-row-detail')
-      if (detail) root.querySelector('.npr-row .npr-row-chevron button')?.click()
+      const detail = root.querySelector('[data-npr="detail"]')
+      if (detail) root.querySelector('[data-disclosure-row][data-expandable]')?.click()
     }, ROOT_SRC)
     await new Promise(r => setTimeout(r, 300))
     await page.evaluate(src => {
-      eval(src)?.querySelector('.npr-row .npr-row-chevron button')?.click()
+      eval(src)?.querySelector('[data-disclosure-row][data-expandable]')?.click()
     }, ROOT_SRC)
     await new Promise(r => setTimeout(r, 500))
     await page.evaluate(src => {

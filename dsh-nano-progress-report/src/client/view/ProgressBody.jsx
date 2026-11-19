@@ -1,11 +1,40 @@
 /** ProgressBody — the 'progress' workbench tab body.
- *  Props arrive from the seat + this plugin's inject: { sessionId, ctx, t }. */
+ *  Props arrive from the seat + this plugin's inject: { sessionId, ctx, t }.
+ *
+ *  Composition follows the two references the owner named:
+ *  - DNK devtools: 38px toolbar (host `Input`, border-bottom l3) → content →
+ *    26px status line (border-top l3) → top-edge-resizable drawer whose head is
+ *    a host `SegmentedControl` on `bg-layer-1`.
+ *  - Devin Progress: 24px disclosure rows (glyph → summary → relative time),
+ *    failure marks, and a Tasks drawer.
+ *  Every glyph/button/field is a host primitive; only layout glue is local. */
 import React from 'react'
-import { Button, Input, IconChevronRightOutlineRegular, IconChevronDownOutlineRegular, IconChecklistOutlineRegular, IconRefreshOutlineRegular, IconCloseOutlineRegular, IconUserOutlineRegular, IconSparkleRegular, IconCodeOutlineRegular, IconDeliverDocRegular, IconGlobeOutlineRegular, IconSettingsOutlineRegular, IconAgentPresetOutlineRegular, IconClockOutlineRegular, IconQueueOutlineRegular, IconPlayOutlineRegular, IconCheckOutlineRegular, IconPauseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { AnimatedRows, Button, IconCloseOutlineRegular, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import { applyFilter, isEmptyFilter, parseFilter } from '../filter.js'
 import { perf } from '../perf.js'
+import { Drawer } from './Drawer.jsx'
+import { JobsView } from './JobsView.jsx'
+import { Row } from './Row.jsx'
+import { TasksView } from './TasksView.jsx'
 
 const { createElement: h, useEffect, useMemo, useState } = React
+
+/** Drawer preference (view + height + collapsed) — pure view state, so it lives
+ *  in the browser, never in the host. Filter text has its own per-session key. */
+const DRAWER_KEY = 'dsh-nano-progress-report:drawer'
+const DRAWER_DEFAULT = { height: 184, collapsed: false, view: 'tasks' }
+
+function readDrawer() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(DRAWER_KEY) ?? 'null')
+    if (parsed === null || typeof parsed !== 'object') return DRAWER_DEFAULT
+    return {
+      height: typeof parsed.height === 'number' ? parsed.height : DRAWER_DEFAULT.height,
+      collapsed: parsed.collapsed === true,
+      view: typeof parsed.view === 'string' ? parsed.view : DRAWER_DEFAULT.view,
+    }
+  } catch { return DRAWER_DEFAULT }
+}
 
 function safeGet(source) {
   try { return source === null || source === undefined ? undefined : source.getSnapshot() }
@@ -24,107 +53,6 @@ function useExternal(source, deps) {
   return value
 }
 
-const TYPE_ICON = {
-  prompt: IconUserOutlineRegular,
-  message: IconSparkleRegular,
-  shell: IconCodeOutlineRegular,
-  file: IconDeliverDocRegular,
-  web: IconGlobeOutlineRegular,
-  tool: IconSettingsOutlineRegular,
-  todo: IconChecklistOutlineRegular,
-  subagent: IconAgentPresetOutlineRegular,
-  wait: IconClockOutlineRegular,
-  turn: IconPlayOutlineRegular,
-  job: IconQueueOutlineRegular,
-  lifecycle: IconPauseOutlineRegular,
-}
-
-const STATUS_ICON = {
-  completed: IconCheckOutlineRegular,
-  in_progress: IconClockOutlineRegular,
-  pending: IconPauseOutlineRegular,
-}
-
-function relTime(time, now) {
-  if (!time) return ''
-  const s = Math.max(0, Math.floor((now - time) / 1000))
-  if (s < 60) return `${s}s`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m`
-  const hr = Math.floor(m / 60)
-  if (hr < 24) return `${hr}h`
-  return `${Math.floor(hr / 24)}d`
-}
-
-function Row({ row, now, t }) {
-  const [open, setOpen] = useState(false)
-  const detail = row.detail
-  const expandIcon = open
-    ? h(IconChevronDownOutlineRegular, { size: 12 })
-    : h(IconChevronRightOutlineRegular, { size: 12 })
-  return perf.span('row-render', () => h(React.Fragment, null,
-    h('div', { className: 'npr-row', 'data-type': row.type, 'data-status': row.status, 'data-npr': 'row' },
-      row.expandable
-        ? h('span', { className: 'npr-row-chevron' },
-          h(Button, {
-            variant: 'ghost', size: 'sm',
-            icon: expandIcon,
-            'aria-label': open ? t('row.collapse') : t('row.expand'),
-            onClick: () => setOpen(v => {
-              if (!v) perf.count('row-expand')
-              return !v
-            }),
-          }))
-        : h('span', { className: 'npr-row-chevron npr-row-chevron-spacer' }),
-      h('span', { className: 'npr-row-icon', 'data-type': row.type },
-        h(TYPE_ICON[row.type] ?? IconSettingsOutlineRegular, { size: 13 })),
-      h('div', { className: 'npr-row-body' },
-        h('div', { className: 'npr-row-summary', title: row.summary }, row.summary)),
-      h('span', { className: 'npr-row-time', title: row.time ? new Date(row.time).toLocaleString() : '' }, relTime(row.time, now))),
-    open && detail !== undefined
-      ? h('div', { className: 'npr-row-detail' },
-        detail.error !== undefined
-          ? h('div', null, h('span', { className: 'npr-detail-label' }, 'error: '), String(detail.error))
-          : null,
-        detail.argsRaw
-          ? h('div', null, h('span', { className: 'npr-detail-label' }, 'args: '), detail.argsRaw)
-          : null,
-        detail.resultText
-          ? h('div', null, h('span', { className: 'npr-detail-label' }, 'result: '), detail.resultText)
-          : null,
-        detail.text ? h('div', null, detail.text) : null,
-        detail.reasoning
-          ? h('div', null, h('span', { className: 'npr-detail-label' }, 'reasoning: '), detail.reasoning)
-          : null,
-        Array.isArray(detail.todos) && detail.todos.length > 0
-          ? h('div', null, detail.todos.map((todo, i) => h('div', { key: i, className: 'npr-subcall' },
-            h('span', { className: 'npr-subcall-name' }, h(STATUS_ICON[todo.status] ?? IconPauseOutlineRegular, { size: 12 })),
-            h('span', { className: 'npr-subcall-summary' }, todo.content))))
-          : null,
-        detail.durationMs !== undefined
-          ? h('div', null, h('span', { className: 'npr-detail-label' }, 'duration: '), `${(detail.durationMs / 1000).toFixed(1)}s`)
-          : null,
-        Array.isArray(detail.children) && detail.children.length > 0
-          ? h('div', { className: 'npr-subcalls' }, detail.children.map((child, i) => h('div', { key: i, className: 'npr-subcall', 'data-status': child.status },
-            h('span', { className: 'npr-subcall-name' }, child.name),
-            h('span', { className: 'npr-subcall-summary' }, child.summary))))
-          : null)
-      : null))
-}
-
-function FilterChips({ filter }) {
-  const chips = []
-  for (const type of filter.types) chips.push({ key: `t:${type}`, label: `type:${type}` })
-  for (const type of filter.notTypes) chips.push({ key: `nt:${type}`, label: `-type:${type}`, neg: true })
-  for (const status of filter.statuses) chips.push({ key: `s:${status}`, label: `status:${status}` })
-  for (const status of filter.notStatuses) chips.push({ key: `ns:${status}`, label: `-status:${status}`, neg: true })
-  if (filter.tool !== null) chips.push({ key: 'tool', label: `tool:${filter.tool}` })
-  if (filter.notTool !== null && filter.notTool !== undefined) chips.push({ key: 'ntool', label: `-tool:${filter.notTool}`, neg: true })
-  if (chips.length === 0) return null
-  return h('div', { className: 'npr-filter-chips' },
-    chips.map(chip => h('span', { key: chip.key, className: 'npr-filter-chip', 'data-neg': chip.neg === true ? 'true' : undefined }, chip.label)))
-}
-
 export default function ProgressBody(props) {
   const { sessionId, ctx, t } = props
   const storageKey = `dsh-nano-progress-report:filter:${sessionId ?? 'all'}`
@@ -138,25 +66,21 @@ export default function ProgressBody(props) {
   }
   const [now, setNow] = useState(() => Date.now())
   const [bindingError, setBindingError] = useState(false)
+  const [openKey, setOpenKey] = useState(null)
+  const [ready, setReady] = useState(false)
+  const [drawer, setDrawer] = useState(readDrawer)
 
   const target = useMemo(() => {
     try { return perf.span('progress-subscribe', () => ctx.uiConversation.binding(sessionId).target('progress')) }
     catch { return null }
   }, [ctx, sessionId])
-  useEffect(() => {
-    setBindingError(target === null)
-  }, [target])
+  useEffect(() => { setBindingError(target === null) }, [target])
   const progress = useExternal(target, [target])
 
   const sessionFace = useMemo(() => {
     try { return ctx.sessions.binding(sessionId)?.session ?? null } catch { return null }
   }, [ctx, sessionId])
   const sessionSnap = useExternal(sessionFace, [sessionFace])
-
-  const listSource = useMemo(() => ctx.sessions?.list ?? null, [ctx])
-  const sessionList = useExternal(listSource, [listSource])
-  const sessionTitle = sessionList?.byId?.[sessionId]?.displayTitle
-    ?? sessionList?.byId?.[sessionId]?.title ?? 'session'
 
   const todosSource = useMemo(() => {
     try { return sessionFace?.projections?.faceOf?.('todos') ?? null } catch { return null }
@@ -175,6 +99,10 @@ export default function ProgressBody(props) {
     const timer = window.setInterval(() => setNow(Date.now()), 30000)
     return () => window.clearInterval(timer)
   }, [])
+  useEffect(() => { setReady(true) }, [])
+  useEffect(() => {
+    try { window.localStorage.setItem(DRAWER_KEY, JSON.stringify(drawer)) } catch { /* storage off */ }
+  }, [drawer])
 
   const filter = useMemo(() => parseFilter(query), [query])
   const rows = progress?.rows ?? []
@@ -187,89 +115,114 @@ export default function ProgressBody(props) {
   const hasMore = sessionSnap?.hasMore === true
   const loadingOlder = sessionSnap?.loadingOlder === true
   const jobs = jobsSnap?.rows?.[sessionId] ?? []
-  // faceOf('todos') snapshot value is `TodoItem[] | null` — the host wrapper
-  // is a type marker only (dsh-tool-todo merge), host TodoDock consumes an array.
   const todoItems = Array.isArray(todos) ? todos : []
   const todoDone = todoItems.filter(item => item?.status === 'completed').length
-  const todoCounts = todoItems.length > 0 ? { completed: todoDone } : null
+  const failed = progress?.counts?.failed ?? 0
+  const awaiting = (progress?.counts?.awaiting ?? 0) > 0
+
+  // A stale `jobs` view must not strand the drawer on an empty tab.
+  const view = drawer.view === 'jobs' && jobs.length > 0 ? 'jobs' : 'tasks'
+  const setDrawerField = (patch) => setDrawer(current => ({ ...current, ...patch }))
 
   if (bindingError) {
-    return h('div', { className: 'npr-empty', 'data-nano-progress-report': '1' }, t('session.unavailable'))
+    return h('div', { className: 'npr-empty', 'data-nano-progress-report': '1', 'data-npr': 'root' },
+      t('session.unavailable'))
   }
 
-  return h('div', { 'data-nano-progress-report': '1', 'data-npr': 'root' },
-    h('div', { className: 'npr-head' },
-      h('div', { className: 'npr-head-title' },
-        h('span', { className: 'npr-head-name' }, sessionTitle),
-        h('span', { className: 'npr-head-state' }, running ? t('state.running') : t('state.idle'))),
-      h('div', { className: 'npr-head-actions' },
-        h(Button, {
-          variant: 'ghost', size: 'sm',
-          icon: h(IconRefreshOutlineRegular, { size: 14 }),
-          'aria-label': t('head.refresh'),
-          onClick: () => setNow(Date.now()),
-        }))),
+  const stateKey = awaiting ? 'awaiting' : running ? 'running' : 'idle'
+  const stats = query === ''
+    ? t('toolbar.events').replace('{n}', String(rows.length))
+    : t('toolbar.matched').replace('{n}', String(filtered.length)).replace('{total}', String(rows.length))
 
-    h('div', { className: 'npr-filter' },
+  const drawerOptions = [
+    { value: 'tasks', label: t('drawer.tasks') },
+    { value: 'jobs', label: t('drawer.jobs'), disabled: jobs.length === 0 },
+  ]
+
+  return h('div', { 'data-nano-progress-report': '1', 'data-npr': 'root' },
+    h('div', { className: 'npr-toolbar', 'data-npr': 'toolbar' },
       h(Input, {
-        className: 'npr-filter-input', value: query,
+        className: 'npr-search',
+        'data-npr': 'search',
+        type: 'search',
+        value: query,
         placeholder: t('filter.placeholder'),
+        'aria-label': t('filter.placeholder'),
         onChange: event => onQuery(event.currentTarget.value),
       }),
-      h(FilterChips, { filter }),
       query !== ''
         ? h(Button, {
-          variant: 'ghost', size: 'sm',
-          icon: h(IconCloseOutlineRegular, { size: 13 }),
+          variant: 'ghost', size: 'sm', 'data-npr': 'filter-clear',
+          icon: h(IconCloseOutlineRegular, { size: 14 }),
           'aria-label': t('filter.clear'),
           onClick: () => onQuery(''),
         })
-        : null),
+        : null,
+      // Only while filtering: the status line already carries the plain
+      // count, so an unfiltered toolbar stays as quiet as DNK's.
+      query === ''
+        ? null
+        : h('span', { className: 'npr-stats', 'data-npr': 'stats' }, stats)),
 
-    h('div', { className: 'npr-flow', role: 'list', 'data-npr': 'flow' },
+    h('div', { className: 'npr-flow', 'data-npr': 'flow' },
       hasMore
-        ? h(Button, {
-          variant: 'outline', size: 'sm', className: 'npr-load-older',
-          onClick: () => {
-            perf.count('load-older')
-            try { void sessionFace?.loadOlder?.() } catch { /* noop */ }
-          },
-          disabled: loadingOlder,
-        }, loadingOlder ? t('flow.loadingOlder') : t('flow.loadOlder'))
+        ? h('div', { className: 'npr-older' },
+          h(Button, {
+            variant: 'outline', size: 'sm', 'data-npr': 'load-older',
+            onClick: () => {
+              perf.count('load-older')
+              try { void sessionFace?.loadOlder?.() } catch { /* noop */ }
+            },
+            disabled: loadingOlder,
+          }, loadingOlder ? t('flow.loadingOlder') : t('flow.loadOlder')))
         : null,
       filtered.length === 0
-        ? h('div', { className: 'npr-empty' }, isEmptyFilter(filter) ? t('flow.empty') : t('flow.emptyFiltered'))
-        : filtered.map(row => h(Row, { key: row.key, row, now, t }))),
+        ? h('div', { className: 'npr-empty', 'data-npr': 'empty' },
+          isEmptyFilter(filter) ? t('flow.empty') : t('flow.emptyFiltered'))
+        : h(AnimatedRows, {
+          className: 'npr-rows',
+          role: 'list',
+          label: t('flow.list'),
+          ready,
+          resetKey: query,
+          rowKeys: filtered.map(row => row.key),
+        }, filtered.map(row => perf.span('row-render', () => h(Row, {
+          key: row.key,
+          row,
+          now,
+          t,
+          open: openKey === row.key,
+          onToggle: () => {
+            if (openKey !== row.key) perf.count('row-expand')
+            setOpenKey(current => (current === row.key ? null : row.key))
+          },
+        }))))),
 
-    h('div', { className: 'npr-panel', 'data-npr': 'tasks' },
-      h('div', { className: 'npr-panel-head' },
-        h('span', { className: 'npr-panel-title' },
-          h(IconChecklistOutlineRegular, { size: 13, style: { marginRight: 6, verticalAlign: '-2px' } }),
-          t('tasks.title')),
-        h('span', { className: 'npr-panel-count' },
-          todoCounts !== null ? `${todoDone}/${todoItems.length} ${t('tasks.done')}` : '')),
-      todoItems.length > 0
-        ? h('div', { className: 'npr-panel-bar' },
-          h('div', {
-            className: 'npr-panel-bar-fill',
-            style: { width: `${Math.round(100 * todoDone / Math.max(1, todoItems.length))}%` },
-          }))
+    h('div', { className: 'npr-status', 'data-npr': 'status' },
+      h('span', { className: 'npr-status-item', 'data-npr': 'status-count' },
+        t('status.events').replace('{n}', String(rows.length))),
+      failed > 0
+        ? h('span', { className: 'npr-status-item', 'data-npr': 'status-failed', 'data-bad': 'true' },
+          t('status.failedCount').replace('{n}', String(failed)))
         : null,
-      h('div', { className: 'npr-panel-list' },
-        todoItems.length === 0
-          ? h('div', { className: 'npr-empty', style: { padding: '8px' } }, t('tasks.empty'))
-          : todoItems.map((todo, i) => h('div', { key: i, className: 'npr-task', 'data-status': todo.status },
-            h('span', { className: 'npr-task-dot' }, h(STATUS_ICON[todo.status] ?? IconPauseOutlineRegular, { size: 12 })),
-            h('span', { className: 'npr-task-text' }, todo.content))))),
+      h('span', { className: 'npr-status-spacer' }),
+      h('span', { className: 'npr-status-item', 'data-npr': 'state', 'data-state': stateKey },
+        t(`state.${stateKey}`))),
 
-    jobs.length > 0
-      ? h('div', { className: 'npr-panel', 'data-npr': 'jobs' },
-        h('div', { className: 'npr-panel-head' },
-          h('span', { className: 'npr-panel-title' }, t('jobs.title')),
-          h('span', { className: 'npr-panel-count' }, String(jobs.length))),
-        h('div', { className: 'npr-panel-list' },
-          jobs.map(job => h('div', { key: job.id, className: 'npr-job', 'data-status': job.status },
-            h('span', { className: 'npr-job-label' }, job.label ?? job.kind ?? job.id),
-            h('span', { className: 'npr-job-status' }, job.status)))))
-      : null)
+    h(Drawer, {
+      t,
+      view,
+      onView: next => setDrawerField({ view: next }),
+      options: drawerOptions,
+      collapsed: drawer.collapsed,
+      onCollapsed: value => setDrawerField({ collapsed: value }),
+      height: drawer.height,
+      onResize: value => setDrawerField({ height: value }),
+      accessory: view === 'tasks' && todoItems.length > 0
+        ? h('span', { className: 'npr-drawer-count', 'data-npr': 'tasks-count' },
+          `${String(todoDone)}/${String(todoItems.length)} ${t('tasks.done')}`)
+        : null,
+    }, view === 'jobs'
+      ? h(JobsView, { jobs, t })
+      : h(TasksView, { todos: todoItems, t })))
 }

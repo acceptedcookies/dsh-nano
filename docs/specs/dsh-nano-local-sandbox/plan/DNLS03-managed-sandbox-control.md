@@ -423,7 +423,7 @@ DNLS03-managed-sandbox-control
   4. 传输断开后的第一次重连要换新 URL；第二次自动重连不发生；断连期间的输入不写入原 PTY。
   5. 撤权后队列被清空，PTY 的 kill 计数仍为 0。绕过宿主直连 broker 的写入字节数为 0。
   6. locator 字符串不含 `token=`。
-  7. `threat.spike.test.mjs:191` 保持原样；`git diff -- dsh-nano-terminal` 为空。
+  7. [业主] 执行期勘误（T42）：零差异保护的是 [DNT] local 与第三方既有协议行为，不是整个包。允许通用 McpLane 的沙箱分支及其构建产物变化。原 :191 断言保持；分别实测三条路径。
 - **对应测试台账项**：`DNLS03-T40`–`T42`
 - **收口标准**：`t42-dnt-local.log` 与 `t42-sandbox-wire.log` 分开记 PASS；前者仍包含 `:191` 的 `session=` 断言。
 - **本 Phase 风险提醒**：按插件名或 URL 特征分派，会把第三方端点卷进硬切。
@@ -606,7 +606,7 @@ DNLS03-managed-sandbox-control
 | `DNLS03-T32` | 失联/已结束/异参 不 spawn；同参返原 id | 短途 | unit | 🆕 `test/term-create-attach.test.mjs` | P4-03 | commit + spawn 0 |
 | `DNLS03-T40` | v1 拒绝；session 不符拒绝；缺 CREDIT/流控不得进入 DATA；断序报未对齐；断连期间的输入重连后不出现在 PTY stdin；自动重连只一次且换地址 | 短途 | 契约 | 🆕 `test/term-wire-v2.test.mjs` | P5-01 | commit + PASS + stdin 记录 |
 | `DNLS03-T41` | URL 无 token；loopback/公网直连 broker 被拒且 stdin 为 0；撤权 detach 且 kill 计数 0；无主体不开放流 | 短途 | 契约 | 🆕；攻击向量 §7.3-2 | P5-02 | commit + kill 计数 + 直连字节数 |
-| `DNLS03-T42` | [DNT] local 仍 PASS；沙箱消费点拒绝 v1。不改 `threat.spike.test.mjs:191` | 短途 | 回归 | ♻️ `node --test dsh-nano-local-sandbox/test/threat.spike.test.mjs`（`:191` 的 `session=` 断言保持，日志 `t42-dnt-local.log`）+ 🆕 本包沙箱夹具（日志 `t42-sandbox-wire.log`） | P5-03 | 两份日志都 PASS；`git diff -- dsh-nano-terminal` 为空 |
+| `DNLS03-T42` | [DNT] local 仍 PASS；沙箱消费点拒绝 v1。不改 `threat.spike.test.mjs:191` | 短途 | 回归 | ♻️ `node --test dsh-nano-local-sandbox/test/threat.spike.test.mjs`（`:191` 的 `session=` 断言保持，日志 `t42-dnt-local.log`）+ 🆕 本包沙箱夹具（日志 `t42-sandbox-wire.log`） | P5-03 | 两份日志都 PASS；按 §5.6(7) 验收 |
 | `DNLS03-T50` | bridge ≠ engine+1 时命中 inspect；+1 端口上的假服务不被当成 bridge；服务列表与详情应答字节中无 `token=`、无 attach URL | 短途 | unit | 🆕 `test/service-ports.test.mjs`；攻击向量 §7.3-7 | P6-01 | commit + 命中端口 + 应答字节断言 |
 | `DNLS03-T51` | 保存不 start；过期 expectedRevision 拒绝；tag ≠ 代次 | 短途 | unit | 🆕 | P6-02 | commit + start 计数 0 |
 | `DNLS03-T52` | 缺口为 null；不跨断段做差；刷新不二次采样 | 短途 | unit | 🆕 `test/usage-minutes.test.mjs` | P6-03 | commit + PASS |

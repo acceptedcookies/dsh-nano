@@ -37,7 +37,8 @@
     "dnls.har",
     "dnls.snapshot",
     "dnls.refs",
-    "dnls.control"
+    "dnls.control",
+    "dnls.contract"
   ],
   "scenarios": [],
   "budgets": []

@@ -7,6 +7,10 @@ import { dnprDefine } from '../../scripts/dnpr-define.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+// declaration.json's contract array is projected from the security ledger
+// before bake-declaration reads it — ids are authored once, in the ledger.
+const projection = spawnSync(process.execPath, [join(root, 'scripts/project-declaration.mjs')], { stdio: 'inherit' })
+if (projection.status !== 0) process.exit(projection.status ?? 1)
 const result = spawnSync(process.execPath, [
   join(root, '..', 'scripts/bake-plugin-bindings.mjs'),
   '--plugin',

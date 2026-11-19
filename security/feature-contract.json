@@ -835,6 +835,19 @@
     },
     {
       "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/contract",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/storage",
       "methods": [
         "GET",

@@ -1089,6 +1089,22 @@
       "match": "exact"
     },
     {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/contract",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L0",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "feature contract GET/HEAD 0 JSON — dnls.control/1 discovery: {contractVersion,capabilities}, no object access, no body. HEAD answers with the X-DNLS-Contract response header only.",
+      "id": "dnls.contract",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
       "plugin": "dsh-nano-terminal",
       "path": "/dsh-nano-terminal/mcp",
       "methods": [

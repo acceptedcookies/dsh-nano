@@ -20,11 +20,11 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - [x] **P1-04** 重启对账 — `control-registry.js`；损坏、缺失有存量、版本不识别时不空表认领（`DNLS03-T04`）
 
 ### Phase 2
-- [ ] **P2-01** 合同发现 — `routes.js` `registerRoutes`；`mcp-sandbox.js:189-229`；`GET /contract` 与 `sandbox.contract` 同源返回版本与能力，不授权（`DNLS03-T10`）
-- [ ] **P2-02** 派发前配对 — `routes.js` 对象路由入口；`mcp-sandbox.js` tools/call 前；缺头或版本不符在访问对象前拒绝（`DNLS03-T11`）
-- [ ] **P2-03** 七项错误 — `error-catalog.js:15,88-110`；七个 `sandbox.*` 不随 active profile 改前缀（`DNLS03-T12`）
-- [ ] **P2-04** 单目标 — `routes.js` 对象 handler；`mcp-sandbox.js:229`；缺失、空、重复、冲突、sessionId 兜底都不执行（`DNLS03-T13`）
-- [ ] **P2-05** 绑定投影 — `lib/bindings.js:12-34`；`src/perf/declaration.json:11-41`；新路由进既有 bake；`dnls.control` 绑定 id 保持为 `/control`（`DNLS03-T14`）
+- [x] **P2-01**（staged-router 层 PASS；公开激活待原子同切） 合同发现 — `routes.js` `registerRoutes`；`mcp-sandbox.js:189-229`；`GET /contract` 与 `sandbox.contract` 同源返回版本与能力，不授权（`DNLS03-T10`）
+- [x] **P2-02**（staged-router 层 PASS；公开激活待原子同切） 派发前配对 — `routes.js` 对象路由入口；`mcp-sandbox.js` tools/call 前；缺头或版本不符在访问对象前拒绝（`DNLS03-T11`）
+- [x] **P2-03**（staged-router 层 PASS；公开激活待原子同切） 七项错误 — `error-catalog.js:15,88-110`；七个 `sandbox.*` 不随 active profile 改前缀（`DNLS03-T12`）
+- [x] **P2-04**（staged-router 层 PASS；公开激活待原子同切） 单目标 — `routes.js` 对象 handler；`mcp-sandbox.js:229`；缺失、空、重复、冲突、sessionId 兜底都不执行（`DNLS03-T13`）
+- [x] **P2-05**（staged-router 层 PASS；公开激活待原子同切） 绑定投影 — `lib/bindings.js:12-34`；`src/perf/declaration.json:11-41`；新路由进既有 bake；`dnls.control` 绑定 id 保持为 `/control`（`DNLS03-T14`）
 
 ### Phase 3
 - [ ] **P3-01** 操作文档 — `control-registry.js`；`routes.js` lifecycle；`(主体,requestId)` 去重；未结束 202；派发后取消返回现态（`DNLS03-T20`）
@@ -64,16 +64,17 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - [ ] **STEP.8** — 回收、汇聚、核实全部审查报告，执行更新或修复并重入 测试↔修复 循环直至收口，更新 closure
 
 ## 4. 执行记录与证据
-开工点 `18ea26f`。主工作区保存原状：`9061673` [DNPR]，`909fa3f` 已移除的清单，`18ea26f` 计划与问答。`git fetch origin main` 后本地无落后提交。每笔 PASS 记录提交、命令、观测与 UTC；测试 ID 的否证以计划 §8.1、§8.5 为准。
+执行状态：P3 进行中。开工点 `18ea26f`。主工作区保存原状：`9061673` [DNPR]，`909fa3f` 已移除的清单，`18ea26f` 计划与问答。`git fetch origin main` 后本地无落后提交。每笔 PASS 记录提交、命令、观测与 UTC；测试 ID 的否证以计划 §8.1、§8.5 为准。
 
 - 横向：`index.apply → registerRoutes → routeSpecs`。现 `/mcp` 的 `buildOwners` 在同一 env 的现场上按 session 登记实例；`callTermTool` 的 create/list 走宿主 `active` 表；`observeOnce` 读 inspect，而 bridge 定位仍从 engine 推导。目标是替换权威来源，不是增加旁路台账。
 - 历史图谱（按职责演进，不表示直接父子）：`2b9ac0f` session 实例/空闲回收 → `ed99c71` 实际路由接线 → `74d734f` 容器 PTY 与观察快照 → `ede7e45` PTY resize/错误边界 → `43e83d1` kernel/driver 切割 → `d0ddac4` 状态卷归 kernel 分配 → `1e41d91` 计划取样。`git diff 1e41d91 18ea26f -- dsh-nano-local-sandbox dsh-nano-terminal dsh-nano-kitesurf` 无源码差异。
 - 正反例：唯一锚表为计划 §7.1；`test/lifecycle.spike.test.mjs` 的删行、`test/term-bridge.test.mjs` 的 create 发 URL 是旧语义；`threat.spike.test.mjs` 的 local 协议不是它们的替代断言。`context/apple-container`、`context/deepseek-harness` 仅供参考，不是构建输入。
 - T00：从 worktree 根执行 `DNLS_MEASURE_HOST_PIN="$(git rev-parse --path-format=absolute --git-common-dir)/../.dependencies/pinned/deepseek-harness" node --test dsh-nano-local-sandbox/test/once/dnls03-anchors.once.test.mjs`。一次性历史测量，不加入包测试；以本阶段提交重现。A-23 命中 `admit(request)`；当前 pin `9c2670d` / [dsh] rc.5，与 Q41 原取样 rc.1 `66491b0` 的 `rpc.ts`、`rpc-host.ts`、`peer.ts` Git blob 分别同为 `aec79d0`、`88e7b48`、`3978399`。不推论运行时的业务权限或页签已可用。
-- Phase 0 提交 `ba55bf7`。Phase 1 内核（不声明公开路由已切）：2026-11-19T16:22:30Z，`node --test dsh-nano-local-sandbox/test/control-registry.test.mjs dsh-nano-local-sandbox/test/instances-ensure.test.mjs`，26 pass / 0 fail；T01 文件字节可重开、原子写失败不报成功；T02 两个 session 释放后重开同一对象；T03 子进程持锁时第二写者失败，进程退出后原行可读；T04 有卷无账、损坏及不明代次失败关闭。原有 session 路由和旧用例等待原子同切，不作 T02 或产品交付证据。
+- Phase 0 提交 `ba55bf7`；Phase 1 提交 `e32697b`。Phase 1 内核（不声明公开路由已切）：2026-11-19T16:22:30Z，`node --test dsh-nano-local-sandbox/test/control-registry.test.mjs dsh-nano-local-sandbox/test/instances-ensure.test.mjs`，26 pass / 0 fail；T01 文件字节可重开、原子写失败不报成功；T02 两个 session 释放后重开同一对象；T03 子进程持锁时第二写者失败，进程退出后原行可读；T04 有卷无账、损坏及不明代次失败关闭。原有 session 路由和旧用例等待原子同切，不作 T02 或产品交付证据。
+- Phase 2 staged 派发（公开激活待原子同切；登记时 managed-routes.js 未入库，提交引用待下一阶段回填）：2026-11-19T16:43:44Z，`node --test dsh-nano-local-sandbox/test/{contract-version,target-dispatch,error-catalog,route-scan-coverage}.test.mjs`，22 pass / 0 fail；projection+bake 复跑零漂移。最近聚焦复跑 2026-11-19T16:44:49Z，`node --test dsh-nano-local-sandbox/test/contract-version.test.mjs`，10 pass / 0 fail；T10 HTTP/MCP 发现同源且不触对象；T11 admit 信封（rejection/peer/signal.aborted/未知形状）、版本配对、七项错误、信封清洗；T13 单目标与重复键/转义键/越限体拒于 execute 前。
 
 ## 5. 交接
-Phase 1 内核已完成；下一节点 Phase 2。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
+Phase 2 staged 派发已完成（公开激活待原子同切）；当前节点 Phase 3。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
 
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。

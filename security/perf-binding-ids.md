@@ -75,6 +75,7 @@
 | `/nano-local-sandbox/snapshot` | — | `dnls.snapshot` | http | exact |
 | `/nano-local-sandbox/refs` | — | `dnls.refs` | http | exact |
 | `/nano-local-sandbox/control` | — | `dnls.control` | http | exact |
+| `/nano-local-sandbox/contract` | — | `dnls.contract` | http | exact |
 | `/dsh-nano-terminal/mcp` | — | `dnt.mcp` | http | exact |
 | `/dsh-nano-terminal/sessions` | — | `dnt.sessions` | http | exact |
 | `/dsh-nano-terminal/events` | — | `dnt.events` | http | exact |

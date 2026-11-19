@@ -28,6 +28,7 @@ export const HAR_ROUTE = '/nano-local-sandbox/har'
 export const SNAPSHOT_ROUTE = '/nano-local-sandbox/snapshot'
 export const REFS_ROUTE = '/nano-local-sandbox/refs'
 export const CONTROL_ROUTE = '/nano-local-sandbox/control'
+export const CONTRACT_ROUTE = '/nano-local-sandbox/contract'
 
 import { request as httpRequest } from 'node:http'
 import { createHash } from 'node:crypto'
@@ -1444,6 +1445,14 @@ export function routeSpecs(deps = {}) {
     bodyLimit: row.bodyLimit,
     async handler(req, res) {
       deps.onHandler?.()
+      // dnls.control/1 is staged, not live: the managed dispatch
+      // (managed-routes.js) owns this path only after the atomic cutover.
+      // Until then discovery answers unavailable before any profile/session
+      // work — and never carries a successful version header.
+      if (row.path === CONTRACT_ROUTE) {
+        send(res, 503, { ok: false, error: 'dnls.control/1 discovery pending cutover' })
+        return
+      }
       // Every face (HTTP, MCP, diagnostics push) reads the active profile
       // driver; an unusable profile fails the request instead of half-working.
       try {

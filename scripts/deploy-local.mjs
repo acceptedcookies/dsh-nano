@@ -424,4 +424,19 @@ if (problems.length > 0) {
   process.exit(1)
 }
 log(`done — ${plugins.length} plugin(s) staged under ${dshHome}.`)
+// The deploy carries code only. A sandbox profile's runtime and image are
+// derived build artifacts; report them so a missing one is not discovered at
+// the first ensure, without turning the deploy into a build.
+const sandbox = plugins.find(p => p.name === 'dsh-nano-local-sandbox')
+if (sandbox && !dryRun) {
+  const entry = join(repoRoot, 'dsh-nano-local-sandbox', 'scripts', 'build-profile.mjs')
+  const check = spawnSync(process.execPath, [entry, '--home', dshHome, '--check'], { encoding: 'utf8' })
+  let state = null
+  try { state = JSON.parse(check.stdout) } catch { /* reported below as unreadable */ }
+  if (state?.ready) log(`sandbox profile ${state.profile}@${state.ref.slice(0, 12)}: runtime and image ready`)
+  else {
+    log(`sandbox profile not ready under ${dshHome}: ${state ? [!state.runtime.ok && 'runtime missing', !state.image.ok && `image ${state.image.tag} missing`].filter(Boolean).join(', ') : (check.stderr || 'check failed').trim()}`)
+    log(`build it: node ${relative(process.cwd(), entry)} --home ${dshHome} --work <dir> --source <official checkout> --manifest .dependencies/MANIFEST.json --host-install <dsh package> --container-state <container state dir>`)
+  }
+}
 log('next: restart the host serving this profile, then refresh the page.')

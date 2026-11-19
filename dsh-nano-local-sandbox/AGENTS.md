@@ -101,6 +101,19 @@ profile 的唯一权威是 `profiles/kitesurf/profile.yaml`。实例状态在该
 npm test
 ```
 
+runtime 与镜像是派生产物，插件部署不带它们。唯一构建入口在源码树（不进包）：
+
+```bash
+# 只报告该 home 是否就绪（退出码 0 就绪，3 缺产物）
+node scripts/build-profile.mjs --home <DSH_HOME> --check
+# 补齐缺的产物；已就绪时什么都不做
+node scripts/build-profile.mjs --home <DSH_HOME> --work <派生目录> \
+  --source <官方 checkout> --manifest <仓根>/.dependencies/MANIFEST.json \
+  --host-install <已安装的 dsh 包目录> --container-state <container 服务状态目录>
+```
+
+pin 只从官方提交导出到 `<派生目录>/pin`，构建在 `<派生目录>/build`，不回写 pin。缺 runtime 或镜像时 `ensure` 失败关闭，不删除健康容器。
+
 ## 故障
 
 | 现象 | 原因 | 处理 |

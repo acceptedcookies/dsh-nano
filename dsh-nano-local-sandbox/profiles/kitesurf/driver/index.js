@@ -57,6 +57,7 @@ export default function createDriver(api) {
     id: 'kitesurf',
     validateManifest: runtime.validateManifest,
     buildArgs: runtime.buildArgs,
+    build: runtime.build,
     image: runtime.image,
     runtimeRoot: runtime.runtimeRoot,
     assertRuntime: runtime.assertRuntime,

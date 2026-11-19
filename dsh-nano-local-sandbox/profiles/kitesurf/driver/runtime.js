@@ -41,6 +41,20 @@ export function buildArgs(manifest) {
   return [`KITESURF_BASE_IMAGE=${manifest.build.base}`]
 }
 
+/** How the derived runtime and the image context are produced; used only by the manual build entry. */
+export const build = {
+  runtimeSteps: [
+    ['pnpm', ['install', '--frozen-lockfile']],
+    // Scaled timeouts absorb slow first-time crate downloads without touching the pin.
+    ['bazel', ['run', '--experimental_scale_timeouts=4', '//packages/engine:dev_build']],
+  ],
+  contextPrefix(manifest) {
+    const packages = Object.entries(manifest.build.npmPrefix).map(([name, version]) => `${name}@${version}`)
+    // --ignore-scripts: the Dockerfile restores the bundled binaries' exec bits.
+    return { dir: 'linux-prefix', argv: ['npm', ['install', '--prefix', 'linux-prefix', '--os=linux', '--cpu=arm64', '--ignore-scripts', '--no-audit', '--no-fund', ...packages]] }
+  },
+}
+
 export function image(manifest) {
   const tag = String(manifest?.build?.image || '').trim()
   if (!/(?:@sha256:[0-9a-f]{64}|:[A-Za-z0-9_][A-Za-z0-9_.-]*)$/.test(tag) || /:latest$/i.test(tag)) {

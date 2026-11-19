@@ -1,13 +1,14 @@
 /** Register all Progress event Definitions + the 'progress' view target. */
 import { TARGET } from '../constants.js'
 import { progressToolDefinition } from './tool.js'
-import { progressAssistantDefinition, progressPromptDefinition } from './message.js'
+import { progressAgentMessageDefinition, progressAssistantDefinition, progressPromptDefinition } from './message.js'
 import { progressApprovalDefinition, progressInboxDefinition, progressLifecycleDefinition, progressTurnDefinition } from './turn.js'
 import { progressJobDefinition, progressTodoDefinition } from './job.js'
 import { ProgressBuilder } from '../view/progress-builder.js'
 
 const DEFINITIONS = [
   progressPromptDefinition,
+  progressAgentMessageDefinition,
   progressAssistantDefinition,
   progressToolDefinition,
   progressTodoDefinition,

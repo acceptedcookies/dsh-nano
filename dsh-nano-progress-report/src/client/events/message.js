@@ -3,7 +3,7 @@ import { TARGET } from '../constants.js'
 import { blocksText } from '../args.js'
 
 /** `user/message` whose source is a human → 'prompt' row. Other sources are
- *  injected context and do not surface as prompt rows. */
+ *  injected context; inter-agent sources get their own rows below. */
 export const progressPromptDefinition = {
   kind: 'progress-prompt',
   target: TARGET,
@@ -26,6 +26,50 @@ export const progressPromptDefinition = {
   },
 }
 
+/** Source kinds of messages another agent (or the subagent runtime) delivered
+ *  into this session. Host payload (dsh-subagent continuation-messages):
+ *  `agent-message` = `{kind, form:'relay', senderSessionId}`, text opens with
+ *  "Agent <name> sent a message:"; `subagent-settled` = `{kind, form:'notice',
+ *  summary, stopReason?, senderSessionId}`. `stopReason` is absent before rc.5. */
+const AGENT_SOURCES = new Set(['agent-message', 'subagent-settled'])
+
+/** Inter-agent `user/message` → 'relay' (send_message from another agent) or
+ *  'settled' (background subagent finished) row. Kept apart from 'prompt':
+ *  the human did not write these. */
+export const progressAgentMessageDefinition = {
+  kind: 'progress-agent-message',
+  target: TARGET,
+  match(event) {
+    if (event.type !== 'user/message') return null
+    return AGENT_SOURCES.has(event.data?.source?.kind) ? { id: String(event.seq), role: 'start' } : null
+  },
+  start(context, match) {
+    const data = match.event.data
+    const source = data.source
+    return {
+      seq: match.event.seq, time: match.event.time,
+      sourceKind: source.kind,
+      summary: typeof source.summary === 'string' ? source.summary : undefined,
+      stopReason: typeof source.stopReason === 'string' ? source.stopReason : undefined,
+      sender: typeof source.senderSessionId === 'string' ? source.senderSessionId : undefined,
+      text: blocksText(data.content ?? data.message?.content ?? data.text),
+    }
+  },
+  update: context => context.state,
+  buildViewNode(context) {
+    const state = context.state
+    if (state === undefined) return null
+    return {
+      key: context.key, kind: context.kind, id: context.id, target: TARGET,
+      data: {
+        row: state.sourceKind === 'subagent-settled' ? 'settled' : 'relay',
+        seq: state.seq, time: state.time, text: state.text,
+        summary: state.summary, stopReason: state.stopReason, sender: state.sender,
+        location: context.start?.location,
+      },
+    }
+  },
+}
 /** `assistant/message` → 'message' row with first text block as summary and
  *  optional reasoning text folded into the expandable detail. Host payload:
  *  `data.message` = AssistantMessage with `content: ContentBlock[]` tagged by

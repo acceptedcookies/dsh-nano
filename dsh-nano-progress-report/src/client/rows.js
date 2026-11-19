@@ -178,6 +178,20 @@ export function rowFromNode(node) {
         tool: data.toolName ?? '',
         detail: { text: data.reason } }
     }
+    case 'relay':
+      return { ...base, type: 'subagent', status: 'ok',
+        summary: text(data.text || 'Agent message'),
+        expandable: (data.text ?? '').length > 140,
+        detail: { text: data.text } }
+    case 'settled': {
+      // Missing stopReason (pre-rc.5 notices) carries no failure claim;
+      // any recorded reason other than 'completed' means the child did not finish.
+      const status = data.stopReason === undefined || data.stopReason === 'completed' ? 'ok' : 'failed'
+      return { ...base, type: 'subagent', status,
+        summary: text(data.summary || data.text || 'Subagent finished'),
+        expandable: (data.text ?? '').length > 0,
+        detail: { text: data.text } }
+    }
     case 'inbox':
       return { ...base, type: 'wait', status: 'ok',
         summary: text(data.summary ?? 'Inbox updated'),

@@ -83,6 +83,7 @@ dsh plugin --profile web add <spec>
 | 在过滤条输入 `type:shell` | 只剩 shell 行 |
 | `-status:failed` | 排除失败行；`status:failed` 只看失败 |
 | `tool:bash` | 只看 bash 的 tool/call 行（wire 名精确匹配；bash 的 approval 行也归 bash）；`-tool:bash` 排除 bash |
+| `type:subagent` | subagent 调用行，加上别的 agent 发来的消息（`Agent <name> sent a message:` 开头）与后台 subagent 结束通知；结束通知记录了非 `completed` 的结束原因时算失败 |
 | 点击行 | 就地展开 detail（args 原文、result、耗时、subagent 的 PTC 子调用）；再点收起 |
 | 拖拽底部抽屉上沿 | 抬升/下移 Tasks/Jobs 面板，上限 70% 视口，下限 96px |
 | 抽屉头部的折叠按钮 | 只留标题行；再点回到原高度 |

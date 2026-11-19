@@ -73,6 +73,23 @@ describe('rowFromNode', () => {
     assert.equal(r.type, 'wait')
     assert.equal(r.status, 'ok')
   })
+  it('relay row → subagent ok row with the framed text', () => {
+    const r = rowFromNode(node({ row: 'relay', text: 'Agent lead sent a message: \nfix the login page' }))
+    assert.equal(r.type, 'subagent')
+    assert.equal(r.status, 'ok')
+    assert.equal(r.summary, 'Agent lead sent a message: fix the login page')
+    assert.equal(r.tool, '')
+  })
+  it('settled row → subagent row; failed only on a recorded non-completed stopReason', () => {
+    const ok = rowFromNode(node({ row: 'settled', summary: 'Background subagent w2 finished.', stopReason: 'completed', text: 'closing' }))
+    assert.equal(ok.type, 'subagent')
+    assert.equal(ok.status, 'ok')
+    assert.equal(ok.summary, 'Background subagent w2 finished.')
+    assert.equal(ok.expandable, true)
+    assert.equal(rowFromNode(node({ row: 'settled', summary: 's', stopReason: 'error' })).status, 'failed')
+    assert.equal(rowFromNode(node({ row: 'settled', summary: 's', stopReason: 'aborted' })).status, 'failed')
+    assert.equal(rowFromNode(node({ row: 'settled', summary: 's' })).status, 'ok', 'pre-rc.5 notice has no stopReason')
+  })
   it('prompt row', () => {
     const r = rowFromNode(node({ row: 'prompt', text: 'build the thing' }))
     assert.equal(r.type, 'prompt')

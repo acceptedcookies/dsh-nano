@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { progressToolDefinition } from '../src/client/events/tool.js'
-import { progressAssistantDefinition, progressPromptDefinition } from '../src/client/events/message.js'
+import { progressAgentMessageDefinition, progressAssistantDefinition, progressPromptDefinition } from '../src/client/events/message.js'
 import {
   progressApprovalDefinition, progressInboxDefinition,
   progressLifecycleDefinition, progressTurnDefinition,
@@ -78,6 +78,41 @@ describe('prompt definition', () => {
   })
 })
 
+describe('agent message definition', () => {
+  const relay = evt('user/message', {
+    content: [{ type: 'text', text: 'Agent lead sent a message: ' }, { type: 'text', text: 'fix the login page' }],
+    source: { kind: 'agent-message', form: 'relay', senderSessionId: 'lead-1' },
+  }, 11)
+  const settled = (source, content = [{ type: 'text', text: 'Background subagent w2 failed before it finished.' }]) => evt('user/message', {
+    content, source: { kind: 'subagent-settled', form: 'notice', senderSessionId: 'w2', ...source },
+  }, 12)
+  it('matches relay and settled notices, not prompts or host context', () => {
+    assert.deepEqual(progressAgentMessageDefinition.match(relay), { id: '11', role: 'start' })
+    assert.ok(progressAgentMessageDefinition.match(settled({ summary: 's' })))
+    for (const kind of ['user', 'goal', 'runtime-context', 'working-directory']) {
+      assert.equal(progressAgentMessageDefinition.match(evt('user/message', { source: { kind }, content: [] })), null, kind)
+    }
+    assert.equal(progressPromptDefinition.match(relay), null, 'a relay is not a human prompt')
+  })
+  it('relay keeps the framed text and sender', () => {
+    const node = progressAgentMessageDefinition.buildViewNode(ctx(progressAgentMessageDefinition.start(ctx(undefined), { event: relay })))
+    assert.equal(node.data.row, 'relay')
+    assert.equal(node.data.sender, 'lead-1')
+    assert.match(node.data.text, /^Agent lead sent a message: \nfix the login page$/)
+  })
+  it('settled notice carries summary and stopReason (absent before rc.5)', () => {
+    const rc5 = progressAgentMessageDefinition.buildViewNode(ctx(progressAgentMessageDefinition.start(ctx(undefined), {
+      event: settled({ summary: 'Background subagent w2 failed before it finished.', stopReason: 'error' }),
+    })))
+    assert.equal(rc5.data.row, 'settled')
+    assert.equal(rc5.data.stopReason, 'error')
+    assert.match(rc5.data.summary, /failed/)
+    const rc1 = progressAgentMessageDefinition.buildViewNode(ctx(progressAgentMessageDefinition.start(ctx(undefined), {
+      event: settled({ summary: 'Background subagent w2 finished.' }),
+    })))
+    assert.equal(rc1.data.stopReason, undefined)
+  })
+})
 describe('todo definition', () => {
   it('todo/write produces per-status counts', () => {
     const state = progressTodoDefinition.start(ctx(undefined), {

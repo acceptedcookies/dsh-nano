@@ -84,7 +84,7 @@ test('lib/client.js loads in a stubbed module loader and exports a factory', () 
     assert.ok(method === 'empty' ? builder?.[method] !== undefined : typeof builder?.[method] === 'function',
       `view create() must produce a builder with ${method}`)
   }
-  assert.equal(calls.eventDefs, 9, 'all 9 event definitions must register')
+  assert.equal(calls.eventDefs, 10, 'all 10 event definitions must register')
 })
 
 test('lib/client.js keeps host externals external (spec §7.1)', () => {

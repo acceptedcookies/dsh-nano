@@ -193,14 +193,23 @@ function apply(state, event) {
       let patch = { ...item, calls: item.calls + 1, lastSeq: seq }
       if (failed) {
         patch = { ...patch, failedCalls: patch.failedCalls + 1 }
+        const metaPaths = callPaths(null, data.meta)
+        const path = metaPaths[0] ?? call.paths[0] ?? null
         const entries = call.keys.length > 0
-          ? call.keys.map(key => ({ tool: call.name, key, seq, callId: String(rawId) }))
-          : [{ tool: call.name, key: null, seq, callId: String(rawId) }]
+          ? call.keys.map(key => ({ tool: call.name, key, path: FILE_TOOLS.has(call.name) ? path : null }))
+          : [{ tool: call.name, key: null, path: null }]
         let failures = patch.failures
         let truncated = patch.truncated.failures
         for (const entry of entries) {
-          if (failures.some(f => f.tool === entry.tool && f.key === entry.key)) continue
-          failures = [...failures, entry]
+          const index = failures.findIndex(f => f.tool === entry.tool && f.key === entry.key)
+          if (index < 0) {
+            failures = [...failures, {
+              ...entry, count: 1, firstSeq: seq, lastSeq: seq, callId: String(rawId),
+            }]
+          } else {
+            failures = failures.map((f, i) => (i === index
+              ? { ...f, count: f.count + 1, lastSeq: seq, callId: String(rawId) } : f))
+          }
         }
         if (failures.length > FAILURES_MAX) {
           truncated += failures.length - FAILURES_MAX
@@ -369,7 +378,8 @@ function itemView(item, index, state) {
     status: itemStatus(item, index === 0, state), endReason: item.endReason,
     firstSeq: item.firstSeq, lastSeq: item.lastSeq,
     files: item.files,
-    failures: item.failures.map(({ tool, seq, callId }) => ({ tool, seq, callId })),
+    failures: item.failures.map(({ tool, key, path, count, firstSeq, lastSeq, callId }) => (
+      { tool, key, path, count, firstSeq, lastSeq, callId })),
     tasks: item.tasks, jobs: item.jobs,
     counts: {
       calls: item.calls, failures: item.failedCalls,
@@ -407,8 +417,13 @@ function parseItem(value) {
     files: (value.files ?? []).filter(f => f && isPath(f.path) && isCount(f.firstSeq) && isCount(f.lastSeq))
       .map(f => ({ path: f.path, firstSeq: f.firstSeq, lastSeq: f.lastSeq })),
     failures: (value.failures ?? [])
-      .filter(f => f && typeof f.tool === 'string' && (f.key === null || isDigest(f.key)) && isCount(f.seq))
-      .map(f => ({ tool: f.tool, key: f.key, seq: f.seq, callId: String(f.callId ?? '') })),
+      .filter(f => f && typeof f.tool === 'string' && (f.key === null || isDigest(f.key))
+        && isCount(f.firstSeq) && isCount(f.lastSeq) && isCount(f.count))
+      .map(f => ({
+        tool: f.tool, key: f.key,
+        path: typeof f.path === 'string' && Buffer.byteLength(f.path) <= PATH_MAX_BYTES ? f.path : null,
+        count: f.count, firstSeq: f.firstSeq, lastSeq: f.lastSeq, callId: String(f.callId ?? ''),
+      })),
     tasks: (value.tasks ?? []).filter(t => t && isText(t.content) && isCount(t.firstSeq))
       .map(t => ({
         content: t.content, status: t.status === 'completed' || t.status === 'in_progress' ? t.status : 'pending',

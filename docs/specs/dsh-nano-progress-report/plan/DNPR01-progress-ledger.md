@@ -23,7 +23,7 @@
 > 对抗审查（已回写，未改 QNA / 真相层）:
 > - [`.anote/reviews/dsh-nano-progress-report/DNPR01/na/6284/qna-compliance.md`](../../../../.anote/reviews/dsh-nano-progress-report/DNPR01/na/6284/qna-compliance.md)
 > - [`.anote/reviews/dsh-nano-progress-report/DNPR01/na/6284/exit-and-antigreen.md`](../../../../.anote/reviews/dsh-nano-progress-report/DNPR01/na/6284/exit-and-antigreen.md)
-> 文档状态: `draft`
+> 文档状态: `executing`（[业主] 2026-11-20 发车指令授权执行）
 
 ---
 

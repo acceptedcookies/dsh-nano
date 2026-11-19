@@ -8,6 +8,20 @@ import test from 'node:test'
 const BASE = '6afb4d99c157951864274c152a27cb5f7ade8503'
 const root = fileURLToPath(new URL('../../', import.meta.url))
 
+// Retired with the code they covered (DNLS02 T-O-32): DNK no longer owns an
+// engine, container, lifecycle or error catalogue, so these titles have no
+// home to move to. The bridge frame tests moved to mcp-bridge-frames.test.mjs.
+const RETIRED_FILES = new Set([
+  'dsh-nano-kitesurf/test/container-engine.test.mjs',
+  'dsh-nano-kitesurf/test/diagnostics.test.mjs',
+  'dsh-nano-kitesurf/test/engine.test.mjs',
+  'dsh-nano-kitesurf/test/nano-kite.test.mjs',
+  'dsh-nano-kitesurf/test/snapshot.test.mjs',
+])
+const RETIRED_TITLES = new Set([
+  'skill bodies are generated from ERROR_CATALOG (no hand-copied table)',
+])
+
 function gitShow(path) {
   return execFileSync('git', ['show', `${BASE}:${path}`], { cwd: root, encoding: 'utf8' })
 }
@@ -45,7 +59,9 @@ function currentFiles(dir) {
 test('deleted DNK and DNT titles still exist with at least as many asserts', () => {
   const before = new Map()
   for (const path of [...filesAt('dsh-nano-kitesurf/test'), ...filesAt('dsh-nano-terminal/test')]) {
+    if (RETIRED_FILES.has(path)) continue
     for (const row of titles(gitShow(path))) {
+      if (RETIRED_TITLES.has(row.title)) continue
       const prev = before.get(row.title)
       if (!prev || row.asserts > prev.asserts) before.set(row.title, { ...row, path })
     }

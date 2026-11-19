@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto'
-import { CDP_TIMEOUTS, withPage } from './cdp-elements.js'
+
+/** Kernel services, injected by the loader: the driver never imports src/host. */
+let api = null
+export function configure(services) {
+  api = services
+  return api
+}
 
 const HISTORY_LIMIT = 1000
 
@@ -76,7 +82,7 @@ export function createBrowserHistoryAdapter(session, { now = () => new Date().to
 /** Cross-document browser history is CDP state, not the document's history.go shim. */
 export async function navigateHistory(client, delta) {
   if (delta !== -1 && delta !== 1) throw historyError('delta must be -1 or +1')
-  return withPage(client, async sessionId => {
+  return api.cdp.withPage(client, async sessionId => {
     const history = await client.send('Page.getNavigationHistory', {}, sessionId)
     const entries = Array.isArray(history.entries) ? history.entries : []
     const currentIndex = history.currentIndex
@@ -85,7 +91,7 @@ export async function navigateHistory(client, delta) {
     if (!next || !Number.isInteger(next.id)) {
       return { moved: false, currentIndex, entries: entries.length }
     }
-    await client.send('Page.navigateToHistoryEntry', { entryId: next.id }, sessionId, CDP_TIMEOUTS.navigate)
+    await client.send('Page.navigateToHistoryEntry', { entryId: next.id }, sessionId, api.cdp.timeouts.navigate)
     // The official method discards Page.navigate's result.errorText. Observe
     // the owning page instead of presenting a recorded destination as arrival.
     const observed = await client.send('Runtime.evaluate', {

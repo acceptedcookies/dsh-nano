@@ -7,7 +7,8 @@ import { policyFingerprint, tupleFromPolicy } from './policy-adapter.js'
  * fingerprint, idle sweep.
  *
  * Three optional hooks let the caller decide what a container actually looks
- * like, so this module stays free of platform nouns and of the kitesurf recipe:
+ * like, so this module stays free of platform nouns and of any profile
+ * recipe:
  *  - `imageFor(profile, instance)`  → runtime image reference
  *  - `portSpecFor(instance)`        → `[{publish}]` rows for `container run -p`
  *  - `mountsFor(instance, tuple)`   → `[{arg}]` rows for `container run --mount`

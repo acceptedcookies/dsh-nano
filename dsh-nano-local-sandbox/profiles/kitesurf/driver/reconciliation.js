@@ -36,13 +36,16 @@ function canonicalImage(reference) {
 }
 
 /** Missing fixture fields mean unknown, not a production recipe mismatch. */
-export function recipeDrift(info, { image, runtimeRoot }) {
+export function recipeDrift(info, { image, runtimeRoot, stateDir }) {
   const problems = []
   if (info?.imageRef && canonicalImage(info.imageRef) !== canonicalImage(image)) {
     problems.push(`image ${info.imageRef} != ${image}`)
   }
   if (info?.runtimeSource && info.runtimeSource !== runtimeRoot) {
     problems.push(`runtime ${info.runtimeSource} != ${runtimeRoot}`)
+  }
+  if (info?.stateSource && stateDir && info.stateSource !== stateDir) {
+    problems.push(`state ${info.stateSource} != ${stateDir}`)
   }
   return problems.length ? problems.join(', ') : null
 }

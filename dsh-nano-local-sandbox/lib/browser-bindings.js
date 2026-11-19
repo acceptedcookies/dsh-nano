@@ -7,7 +7,7 @@ export const BROWSER_BINDINGS = Object.freeze([
   Object.freeze({ id: "dnls.pick", path: "/nano-local-sandbox/pick" }),
   Object.freeze({ id: "dnls.edit", path: "/nano-local-sandbox/edit" }),
   Object.freeze({ id: "dnls.settings", path: "/nano-local-sandbox/settings" }),
-  Object.freeze({ id: "dnls.kite", path: "/nano-local-sandbox/kite" }),
+  Object.freeze({ id: "dnls.lifecycle", path: "/nano-local-sandbox/lifecycle" }),
   Object.freeze({ id: "dnls.console", path: "/nano-local-sandbox/console" }),
   Object.freeze({ id: "dnls.operations", path: "/nano-local-sandbox/operations" }),
   Object.freeze({ id: "dnls.diagnostics", path: "/nano-local-sandbox/diagnostics" }),

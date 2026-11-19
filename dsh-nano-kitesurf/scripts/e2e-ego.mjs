@@ -60,6 +60,64 @@ async function setNav(page, target) {
   return page.evaluate(() => document.querySelector('[data-nks-nav]')?.dataset?.nksNavState)
 }
 
+// Center of the first visible element matching `selector` whose own text is
+// exactly `text` (or any match when text is null).
+function locate(page, selector, text) {
+  return page.evaluate(({ selector, text }) => {
+    const el = [...document.querySelectorAll(selector)].find((node) => {
+      const r = node.getBoundingClientRect()
+      if (r.width === 0 || r.height === 0) return false
+      if (text == null) return true
+      const own = node.cloneNode(true)
+      own.querySelectorAll('button').forEach((b) => b.remove())
+      return own.textContent.trim() === text
+    })
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }
+  }, { selector, text })
+}
+
+async function waitPane(page, ms) {
+  for (let waited = 0; waited < ms; waited += 250) {
+    if (await page.evaluate(() => Boolean(document.querySelector('[data-nano-kitesurf] .nks-toolbar')))) return true
+    await new Promise((r) => setTimeout(r, 250))
+  }
+  return false
+}
+
+async function openPane(page) {
+  if (await waitPane(page, 500)) return { ok: true, via: 'already-open' }
+  // A restarted host can come back with the workbench collapsed.
+  const sidebar = await locate(page, 'button[aria-label="打开右侧边栏"], button[aria-label="Open right sidebar"]', null)
+  if (sidebar) {
+    await page.mouse.click(sidebar.x, sidebar.y)
+    if (await waitPane(page, 3000)) return { ok: true, via: 'sidebar' }
+  }
+  const steps = [
+    ['tab', '[role="tab"]', 'Kitesurf'],
+    ['launcher', 'button', 'Kitesurf'],
+  ]
+  for (const [via, selector, text] of steps) {
+    const pos = await locate(page, selector, text)
+    if (pos) {
+      await page.mouse.click(pos.x, pos.y)
+      if (await waitPane(page, 8000)) return { ok: true, via }
+    }
+  }
+  const newTab = await locate(page, 'button[aria-label="新标签页"], button[aria-label="New tab"]', null)
+  if (newTab) {
+    await page.mouse.click(newTab.x, newTab.y)
+    await new Promise((r) => setTimeout(r, 800))
+    const pos = await locate(page, 'button', 'Kitesurf')
+    if (pos) {
+      await page.mouse.click(pos.x, pos.y)
+      if (await waitPane(page, 8000)) return { ok: true, via: 'new-tab-launcher' }
+    }
+  }
+  return { ok: false, via: 'no Kitesurf workbench entry found' }
+}
+
 async function main() {
   const task = await taskSpace(SPACE)
   // Page labels persist per space but a crashed run may have left a different
@@ -89,18 +147,11 @@ async function main() {
   })
   record('bundle-mounted', Boolean(rev), rev ? rev.split('rev=')[1] : 'no link tag')
 
-  // 2. open the pane
-  await page.mouse.click(1180, 24)
-  await new Promise((r) => setTimeout(r, 900))
-  const item = await page.evaluate(() => {
-    const el = Array.from(document.querySelectorAll('*')).find((e) => e.children.length === 0 && e.textContent?.trim() === 'Kitesurf' && e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().y > 60)
-    if (!el) return null
-    const r = el.getBoundingClientRect()
-    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }
-  })
-  if (item) await page.mouse.click(item.x, item.y)
-  await new Promise((r) => setTimeout(r, 6000))
-  record('pane-open', await page.evaluate(() => Boolean(document.querySelector('[data-nano-kitesurf]'))))
+  // 2. open the pane through the workbench entry, never by fixed coordinates:
+  // reuse an existing Kitesurf tab, else the launcher's Kitesurf entry, else
+  // open a new workbench tab and pick Kitesurf from its launcher.
+  const pane = await openPane(page)
+  record('pane-open', pane.ok, pane.via)
 
   // 2b. vertical tab drawer (DSH slide artwork): a toolbar toggle opens it,
   // the drawer slides in from the left edge and holds only the tab list.
@@ -262,8 +313,17 @@ async function main() {
   })
   if (dt) await page.mouse.click(dt.x, dt.y)
   await new Promise((r) => setTimeout(r, 2500))
-  const consoleRows = await page.evaluate(() => document.querySelectorAll('[data-nks-devtools] .nks-dt-row').length)
-  record('devtools-console', consoleRows > 0, `${consoleRows} rows`)
+  const consoleRows = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('[data-nks-devtools] .nks-dt-row')]
+    return {
+      count: rows.length,
+      // A row that renders nothing is a shell — the review's rows>0 gap.
+      textRows: rows.filter((row) => (row.textContent || '').trim().length > 0).length,
+      leveled: rows.filter((row) => /log|warn|error|info|debug/i.test(row.textContent || '')).length,
+    }
+  })
+  record('devtools-console', consoleRows.count > 0 && consoleRows.textRows === consoleRows.count && consoleRows.leveled > 0,
+    `${consoleRows.count} rows · ${consoleRows.textRows} with text · ${consoleRows.leveled} leveled`)
   const netTab = await page.evaluate(() => {
     // The view switch is the host SegmentedControl (no per-option data attribute):
     // find the head's option whose text is the Network label.
@@ -276,8 +336,18 @@ async function main() {
   })
   if (netTab) await page.mouse.click(netTab.x, netTab.y)
   await new Promise((r) => setTimeout(r, 2000))
-  const netRows = await page.evaluate(() => document.querySelectorAll('[data-nks-devtools] .nks-dt-row').length)
-  record('devtools-network', netRows > 0, `${netRows} rows`)
+  const netRows = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('[data-nks-devtools] .nks-dt-row')]
+    return {
+      count: rows.length,
+      // Each row must carry a method+target or a status — a count alone
+      // accepted empty shells before (review: incremental assertions).
+      shaped: rows.filter((row) => /GET|POST|PUT|DELETE|PATCH|HEAD|https?:|wss?:/.test(row.textContent || '')).length,
+      statused: rows.filter((row) => /\b[1-5]\d\d\b|pending|failed|cancelled/i.test(row.textContent || '')).length,
+    }
+  })
+  record('devtools-network', netRows.count > 0 && netRows.shaped > 0,
+    `${netRows.count} rows · ${netRows.shaped} method/url · ${netRows.statused} statused`)
   await page.screenshot({ path: `/tmp/dnk-e2e-${++shot}-devtools.png` })
 
   // 8. Elements tab (DOM tree) and computed styles
@@ -352,15 +422,15 @@ async function main() {
   // 9. lifecycle: suspend -> resume -> page comes back
   const lifecycle = await page.evaluate(async (targetUrl) => {
     const readJson = async (r) => { const t = await r.text(); try { return JSON.parse(t) } catch { return { ok: false, error: t.slice(0, 120), status: r.status } } }
-    const post = (body) => fetch('/nano-local-sandbox/kite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(readJson)
+    const post = (body) => fetch('/nano-local-sandbox/lifecycle', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(readJson)
     const st = () => fetch('/nano-local-sandbox/status').then(readJson)
     try {
     const before = await st()
     const suspended = await post({ action: 'suspend' })
     const mid = await st()
     const resumed = await post({ action: 'resume' })
-    // resume rebuilds the container: the page is gone, so re-open before any
-    // later check that needs a document.
+    // resume restores the engine without the page: re-open before any later
+    // check that needs a document.
     await fetch('/nano-local-sandbox/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: targetUrl }) })
     for (let i = 0; i < 12; i += 1) {
       const dom = await fetch('/nano-local-sandbox/dom').then(readJson)
@@ -369,11 +439,11 @@ async function main() {
     }
     const after = await st()
     return {
-      beforePhase: before.kite?.phase,
+      beforePhase: before.lifecycle?.phase,
       suspendOk: suspended.ok === true,
-      midPhase: mid.kite?.phase,
+      midPhase: mid.lifecycle?.phase,
       resumeOk: resumed.ok === true,
-      afterPhase: after.kite?.phase,
+      afterPhase: after.lifecycle?.phase,
       alive: after.ok === true,
     }
     } catch (error) { return { error: String((error && error.message) || error) } }
@@ -389,7 +459,7 @@ async function main() {
 
   // 11. history is served from the workerd KV
   const history = await page.evaluate(() => fetch('/nano-local-sandbox/browse-history?limit=5').then((r) => r.json()))
-  record('history-kv', history.ok === true && (history.entries || []).length > 0 && history.source === 'workerd-kv', `${(history.entries || []).length} entries · ${history.source}`)
+  record('history-kv', history.ok === true && (history.entries || []).length > 0 && history.source === 'instance-state', `${(history.entries || []).length} entries · ${history.source}`)
 
   // 12. perf-review instrumentation: pane actions must be recorded as spans.
   // Read the collector's local report — the host copy only updates on the
@@ -406,53 +476,55 @@ async function main() {
   const spanCount = spanNames.reduce((sum, name) => sum + (ksSpans[name]?.n || 0), 0)
   record('perf-spans', spanCount > 0, `${spanCount} spans (${spanNames.join(',')}) ${Array.isArray(perf.host?.rows) ? 'host-read' : 'host-absent'}`)
 
-  // 13. P1-4 latency budget: host-side spans must report pre-aggregated stats
-  // and the hot-path p95 must stay under a sane ceiling. Budget is generous —
-  // the engine is a local container, network latency dominates; this catches
-  // regressions (e.g. a span suddenly taking seconds), not micro-optimisation.
+  // 13. P1-4 latency budget. This package has no host routes; every pane
+  // request is served by the sandbox host, whose route bundle reports one
+  // contract row per call. Budget is generous — the engine is a local
+  // container; this catches regressions (a call suddenly taking seconds),
+  // not micro-optimisation.
   const hostRows = Array.isArray(perf.host?.rows)
-    ? perf.host.rows.filter((row) => row.pluginId === 'nano-kitesurf' && row.kind !== 'contract')
+    ? perf.host.rows.filter((row) => row.pluginId === 'dsh-nano-local-sandbox' && row.kind === 'contract')
     : []
-  const shotSamples = hostRows.filter((row) => row.name === 'shot').map((row) => row.ms).filter((ms) => typeof ms === 'number').sort((a, b) => a - b)
+  const shotSamples = hostRows.map((row) => row.ms).filter((ms) => typeof ms === 'number').sort((a, b) => a - b)
   const percentile = (p) => shotSamples.length === 0 ? null : shotSamples[Math.min(shotSamples.length - 1, Math.max(0, Math.ceil(p * shotSamples.length) - 1))]
   const shotStats = shotSamples.length === 0 ? null : {
     n: shotSamples.length, p50: percentile(0.5), p95: percentile(0.95),
-    max: shotSamples.at(-1), errors: hostRows.filter((row) => row.name === 'shot' && row.err === true).length,
+    max: shotSamples.at(-1), errors: hostRows.filter((row) => row.outcome !== 'ok').length,
   }
   if (shotStats) {
     record('perf-stats-shape', typeof shotStats.p95 === 'number' && typeof shotStats.p50 === 'number',
-      `shot p50=${shotStats.p50} p95=${shotStats.p95} max=${shotStats.max} errors=${shotStats.errors}`)
-    record('perf-budget-shot-p95', shotStats.p95 != null && shotStats.p95 < 3000, `shot p95=${shotStats.p95}ms < 3000ms`)
+      `sandbox host p50=${shotStats.p50.toFixed(1)} p95=${shotStats.p95.toFixed(1)} max=${shotStats.max.toFixed(1)} non-ok=${shotStats.errors} n=${shotStats.n}`)
+    record('perf-budget-host-p95', shotStats.p95 != null && shotStats.p95 < 3000, `sandbox host p95=${shotStats.p95.toFixed(1)}ms < 3000ms`)
   } else {
-    record('perf-stats-shape', false, 'shot rows missing from the v2 host read view')
-    record('perf-budget-shot-p95', false, 'no shot rows')
+    record('perf-stats-shape', false, 'sandbox host contract rows missing from the v2 host read view')
+    record('perf-budget-host-p95', false, 'no sandbox host rows')
   }
-  // Each host row carries {ms,seq,err,at}; the event ring is optional.
-  const shotRows = hostRows.filter((row) => row.name === 'shot')
-  const hasTriple = shotRows.length === 0 || shotRows.every((row) => typeof row.ms === 'number' && typeof row.at === 'string' && 'err' in row)
-  record('perf-event-triples', hasTriple, `${shotRows.length} rows, row shape ok=${hasTriple}`)
+  // Each contract row carries {seq,name,kind,outcome,ms}.
+  const hasTriple = hostRows.length > 0 && hostRows.every((row) => typeof row.ms === 'number' && typeof row.seq === 'number' && typeof row.outcome === 'string')
+  record('perf-event-triples', hasTriple, `${hostRows.length} rows, row shape ok=${hasTriple}`)
 
   // 14. P1-6 feedback-report: every field the template asks for must be
   // fetchable from a real route — buildId/phase (status), route sequence
-  // (operations), hints+console+errors (diagnostics), element packet (/last),
-  // context chip (/context). If any source vanishes the recipe breaks.
+  // (operations), hints+console+errors (diagnostics), element packet (/pick).
   const report = await page.evaluate(async () => {
-    const [status, ops, diag, last] = await Promise.all([
+    // The full error catalog is opt-in (?catalog=1); the pick target is the
+    // first paragraph, which every test page renders.
+    const [status, ops, diag, catalog, pick] = await Promise.all([
       fetch('/nano-local-sandbox/status').then((r) => r.json()).catch(() => ({})),
       fetch('/nano-local-sandbox/operations?limit=5').then((r) => r.json()).catch(() => ({})),
       fetch('/nano-local-sandbox/diagnostics?limit=5').then((r) => r.json()).catch(() => ({})),
-      fetch('/nano-local-sandbox/last').then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-local-sandbox/diagnostics?catalog=1').then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-local-sandbox/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ selector: 'p' }) }).then((r) => r.json()).catch(() => ({})),
     ])
     return {
       buildId: status.buildId || status.plugin?.buildId || null,
-      phase: status.kite?.phase || status.plugin?.phase || null,
+      phase: status.lifecycle?.phase || status.plugin?.phase || null,
       opsCount: (ops.entries || []).length,
       hasHints: Array.isArray(diag.hints),
-      hasErrorCatalog: Array.isArray(diag.observability?.errorCatalog) && diag.observability.errorCatalog.length > 10,
-      lastPick: last.pick === null || typeof last.pick === 'object',
+      hasErrorCatalog: Array.isArray(catalog.errorCatalog) && catalog.errorCatalog.length > 10,
+      pickPacket: Boolean(pick.pick?.elements?.[0]?.selector),
     }
   })
-  const reportOk = report.buildId && report.phase && report.hasHints && report.hasErrorCatalog
+  const reportOk = report.buildId && report.phase && report.hasHints && report.hasErrorCatalog && report.pickPacket
   record('feedback-report-fields', !!reportOk, JSON.stringify(report).slice(0, 160))
 
   // 15. P1-2 chunked evaluate: an expression returning >4KB must page through
@@ -475,7 +547,10 @@ async function main() {
     const rd = await fetch('/nano-local-sandbox/storage?scope=local').then(J)
     return { savedOk: saved.ok === true, restored: loaded.restored, readBack: rd.result?.entries?.['e2e-k'] }
   })
-  record('storage-state-roundtrip', st.savedOk && st.restored >= 1 && st.readBack === 'e2e-v', JSON.stringify(st))
+  // loaded.restored is the /state restored OBJECT ({ok,url,cookieSet}), not a
+  // count — >=1 silently compared NaN and made the check lie. ok:true is the
+  // real contract.
+  record('storage-state-roundtrip', st.savedOk && st.restored?.ok === true && st.readBack === 'e2e-v', JSON.stringify(st))
 
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`)

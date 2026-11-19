@@ -30,11 +30,15 @@ RUN chmod 755 /entrypoint.sh \
 # process must not be able to write the checkout or run as root.
 USER node
 
+# AGENT_BROWSER_CDP points at the bridge's /cdp relay, not the engine directly:
+# every engine connection owns a private page at this pin, so a direct socket
+# would land the agent in its own about:blank while the human sees another.
 ENV PATH="/opt/npm-global/node_modules/.bin:${PATH}" \
     DNLS_HOME=/opt/kitesurf \
     DNLS_PORT=8787 \
     DNLS_MCP_PORT=8791 \
-    AGENT_BROWSER_CDP=ws://127.0.0.1:8787/devtools/browser
+    AGENT_BROWSER_CDP=ws://127.0.0.1:8791/cdp \
+    KITESURF_CDP_UPSTREAM=ws://127.0.0.1:8787/devtools/browser
 
 EXPOSE 8787 8791
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]

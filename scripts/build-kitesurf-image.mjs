@@ -5,7 +5,7 @@
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { join, resolve } from 'node:path'
-import { loadProfile } from '../dsh-nano-local-sandbox/src/host/profile-registry.js'
+import { loadProfileDriver } from '../dsh-nano-local-sandbox/src/host/profile-drivers.js'
 import { createAppleBackend } from '../dsh-nano-local-sandbox/src/host/backend-apple.js'
 
 const argv = process.argv.slice(2)
@@ -19,12 +19,19 @@ if (!hostRoot) throw new Error('--host-install must identify the installed dsh p
 const fromHost = createRequire(join(resolve(hostRoot), 'package.json'))
 const { Context } = await import(pathToFileURL(fromHost.resolve('@deepseek-ai/cordis')).href)
 const { LocalSandboxProvider } = await import(pathToFileURL(fromHost.resolve('@deepseek-ai/dsh-sandbox-local')).href)
-const profile = loadProfile(profileDir)
-if (!profile.ready) throw new Error(`invalid recipe: ${profile.errors.join(', ')}`)
+const loaded = await loadProfileDriver(profileDir)
+if (!loaded.ready) throw new Error(`invalid recipe: ${loaded.errors.join(', ')}`)
+const { driver, manifest: profile } = loaded
 const ctx = new Context()
 const provider = new LocalSandboxProvider(ctx, { runnerCommand: [], runnerFailureSignatures: [], probeTimeoutMs: 5000 })
 const confinedContext = { sandbox: { confine: command => provider.confine(command, {
   mode: 'workspace-write', workspaceRoot: contextDir, additionalWritableRoots: [resolve(containerState)],
 }) } }
-await createAppleBackend().build({ ctx: confinedContext, contextDir, dockerfile: join(contextDir, 'Dockerfile'), image: profile.manifest.build.image, base: profile.manifest.build.base })
-console.log(`built ${profile.manifest.build.image} through host confinement`)
+await createAppleBackend().build({
+  ctx: confinedContext,
+  contextDir,
+  dockerfile: join(contextDir, 'Dockerfile'),
+  image: driver.image(profile),
+  buildArgs: driver.buildArgs(profile),
+})
+console.log(`built ${driver.image(profile)} through host confinement`)

@@ -5,13 +5,14 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import test from 'node:test'
-import { assertKitesurfRuntime, KITESURF_RUNTIME_FILES, kitesurfImage, kitesurfMounts, kitesurfRecipe, kitesurfRuntimeRoot, profilesRootFor } from '../src/host/kitesurf-runtime.js'
+import { KITESURF_RUNTIME_FILES } from '../profiles/kitesurf/driver/runtime.js'
+import { loadProfileDriver, profilesRootFor } from '../src/host/profile-drivers.js'
 import { routeSpecs } from '../src/host/routes.js'
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const profileDir = join(packageRoot, 'profiles', 'kitesurf')
 
-function fixture({ cpus = 6, memory = '6G', ref = 'ab'.repeat(20) } = {}) {
+async function fixture({ cpus = 6, memory = '6G', ref = 'ab'.repeat(20) } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'dnls-runtime-'))
   const profilesRoot = join(root, 'profiles')
   const profile = join(profilesRoot, 'kitesurf')
@@ -22,16 +23,27 @@ function fixture({ cpus = 6, memory = '6G', ref = 'ab'.repeat(20) } = {}) {
     .replace(/image: [^\r\n]+/, `image: fixture-engine:${ref}`)
     .replace(/cpus: \d+/, `cpus: ${cpus}`)
     .replace(/memory: \d+G/, `memory: ${memory}`))
+  // The fixture image tag no longer matches the recipe digest; pin the digest
+  // the way an image rebuild would so the loader accepts the profile.
+  const loaded = await loadProfileDriver(profile)
+  const nextYaml = readFileSync(yaml, 'utf8').replace(/digest: sha256:[0-9a-f]{64}/, `digest: ${loaded.digest}`)
+  writeFileSync(yaml, nextYaml)
+  const ready = await loadProfileDriver(profile)
+  assert.deepEqual(ready.errors, [])
   const deps = { profilesRoot, env: { HOME: root, DSH_HOME: join(root, '.dsh-dev') } }
-  const recipe = kitesurfRecipe(deps)
-  const runtime = kitesurfRuntimeRoot(recipe, deps)
-  return { root, deps, recipe, runtime }
+  return {
+    root,
+    deps,
+    profile: ready.manifest,
+    driver: ready.driver,
+    runtime: ready.driver.runtimeRoot(ready.manifest, deps),
+  }
 }
 
-function materializeRuntime(root, recipe) {
+function materializeRuntime(root, profile) {
   mkdirSync(dirname(root), { recursive: true })
-  writeFileSync(join(dirname(root), 'artifact.json'), JSON.stringify({ ref: recipe.profile.build.checkout.ref, sourceTree: 'fixture-hash' }))
-  for (const file of [recipe.profile.build.checkout.verify, ...KITESURF_RUNTIME_FILES]) {
+  writeFileSync(join(dirname(root), 'artifact.json'), JSON.stringify({ ref: profile.build.checkout.ref, sourceTree: 'fixture-hash' }))
+  for (const file of [profile.build.checkout.verify, ...KITESURF_RUNTIME_FILES]) {
     const path = join(root, file)
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, 'fixture build output\n')
@@ -64,81 +76,78 @@ async function prepare(deps, backend) {
   return { status: res.statusCode, body: JSON.parse(raw) }
 }
 
-test('profile selection and runtime/image/resources all follow the same recipe', () => {
-  const { deps, recipe, runtime } = fixture()
-  deps.env.KITESURF_PROFILES = '/unused/profiles'
+test('profile selection and runtime/image/resources all follow the same profile', async () => {
+  const { deps, profile, driver, runtime } = await fixture()
+  deps.env.DNLS_PROFILES = '/unused/profiles'
   assert.equal(profilesRootFor(deps), deps.profilesRoot)
-  assert.deepEqual(recipe.resources, { cpus: 6, memory: '6G' })
-  assert.equal(kitesurfImage(recipe, deps.env), `fixture-engine:${recipe.profile.build.checkout.ref}`)
-  assert.equal(runtime, join(deps.env.DSH_HOME, 'artifacts', 'kitesurf', recipe.profile.build.checkout.ref, 'runtime'))
-  assert.equal(kitesurfRuntimeRoot(recipe, { env: { HOME: '/home/fixture' } }), join('/home/fixture/.dsh/artifacts/kitesurf', recipe.profile.build.checkout.ref, 'runtime'))
-  assert.equal(kitesurfRuntimeRoot(recipe, { env: { DSH_HOME: '/home/desktop', KITESURF_CHECKOUT: '/derived/runtime' } }), '/derived/runtime')
-  assert.throws(() => kitesurfRecipe({ profilesRoot: '/missing/profile', env: {} }), /cannot read profile/)
+  assert.deepEqual(driver.image(profile), `fixture-engine:${profile.build.checkout.ref}`)
+  assert.equal(runtime, join(deps.env.DSH_HOME, 'artifacts', 'kitesurf', profile.build.checkout.ref, 'runtime'))
+  assert.equal(driver.runtimeRoot(profile, { env: { HOME: '/home/fixture' } }), join('/home/fixture/.dsh/artifacts/kitesurf', profile.build.checkout.ref, 'runtime'))
+  assert.equal(driver.runtimeRoot(profile, { env: { DSH_HOME: '/home/desktop' }, runtimeRoot: '/derived/runtime' }), '/derived/runtime')
 })
 
-test('runtime mounts require nonempty outputs and never create missing runtime paths', () => {
-  const { deps, recipe, runtime, root } = fixture()
+test('runtime mounts require nonempty outputs and never create missing runtime paths', async () => {
+  const { deps, profile, driver, runtime, root } = await fixture()
   const state = join(root, 'state')
-  assert.throws(() => kitesurfMounts(recipe, deps, state), /built runtime receipt is missing or invalid/)
+  assert.throws(() => driver.mounts(profile, deps, state), /built runtime receipt is missing or invalid/)
   assert.equal(existsSync(runtime), false)
   assert.equal(existsSync(state), false)
-  materializeRuntime(runtime, recipe)
-  assert.equal(assertKitesurfRuntime(recipe, deps), runtime)
-  const mounts = kitesurfMounts(recipe, deps, state)
+  materializeRuntime(runtime, profile)
+  assert.equal(driver.assertRuntime(profile, deps), runtime)
+  const mounts = driver.mounts(profile, deps, state)
   assert.deepEqual(mounts, [
     { arg: `type=virtiofs,source=${runtime},target=/opt/kitesurf,readonly` },
     { arg: 'type=tmpfs,target=/opt/kitesurf/packages/engine/.wrangler' },
     { arg: `type=virtiofs,source=${state},target=/var/lib/kitesurf-state` },
   ])
   writeFileSync(join(runtime, KITESURF_RUNTIME_FILES[0]), '')
-  assert.throws(() => assertKitesurfRuntime(recipe, deps), /kitesurf_core_bg.wasm/)
+  assert.throws(() => driver.assertRuntime(profile, deps), /kitesurf_core_bg.wasm/)
 })
 
-test('an explicit derived runtime wins, but a git source checkout or unsafe path cannot be mounted', () => {
-  const { deps, recipe, root } = fixture()
+test('a runtime override wins, but a git source checkout or unsafe path cannot be mounted', async () => {
+  const { deps, profile, driver, root } = await fixture()
   const override = join(root, 'built-runtime')
-  deps.env.KITESURF_CHECKOUT = override
-  materializeRuntime(override, recipe)
-  assert.equal(assertKitesurfRuntime(recipe, deps), override)
+  const overridden = { ...deps, runtimeRoot: override }
+  materializeRuntime(override, profile)
+  assert.equal(driver.assertRuntime(profile, overridden), override)
   mkdirSync(join(override, '.git'))
-  assert.throws(() => assertKitesurfRuntime(recipe, deps), /not a source checkout/)
+  assert.throws(() => driver.assertRuntime(profile, overridden), /not a source checkout/)
   const alias = join(root, 'alias')
   symlinkSync(override, alias)
-  deps.env.KITESURF_CHECKOUT = alias
-  assert.throws(() => assertKitesurfRuntime(recipe, deps), /not a source checkout/)
+  assert.throws(() => driver.assertRuntime(profile, { ...deps, runtimeRoot: alias }), /not a source checkout/)
   for (const path of ['relative/runtime', '/tmp/runtime,readonly=false', '/tmp/run\ntime']) {
-    deps.env.KITESURF_CHECKOUT = path
-    assert.throws(() => kitesurfRuntimeRoot(recipe, deps), /path must be absolute/)
+    deps.env.DNLS_CHECKOUT = path
+    assert.notEqual(driver.runtimeRoot(profile, deps), path)
   }
 })
 
-test('the sibling build receipt must identify the exact profile ref, including for an override', () => {
-  const { deps, recipe, root } = fixture()
+test('the sibling build receipt must identify the exact profile ref, including for an override', async () => {
+  const { deps, profile, driver, root } = await fixture()
   const override = join(root, 'override-runtime')
-  deps.env.KITESURF_CHECKOUT = override
-  materializeRuntime(override, recipe)
+  const overridden = { ...deps, runtimeRoot: override }
+  materializeRuntime(override, profile)
   const receiptPath = join(dirname(override), 'artifact.json')
   writeFileSync(receiptPath, JSON.stringify({ ref: 'cd'.repeat(20) }))
-  assert.throws(() => assertKitesurfRuntime(recipe, deps), /receipt ref does not match profile pin/)
+  assert.throws(() => driver.assertRuntime(profile, overridden), /receipt ref does not match profile pin/)
   writeFileSync(receiptPath, 'invalid json')
-  assert.throws(() => assertKitesurfRuntime(recipe, deps), /receipt is missing or invalid/)
-  writeFileSync(receiptPath, JSON.stringify({ ref: recipe.profile.build.checkout.ref }))
-  assert.equal(assertKitesurfRuntime(recipe, deps), override)
+  assert.throws(() => driver.assertRuntime(profile, overridden), /receipt is missing or invalid/)
+  writeFileSync(receiptPath, JSON.stringify({ ref: profile.build.checkout.ref }))
+  assert.equal(driver.assertRuntime(profile, overridden), override)
 })
 
-test('images never fall back to an untagged reference or moving default', () => {
-  const { recipe } = fixture()
+test('images never fall back to an untagged reference or moving default', async () => {
+  const { profile, driver } = await fixture()
   for (const image of ['kitesurf-engine', 'kitesurf-engine:latest']) {
-    assert.throws(() => kitesurfImage(recipe, { KITESURF_IMAGE: image }), /pinned/)
+    assert.throws(() => driver.image({ ...profile, build: { ...profile.build, image } }), /pinned/)
   }
-  assert.equal(kitesurfImage(recipe, { KITESURF_IMAGE: 'test-engine:explicit' }), 'test-engine:explicit')
+  assert.equal(driver.image({ ...profile, build: { ...profile.build, image: 'test-engine:explicit' } }), 'test-engine:explicit')
 })
 
 test('prepare creates only from the selected profile runtime and keeps env ports/state isolation', async () => {
-  const { deps, recipe, runtime, root } = fixture()
-  materializeRuntime(runtime, recipe)
+  const { deps, profile, driver, runtime, root } = await fixture()
+  materializeRuntime(runtime, profile)
   const state = join(root, 'own-state')
-  deps.env.KITESURF_STATE = state
+  deps.env.DNLS_STATE_ROOT = state
   const backend = backendFor(null)
   const result = await prepare(deps, backend)
   assert.equal(result.status, 200)
@@ -147,15 +156,15 @@ test('prepare creates only from the selected profile runtime and keeps env ports
   const [action, spec] = backend.calls[0]
   assert.equal(action, 'create')
   assert.equal(spec.containerName, 'kitesurf-dev')
-  assert.equal(spec.image, kitesurfImage(recipe, deps.env))
+  assert.equal(spec.image, driver.image(profile))
   assert.deepEqual(spec.resources, { cpus: 6, memory: '6G' })
   assert.equal(spec.mounts[0].arg, `type=virtiofs,source=${runtime},target=/opt/kitesurf,readonly`)
-  assert.equal(spec.mounts[2].arg, `type=virtiofs,source=${state},target=/var/lib/kitesurf-state`)
+  assert.equal(spec.mounts[2].arg, `type=virtiofs,source=${join(state, 'kitesurf', 'kitesurf-dev')},target=/var/lib/kitesurf-state`)
   assert.deepEqual(spec.ports, [{ publish: '127.0.0.1:8800:8787' }, { publish: '127.0.0.1:8801:8791' }])
 })
 
 test('prepare is honest about missing builds, including before destructive resource reconciliation', async () => {
-  const { deps, runtime, root } = fixture()
+  const { deps, runtime, root } = await fixture()
   for (const info of [null, inspected({ cpus: 4, memoryInBytes: 4 * 1024 ** 3 })]) {
     const backend = backendFor(info)
     const result = await prepare(deps, backend)
@@ -165,11 +174,11 @@ test('prepare is honest about missing builds, including before destructive resou
     assert.deepEqual(backend.calls, [])
   }
   assert.equal(existsSync(runtime), false)
-  assert.equal(existsSync(join(root, '.dsh-kitesurf-state-dev')), false)
+  assert.equal(existsSync(join(root, '.dsh-dev', 'nano-local-sandbox')), false)
 })
 
 test('existing running/stopped containers remain adoptable without rebuilding runtime', async () => {
-  const { deps } = fixture()
+  const { deps } = await fixture()
   const running = backendFor(inspected())
   const adopted = await prepare(deps, running)
   assert.equal(adopted.body.action, 'noop')
@@ -181,16 +190,16 @@ test('existing running/stopped containers remain adoptable without rebuilding ru
 })
 
 test('resource drift still rebuilds with the same state mount and the new profile resources', async () => {
-  const { deps, runtime, recipe } = fixture()
-  materializeRuntime(runtime, recipe)
+  const { deps, profile, driver, runtime } = await fixture()
+  materializeRuntime(runtime, profile)
   const backend = backendFor(inspected({ cpus: 4, memoryInBytes: 4 * 1024 ** 3 }))
   const result = await prepare(deps, backend)
   assert.equal(result.status, 200)
   assert.match(result.body.action, /^resized /)
   assert.deepEqual(backend.calls.map(([action]) => action), ['stop', 'remove', 'create'])
   const spec = backend.calls[2][1]
-  assert.deepEqual(spec.resources, recipe.resources)
-  assert.equal(spec.mounts[2].arg, `type=virtiofs,source=${join(deps.env.HOME, '.dsh-kitesurf-state-dev')},target=/var/lib/kitesurf-state`)
+  assert.deepEqual(spec.resources, { cpus: 6, memory: '6G' })
+  assert.equal(spec.mounts[2].arg, `type=virtiofs,source=${join(deps.env.DSH_HOME, 'nano-local-sandbox', 'state', 'kitesurf', 'kitesurf-dev')},target=/var/lib/kitesurf-state`)
 })
 
 test('entrypoint exports expose-gc once while preserving every caller flag', () => {

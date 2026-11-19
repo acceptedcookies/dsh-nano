@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { acceptKey, createFrameDecoder, originAllowed, sendText } from '../../dsh-nano-local-sandbox/profiles/kitesurf/mcp-bridge.mjs'
+import { acceptKey, createFrameDecoder, originAllowed, sendText } from '../profiles/kitesurf/mcp-bridge.mjs'
 
 test('the WebSocket accept key matches RFC 6455', async () => {
   const key = await acceptKey('dGhlIHNhbXBsZSBub25jZQ==')
@@ -108,7 +108,7 @@ test('sendText writes a FIN text frame', () => {
 // a spawned agent-browser child; the HTTP endpoints need no child, so they are
 // the unit-testable surface of the contract.
 test('POST /control takeover then release toggles humanHold visible on /health', async () => {
-  const { createBridge } = await import('../../dsh-nano-local-sandbox/profiles/kitesurf/mcp-bridge.mjs')
+  const { createBridge } = await import('../profiles/kitesurf/mcp-bridge.mjs')
   const port = 19000 + Math.floor(Math.random() * 900)
   const server = createBridge(port, { ...process.env, DNLS_MCP_PORT: String(port) })
   await new Promise((r) => setTimeout(r, 150))

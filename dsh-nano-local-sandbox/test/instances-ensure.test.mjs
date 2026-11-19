@@ -89,6 +89,25 @@ test('two sessions index the same env container', async () => {
   assert.equal(backend.calls.create.length, 0)
 })
 
+test('each session gets its own instance record and fingerprint over the shared container', async () => {
+  const backend = recordingBackend()
+  const routes = routesFor(baseDeps(backend))
+  const a = await tool(routes, 'sandbox.instance.ensure', {
+    sessionId: 'sess-a',
+    policy: { mode: 'workspace-write', workspaceRoot: '/work/a', extraRoots: [] },
+  })
+  const b = await tool(routes, 'sandbox.instance.ensure', {
+    sessionId: 'sess-b',
+    policy: { mode: 'workspace-write', workspaceRoot: '/work/b', extraRoots: [] },
+  })
+  assert.notEqual(a.data.instanceId, b.data.instanceId)
+  assert.notEqual(a.data.policyFingerprint, b.data.policyFingerprint)
+  assert.equal(a.data.containerName, b.data.containerName)
+  const listed = await tool(routes, 'sandbox.instance.status')
+  assert.equal(typeof listed, 'object')
+  assert.equal(backend.calls.create.length, 0)
+})
+
 test('the same session reuses its instance instead of creating a second container', async () => {
   const backend = recordingBackend()
   const routes = routesFor(baseDeps(backend))

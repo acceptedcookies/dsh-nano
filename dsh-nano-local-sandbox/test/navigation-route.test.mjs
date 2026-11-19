@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import test from 'node:test'
 import { routeSpecs } from '../src/host/routes.js'
+import './support/kernel.mjs'
 
 function harness(t, navigate) {
   const home = mkdtempSync(join(tmpdir(), 'dnls-nav-'))
@@ -16,7 +17,7 @@ function harness(t, navigate) {
     return {}
   } }
   const session = { phase: 'running', history: [], httpBase: 'http://engine.invalid', cdp: client }
-  const route = routeSpecs({ session, env: { KITESURF_STATE: home } }).find(row => row.path.endsWith('/open'))
+  const route = routeSpecs({ session, env: { DNLS_STATE_ROOT: home } }).find(row => row.path.endsWith('/open'))
   const open = async url => {
     let body
     const res = { statusCode: 0, end(raw) { body = JSON.parse(raw) } }
@@ -33,7 +34,7 @@ test('/open normalizes a bare hostname and only records a completed navigation',
   assert.equal(result.body.url, 'https://archy.studio/')
   assert.equal(h.calls.find(row => row.method === 'Page.navigate').params.url, 'https://archy.studio/')
   assert.equal(h.session.history.length, 1)
-  assert.equal(JSON.parse(readFileSync(join(h.home, 'last-page.json'), 'utf8')).url, 'https://archy.studio/')
+  assert.equal(JSON.parse(readFileSync(join(h.home, 'kitesurf', 'kitesurf', 'last-page.json'), 'utf8')).url, 'https://archy.studio/')
 })
 
 test('/open propagates an actual CDP navigation error instead of returning ok:true', async t => {

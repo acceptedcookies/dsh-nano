@@ -1,4 +1,4 @@
-// ../../../../packages/dsh-host-route-guard/src/route-guard.js
+// ../packages/dsh-host-route-guard/src/route-guard.js
 var RouteGuardError = class extends Error {
   constructor(reason, detail = "") {
     super(detail ? `route-guard: ${reason} \u2014 ${detail}` : `route-guard: ${reason}`);

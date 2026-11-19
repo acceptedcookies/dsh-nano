@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createBrowserHistoryAdapter, navigateHistory } from '../src/host/browser-history-adapter.js'
+import { createBrowserHistoryAdapter, navigateHistory } from '../profiles/kitesurf/driver/history.js'
+// Loading the profile driver configures the CDP helpers the adapter borrows.
+import './support/kernel.mjs'
 
 const A = 'https://a.example/'
 const B = 'https://b.example/'
@@ -96,6 +98,7 @@ function cdpFixture({ currentIndex = 1, attached = true, onMove, actualUrl } = {
     calls.push({ method, params, sessionId, timeoutMs })
     if (method === 'Target.getTargets') return { targetInfos: [{ type: 'page', targetId: 'p', ...(attached ? { sessionId: 's' } : {}) }] }
     if (method === 'Target.attachToTarget') return { sessionId: 's' }
+    if (method === 'Page.enable') return {}
     if (method === 'Page.getNavigationHistory') return { currentIndex, entries: [{ id: 11, url: A, title: 'A' }, { id: 12, url: B }] }
     if (method === 'Page.navigateToHistoryEntry') { reached = { url: actualUrl || (params.entryId === 11 ? A : B), title: params.entryId === 11 ? 'A' : '' }; return onMove?.() || {} }
     if (method === 'Runtime.evaluate') return { result: { value: reached } }
@@ -107,7 +110,7 @@ function cdpFixture({ currentIndex = 1, attached = true, onMove, actualUrl } = {
 test('back uses the owning flattened CDP session and a 45-second navigation budget', async () => {
   const { client, calls } = cdpFixture()
   assert.deepEqual(await navigateHistory(client, -1), { moved: true, url: A, title: 'A', currentIndex: 0, entries: 2 })
-  assert.deepEqual(calls.map(row => row.method), ['Target.getTargets', 'Page.getNavigationHistory', 'Page.navigateToHistoryEntry', 'Runtime.evaluate'])
+  assert.deepEqual(calls.map(row => row.method).filter((m) => m !== 'Page.enable'), ['Target.getTargets', 'Page.getNavigationHistory', 'Page.navigateToHistoryEntry', 'Runtime.evaluate'])
   assert.deepEqual(calls.at(-2), { method: 'Page.navigateToHistoryEntry', params: { entryId: 11 }, sessionId: 's', timeoutMs: 45000 })
 })
 

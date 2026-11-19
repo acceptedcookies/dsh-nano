@@ -1,19 +1,38 @@
 /** Per-session CDP reader. The socket hangs off the session object, not a module global. */
-import { applyBrowserSettingsToPage } from './browser-settings-adapter.js'
+import { errorCode } from './error-catalog.js'
 
+/**
+ * The page-level session is cached on the client: this pin's TargetInfo rows
+ * do not echo an existing sessionId, so every call used to re-attach and leak
+ * a session per command. sessionId is connection-scoped, so the cache dies
+ * with the socket — resetClient/new client start empty again.
+ */
 export async function withPage(client, fn) {
-  const targets = await client.send('Target.getTargets')
-  const page = (targets.targetInfos || []).find((row) => row.type === 'page')
-  if (!page) {
-    const error = new Error('no document')
-    error.status = 502
-    error.errorId = 'kitesurf.elements.empty'
-    throw error
-  }
-  const attached = page.sessionId
-    ? { sessionId: page.sessionId }
-    : await client.send('Target.attachToTarget', { targetId: page.targetId, flatten: true })
-  return fn(attached.sessionId)
+  if (client.pageSessionId) return fn(client.pageSessionId)
+  // Single-flight the attach: two concurrent first calls would each create a
+  // session and the loser leaks one the engine still bills to this socket.
+  client.attachFlight = client.attachFlight || (async () => {
+    const targets = await client.send('Target.getTargets')
+    const page = (targets.targetInfos || []).find((row) => row.type === 'page')
+    if (!page) {
+      const error = new Error('no document')
+      error.status = 502
+      error.errorId = errorCode('elements.empty')
+      throw error
+    }
+    const attached = page.sessionId
+      ? { sessionId: page.sessionId }
+      : await client.send('Target.attachToTarget', { targetId: page.targetId, flatten: true })
+    client.pageSessionId = attached.sessionId
+    client.pageTargetId = page.targetId
+    // Page.enable at ATTACH time, not first navigation: frameNavigated must
+    // reach this socket even when the agent over the relay navigates first —
+    // otherwise stale @N refs survive into a document they weren't minted on.
+    try { await client.send('Page.enable', {}, attached.sessionId) } catch { /* best effort */ }
+    return attached.sessionId
+  })().finally(() => { client.attachFlight = null })
+  const sessionId = await client.attachFlight
+  return fn(sessionId)
 }
 
 export async function evaluatePage(client, expression) {
@@ -27,7 +46,7 @@ export async function evaluatePage(client, expression) {
       const detail = result.exceptionDetails
       const error = new Error(String(detail.exception?.description || detail.text || 'evaluate failed').slice(0, 240))
       error.status = 400
-      error.errorId = 'kitesurf.evaluate.exception'
+      error.errorId = errorCode('evaluate.exception')
       throw error
     }
     return result.result?.value
@@ -40,7 +59,7 @@ export async function readElements(client, options = {}) {
   if (!page) {
     const error = new Error('no document')
     error.status = 502
-    error.errorId = 'kitesurf.elements.empty'
+    error.errorId = errorCode('elements.empty')
     throw error
   }
   const attached = page.sessionId
@@ -55,13 +74,24 @@ export async function readElements(client, options = {}) {
   if (!root) {
     const error = new Error('no document')
     error.status = 502
-    error.errorId = 'kitesurf.elements.empty'
+    error.errorId = errorCode('elements.empty')
     throw error
   }
   const nodes = []
   const flatten = (node, level) => {
     if (!node || nodes.length >= 220) return
-    nodes.push({ nodeId: node.nodeId, level, tag: String(node.localName || node.nodeName || '').toLowerCase() })
+    const attrs = Array.isArray(node.attributes) ? node.attributes : []
+    const attrOf = (name) => { const at = attrs.indexOf(name); return at >= 0 ? attrs[at + 1] : undefined }
+    nodes.push({
+      nodeId: node.nodeId,
+      level,
+      tag: String(node.localName || node.nodeName || '').toLowerCase(),
+      // id/cls/children count are the precision handles the Elements panel
+      // searches by; a bare tag list was the audit's "no evidence" gap.
+      ...(attrOf('id') ? { id: String(attrOf('id')).slice(0, 80) } : {}),
+      ...(attrOf('class') ? { cls: String(attrOf('class')).slice(0, 120) } : {}),
+      childCount: (node.children || []).length,
+    })
     for (const child of node.children || []) flatten(child, level + 1)
   }
   flatten(root, 0)
@@ -89,9 +119,36 @@ export async function readElements(client, options = {}) {
 const navigationFlights = new WeakMap()
 const NAVIGATION_METHODS = new Set(['Page.navigate', 'Page.navigateToHistoryEntry'])
 
+/**
+ * The observable navigation ledger: what the pane should show instead of a
+ * bare local timer. `outcome` is settled once per intent; a timed-out caller
+ * leaves the intent 'in-flight' until the engine answers or the socket dies,
+ * because Page.stopLoading is a no-op at this pin — a timeout is NOT a cancel.
+ */
+export function navigationLedger(session) {
+  return session.navigation || null
+}
+
 /** Explicit navigations for one page must not race each other or be retried. */
 export function navigate(session, httpBase, url, connect = connectCdp, options = {}) {
-  return queueNavigation(session, () => navigateOnce(session, httpBase, url, connect, options.isCancelled || (() => false)), options)
+  session.navigation = {
+    intent: url,
+    sinceMs: Date.now(),
+    outcome: 'in-flight',
+    timedOut: false,
+    generation: (session.navigation?.generation || 0) + 1,
+  }
+  return queueNavigation(session, () => navigateOnce(session, httpBase, url, connect, options.isCancelled || (() => false), options.hooks || {}), options)
+    .then((value) => {
+      if (session.navigation?.intent === url) session.navigation = { ...session.navigation, outcome: 'committed', url: value?.url ?? url, settledAt: new Date().toISOString() }
+      return value
+    })
+    .catch((error) => {
+      if (session.navigation?.intent === url) {
+        session.navigation = { ...session.navigation, outcome: /timed out/i.test(error?.message || '') ? 'in-flight' : 'failed', timedOut: /timed out/i.test(error?.message || ''), errorId: error?.errorId || errorCode('navigate.failed'), settledAt: new Date().toISOString() }
+      }
+      throw error
+    })
 }
 
 export function queueNavigation(session, work, { isCancelled = () => false } = {}) {
@@ -109,51 +166,67 @@ export function queueNavigation(session, work, { isCancelled = () => false } = {
 }
 
 function assertNavigationActive(isCancelled) {
-  if (isCancelled()) throw Object.assign(new Error('Navigation request was cancelled'), { errorId: 'kitesurf.navigate.failed', status: 502 })
+  if (isCancelled()) throw Object.assign(new Error('Navigation request was cancelled'), { errorId: errorCode('navigate.failed'), status: 502 })
 }
 
-async function navigateOnce(session, httpBase, url, connect, isCancelled) {
+async function navigateOnce(session, httpBase, url, connect, isCancelled, hooks = {}) {
   const client = await ensureClient(session, httpBase, connect)
   const targets = await client.send('Target.getTargets')
   const page = (targets.targetInfos || []).find((row) => row.type === 'page')
   if (!page) {
     const error = new Error('no document')
     error.status = 502
-    error.errorId = 'kitesurf.elements.empty'
+    error.errorId = errorCode('elements.empty')
     throw error
   }
-  const attached = page.sessionId
-    ? { sessionId: page.sessionId }
-    : await client.send('Target.attachToTarget', { targetId: page.targetId, flatten: true })
-  await client.send('Page.enable', {}, attached.sessionId)
+  // Reuse the page session across navigations: the pinned engine lists no
+  // sessionId on getTargets, so re-attaching on every /open piled up sessions
+  // on the same target — one per navigation, forever.
+  let sessionId = client.pageSessionId
+  if (!sessionId || client.pageTargetId !== page.targetId) {
+    const attached = page.sessionId
+      ? { sessionId: page.sessionId }
+      : await client.send('Target.attachToTarget', { targetId: page.targetId, flatten: true })
+    sessionId = attached.sessionId
+    client.pageSessionId = sessionId
+    client.pageTargetId = page.targetId
+  }
+  await client.send('Page.enable', {}, sessionId)
   // Driver-owned settings replay on the attached page; never patch the pin
-  // or silently claim an override succeeded when its CDP call failed.
-  await applyBrowserSettingsToPage(session, client, attached.sessionId)
+  // or silently claim an override succeeded when its CDP call failed. The
+  // pre-navigation script (locale/geo/media shims) is refreshed HERE so the
+  // page's first script already sees the override.
+  if (typeof hooks.applySettings === 'function') await hooks.applySettings(session, client, sessionId)
   // Cancelling a queued HTTP request must not navigate later. Once sent,
   // however, a CDP navigation is left to finish on its existing connection.
   assertNavigationActive(isCancelled)
-  // The engine consumes ks_color_scheme before the page sees the URL and
-  // applies it as the document's prefers-color-scheme. It is a driver-level
-  // navigation parameter, not a modification to the pinned engine.
-  let navigateUrl = url
-  if (session.colorScheme === 'light' || session.colorScheme === 'dark') {
-    try {
-      const parsed = new URL(url)
-      parsed.searchParams.set('ks_color_scheme', session.colorScheme)
-      navigateUrl = parsed.toString()
-    } catch { /* an invalid URL is reported by Page.navigate */ }
-  }
-  const result = await client.send('Page.navigate', { url: navigateUrl }, attached.sessionId)
+  // Driver-level navigation parameters are applied by the profile driver; the
+  // kernel only knows that a URL may be decorated before it is sent.
+  const navigateUrl = typeof hooks.decorateUrl === 'function' ? hooks.decorateUrl(url, session) : url
+  const result = await client.send('Page.navigate', { url: navigateUrl }, sessionId)
   if (result.errorText) {
     const error = new Error(String(result.errorText).slice(0, 240))
-    error.status = 502
-    error.errorId = 'kitesurf.navigate.failed'
+    error.status = /egress.*timeout|timed out/i.test(String(result.errorText)) ? 504 : 502
+    // The engine reports site-side egress failure in-band; give it the
+    // documented navigate.egress id instead of flattening to failed.
+    error.errorId = /egress/i.test(String(result.errorText)) ? errorCode('navigate.egress') : errorCode('navigate.failed')
     throw error
   }
-  // Locale/geolocation/color-scheme JS overrides must run in the committed
-  // document, not in the previous about:blank.
-  try { await applyBrowserSettingsToPage(session, client, attached.sessionId) } catch { /* best effort */ }
-  return { ok: true, url }
+  // Page.navigate replying is not arrival: a dead JS entry can leave a
+  // non-blank shell. Verify the document the page actually committed to and
+  // report its truth — never a fabricated success off errorText alone.
+  const observed = await client.send('Runtime.evaluate', {
+    expression: '(()=>({url:location.href,title:document.title,readyState:document.readyState,root:!!document.documentElement,bodyBytes:(document.body&&document.body.innerText||"").length}))()',
+    returnByValue: true,
+  }, sessionId)
+  const landed = observed?.result?.value || null
+  if (landed) session.lastArrival = landed
+  // JS overrides also run in the committed document for the CURRENT page;
+  // the pre-nav script already covered the first scripts of the new document.
+  if (typeof hooks.applySettings === 'function') {
+    try { await hooks.applySettings(session, client, sessionId) } catch { /* best effort on the live doc */ }
+  }
+  return { ok: true, url: landed?.url || url }
 }
 
 /** A slow command is not a dead transport: navigation and capture do real work. */
@@ -178,7 +251,7 @@ export function resetClient(session) {
 }
 
 /**
- * Probe only idle sockets. Kitesurf can queue Browser.getVersion behind a
+ * Probe only idle sockets. A busy engine can queue Browser.getVersion behind a
  * navigation, so a missed deadline is not evidence that its socket died.
  * Only the transport's close/error handlers invalidate an existing client.
  */
@@ -275,6 +348,7 @@ export function recordNetworkEvent(session, message) {
       type: String(params.type || 'Other').slice(0, 32),
       at: new Date(startedAt).toISOString(),
       startedAt,
+      updatedAt: Date.now(),
       timestamp: Number(params.timestamp) || null,
       status: null,
       mimeType: '',
@@ -297,13 +371,18 @@ export function recordNetworkEvent(session, message) {
   }
   const row = networkRow(session, id)
   if (!row) return
+  // Every mutation moves updatedAt: the incremental feed keys off this, not
+  // startedAt, or a pending→failed transition would never reach the pane.
+  const touch = () => { row.updatedAt = Date.now() }
   if (message.method === 'Network.requestWillBeSentExtraInfo') {
     row.requestHeaders = { ...row.requestHeaders, ...networkHeaders(params.headers) }
+    touch()
     return
   }
   if (message.method === 'Network.responseReceivedExtraInfo') {
     row.responseHeaders = { ...row.responseHeaders, ...networkHeaders(params.headers) }
     if (Number(params.statusCode)) row.status = Number(params.statusCode)
+    touch()
     return
   }
   if (message.method === 'Network.responseReceived') {
@@ -316,22 +395,26 @@ export function recordNetworkEvent(session, message) {
     const remote = params.response?.remoteIPAddress
     row.remoteAddress = remote ? `${remote}${params.response.remotePort ? ':' + params.response.remotePort : ''}` : ''
     if (params.response?.fromDiskCache || params.response?.fromServiceWorker) row.cached = true
+    touch()
     return
   }
   if (message.method === 'Network.requestServedFromCache') {
     row.cached = true
+    touch()
     return
   }
   if (message.method === 'Network.loadingFinished') {
     const size = Number(params.encodedDataLength)
     if (Number.isFinite(size) && size >= 0) row.size = size
     row.durationMs = networkElapsed(row, params.timestamp)
+    touch()
     return
   }
   if (message.method === 'Network.loadingFailed') {
     row.failed = true
     row.error = String(params.errorText || 'failed').slice(0, 200)
     row.durationMs = networkElapsed(row, params.timestamp)
+    touch()
   }
 }
 
@@ -353,38 +436,125 @@ async function acquireClient(session, httpBase, connect) {
   if (session.cdp) resetClient(session)
   session.console = session.console || []
   session.network = session.network || []
-  const client = await connect(httpBase)
+  const client = connect.length >= 2 ? await connect(httpBase, {}) : await connect(httpBase)
   session.cdp = client
   client.probedAt = Date.now()
   if (typeof client.listen === 'function') {
     client.listen((message) => {
       const params = message.params || {}
+      // Page detach kills the cached page session — withPage's next call must
+      // re-attach instead of silently writing to a dead sessionId.
+      if (message.method === 'Target.detachedFromTarget' || message.method === 'Inspector.detached') {
+        const detached = params.sessionId
+        if (detached && detached === client.pageSessionId) { client.pageSessionId = null; client.pageTargetId = null }
+        return
+      }
+      // Relay mux broadcasts every shared-page event to every client. The host
+      // only records ITS page-session's events — an agent's attach would
+      // otherwise double every console/network row.
+      if (client.pageSessionId && message.sessionId && message.sessionId !== client.pageSessionId) {
+        // Browser-domain events (no sessionId) and our own session pass;
+        // foreign session rows are dropped here.
+        return
+      }
+      const pushConsole = (level, text, extra = {}) => {
+        session.consoleSeq = (session.consoleSeq || 0) + 1
+        session.console.push({
+          seq: session.consoleSeq,
+          level,
+          text: String(text ?? '').slice(0, 400),
+          source: extra.source || '',
+          url: String(extra.url || params.stackTrace?.callFrames?.[0]?.url || '').slice(0, 600),
+          at: new Date().toISOString(),
+        })
+        if (session.console.length > 400) session.console.shift()
+      }
       if (message.method === 'Runtime.consoleAPICalled') {
-        const text = (params.args || []).map((arg) => arg.value ?? arg.description ?? '').join(' ').slice(0, 200)
+        const text = (params.args || []).map((arg) => arg.value ?? arg.description ?? '').join(' ')
         const rawLevel = String(params.type || 'log').toLowerCase()
         const level = rawLevel === 'warning' ? 'warn' : rawLevel
-        session.console.push({ level, text, at: new Date().toISOString() })
-        if (session.console.length > 200) session.console.shift()
+        pushConsole(level, text, { source: 'console' })
+      } else if (message.method === 'Runtime.exceptionThrown') {
+        const detail = params.exceptionDetails || {}
+        const text = detail.exception?.description || detail.text || 'uncaught exception'
+        pushConsole('exception', text, { source: 'exception', url: detail.url || '' })
+      } else if (message.method === 'Log.entryAdded') {
+        const entry = params.entry || {}
+        pushConsole(String(entry.level || 'info').toLowerCase(), entry.text || '', { source: entry.source || 'log', url: entry.url || '' })
+      } else if (message.method === 'Page.frameNavigated' && !params.frame?.parentId) {
+        // A main-frame commit replaces the document — whether it came from
+        // /open, /history, an SPA pushState, or the agent over the relay. The
+        // @N table is page-generation-scoped: drop it here so a stale handle
+        // can never write into a different document.
+        session.pageGen = (session.pageGen || 0) + 1
+        session.refs = {}
+        session.lastSnapshot = null
+        if (params.frame?.url && params.frame.url !== 'about:blank') session.pageUrl = params.frame.url
       }
       recordNetworkEvent(session, message)
     })
+  }
+  // A late reply to Page.navigate still settles the intent — the caller's
+  // deadline expired but the engine finished. 'in-flight' must not stay the
+  // pane's forever-state.
+  client.onLateNavigation = (message, lateIntent) => {
+    const nav = session.navigation
+    if (!nav || nav.outcome === 'committed' || nav.outcome === 'failed') return
+    // A late reply settles only the intent it was issued for. Sequence beats
+    // substring: intent A='example.com/' timeout + B='example.com/page2' makes
+    // a prefix match settle A against B's page — wrong. Exact match or, when
+    // the intents differ, only a reply whose seq IS the ledger's wins.
+    const sent = String(lateIntent ?? '')
+    const want = String(nav.intent ?? '')
+    if (sent && want && sent !== want && !(sent.includes(want + '?') || sent.includes(want + '&'))) return
+    // Page.navigate's engine-level failure travels in result.errorText — a
+    // protocol-clean reply carrying it must NOT settle as committed.
+    const failed = Boolean(message?.error) || Boolean(message?.result?.errorText)
+    session.navigation = {
+      ...nav,
+      outcome: failed ? 'failed' : 'committed',
+      errorId: failed ? (message?.error?.errorId || errorCode('navigate.failed')) : nav.errorId,
+      error: message?.result?.errorText || message?.error?.message || nav.error,
+      settledAt: new Date().toISOString(),
+    }
   }
   try {
     // Bodies are not retained at the engine's zero default; ask for a bounded
     // buffer so the request detail panel can show a real Response tab.
     await client.send('Network.enable', { maxTotalBufferSize: 8 * 1024 * 1024, maxResourceBufferSize: 2 * 1024 * 1024 })
     await client.send('Runtime.enable')
+    // Log domain surfaces browser-side failures (module fetch, CSP) the page
+    // Runtime never raises as consoleAPICalled.
+    await client.send('Log.enable')
   } catch { /* page-session events still arrive after a later enable */ }
   return client
 }
 
 /** Optional transport and budgets are a local test seam, not an HTTP setting. */
-export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket, timeouts = {} } = {}) {
+export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket, timeouts = {}, relayUrl } = {}) {
   const budgets = { ...CDP_TIMEOUTS, ...timeouts }
-  const wsUrl = `${String(httpBase).replace(/^http/, 'ws')}/devtools/browser`
-  const ws = new Socket(wsUrl)
+  // The service's /cdp relay multiplexes every downstream client onto ONE
+  // upstream socket — the only way another client and this socket share the
+  // same page (the engine makes every connection own a private page). Connect
+  // to the relay first; a service without the relay falls back to the direct
+  // socket. The relay lives on the bridge port, declared as the engine port + 1
+  // by every profile that ships one.
+  const direct = `${String(httpBase).replace(/^http/, 'ws')}/devtools/browser`
+  const relay = relayUrl ?? `${String(httpBase).replace(/^http/, 'ws').replace(/:(\d+)(\/|$)/, (m, port, tail) => `:${Number(port) + 1}${tail}`)}/cdp`
+  const urls = relay ? [relay, direct] : [direct]
+  return tryUrls(urls, 0)
+
+  function tryUrls(list, index) {
+    return openSocket(list[index], index === 0 && list.length > 1 ? 'relay' : 'direct')
+      .catch((error) => (index + 1 < list.length ? tryUrls(list, index + 1) : Promise.reject(error)))
+  }
+
+  function openSocket(wsUrl, via) {
+    const ws = new Socket(wsUrl)
   let next = 1
   const navigations = new Set()
+  const navIntents = new Map() // command id -> url the caller asked for
+  let navigatingSince = 0
   const pending = new Map()
   const listeners = new Set()
   const rejectPending = (reason) => {
@@ -396,8 +566,17 @@ export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket,
     let message
     try { message = JSON.parse(String(event.data)) } catch { return }
     // A late navigation reply still proves the engine finished that command,
-    // even when its caller's deadline has already expired.
-    navigations.delete(message.id)
+    // even when its caller's deadline has already expired. Tell the ledger —
+    // 'in-flight' must not stay the pane's forever-state once the engine has
+    // actually answered.
+    if (navigations.delete(message.id)) {
+      const lateIntent = navIntents.get(message.id)
+      navIntents.delete(message.id)
+      if (navigations.size === 0) navigatingSince = 0
+      if (typeof client?.onLateNavigation === 'function' && !pending.has(message.id)) {
+        try { client.onLateNavigation(message, lateIntent) } catch { /* ledger is best-effort */ }
+      }
+    }
     if (typeof message.id === 'number' && pending.has(message.id)) {
       const settle = pending.get(message.id)
       pending.delete(message.id)
@@ -424,20 +603,30 @@ export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket,
   const client = {
     alive: true,
     probedAt: 0,
+    via,
+    pageSessionId: null,
     get navigating() { return navigations.size > 0 },
+    get navigatingSince() { return navigatingSince },
     send(method, params = {}, sessionId, timeoutMs = NAVIGATION_METHODS.has(method) ? budgets.navigate : method === 'Page.captureScreenshot' ? budgets.screenshot : budgets.call) {
       if (!client.alive) return Promise.reject(new Error('cdp socket closed'))
       const id = next
       next += 1
       const frame = { id, method, params }
       if (sessionId) frame.sessionId = sessionId
-      if (NAVIGATION_METHODS.has(method)) navigations.add(id)
+      if (NAVIGATION_METHODS.has(method)) {
+        navigations.add(id)
+        navigatingSince = Date.now()
+        // Record the intent per in-flight id so a LATE reply can be matched to
+        // the navigation it actually answers — an A-reply must not settle B.
+        navIntents.set(id, params?.url || params?.entryId || null)
+      }
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
           pending.delete(id)
           // The engine may still finish this work. A deadline is neither a
-          // transport failure nor permission to close its page-owning socket.
-          reject(new Error(`${method} timed out`))
+          // transport failure nor permission to close its page-owning socket;
+          // Page.stopLoading is a no-op at this pin, so nothing was cancelled.
+          reject(new Error(`${method} timed out (engine still executing)`))
         }, timeoutMs)
         pending.set(id, {
           resolve: (message) => {
@@ -465,4 +654,5 @@ export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket,
     },
   }
   return ready.then(() => client)
+  }
 }

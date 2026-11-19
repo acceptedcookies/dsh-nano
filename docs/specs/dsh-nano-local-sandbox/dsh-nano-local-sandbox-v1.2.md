@@ -592,6 +592,8 @@ DSH agent / DNT UI
 
 ## 9. 待 [业主] 决定的事项（不得由实现反推）
 
+> **登记状态**：Q1 / Q4 / Q5 / Q7 已由 [业主] 于 2026-11-19 按推荐冻结，唯一登记见 [qna/DNLS02-qna.md](qna/DNLS02-qna.md)（`T-O-19` / `T-O-20` / `T-O-21` / `T-O-22`）；kernel / driver 切割与错误命名空间见 `T-O-23` / `T-O-24`。Q2 / Q3 / Q6 / Q8 仍待决定。
+
 | ID | 决策 | 为什么必须先定 |
 |---|---|---|
 | Q1 | 是否批准 v1.2 的 **profile-scoped route 命名空间**（`/profiles/:profileId/instances/:instanceId/...`），还是保留 `/nano-local-sandbox/*` 作为兼容 facade | 影响 DNK/DNT 全部消费面与安全台账；属于公共合同变更 |

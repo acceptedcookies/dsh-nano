@@ -52,7 +52,7 @@
 | `/nano-local-sandbox/pick` | — | `dnls.pick` | http | exact |
 | `/nano-local-sandbox/edit` | — | `dnls.edit` | http | exact |
 | `/nano-local-sandbox/settings` | — | `dnls.settings` | http | exact |
-| `/nano-local-sandbox/kite` | — | `dnls.kite` | http | exact |
+| `/nano-local-sandbox/lifecycle` | — | `dnls.lifecycle` | http | exact |
 | `/nano-local-sandbox/console` | — | `dnls.console` | http | exact |
 | `/nano-local-sandbox/operations` | — | `dnls.operations` | http | exact |
 | `/nano-local-sandbox/diagnostics` | — | `dnls.diagnostics` | http | exact |

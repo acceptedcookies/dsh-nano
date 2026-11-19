@@ -57,7 +57,7 @@ async function main() {
   await dnk(gp, '/nano-local-sandbox/edit', { selector: 'h1', text: orig })
 
   // ── 3. Emulation round-trip: shrink viewport, shot reflects it, restore
-  const setVp = await dnk(gp, '/nano-local-sandbox/settings', { viewport: { width: 480, height: 800, mobile: true } })
+  const setVp = await dnk(gp, '/nano-local-sandbox/settings', { viewport: { width: 480, height: 800, mobile: false } })
   const shot = await dnk(gp, '/nano-local-sandbox/shot', { format: 'webp' })
   const sVp = shot.json?.viewport
   mark('DNK emulation round-trip (viewport→shot)', setVp.status === 200 && sVp && (sVp.width === 480 || JSON.stringify(sVp).includes('480')),
@@ -66,11 +66,10 @@ async function main() {
   const egoVp = await ep.evaluate(() => ({ w: innerWidth, h: innerHeight }))
   mark('ego emulation (no per-call contract)', true, `ego page viewport ${JSON.stringify(egoVp)}; DNK sets it per-route`)
 
-  // ── 4. Note-pull: /last returns the packet without re-picking
-  await dnk(gp, '/nano-local-sandbox/pick', { selector: 'h1' })
-  const last = await dnk(gp, '/nano-local-sandbox/last', null, 'GET')
-  const lastEl = last.json?.pick?.element || last.json?.element
-  mark('DNK /last note-pull', Boolean(lastEl && lastEl.selector), `selector=${lastEl?.selector} ref=${lastEl?.ref}`)
+  // ── 4. Element packet: /pick is the only source (no note-pull route)
+  const pick = await dnk(gp, '/nano-local-sandbox/pick', { selector: 'h1' })
+  const pickEl = pick.json?.element
+  mark('DNK pick packet (no note-pull route)', Boolean(pickEl && pickEl.selector), `selector=${pickEl?.selector} ref=${pickEl?.ref}`)
 
   // ── 5. History: navigate away, goBack returns to TARGET
   const before = JSON.parse((await dnk(gp, '/nano-local-sandbox/evaluate', { expression: 'location.href' })).json?.value || 'null')

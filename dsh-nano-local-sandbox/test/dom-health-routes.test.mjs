@@ -29,13 +29,13 @@ async function call(route, { method = 'GET', url = route.path, body } = {}) {
 }
 
 /** A CDP client stand-in: answers the three calls /dom makes. */
-function fakeClient({ url = 'https://example.com/p', html = '<html><head><title>t</title></head><body><script>x()</script><p onclick="y()">hi</p></body></html>' } = {}) {
+function fakeClient({ url = 'https://example.com/p', html = '<html><head><title>t</title></head><body><script>x()</script><p onclick="y()">hi</p></body></html>', version = { product: 'Chrome/145.0.0.0', revision: '@kitesurf' } } = {}) {
   return {
     async send(method) {
       if (method === 'Target.getTargets') return { targetInfos: [{ targetId: 't1', type: 'page', url }] }
       if (method === 'Target.attachToTarget') return { sessionId: 's1' }
       if (method === 'Runtime.evaluate') return { result: { value: { url, html } } }
-      if (method === 'Browser.getVersion') return { product: 'Kitesurf/0.0.1' }
+      if (method === 'Browser.getVersion') return version
       if (method === 'Page.captureScreenshot') return { data: 'AAAA' }
       return {}
     },
@@ -109,6 +109,24 @@ test('/selftest runs the 11 declared checks and names every one', async () => {
   assert.equal(result.body.passed, false)
   assert.equal(result.body.v, 1)
   assert.equal(result.body.snapshot?.v, 1)
+  const byId = Object.fromEntries(result.body.checks.map((row) => [row.id, row]))
+  assert.equal(byId['engine-version'].ok, true, 'the engine marker may sit in revision, not product')
+  assert.equal(byId['engine-version'].detail, 'Chrome/145.0.0.0 @kitesurf')
+  assert.deepEqual(byId['history-consistent'], { id: 'history-consistent', ok: true, detail: '1 entries' })
+  // Profile probes fill their declared slot; none may be left as "not run".
+  assert.equal(result.body.checks.some((row) => row.detail === 'not run'), false)
+})
+
+test('/selftest rejects a foreign engine version and a malformed history', async () => {
+  const routes = routesFor(depsWith({
+    session: { phase: 'running', history: [{ url: 'https://example.com/p' }, { at: 'x' }], containerName: 'kitesurf-dev', httpBase: 'http://127.0.0.1:8800' },
+    connect: async () => fakeClient({ version: { product: 'HeadlessChrome/145.0.0.0', revision: '@abc123' } }),
+  }))
+  const result = await call(routes['/nano-local-sandbox/selftest'])
+  const byId = Object.fromEntries(result.body.checks.map((row) => [row.id, row]))
+  assert.equal(byId['engine-version'].ok, false)
+  assert.equal(byId['engine-version'].detail, 'unavailable')
+  assert.deepEqual(byId['history-consistent'], { id: 'history-consistent', ok: false, detail: '1 of 2 entries without url' })
 })
 
 test('/diagnostics ships a human report and only includes the catalog on request', async () => {
@@ -116,7 +134,8 @@ test('/diagnostics ships a human report and only includes the catalog on request
   const plain = await call(routes['/nano-local-sandbox/diagnostics'])
   assert.equal(plain.status, 200)
   assert.equal(typeof plain.body.text, 'string')
-  assert.equal(plain.body.text.includes('Kitesurf 环境诊断'), true)
+  assert.equal(plain.body.text.includes('环境诊断'), true)
+  assert.equal(/^kitesurf/i.test(plain.body.text), false, 'the kernel report opens with no profile business')
   assert.equal(Array.isArray(plain.body.summary), true)
   assert.equal(plain.body.summary.length, 5)
   assert.equal(plain.body.errorCatalog, undefined)

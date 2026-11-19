@@ -172,7 +172,9 @@ test('term.session.create does not create audit.jsonl', async () => {
   const auditPath = join(dir, 'term.audit')
   const mcp = createMcpHandler({
     registry: {
-      async create() { return { id: 't1', addr: 't1', lane: 'local', title: 't' } },
+      // The real registry record carries info()/sockets — the fixture must
+      // too, or create's ctx read throws before attach is ever built.
+      async create() { return { id: 't1', addr: 't1', lane: 'local', title: 't', labels: {}, sockets: new Set(), info() { return { ctx: 'test' } } } },
       resolve() { return null },
       list() { return [] },
     },

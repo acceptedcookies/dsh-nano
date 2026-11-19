@@ -1,29 +1,67 @@
 import { spawn, execFile } from 'node:child_process'
 import { assertPublicSpec, capabilityReport } from './backend.js'
+import { errorCode } from './error-catalog.js'
 
-function run(io, args) {
+/**
+ * Container-CLI errors need shape, not just a stderr blob. Classify into
+ * not-found / not-running / conflict / timeout / generic so callers (and the
+ * audit trail) can tell "container missing" from "daemon broken" — an inspect
+ * that fails used to be indistinguishable from a missing container.
+ */
+function cliError(args, { code, stderr = '', cause = null, timedOut = false } = {}) {
+  const verb = args[0] || 'cli'
+  const name = args[args.length - 1] || ''
+  // execFile surfaces the child's stderr on error.cause.message (wrapped as
+  // "Command failed: …"), not always on error.stderr — read both so kind
+  // classification and messages see the real CLI output.
+  const raw = stderr || cause?.stderr || cause?.message || ''
+  const text = String(raw).split('\n').filter((line) => line && !/^Command failed:/.test(line)).join(' ').trim()
+  let kind = 'failed'
+  if (timedOut) kind = 'timeout'
+  else if (/no such container|not found|does not exist/i.test(text)) kind = 'not-found'
+  else if (/not running|is stopped|already stopped/i.test(text)) kind = 'not-running'
+  else if (/already exists|in use|conflict|address already/i.test(text)) kind = 'conflict'
+  const error = new Error(`container ${verb} ${name}: ${timedOut ? 'timed out' : (text || `exit ${code}`)}`)
+  error.code = code
+  error.cliKind = kind
+  error.errorId = timedOut ? errorCode('backend.timeout') : errorCode('backend.cli')
+  if (cause) error.cause = cause
+  return error
+}
+
+const CLI_TIMEOUT_MS = Number(process.env.DNLS_CLI_TIMEOUT_MS || 15000)
+
+function run(io, args, { timeoutMs = CLI_TIMEOUT_MS } = {}) {
   io.calls.spawn += 1
   if (io.spawn) return io.spawn('container', args)
   return new Promise((resolve, reject) => {
     const child = spawn('container', args, { stdio: 'pipe' })
     let stderr = ''
+    const timer = setTimeout(() => {
+      try { child.kill('SIGKILL') } catch { /* gone */ }
+      reject(cliError(args, { timedOut: true }))
+    }, timeoutMs)
     child.stderr?.on('data', (chunk) => { stderr += chunk })
-    child.on('error', reject)
+    child.on('error', (cause) => { clearTimeout(timer); reject(cliError(args, { cause })) })
     child.on('close', (code) => {
+      clearTimeout(timer)
       if (code === 0) resolve({ code })
-      else reject(new Error(stderr || `container exit ${code}`))
+      else reject(cliError(args, { code, stderr }))
     })
   })
 }
 
-function runFile(io, args) {
+function runFile(io, args, { timeoutMs = CLI_TIMEOUT_MS } = {}) {
   io.calls.spawn += 1
   if (io.execFile) return io.execFile('container', args)
   return new Promise((resolve, reject) => {
-    execFile('container', args, { encoding: 'utf8' }, (error, stdout) => {
-      if (error) reject(error)
+    const child = execFile('container', args, { encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL' }, (error, stdout) => {
+      if (error) {
+        reject(cliError(args, { code: error.code, stderr: error.stderr, cause: error.killed ? null : error, timedOut: error.killed === true }))
+      }
       else resolve(stdout)
     })
+    void child
   })
 }
 
@@ -80,10 +118,16 @@ export function createAppleBackend(spec = {}, io = {}) {
       await runFile(bound, ['image', 'inspect', tag])
       return { ok: true, image: tag }
     },
-    /** Image creation remains privileged here, after host confinement wraps argv. */
-    async build({ ctx, contextDir, dockerfile, image, base }) {
+    /**
+     * Image creation remains privileged here, after host confinement wraps argv.
+     * `buildArgs` are the profile Dockerfile's own ARG names/values; the kernel
+     * only passes them through.
+     */
+    async build({ ctx, contextDir, dockerfile, image, buildArgs = [] }) {
       if (typeof ctx?.sandbox?.confine !== 'function') throw new Error('ctx.sandbox.confine is required')
-      const args = ['container', 'build', '--tag', image, '--file', dockerfile, '--build-arg', `KITESURF_BASE_IMAGE=${base}`, contextDir]
+      const args = ['container', 'build', '--tag', image, '--file', dockerfile]
+      for (const arg of buildArgs) args.push('--build-arg', String(arg))
+      args.push(contextDir)
       const confined = await ctx.sandbox.confine(args)
       if (!Array.isArray(confined?.argv) || confined.argv.length === 0) throw new Error('sandbox did not return a confined build command')
       return new Promise((resolve, reject) => {
@@ -127,8 +171,15 @@ export function createAppleBackend(spec = {}, io = {}) {
     },
     async inspect(name) {
       calls.inspect += 1
-      const stdout = await runFile(bound, ['inspect', name])
-      return { raw: stdout ?? '' }
+      try {
+        const stdout = await runFile(bound, ['inspect', name])
+        return { raw: stdout ?? '' }
+      } catch (error) {
+        // A missing container is a state, not a fault: returning null keeps
+        // "absent → create" distinct from "daemon broken → blocked" upstream.
+        if (error?.cliKind === 'not-found' || /not found|no such container/i.test(error?.message || '')) return null
+        throw error
+      }
     },
     async exec(name, argv) {
       calls.exec += 1

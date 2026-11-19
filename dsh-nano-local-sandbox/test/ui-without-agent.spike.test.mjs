@@ -3,7 +3,8 @@ import test from 'node:test'
 import { registerRoutes } from '../lib/route-guard.js'
 import { BINDING_TABLE } from '../lib/bindings.js'
 import { routeSpecs } from '../src/host/routes.js'
-import { ERROR_CATALOG } from '../src/host/error-catalog.js'
+import { errorCatalog } from '../src/host/error-catalog.js'
+import './support/kernel.mjs'
 
 function host(rejection) {
   const registered = []
@@ -46,5 +47,5 @@ test('a shot with no agent is not 200, and rejection runs before the handler', a
   await live.handler({ method: 'POST' }, okRes)
   assert.notEqual(okRes.statusCode, 200)
   const parsed = JSON.parse(body)
-  assert.equal(ERROR_CATALOG.some((row) => row.example === parsed.errorId || new RegExp(row.match).test(parsed.errorId)), true)
+  assert.equal(errorCatalog().some((row) => row.example === parsed.errorId || new RegExp(row.match).test(parsed.errorId)), true)
 })

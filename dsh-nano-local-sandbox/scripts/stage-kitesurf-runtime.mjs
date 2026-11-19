@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto'
 import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { loadProfile } from '../src/host/profile-registry.js'
-import { KITESURF_RUNTIME_FILES } from '../src/host/kitesurf-runtime.js'
+import { KITESURF_RUNTIME_FILES } from '../profiles/kitesurf/driver/runtime.js'
 
 const argv = process.argv.slice(2)
 const option = name => { const i = argv.indexOf(name); return i < 0 ? undefined : argv[i + 1] }

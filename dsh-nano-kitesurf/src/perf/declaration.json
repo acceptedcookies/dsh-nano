@@ -8,9 +8,7 @@
     ],
     "tracks": [],
     "usage": [],
-    "hostSpans": [
-      "kite-warmup"
-    ]
+    "hostSpans": []
   },
   "buckets": [],
   "contract": [],

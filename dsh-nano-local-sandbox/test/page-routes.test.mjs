@@ -34,7 +34,7 @@ test('pick, targets, network and har read the session CDP client', async () => {
       listen() { return () => {} },
       async send(method) {
         if (method === 'Target.getTargets') return { targetInfos: [{ type: 'page', url: 'https://example.com/', sessionId: 's' }] }
-        if (method === 'Runtime.evaluate') return { result: { value: { ok: true, tag: 'p', text: 'Hello' } } }
+        if (method === 'Runtime.evaluate') return { result: { value: { ok: true, element: { tag: 'p', text: 'Hello' }, url: 'https://example.com/', scrollY: 0 } } }
         return {}
       },
     },
@@ -45,7 +45,7 @@ test('pick, targets, network and har read the session CDP client', async () => {
   const network = await call(routes['/nano-local-sandbox/network'])
   const har = await call(routes['/nano-local-sandbox/har'])
   const operations = await call(routes['/nano-local-sandbox/operations'])
-  assert.equal(pick.body.tag, 'p')
+  assert.equal(pick.body.pick?.elements?.[0]?.tag, 'p')
   assert.equal(targets.body.targetInfos[0].url, 'https://example.com/')
   assert.equal(network.body.entries[0].status, 200)
   assert.equal(har.body.log.entries.length, 1)

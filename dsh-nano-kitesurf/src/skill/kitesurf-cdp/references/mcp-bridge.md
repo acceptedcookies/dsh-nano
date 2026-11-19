@@ -1,16 +1,18 @@
 # mcp-bridge — `sandbox.*` 原生工具与桥健康
 
-`ws://127.0.0.1:<mcpPort>/mcp` 是容器内 WebSocket→`agent-browser mcp` 桥，不是 HTTP API。`kite.mcpPort` 只在新容器创建时变，`configure` 单独不改它。
+`ws://<host>:<lifecycle.mcpPort>/mcp` 是容器内 WebSocket→`agent-browser mcp` 桥，不是 HTTP API。端口由实例 registry 返回，pane 不能手改。
 
 ## 帧与握手
 
 MCP-over-WS：**每个文本帧一条完整 JSON-RPC**，无 `\n` 终止符（帧内 `\n` 仅兼容批量）。`agent-browser mcp` 模式直接对 newline-delimited initialize 应答。裸 JSON-RPC 走 WS 时按帧发，不要依赖尾部 `\n`。
 
-`GET http://127.0.0.1:<mcpPort>/health`（plain HTTP，Origin allowlisted）报 `{ ok, mcp, conns, accepted, rejected, uptimeMs, control, diagnosticsPushedAt }`——把 agent 指到 `ws://…/mcp` 前先验它。
+`GET http://<host>:<lifecycle.mcpPort>/health`（plain HTTP，Origin allowlisted）报 `{ ok, mcp, conns, accepted, rejected, uptimeMs, control, diagnosticsPushedAt }`——把 agent 指到 `ws://…/mcp` 前先验它。
 
 ## `sandbox.*` 原生工具（33 个 `agent_browser_*` 之外）
 
-宿主每 30s（失败时立即）把诊断快照推给桥，工具读这份推送。
+宿主每 15s（失败时立即）把诊断快照推给桥，工具读这份推送。
+
+> **面划分（真源）**：WS 桥暴露读/诊断 + 写锁共 15 个 `sandbox.*`（`sandbox.control` 的 status/claim/release/takeover 都在 WS 上）。**没有的是容器/实例管理面**——`sandbox.instance.ensure`、`sandbox.profile.*`、`sandbox.state`、`sandbox.evaluate`、`sandbox.settings` 等宿主 HTTP MCP 工具 **不在 WS 上**，要走宿主的鉴权 HTTP 路由 `/nano-local-sandbox/*`（或宿主 HTTP MCP）。同名工具语义一致（读同一份推送文档），目录大小不同是刻意的：WS agent 没有容器/实例管理权。写页面行为统一走 `agent_browser_*`（click/type/navigate/eval/…），受写锁约束；`sandbox.interact` 只在写锁判定里出现，不是可调用工具。
 
 | 工具 | 作用 |
 |---|---|
@@ -22,12 +24,11 @@ MCP-over-WS：**每个文本帧一条完整 JSON-RPC**，无 `\n` 终止符（�
 | `sandbox.history` | 持久浏览历史最近 30 条 |
 | `sandbox.dom` | 最后抓取的 DOM 文本（推送，非 live） |
 | `sandbox.elements` | 最后抓取的元素列表（推送） |
-| `sandbox.interact` | 页内交互（click/type/scroll…，写所有权持有者） |
 | `sandbox.snapshot` | a11y-lite 树 + `@N` ref 表 + treePreview（推送，`liveSnapshot`/`resolveRef` 指 host 路由） |
 | `sandbox.control` | 写所有权 `{action:status|claim|release|takeover}`（`self={connId,clientName}`） |
 | `sandbox.selftest` | 引擎健康自检结果 |
 | `sandbox.network` | 网络生命周期最近项 |
-| `sandbox.ports` | 端口报告：configured/effective/container.published/free/lastRepair |
+| `sandbox.ports` | 端口报告：effective/container.published/free |
 | `sandbox.recovery_plan` | 分步自愈计划 |
 | `sandbox.bridge_health` | 桥自身 liveness |
 
@@ -35,9 +36,15 @@ MCP-over-WS：**每个文本帧一条完整 JSON-RPC**，无 `\n` 终止符（�
 
 MCP 的 `-32601/-32602/-32700` 是 JSON-RPC 协议错，`kitesurf.*` 是业务错，互不等价。
 
+## 实例与会话（`sandbox.instance.*`）
+
+`sandbox.instance.ensure(profileId, sessionId, policy)` 返回 per-session 的 `instanceId` 与 `policyFingerprint`。物理容器仍是 env 容器：多个 session 实例记录可以挂在同一 env 容器上（`attached` 计数），页面、CDP socket 与 history 在同一 env 容器内共享——实例记录按 session 隔离，不等于页面隔离。`profile.list` 的 `scope: session` 指记录与策略指纹的隔离；每 session 独立容器不在当前合同内。
+
 ## 写所有权（`sandbox.control`）
 
-人机共存时同一页面只能一个写者。`claim` 认领、`release` 释放、`status` 读当前 writer。锁是**粘性**的：首写/`claim` 认领，`release`/断线才放；`B` 在非 owner 时写被 `kitesurf.control.busy` 拒（**拒非排队**），`B release` 不偷锁。
+人机共存时同一页面只允许**一个 MCP 写者**。`claim` 认领、`release` 释放、`status` 读当前 writer。锁是**粘性**的：首写/`claim` 认领，`release`/断线才放；`B` 在非 owner 时写被 `kitesurf.control.busy` 拒（**拒非排队**），`B release` 不偷锁。
+
+锁的域只是 MCP/桥连接。pane（人）的 REST 写（`/open`、`/edit`、`/interact` 等）代表人，**不受写锁约束**，也没有 REST 侧 busy/held 拦截。
 
 ## 人工接管（humanHold / takeover）— HITL
 
@@ -48,5 +55,5 @@ MCP 的 `-32601/-32602/-32700` 是 JSON-RPC 协议错，`kitesurf.*` 是业务�
 - **竞态**：hold 置位与在飞写入不互斥——在飞的 `tools/call` 正常完成（写入已发生），**下一次**写才被拒；`humanHold` 不绑定 socket，持锁 writer 断线 hold 仍在。
 - **re-take**：`release` 后 hold 清除，agent 下次写自动重争 writer（粘性锁照旧）。
 - `lastAction` = 最后一次**放行**的写 `{tool,owner,at,ok}`；held/busy 的拒绝**不**记 `lastAction`（记了会骗 pane 有动作）。pane 轮询渲染为动作 toast。
-- `POST http://127.0.0.1:<mcpPort>/control` 接受 `{action,owner?,note?}`，GET 返回同 `sandbox.control status`；`/health` 里 `control.{writer,owner,humanHold,lastAction,lastCallAt}`。
+- `POST http://<host>:<lifecycle.mcpPort>/control` 接受 `{action,owner?,note?}`，GET 返回同 `sandbox.control status`；`/health` 里 `control.{writer,owner,humanHold,lastAction,lastCallAt}`。
 - agent 收到 `kitesurf.control.held`：**停写**，把控制权交还人；不要 retry 不要 `claim`——`claim` 在 hold 下被 `kitesurf.control.held` 拒（owner ≠ 你）。等 `status` 里 `humanHold.active:false` 再继续。

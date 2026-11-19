@@ -27,7 +27,7 @@ test('an idle session adopts a running container inspect', async () => {
   registerRoutes(ctx, routeSpecs({
     session,
     httpProbe: () => false,
-    env: { KITESURF_STATE: '/nonexistent/dnls-test-state' },
+    env: { DNLS_STATE_ROOT: '/nonexistent/dnls-test-state' },
     connect: async () => ({ alive: true, probedAt: Date.now(), async send(method) {
       if (method === 'Target.getTargets') return { targetInfos: [{ type: 'page', targetId: 'p', sessionId: 's', url: 'about:blank' }] }
       return {}
@@ -39,7 +39,7 @@ test('an idle session adopts a running container inspect', async () => {
   const res = { statusCode: 0, end(text) { raw = text } }
   await status.handler({ method: 'GET', url: '/nano-local-sandbox/status' }, res)
   const body = JSON.parse(raw)
-  assert.equal(body.kite.phase, 'running')
+  assert.equal(body.lifecycle.phase, 'running')
   assert.equal(body.httpBase, 'http://127.0.0.1:8798')
   assert.equal(session.phase, 'running')
 })

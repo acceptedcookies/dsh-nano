@@ -25,7 +25,7 @@ export const PUBLIC_KEYS = Object.freeze([
   'identity',
 ])
 
-const APPLE_NOUNS = new Set(['container', 'vmnet', 'virtiofs', 'kitesurf'])
+const APPLE_NOUNS = new Set(['container', 'vmnet', 'virtiofs'])
 
 export function assertPublicSpec(spec) {
   if (spec == null) return

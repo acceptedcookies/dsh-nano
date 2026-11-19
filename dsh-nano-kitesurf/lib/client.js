@@ -39,18 +39,18 @@ var __kitesurfExport = (() => {
   ));
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // ../../../../packages/dsh-nano-ui/src/version.js
+  // ../packages/dsh-nano-ui/src/version.js
   var VERSION;
   var init_version = __esm({
-    "../../../../packages/dsh-nano-ui/src/version.js"() {
+    "../packages/dsh-nano-ui/src/version.js"() {
       VERSION = "0.2.1";
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/layers.js
+  // ../packages/dsh-nano-ui/src/layers.js
   var NANO_LAYER, NANO_SPACE, kebab, LAYER_CSS;
   var init_layers = __esm({
-    "../../../../packages/dsh-nano-ui/src/layers.js"() {
+    "../packages/dsh-nano-ui/src/layers.js"() {
       NANO_LAYER = Object.freeze({
         shellSlot: 20,
         hostModal: 1e3,
@@ -76,10 +76,10 @@ ${NANO_SPACE.map((value, index) => `  --nano-space-${index + 1}: ${value}px;`).j
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/styles.js
+  // ../packages/dsh-nano-ui/src/styles.js
   var NANO_STYLES;
   var init_styles = __esm({
-    "../../../../packages/dsh-nano-ui/src/styles.js"() {
+    "../packages/dsh-nano-ui/src/styles.js"() {
       init_layers();
       init_version();
       NANO_STYLES = `/* dsh-nano-ui@${VERSION} */
@@ -161,10 +161,10 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/catalog/tokens.json
+  // ../packages/dsh-nano-ui/catalog/tokens.json
   var schemes;
   var init_tokens = __esm({
-    "../../../../packages/dsh-nano-ui/catalog/tokens.json"() {
+    "../packages/dsh-nano-ui/catalog/tokens.json"() {
       schemes = {
         dark: {
           "--dsw-alias-bg-base": "#151517",
@@ -412,7 +412,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/theme-scheme.js
+  // ../packages/dsh-nano-ui/src/theme-scheme.js
   function hostScheme(theme) {
     try {
       const snapshot = theme?.getTheme?.();
@@ -433,11 +433,11 @@ ${LAYER_CSS}
     return Object.entries(table);
   }
   var init_theme_scheme = __esm({
-    "../../../../packages/dsh-nano-ui/src/theme-scheme.js"() {
+    "../packages/dsh-nano-ui/src/theme-scheme.js"() {
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/theme.js
+  // ../packages/dsh-nano-ui/src/theme.js
   function createThemeScope({ theme, element, pin, subscribe }) {
     if (!(element instanceof HTMLElement)) throw new TypeError("dsh-nano-ui: createThemeScope needs an owner element");
     let current = pin;
@@ -477,16 +477,16 @@ ${LAYER_CSS}
     };
   }
   var init_theme = __esm({
-    "../../../../packages/dsh-nano-ui/src/theme.js"() {
+    "../packages/dsh-nano-ui/src/theme.js"() {
       init_tokens();
       init_theme_scheme();
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/catalog/icons.json
+  // ../packages/dsh-nano-ui/catalog/icons.json
   var sprite;
   var init_icons = __esm({
-    "../../../../packages/dsh-nano-ui/catalog/icons.json"() {
+    "../packages/dsh-nano-ui/catalog/icons.json"() {
       sprite = {
         from: "rc.3",
         glyphs: [
@@ -600,7 +600,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/icon-markup.js
+  // ../packages/dsh-nano-ui/src/icon-markup.js
   function spriteMarkup(glyph, weight = "regular", size = 16) {
     if (typeof glyph !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(glyph)) throw new TypeError(`dsh-nano-ui: bad sprite glyph "${glyph}"`);
     if (!SPRITE_WEIGHTS.includes(weight)) throw new TypeError(`dsh-nano-ui: bad sprite weight "${weight}"`);
@@ -612,12 +612,12 @@ ${LAYER_CSS}
   }
   var SPRITE_WEIGHTS;
   var init_icon_markup = __esm({
-    "../../../../packages/dsh-nano-ui/src/icon-markup.js"() {
+    "../packages/dsh-nano-ui/src/icon-markup.js"() {
       SPRITE_WEIGHTS = Object.freeze(["regular", "medium"]);
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/icons.js
+  // ../packages/dsh-nano-ui/src/icons.js
   function icon(name) {
     const component = /^Icon[A-Z]/.test(name) ? primitives[name] : void 0;
     if (component === void 0) throw new Error(`dsh-nano-ui: the host exports no icon "${name}"`);
@@ -632,7 +632,7 @@ ${LAYER_CSS}
   }
   var primitives, warned;
   var init_icons2 = __esm({
-    "../../../../packages/dsh-nano-ui/src/icons.js"() {
+    "../packages/dsh-nano-ui/src/icons.js"() {
       primitives = __toESM(__require("@deepseek-ai/dsh-client-ui-primitives"), 1);
       init_icons();
       init_icon_markup();
@@ -640,7 +640,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/dialog.js
+  // ../packages/dsh-nano-ui/src/dialog.js
   function preset(list, value) {
     if (typeof value !== "number" || !Number.isFinite(value)) return void 0;
     return list.find((step) => step >= value) ?? list[list.length - 1];
@@ -684,7 +684,7 @@ ${LAYER_CSS}
   }
   var import_react, import_dsh_client_ui_primitives, h, DIALOG_WIDTHS, DIALOG_HEIGHTS, DIALOG_CHROME;
   var init_dialog = __esm({
-    "../../../../packages/dsh-nano-ui/src/dialog.js"() {
+    "../packages/dsh-nano-ui/src/dialog.js"() {
       import_react = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives = __require("@deepseek-ai/dsh-client-ui-primitives");
       h = import_react.default.createElement;
@@ -694,7 +694,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/overlay.js
+  // ../packages/dsh-nano-ui/src/overlay.js
   function assertContainer(container, who) {
     if (!(container instanceof HTMLElement) || !container.isConnected) {
       throw new Error(`dsh-nano-ui: ${who} needs a container element attached to the document; overlays never fall back to document.body`);
@@ -747,7 +747,7 @@ ${LAYER_CSS}
   }
   var import_react2, import_react_dom, import_dsh_client_ui_primitives2, h2;
   var init_overlay = __esm({
-    "../../../../packages/dsh-nano-ui/src/overlay.js"() {
+    "../packages/dsh-nano-ui/src/overlay.js"() {
       import_react2 = __toESM(__require("react"), 1);
       import_react_dom = __require("react-dom");
       import_dsh_client_ui_primitives2 = __require("@deepseek-ai/dsh-client-ui-primitives");
@@ -756,7 +756,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/menu-model.js
+  // ../packages/dsh-nano-ui/src/menu-model.js
   function menuHeight(items) {
     let height = 8;
     for (const item of items) height += item?.separator === true ? 9 : 28;
@@ -772,12 +772,12 @@ ${LAYER_CSS}
   }
   var MENU_CAPS;
   var init_menu_model = __esm({
-    "../../../../packages/dsh-nano-ui/src/menu-model.js"() {
+    "../packages/dsh-nano-ui/src/menu-model.js"() {
       MENU_CAPS = Object.freeze([120, 160, 200, 240, 320, 400, 480]);
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/menu.js
+  // ../packages/dsh-nano-ui/src/menu.js
   function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, portal = true, direction }) {
     if (menu === null || menu === void 0 || actions.length === 0) return null;
     const onSelect = (id) => {
@@ -807,7 +807,7 @@ ${LAYER_CSS}
   }
   var import_react3, import_dsh_client_ui_primitives3, h3;
   var init_menu = __esm({
-    "../../../../packages/dsh-nano-ui/src/menu.js"() {
+    "../packages/dsh-nano-ui/src/menu.js"() {
       import_react3 = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives3 = __require("@deepseek-ai/dsh-client-ui-primitives");
       init_menu_model();
@@ -815,14 +815,14 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/toast.js
+  // ../packages/dsh-nano-ui/src/toast.js
   function NanoToast({ text, anchor, tone, icon: icon2, actions, holdMs, onDone }) {
     if (text === void 0 || text === null || text === "") return null;
     return import_react4.default.createElement(import_dsh_client_ui_primitives4.Toast, { key: String(text), text, anchor: anchor ?? void 0, tone, icon: icon2, actions, holdMs, onDone: onDone ?? noop });
   }
   var import_react4, import_dsh_client_ui_primitives4, noop;
   var init_toast = __esm({
-    "../../../../packages/dsh-nano-ui/src/toast.js"() {
+    "../packages/dsh-nano-ui/src/toast.js"() {
       import_react4 = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives4 = __require("@deepseek-ai/dsh-client-ui-primitives");
       noop = () => {
@@ -830,7 +830,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/mount.js
+  // ../packages/dsh-nano-ui/src/mount.js
   function mountNano(el, Component, props = {}) {
     if (!(el instanceof Element)) throw new TypeError("dsh-nano-ui: mountNano needs an element");
     const root = (0, import_client.createRoot)(el);
@@ -852,13 +852,13 @@ ${LAYER_CSS}
   }
   var import_react5, import_client;
   var init_mount = __esm({
-    "../../../../packages/dsh-nano-ui/src/mount.js"() {
+    "../packages/dsh-nano-ui/src/mount.js"() {
       import_react5 = __toESM(__require("react"), 1);
       import_client = __require("react-dom/client");
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/tabs.js
+  // ../packages/dsh-nano-ui/src/tabs.js
   function nanoTabs({ items, value, onChange, label }) {
     const id = `nano-seg-${++seq}`;
     const el = document.createElement("div");
@@ -909,7 +909,7 @@ ${LAYER_CSS}
   }
   var import_react6, import_dsh_client_ui_primitives5, h4, seq;
   var init_tabs = __esm({
-    "../../../../packages/dsh-nano-ui/src/tabs.js"() {
+    "../packages/dsh-nano-ui/src/tabs.js"() {
       import_react6 = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives5 = __require("@deepseek-ai/dsh-client-ui-primitives");
       init_mount();
@@ -918,7 +918,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/dom.js
+  // ../packages/dsh-nano-ui/src/dom.js
   function mount(parent) {
     const host = document.createElement("div");
     parent.appendChild(host);
@@ -979,7 +979,7 @@ ${LAYER_CSS}
   }
   var import_react7, import_client2, HOST_MENU_GAP;
   var init_dom = __esm({
-    "../../../../packages/dsh-nano-ui/src/dom.js"() {
+    "../packages/dsh-nano-ui/src/dom.js"() {
       import_react7 = __toESM(__require("react"), 1);
       import_client2 = __require("react-dom/client");
       init_dialog();
@@ -989,7 +989,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/button.js
+  // ../packages/dsh-nano-ui/src/button.js
   function IconButton({ icon: icon2, variant = "ghost", size = "sm", ...rest }) {
     const label = rest["aria-label"];
     if (typeof label !== "string" || label.trim() === "") throw new TypeError("dsh-nano-ui: IconButton needs an aria-label");
@@ -997,24 +997,24 @@ ${LAYER_CSS}
   }
   var import_react8, import_dsh_client_ui_primitives6;
   var init_button = __esm({
-    "../../../../packages/dsh-nano-ui/src/button.js"() {
+    "../packages/dsh-nano-ui/src/button.js"() {
       import_react8 = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives6 = __require("@deepseek-ai/dsh-client-ui-primitives");
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/toolbar.js
+  // ../packages/dsh-nano-ui/src/toolbar.js
   function Toolbar({ label, className, children }) {
     return import_react9.default.createElement("div", { role: "toolbar", "aria-label": label, className: ["nano-toolbar", className ?? ""].filter(Boolean).join(" ") }, children);
   }
   var import_react9;
   var init_toolbar = __esm({
-    "../../../../packages/dsh-nano-ui/src/toolbar.js"() {
+    "../packages/dsh-nano-ui/src/toolbar.js"() {
       import_react9 = __toESM(__require("react"), 1);
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/empty.js
+  // ../packages/dsh-nano-ui/src/empty.js
   function EmptyState({ icon: icon2, title, description, action, className }) {
     return h5(
       "div",
@@ -1027,13 +1027,13 @@ ${LAYER_CSS}
   }
   var import_react10, h5;
   var init_empty = __esm({
-    "../../../../packages/dsh-nano-ui/src/empty.js"() {
+    "../packages/dsh-nano-ui/src/empty.js"() {
       import_react10 = __toESM(__require("react"), 1);
       h5 = import_react10.default.createElement;
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/window.js
+  // ../packages/dsh-nano-ui/src/window.js
   function useNanoWindow() {
     return import_react11.default.useContext(WindowContext);
   }
@@ -1073,7 +1073,7 @@ ${LAYER_CSS}
   }
   var import_react11, import_dsh_client_ui_primitives7, h6, WindowContext;
   var init_window = __esm({
-    "../../../../packages/dsh-nano-ui/src/window.js"() {
+    "../packages/dsh-nano-ui/src/window.js"() {
       import_react11 = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives7 = __require("@deepseek-ai/dsh-client-ui-primitives");
       init_button();
@@ -1084,7 +1084,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/index.js
+  // ../packages/dsh-nano-ui/index.js
   var dsh_nano_ui_exports = {};
   __export(dsh_nano_ui_exports, {
     EmptyState: () => EmptyState,
@@ -1112,7 +1112,7 @@ ${LAYER_CSS}
     useNanoWindow: () => useNanoWindow
   });
   var init_dsh_nano_ui = __esm({
-    "../../../../packages/dsh-nano-ui/index.js"() {
+    "../packages/dsh-nano-ui/index.js"() {
       init_version();
       init_layers();
       init_styles();
@@ -1132,7 +1132,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-performance-review/src/state.js
+  // ../packages/dsh-performance-review/src/state.js
   function percentile(values, p) {
     if (!Array.isArray(values) || values.length === 0) return null;
     const sorted = [...values].sort((a, b) => a - b);
@@ -1337,7 +1337,7 @@ ${LAYER_CSS}
   }
   var REPORT_VERSION, CLIENT_KEY, HOST_KEY, BUILD_STAMP, NAME_RE, CONTRACT_KEY_RE, MAX_SPAN_KEYS, MAX_USAGE_KEYS, INTERACTION_CAP, RESERVOIR_CAP, EVENT_DURATION_THRESHOLD, WINDOW_PAD_BEFORE_MS, WINDOW_PAD_AFTER_MS, NANO_PKG_PREFIX;
   var init_state = __esm({
-    "../../../../packages/dsh-performance-review/src/state.js"() {
+    "../packages/dsh-performance-review/src/state.js"() {
       REPORT_VERSION = 2;
       CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
       HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
@@ -1355,7 +1355,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-performance-review/src/aggregate.js
+  // ../packages/dsh-performance-review/src/aggregate.js
   function pushInteraction(collector, interaction) {
     collector.interactions.push(interaction);
     while (collector.interactions.length > INTERACTION_CAP) collector.interactions.shift();
@@ -1652,7 +1652,7 @@ ${LAYER_CSS}
   }
   var spanStats, MAX_REPORT_BYTES, EVIDENCE_CAPS, byteLength, usageCell, NOTE_GLOSSARY;
   var init_aggregate = __esm({
-    "../../../../packages/dsh-performance-review/src/aggregate.js"() {
+    "../packages/dsh-performance-review/src/aggregate.js"() {
       init_state();
       spanStats = (row) => ({
         n: row.n,
@@ -1679,10 +1679,10 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-interface/src/contracts/jsonOutcome.js
+  // ../packages/dsh-interface/src/contracts/jsonOutcome.js
   var FAILURE_KIND, FAILURE_KINDS;
   var init_jsonOutcome = __esm({
-    "../../../../packages/dsh-interface/src/contracts/jsonOutcome.js"() {
+    "../packages/dsh-interface/src/contracts/jsonOutcome.js"() {
       FAILURE_KIND = Object.freeze({
         /** signal aborted; issued-before cancellation makes no server-side claim. */
         CANCELLED: "cancelled",
@@ -1699,7 +1699,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-interface/src/contracts/observeEvent.js
+  // ../packages/dsh-interface/src/contracts/observeEvent.js
   function fail(message) {
     throw new TypeError(`observe-event: ${message}`);
   }
@@ -1737,7 +1737,7 @@ ${LAYER_CSS}
   }
   var OBSERVE_SURFACES, HTTP_OUTCOMES, UPGRADE_OUTCOMES, JSON_OUTCOMES, MCP_OUTCOMES, OBSERVE_FIELDS, REQUIRED, OPTIONAL, OUTCOMES;
   var init_observeEvent = __esm({
-    "../../../../packages/dsh-interface/src/contracts/observeEvent.js"() {
+    "../packages/dsh-interface/src/contracts/observeEvent.js"() {
       init_jsonOutcome();
       OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
       HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
@@ -1764,7 +1764,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../../../../packages/dsh-performance-review/src/client.js
+  // ../packages/dsh-performance-review/src/client.js
   var client_exports = {};
   __export(client_exports, {
     bucketForElement: () => bucketForElement,
@@ -2377,7 +2377,7 @@ ${LAYER_CSS}
   }
   var TRACK_EVENT_CAP, SPAN_EVENT_CAP, PROFILER_SAMPLE_CAP, now, isPromiseLike, HIDDEN_SELECTOR, contains, isHostView, statusClass;
   var init_client = __esm({
-    "../../../../packages/dsh-performance-review/src/client.js"() {
+    "../packages/dsh-performance-review/src/client.js"() {
       init_state();
       init_aggregate();
       init_observeEvent();
@@ -2418,9 +2418,9 @@ ${LAYER_CSS}
   var KEYS, BUCKETS, DECL_HASH;
   var init_perf_declaration = __esm({
     "lib/perf-declaration.js"() {
-      KEYS = Object.freeze({ "spans": ["pane-op", "navigate"], "tracks": [], "usage": [], "hostSpans": ["kite-warmup"] });
+      KEYS = Object.freeze({ "spans": ["pane-op", "navigate"], "tracks": [], "usage": [], "hostSpans": [] });
       BUCKETS = Object.freeze([]);
-      DECL_HASH = "462f22bc6836";
+      DECL_HASH = "4a17c8771d1e";
     }
   });
 
@@ -2598,9 +2598,8 @@ ${LAYER_CSS}
           close: "\u5173\u95ED",
           uaLabel: "User-Agent",
           uaPlaceholder: "\u7559\u7A7A\u5219\u4F7F\u7528\u5F15\u64CE\u9ED8\u8BA4",
-          originLabel: "\u5F15\u64CE\u5730\u5740",
-          mcpLabel: "MCP \u7AEF\u53E3",
           viewportLabel: "\u9ED8\u8BA4\u5206\u8FA8\u7387",
+          viewportSupport: "deviceScaleFactor \u53EA\u652F\u6301 1\uFF0Cmobile \u53EA\u652F\u6301 false\uFF1B\u5176\u4ED6\u503C\u4F1A\u88AB\u5F15\u64CE\u62D2\u7EDD",
           localeLabel: "\u9ED8\u8BA4\u8BED\u8A00",
           localePlaceholder: "\u5982 zh-CN / en-US",
           geoLabel: "\u9ED8\u8BA4\u5730\u7406\u4F4D\u7F6E\uFF08GPS\uFF09",
@@ -2613,17 +2612,23 @@ ${LAYER_CSS}
           cookiesLabel: "Cookie",
           cookiesPlaceholder: "name=value\uFF0C\u6BCF\u884C\u4E00\u4E2A",
           cookiesHint: "\u4FDD\u5B58\u65F6\u66FF\u6362\u5F53\u524D\u9875\u9762 Cookie\uFF1B\u8DE8\u5BFC\u822A\u7531\u9A71\u52A8\u91CD\u65B0\u5E94\u7528\u3002",
-          engineSection: "\u5F15\u64CE\u8FDE\u63A5",
           viewportDefault: "\u9ED8\u8BA4",
           viewportDesktop: "\u684C\u9762 1280",
           viewportTablet: "\u5E73\u677F 768",
           viewportPhone: "\u624B\u673A 390",
           saved: "\u8BBE\u7F6E\u5DF2\u4FDD\u5B58",
+          savedUnconfirmed: "\u4FDD\u5B58\u5DF2\u63D0\u4EA4\uFF0C\u672A\u786E\u8BA4\u751F\u6548",
+          envProbing: "\u68C0\u6D4B\u4E2D\u2026",
+          staleBanner: "\u663E\u793A\u4E0A\u6B21\u6210\u529F\u753B\u9762 {url} \xB7 \u5BFC\u822A/\u5237\u65B0\u5931\u8D25",
+          staticPreview: "\u9759\u6001\u9884\u89C8",
+          navigating: "\u5BFC\u822A\u4E2D",
+          engineBusy: "\u5F15\u64CE\u4ECD\u5728\u6267\u884C\uFF08\u8D85\u65F6\u4E0D\u7B49\u4E8E\u53D6\u6D88\uFF09",
+          engineBusyTitle: "\u5F15\u64CE\u4ECD\u5728\u6267\u884C {url} \u7684\u5BFC\u822A\uFF0C\u8D85\u65F6\u8FD4\u56DE\u4E0D\u4EE3\u8868\u5DF2\u53D6\u6D88",
           emptyTitle: "\u5F00\u59CB\u6D4F\u89C8",
           emptyBody: "\u5C55\u5F00\u6807\u7B7E\u9875\u680F\u5E76\u8F93\u5165\u7F51\u5740\u3002Kitesurf \u4F1A\u5728\u5BB9\u5668\u91CC\u6253\u5F00\u9875\u9762\uFF1B\u518D\u70B9\u300C\u6807\u6CE8\u300D\uFF0C\u5728\u753B\u9762\u4E0A\u70B9\u9009\u5143\u7D20\u3002",
           emptyTry: "\u8BD5\u8BD5 example.com",
           errorTitle: "\u5F15\u64CE\u6CA1\u6709\u5E94\u7B54",
-          errorBody: "\u5BB9\u5668\u91CC\u7684 Kitesurf \u6CA1\u6709\u54CD\u5E94\u3002\u5148\u542F\u52A8\u5F15\u64CE\uFF1B\u82E5\u5DF2\u542F\u52A8\uFF0C\u6253\u5F00\u8BBE\u7F6E\u786E\u8BA4\u5F15\u64CE\u5730\u5740\u3002",
+          errorBody: "\u5BB9\u5668\u91CC\u7684 Kitesurf \u6CA1\u6709\u54CD\u5E94\u3002\u5148\u542F\u52A8\u5F15\u64CE\uFF1B\u82E5\u5DF2\u542F\u52A8\uFF0C\u590D\u5236\u8BCA\u65AD\u4FE1\u606F\u6392\u67E5\u6C99\u7BB1\u5BBF\u4E3B\u3002",
           retry: "\u91CD\u8BD5",
           resumeEngine: "\u6062\u590D\u5F15\u64CE",
           diagnose: "\u8BCA\u65AD\u4FE1\u606F",
@@ -2812,9 +2817,8 @@ ${LAYER_CSS}
           close: "Close",
           uaLabel: "User-Agent",
           uaPlaceholder: "Leave empty for engine default",
-          originLabel: "Engine origin",
-          mcpLabel: "MCP port",
           viewportLabel: "Default resolution",
+          viewportSupport: "Only deviceScaleFactor 1 and mobile false are supported; other values are rejected by the engine",
           localeLabel: "Default language",
           localePlaceholder: "e.g. zh-CN / en-US",
           geoLabel: "Default geolocation (GPS)",
@@ -2827,17 +2831,23 @@ ${LAYER_CSS}
           cookiesLabel: "Cookie",
           cookiesPlaceholder: "name=value, one per line",
           cookiesHint: "Replaces the current page cookies on save; the driver reapplies them after navigation.",
-          engineSection: "Engine connection",
           viewportDefault: "Default",
           viewportDesktop: "Desktop 1280",
           viewportTablet: "Tablet 768",
           viewportPhone: "Phone 390",
           saved: "Settings saved",
+          savedUnconfirmed: "Save submitted \u2014 not confirmed applied",
+          envProbing: "Checking\u2026",
+          staleBanner: "Showing last good frame {url} \xB7 navigation/refresh failed",
+          staticPreview: "Static preview",
+          navigating: "Navigating",
+          engineBusy: "Engine still running (a timeout is not a cancel)",
+          engineBusyTitle: "Engine is still navigating to {url}; a timed-out reply did not cancel it",
           emptyTitle: "Start browsing",
           emptyBody: "Open the tab rail and enter a URL. Kitesurf opens the page in the container. Then choose Annotate and pick elements on the page.",
           emptyTry: "Try example.com",
           errorTitle: "Engine is not answering",
-          errorBody: "Kitesurf inside the container is not responding. Start the engine; if it is already started, open Settings and check the engine address.",
+          errorBody: "Kitesurf inside the container is not responding. Start the engine; if it is already started, copy diagnostics and inspect the sandbox host.",
           retry: "Retry",
           resumeEngine: "Resume engine",
           diagnose: "Diagnostics",
@@ -3096,7 +3106,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var DOM = "/nano-local-sandbox/dom";
   var CONTROL = "/nano-local-sandbox/control";
   var localNotes = [];
-  var KITE = "/nano-local-sandbox/kite";
+  var LIFECYCLE = "/nano-local-sandbox/lifecycle";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
   var MAX_PINS = 8;
@@ -3125,6 +3135,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         detail: row.detail || row.url || row.state || ""
       };
     });
+  }
+  function engineEndpoint(payload) {
+    const lifecycle = payload?.lifecycle;
+    return {
+      phase: lifecycle?.phase ?? null,
+      httpBase: lifecycle?.httpBase ?? null,
+      mcpPort: lifecycle?.mcpPort ?? null
+    };
   }
   var pagePerf = ensurePerfReview2();
   var perf = {
@@ -3238,6 +3256,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-hitl-primary:hover{background:var(--dsw-alias-link);filter:brightness(1.08)}
 .nks-act{position:absolute;left:50%;top:34px;transform:translateX(-50%);z-index:var(--nano-layer-local4);padding:4px 10px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary);white-space:nowrap;pointer-events:none;animation:nks-act-in .18s ease-out}
 .nks-act[data-ok="false"]{color:var(--dsw-alias-state-error-primary)}
+/* last-good/\u5BFC\u822A\u4ECD\u5728\u6267\u884C\u63D0\u793A\u6761\uFF1A\u4E0E .nks-act \u540C\u6B3E\u5C0F\u836F\u4E38\uFF0C\u60AC\u505C\u5728\u753B\u9762\u9876\u90E8\u3002 */
+.nks-stale{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:var(--nano-layer-local4);max-width:calc(100% - 32px);padding:4px 10px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 94%,transparent);border:.5px solid var(--dsw-alias-state-warn-primary);border-radius:var(--dsw-radius-sm);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:auto}
+.nks-stale[data-nks-nav-busy="1"]{top:34px;border-color:var(--dsw-alias-border-l2)}
+.nks-dom-tag{position:absolute;right:8px;top:8px;z-index:var(--nano-layer-local4);padding:2px 7px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 88%,transparent);border:.5px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);pointer-events:none;user-select:none}
 @keyframes nks-act-in{from{opacity:0;transform:translateX(-50%) translateY(-4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .nks-note-actions{display:flex;gap:2px;align-items:center}
 .nks-note-form{display:flex;gap:4px;align-items:center}
@@ -3366,6 +3388,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-env-row b{font-weight:500;color:var(--dsw-alias-label-secondary);flex:none}
 .nks-env-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;unicode-bidi:plaintext}
 .nks-env-ok{color:var(--dsw-alias-state-success-primary)}
+.nks-env-wait{color:var(--dsw-alias-label-tertiary)}
 .nks-env-legacy{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);margin-left:6px}
 .nks-logs{margin:0;max-height:380px;overflow:auto;white-space:pre-wrap;word-break:break-all;font:11px/1.45 ui-monospace,Menlo,monospace;color:var(--dsw-alias-label-secondary)}
 .nks-env-bad{color:var(--dsw-alias-state-error-primary)}
@@ -3514,6 +3537,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     return mime.split(";")[0].replace(/^application\//, "").slice(0, 8) || "other";
   }
   function formatSize(bytes) {
+    if (bytes == null) return "\u2014";
     const n = Number(bytes);
     if (!Number.isFinite(n) || n < 0) return "";
     if (n < 1024) return `${n}b`;
@@ -3521,6 +3545,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     return `${(n / 1024 / 1024).toFixed(1)}mb`;
   }
   function formatDuration(ms) {
+    if (ms == null) return "\u2014";
     const n = Number(ms);
     if (!Number.isFinite(n) || n < 0) return "";
     return n < 1e3 ? `${Math.round(n)}ms` : `${(n / 1e3).toFixed(2)}s`;
@@ -3592,31 +3617,31 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       if (!open) return void 0;
       let alive = true;
       let since = null;
+      let sinceSeq = null;
       setRows([]);
       const merge = (fresh, keyOf) => setRows((prev) => {
         if (!Array.isArray(fresh) || fresh.length === 0) return prev;
         const seen = new Set(prev.map(keyOf));
         const extra = fresh.filter((r) => !seen.has(keyOf(r)));
-        if (extra.length === 0) return prev;
         const merged = prev.map((r) => fresh.find((f) => keyOf(f) === keyOf(r)) || r).concat(extra);
         return merged.slice(-400);
       });
       const load = async () => {
         try {
           if (tab === "console") {
-            const url = since ? `${CONSOLE}?limit=200&since=${encodeURIComponent(since)}` : `${CONSOLE}?limit=200`;
+            const url = sinceSeq != null ? `${CONSOLE}?limit=200&sinceSeq=${encodeURIComponent(sinceSeq)}` : `${CONSOLE}?limit=200`;
             const data = await fetch(url).then((r) => r.json());
             if (alive && Array.isArray(data.entries)) {
-              merge(data.entries, (r) => `c${r.seq}`);
-              const last = data.entries[data.entries.length - 1];
-              if (last?.at) since = last.at;
+              merge(data.entries, (r) => `c${r.seq ?? r.at}`);
+              const lastSeq = data.entries.reduce((m, r) => Math.max(m, Number(r.seq) || 0), 0);
+              if (lastSeq) sinceSeq = lastSeq;
             }
           } else if (tab === "network") {
             const url = `${NETWORK}?limit=200${since ? `&since=${encodeURIComponent(since)}` : ""}`;
             const data = await fetch(url).then((r) => r.json());
             if (alive && Array.isArray(data.entries)) {
               merge(data.entries, (r) => `n${r.id}`);
-              const lastStart = data.entries.reduce((m, r) => Math.max(m, Number(r.startedAt) || 0), 0);
+              const lastStart = data.entries.reduce((m, r) => Math.max(m, Number(r.updatedAt || r.startedAt) || 0), 0);
               if (lastStart) since = String(lastStart);
             }
           } else {
@@ -3947,7 +3972,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           h7("span", { className: "nks-dt-dur" }, row.childNodeCount ? String(row.childNodeCount) : "")
         ) : tab === "console" ? h7(
           "div",
-          { className: "nks-dt-row", key: `c${row.seq || index}`, "data-level": row.level },
+          { className: "nks-dt-row", key: `c${row.seq ?? row.at ?? index}`, "data-level": row.level },
           h7("span", { className: "nks-dt-time" }, String(row.at || "").slice(11, 19)),
           h7("span", { className: "nks-dt-lv", "data-lv": row.level }, row.level),
           h7("span", { className: "nks-dt-msg" }, row.text),
@@ -4020,7 +4045,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   }
   function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     const [status, setStatus] = React12.useState(null);
+    const engine = engineEndpoint(status);
     const statusDown = status != null && (status.ok === false || status.ready === false);
+    const engineNavigating = status?.navigation?.outcome === "in-flight";
     const [pageUrl, setPageUrl] = React12.useState("");
     const [draftUrl, setDraftUrl] = React12.useState("");
     const [history, setHistory] = React12.useState([]);
@@ -4042,6 +4069,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const [navTabs, setNavTabs] = React12.useState([]);
     const [nativeHtml, setNativeHtml] = React12.useState(true);
     const [domDoc, setDomDoc] = React12.useState(null);
+    const [staleNav, setStaleNav] = React12.useState(false);
+    const domVersionRef = React12.useRef("");
     const [vp, setVp] = React12.useState(null);
     const [vpCustom, setVpCustom] = React12.useState(false);
     const domFrameRef = React12.useRef(null);
@@ -4206,14 +4235,45 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         return void 0;
       }
       const started = Date.now();
+      let ticks = 0;
       const timer = window.setInterval(() => {
+        ticks += 1;
         setBeatSec(Math.max(1, Math.floor((Date.now() - started) / 1e3)));
+        if (ticks % 2 === 0) refreshStatus().catch(() => {
+        });
       }, 1e3);
       return () => window.clearInterval(timer);
     }, [beat]);
     React12.useEffect(() => {
+      if (!engineNavigating) return void 0;
+      const timer = window.setInterval(() => {
+        refreshStatus().catch(() => {
+        });
+      }, 3e3);
+      return () => window.clearInterval(timer);
+    }, [engineNavigating]);
+    React12.useEffect(() => {
       if (nativeHtml && shot && !domDoc) loadDom().catch(() => {
       });
+    }, [shot, nativeHtml]);
+    React12.useEffect(() => {
+      if (!nativeHtml || !shot) return void 0;
+      let alive = true;
+      let fails = 0;
+      const poll = () => {
+        loadDom().then((ok) => {
+          fails = ok ? 0 : fails + 1;
+        }).catch(() => {
+          fails += 1;
+        });
+      };
+      const timer = window.setInterval(() => {
+        if (alive && fails < 3) poll();
+      }, 3e3);
+      return () => {
+        alive = false;
+        clearInterval(timer);
+      };
     }, [shot, nativeHtml]);
     React12.useEffect(() => {
       if (shot) return void 0;
@@ -4261,14 +4321,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       return () => window.removeEventListener("message", onMessage);
     }, []);
     React12.useEffect(() => {
-      const phase = status?.kite?.phase;
+      const phase = engine.phase;
       if (phase && phase !== "running" && shot) {
         setShot(null);
         setPick(null);
         setPins([]);
         setShotMeta(null);
       }
-    }, [status?.kite?.phase]);
+    }, [engine.phase]);
     React12.useEffect(() => {
       const element = frameRef.current;
       if (!element || typeof ResizeObserver === "undefined") return void 0;
@@ -4324,7 +4384,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         image?.removeEventListener("load", measure);
       };
     }, [shot]);
-    const RECOVERABLE = /^kitesurf\.(shot|engine|elements|dom|kite|navigate|pick|wait|ref)\.|^sandbox\.cdp\./;
+    const RECOVERABLE = /^kitesurf\.(shot|engine|elements|dom|navigate|pick|wait|ref)\.|^sandbox\.cdp\./;
     async function repairNow() {
       setToastFix(false);
       setToast(copy.preparingEnv);
@@ -4377,6 +4437,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       try {
         await work();
       } catch (cause) {
+        if (opts.nav) setStaleNav(true);
         if (opts.dialog) showOpenError(cause, opts.url);
         else showError(cause);
       } finally {
@@ -4422,7 +4483,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       });
     }
     function openPage(url) {
-      return run(() => navigate(url), { beat: true, dialog: true, url });
+      return run(() => navigate(url), { beat: true, dialog: true, url, nav: true });
     }
     function remember(url) {
       setPageUrl(url);
@@ -4438,6 +4499,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       setShot(shotPayload.data);
       setShotMime(shotPayload.mimeType || "image/webp");
       setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
+      setStaleNav(false);
       await loadDom();
       setPick(null);
       remember(shotPayload.url);
@@ -4464,13 +4526,26 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       try {
         const data = await fetch(DOM).then((r) => r.json());
         if (data?.ok && data.srcdoc) {
-          setDomDoc({ srcdoc: data.srcdoc, url: data.url, at: Date.now() });
+          const sig = (data.domSeq ?? data.capturedAt ?? data.generation) != null ? `v:${data.domSeq ?? ""}:${data.capturedAt ?? ""}:${data.generation ?? ""}:${data.url ?? ""}` : `s:${data.srcdoc}:${data.url ?? ""}`;
+          if (sig && sig === domVersionRef.current) return true;
+          domVersionRef.current = sig;
+          setDomDoc({
+            srcdoc: data.srcdoc,
+            url: data.url,
+            at: Date.now(),
+            capturedAt: data.capturedAt ?? null,
+            domSeq: data.domSeq ?? null,
+            generation: data.generation ?? null
+          });
           if (data.url && data.url !== "about:blank") setPageUrl(data.url);
           return true;
         }
       } catch {
       }
-      if (!options.keep) setDomDoc(null);
+      if (!options.keep) {
+        setDomDoc(null);
+        domVersionRef.current = "";
+      }
       return false;
     }
     async function reloadShotInner(scroll, options = {}) {
@@ -4484,6 +4559,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       setShotMime(shotPayload.mimeType || "image/webp");
       setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
       if (shotPayload.url && shotPayload.url !== "about:blank") setPageUrl(shotPayload.url);
+      setStaleNav(false);
       if (options.keepPick !== true) setPick(null);
     }
     async function historyNav(delta) {
@@ -4639,7 +4715,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       if (!shot || busyRef.current || dragRef.current) return;
       const delta = event.deltaY;
       if (Math.abs(delta) < 8) return;
-      run(() => reloadShot(delta));
+      run(() => reloadShot(delta), { nav: true });
     }
     function onDoubleClick(event) {
       if (!annotate) return;
@@ -4788,10 +4864,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     function onStartEngine() {
       run(async () => {
         const fresh = await refreshStatus();
-        const phase = fresh?.kite?.phase;
+        const phase = engineEndpoint(fresh).phase;
         if (phase === "running") return;
         const action = phase === "suspended" ? "resume" : "start";
-        await post(KITE, { action });
+        await post(LIFECYCLE, { action });
         await reloadShot();
       });
     }
@@ -4819,7 +4895,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       height: Math.max(box.height * activeFrame.scale, 2)
     })) : [];
     const hasPage = !!shot && !!shotMeta?.url && shotMeta.url !== "about:blank";
-    const engineHasPage = hasPage || status?.phase === "running" || !!status?.httpBase;
+    const engineHasPage = hasPage || engine.phase === "running" || !!engine.httpBase;
     React12.useEffect(() => {
       if (!engineHasPage) {
         setControl(null);
@@ -4894,6 +4970,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     };
     function EnvPanel() {
       const [snap, setSnap] = React12.useState(null);
+      const [probeMisses, setProbeMisses] = React12.useState(0);
       const [diag, setDiag] = React12.useState(null);
       const copyRawDiag = React12.useRef(false);
       const [busyLocal, setBusyLocal] = React12.useState(false);
@@ -4904,11 +4981,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         let seen = null;
         const load = () => fetch(PORTS).then((r) => r.json()).then((data) => {
           if (!alive || !data) return;
+          setProbeMisses(0);
           const sig = `${data.v ?? ""}:${data.epoch ?? ""}:${data.ready ?? ""}`;
           if (sig === seen) return;
           seen = sig;
           setSnap(data);
         }).catch(() => {
+          if (alive) setProbeMisses((n) => n + 1);
         });
         load();
         const period = () => document.visibilityState === "hidden" ? 12e3 : 1500;
@@ -4991,13 +5070,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           showError(cause);
         }
       }
-      const engine = snap?.effective?.httpBase || "\u2014";
+      const engineBase = snap?.effective?.httpBase || "\u2014";
       const container = snap?.container?.state || "\u2014";
       const portRow = snap?.ports?.engine ? `${snap.ports.engine.port} \xB7 ${snap.ports.engine.heldBy === "this-container" ? copy.portHeld : copy.portFree}` : "\u2014";
       const contractMismatch = snap != null && Number.isFinite(snap.v) && snap.v !== 1;
       const legacyHost = snap != null && !Number.isFinite(snap.v);
       const rows = planeRows(snap, copy);
-      const healthy = !contractMismatch && snap?.ready === true;
+      const probing = snap == null && probeMisses < 3;
+      const healthy = !probing && !contractMismatch && snap?.ready === true;
       return h7(
         "div",
         { className: "nks-env", "data-nks-env": "1" },
@@ -5007,13 +5087,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           copy.envTitle,
           h7(
             "span",
-            { className: healthy ? "nks-env-ok" : "nks-env-bad", title: legacyHost ? copy.legacyHostTitle : void 0 },
-            contractMismatch ? copy.contractNewer : healthy ? `\u25CF ${copy.envOk}` : `\u25CF ${copy.envBad}`
+            { className: healthy ? "nks-env-ok" : probing ? "nks-env-wait" : "nks-env-bad", title: legacyHost ? copy.legacyHostTitle : void 0 },
+            probing ? `\u25CB ${copy.envProbing}` : contractMismatch ? copy.contractNewer : healthy ? `\u25CF ${copy.envOk}` : `\u25CF ${copy.envBad}`
           ),
           legacyHost ? h7("span", { className: "nks-env-legacy", "data-nks-legacy": "1" }, copy.legacyHost) : null
         ),
         h7("div", { className: "nks-env-row" }, h7("b", null, copy.envPlugin), h7("span", null, snap?.buildId || copy.envUnknown)),
-        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envEngine), h7("span", null, engine)),
+        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envEngine), h7("span", null, engineBase)),
         h7("div", { className: "nks-env-row" }, h7("b", null, copy.envContainer), h7("span", null, container)),
         snap?.containerName ? h7("div", { className: "nks-env-row" }, h7("b", null, copy.envInstance), h7("span", null, snap.containerName)) : null,
         h7("div", { className: "nks-env-row" }, h7("b", null, copy.envPorts), h7("span", null, portRow)),
@@ -5275,7 +5355,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       dialogOpenRef.current = true;
       let close = () => {
       };
-      let current = { userAgent: "", viewportWidth: "", viewportHeight: "", httpBase: "", mcpPort: "", locale: "", geolocation: null, colorScheme: "light", cookies: "" };
+      let current = { userAgent: "", viewportWidth: "", viewportHeight: "", locale: "", geolocation: null, colorScheme: "light", cookies: "" };
       const dialog = openNanoDialog2({
         copy: { cancel: copy.cancel, confirm: copy.save, close: copy.close },
         title: copy.settingsTitle,
@@ -5291,27 +5371,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         },
         onConfirm: () => save(),
         children: h7(SettingsTabs, {
-          env: h7(
-            "div",
-            { className: "nks-settings-stack" },
-            h7(EnvPanel, null),
-            h7(
-              "form",
-              {
-                className: "nks-settings-body",
-                onSubmit: (event) => {
-                  event.preventDefault();
-                  save();
-                }
-              },
-              h7("div", { className: "nks-settings-section" }, copy.engineSection),
-              h7("label", { htmlFor: "nks-origin" }, copy.originLabel),
-              h7("input", { id: "nks-origin", className: "nks-address", placeholder: "http://127.0.0.1:8787", inputMode: "url", spellCheck: false, autoComplete: "off" }),
-              h7("label", { htmlFor: "nks-mcp" }, copy.mcpLabel),
-              h7("input", { id: "nks-mcp", className: "nks-address", inputMode: "numeric", placeholder: "8799" }),
-              h7("button", { type: "submit", style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 })
-            )
-          ),
+          env: h7("div", { className: "nks-settings-stack" }, h7(EnvPanel, null)),
           simulation: h7(
             "form",
             {
@@ -5354,6 +5414,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                 onClick: (event) => selectRadio(event.currentTarget.parentElement, value)
               }, label))
             ),
+            h7("span", { className: "nks-settings-hint", "data-nks-vp-unsupported": "1" }, copy.viewportSupport),
             h7("label", { htmlFor: "nks-locale" }, copy.localeLabel),
             h7("input", { id: "nks-locale", className: "nks-address", placeholder: copy.localePlaceholder, spellCheck: false, autoComplete: "off" }),
             h7("label", null, copy.geoLabel),
@@ -5409,8 +5470,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       function save() {
         const nextAgent = document.getElementById("nks-ua")?.value ?? "";
         const choice = document.getElementById("nks-viewport")?.dataset.value ?? "default";
-        const nextOrigin = (document.getElementById("nks-origin")?.value ?? "").trim();
-        const nextPort = (document.getElementById("nks-mcp")?.value ?? "").trim();
         const nextLocale = (document.getElementById("nks-locale")?.value ?? "").trim();
         const latText = (document.getElementById("nks-geo-lat")?.value ?? "").trim();
         const lngText = (document.getElementById("nks-geo-lng")?.value ?? "").trim();
@@ -5438,13 +5497,15 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           if (nextColor !== current.colorScheme) settingsPatch.colorScheme = nextColor;
           if (nextCookies !== current.cookies) settingsPatch.cookies = nextCookies || null;
           if (Object.keys(settingsPatch).length) await post(SETTINGS, settingsPatch);
-          const kitePatch = {};
-          if (nextOrigin && nextOrigin !== current.httpBase) kitePatch.httpBase = nextOrigin;
-          if (nextPort && nextPort !== String(current.mcpPort)) kitePatch.mcpPort = nextPort;
-          if (Object.keys(kitePatch).length) await post(KITE, { action: "configure", ...kitePatch });
           close();
-          showToast(copy.saved);
-          refreshStatus();
+          const fresh = await refreshStatus().catch(() => null);
+          const unconfirmed = [];
+          for (const [key, want] of Object.entries(settingsPatch)) {
+            const got = fresh?.[key];
+            const same = key === "viewport" ? want == null === (got == null) && (want == null || got?.width === want.width && got?.height === want.height) : key === "geolocation" ? want == null === (got == null) && (want == null || got?.latitude === want.latitude && got?.longitude === want.longitude) : String(want ?? "") === String(got ?? "");
+            if (!same) unconfirmed.push(key);
+          }
+          showToast(unconfirmed.length ? `${copy.savedUnconfirmed} (${unconfirmed.join(", ")})` : copy.saved);
         });
       }
       refreshStatus().then((fresh) => {
@@ -5452,8 +5513,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           userAgent: fresh?.userAgent ?? "",
           viewportWidth: fresh?.viewport?.width ? String(fresh.viewport.width) : "",
           viewportHeight: fresh?.viewport?.height ? String(fresh.viewport.height) : "",
-          httpBase: fresh?.kite?.httpBase ?? "",
-          mcpPort: fresh?.kite?.mcpPort != null ? String(fresh.kite.mcpPort) : "",
           locale: fresh?.locale ?? "",
           geolocation: fresh?.geolocation ?? null,
           colorScheme: fresh?.colorScheme ?? "light",
@@ -5461,10 +5520,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         };
         const ua = document.getElementById("nks-ua");
         if (ua) ua.value = current.userAgent;
-        const originInput = document.getElementById("nks-origin");
-        if (originInput) originInput.value = current.httpBase;
-        const mcp = document.getElementById("nks-mcp");
-        if (mcp) mcp.value = current.mcpPort;
         const localeInput = document.getElementById("nks-locale");
         if (localeInput) localeInput.value = current.locale;
         const lat = document.getElementById("nks-geo-lat");
@@ -5503,8 +5558,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h7(
           "div",
           { className: "nks-toolbar-nav" },
-          h7("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1), { beat: true, dialog: true }) }, glyph("back")),
-          h7("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1), { beat: true, dialog: true }) }, glyph("forward")),
+          h7("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1), { beat: true, dialog: true, nav: true }) }, glyph("back")),
+          h7("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1), { beat: true, dialog: true, nav: true }) }, glyph("forward")),
           h7("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph("refresh"))
         ),
         h7(
@@ -5533,11 +5588,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               "data-nks-beat": "1",
               "data-nks-loading": "1",
               role: "status",
-              "aria-label": copy.opening,
-              title: copy.opening
+              "aria-label": engineNavigating ? copy.navigating : copy.opening,
+              // N 秒是本地计时，「导航中」是引擎上报的 navigation.outcome。
+              title: engineNavigating ? `${copy.navigating} \xB7 ${copy.opening} ${beatSec}s` : `${copy.opening} ${beatSec}s`
             },
             h7("i", { className: "nks-spin", "aria-hidden": true }),
-            beatSec > 0 ? h7("span", { "data-nks-beat-sec": String(beatSec) }, `${beatSec}s`) : null
+            engineNavigating || beatSec > 0 ? h7("span", { "data-nks-beat-sec": String(beatSec) }, engineNavigating ? `${copy.navigating}${beatSec > 0 ? ` ${beatSec}s` : ""}` : `${beatSec}s`) : null
           ) : null,
           h7("button", { type: "submit", className: "nks-tool nks-go", "aria-label": copy.go, disabled: busy }, glyph("go"))
         ),
@@ -5759,6 +5815,29 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             `\u269B ${pick.elements[0].componentStack.slice(-3).join(" \u2192 ")}`
           ) : null
         ) : null,
+        // last-good 画面叠加提示：导航/刷新失败但画面还是旧的，地址栏和
+        // 画面不能各说各话。新导航/重截成功会自动撤掉。
+        staleNav ? h7("div", {
+          className: "nks-stale",
+          "data-nks-stale": "1",
+          role: "status",
+          onPointerDown: (event) => event.stopPropagation(),
+          onClick: (event) => event.stopPropagation()
+        }, fill(copy.staleBanner, { url: shotMeta?.url || "" })) : null,
+        // 引擎仍说自己在导航（/open 已超时返回）：超时≠取消，不能恢复成功态。
+        !beat && engineNavigating ? h7("div", {
+          className: "nks-stale",
+          "data-nks-nav-busy": "1",
+          role: "status",
+          title: fill(copy.engineBusyTitle, { url: status?.navigation?.url || status?.navigation?.intent || "" })
+        }, copy.engineBusy) : null,
+        // srcdoc 是剥离脚本的静态投影，不是活页：角落标出来，别让人以为
+        // 在里面点按钮会触发真实交互。
+        nativeHtml && domDoc ? h7("span", {
+          className: "nks-dom-tag",
+          "data-nks-dom-tag": "1",
+          title: copy.staticPreview
+        }, copy.staticPreview) : null,
         nativeHtml && domDoc ? h7("iframe", {
           className: "nks-dom",
           title: "Kitesurf page",
@@ -5807,7 +5886,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               "data-nks-start-engine": "1",
               "data-nks-prepare": "1",
               onClick: oneClickPrepare
-            }, status?.kite?.phase === "running" ? copy.resumeEngine : copy.prepareEnv),
+            }, engine.phase === "running" ? copy.resumeEngine : copy.prepareEnv),
             h7("button", { type: "button", className: "nks-start-btn", "data-nks-diagnose": "1", onClick: () => run(() => refreshStatus()) }, copy.retry),
             h7("button", { type: "button", className: "nks-start-btn", "data-nks-open-settings": "1", onClick: openSettings }, copy.settings)
           ) : null,
@@ -5819,7 +5898,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               openPage("https://example.com");
             } }, copy.emptyTry)
           ) : null,
-          statusDown ? h7("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(" / ") : "kitesurf.engine.failed")} \xB7 ${status?.httpBase || ""}`) : null,
+          statusDown ? h7("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(" / ") : "kitesurf.engine.failed")} \xB7 ${engine.httpBase || ""}`) : null,
           statusDown ? h7("div", { className: "nks-empty-meta" }, status?.lastError?.error || status?.error || "") : null
         ),
         overlays.map((box, index) => h7("div", {

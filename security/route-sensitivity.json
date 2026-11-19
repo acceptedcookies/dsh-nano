@@ -721,7 +721,7 @@
     },
     {
       "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/kite",
+      "path": "/nano-local-sandbox/lifecycle",
       "methods": [
         "POST"
       ],
@@ -729,8 +729,8 @@
       "capability": "proc:local-sandbox",
       "bodyLimit": 4096,
       "sessionBinding": true,
-      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/kite",
-      "id": "dnls.kite",
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/lifecycle",
+      "id": "dnls.lifecycle",
       "channel": "http",
       "match": "exact"
     },
@@ -1018,7 +1018,7 @@
       "capability": "write:engine",
       "bodyLimit": 65536,
       "sessionBinding": false,
-      "justification": "STATE_ROUTE (P1-2) — {action:save} exports {localStorage,sessionStorage,cookie} and appends to $DSH_HOME/nano-kitesurf-state.jsonl; {action:load,state|name} restores it into the page. Host write (state file) + page write, L2.",
+      "justification": "STATE_ROUTE (P1-2) — {action:save} exports {localStorage,sessionStorage,cookie} and appends to the profile state volume browser-state.json; {action:load,state|name} restores it into the page. Host write (state file) + page write, L2.",
       "id": "dnls.state",
       "channel": "http",
       "match": "exact"

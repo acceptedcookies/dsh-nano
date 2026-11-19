@@ -26,8 +26,11 @@
 | `index.js` | 宿主。运行时必需。只经 `registerRoutes` 注册路由 |
 | `src/host/backend-apple.js` | 本包唯一允许调用容器 CLI 的文件 |
 | `src/host/backend-nvx.js` | 会失败的空实现。不是 Windows 后端 |
-| `src/host/` | 实例、profile、CDP、terminal、错误目录 |
-| `profiles/kitesurf/` | kitesurf 配方与 manifest。`linux-prefix/` 不入库 |
+| `src/host/` | 中性内核：实例、profile 装载、CDP、terminal、错误目录。不得出现 profile 业务词 |
+| `src/host/profile-drivers.js` | 按 `capabilities.drivers` 发现 profile，`import()` 其 driver；env tag、容器名与 host 端口也从 profile 的 `instance` 段派生 |
+| `profiles/kitesurf/profile.yaml` | 配方与 manifest 的唯一权威：`driver`、`instance`、`build.recipe`、`health` |
+| `profiles/kitesurf/driver/` | kitesurf 业务：镜像/运行时/挂载、CDP 设置与历史、selftest 探针、错误行 |
+| `profiles/kitesurf/` | 配方源文件（`Dockerfile`、`entrypoint.sh`、`mcp-bridge.mjs`）。`linux-prefix/` 不入库 |
 | `profiles/terminal/` | 终端 PTY 入口 |
 | `lib/route-guard.js`、`lib/bindings.js` | 路由注册。绑定表从仓根账本按 id 烘焙。运行时必需 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
@@ -69,7 +72,7 @@ dsh plugin --profile web add <spec>
 
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
 2. 重启后宿主能加载 `index.js`。本包没有浏览器面板，不要到右侧工作区找第二个设计界面。
-3. `node --test test/*.mjs` 退出码为 0。
+3. `npm test`（`test/*.mjs` + `test/contracts/*.mjs`）退出码为 0。
 
 ## 初次运行
 
@@ -86,7 +89,9 @@ dsh plugin --profile web add <spec>
 
 ## 配置与状态
 
-profile 的唯一权威是 `profiles/kitesurf/profile.yaml`。实例状态在该实例自己的 `stateVolume`。没有第二份 history 文件。
+profile 的唯一权威是 `profiles/kitesurf/profile.yaml`。实例状态在该实例自己的 `stateVolume`；根目录由 `DNLS_STATE_ROOT` 决定，默认 `${DSH_HOME}/nano-local-sandbox/state/<profileId>/<instanceKey>`。没有第二份 history 文件。
+
+环境变量只有三个：`DNLS_ENV`（env tag）、`DNLS_PROFILES`（profile 根）、`DNLS_STATE_ROOT`（状态根）。旧的 `KITESURF_*` 名字已退役，无别名。
 
 ## 构建
 
@@ -96,10 +101,24 @@ profile 的唯一权威是 `profiles/kitesurf/profile.yaml`。实例状态在该
 npm test
 ```
 
+runtime 与镜像是派生产物，插件部署不带它们。唯一构建入口在源码树（不进包）：
+
+```bash
+# 只报告该 home 是否就绪（退出码 0 就绪，3 缺产物）
+node scripts/build-profile.mjs --home <DSH_HOME> --check
+# 补齐缺的产物；已就绪时什么都不做
+node scripts/build-profile.mjs --home <DSH_HOME> --work <派生目录> \
+  --source <官方 checkout> --manifest <仓根>/.dependencies/MANIFEST.json \
+  --host-install <已安装的 dsh 包目录> --container-state <container 服务状态目录>
+```
+
+pin 只从官方提交导出到 `<派生目录>/pin`，构建在 `<派生目录>/build`，不回写 pin。缺 runtime 或镜像时 `ensure` 失败关闭，不删除健康容器。
+
 ## 故障
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
+| `/nano-local-sandbox/lifecycle` 409 | 动作与当前 phase 不符（`action` 只认 suspend/resume/start/init/restart） | GET `/status` 看 `lifecycle.phase` 再选动作 |
 | `dsh plugin add` 报引擎不符 | `engines.dsh` 与正在跑的 dsh 不一致 | 换符合范围的 dsh，或在操作者明确接受风险后执行命令输出里的 `allow-version`。不要改本包的 `engines` |
 | 构建直接失败 | 没有 `ctx.sandbox` | 这是失败关闭，不要改成裸 spawn |
 | NVX 方法拒绝 | 该后端尚未实现 | 不要把拒绝改成成功 |

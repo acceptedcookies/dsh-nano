@@ -1,3 +1,5 @@
+import { errorCode } from './error-catalog.js'
+
 export const OPEN = 1
 export const CLOSED = 3
 const EVALUATE_LIMIT = 2000
@@ -33,7 +35,7 @@ export function createCdpKeeper() {
     const rec = sockets.get(instanceId)
     const previous = rec?.dom ?? null
     if (typeof expression !== 'string' || expression.length === 0 || expression.length > EVALUATE_LIMIT) {
-      return { ok: false, status: 400, errorId: 'kitesurf.evaluate.toolong', dom: null, executed: false, previous }
+      return { ok: false, status: 400, errorId: errorCode('evaluate.toolong'), dom: null, executed: false, previous }
     }
     const dom = await executor(expression)
     if (rec) rec.dom = dom

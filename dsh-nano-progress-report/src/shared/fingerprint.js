@@ -125,6 +125,12 @@ export function bashFingerprint(raw, cwd) {
  *  Call-side: path(s) from the args. Result-side `meta` may carry real paths;
  *  pass `{ args, meta }` and meta paths win when present. */
 export function fileFingerprints(raw, meta) {
+  return callPaths(raw, meta).map(path => digest(`file:${path}`))
+}
+
+/** Concrete paths a file call touches (display strings, not digests).
+ *  Meta paths win over args; returns the same list fileFingerprints keys on. */
+export function callPaths(raw, meta) {
   const args = parseArgsRaw(raw) ?? {}
   let paths = []
   if (Array.isArray(meta?.diffs)) paths = meta.diffs.map(diff => diff?.path)
@@ -134,7 +140,6 @@ export function fileFingerprints(raw, meta) {
     paths = typeof argPath === 'string' && argPath !== '' ? [argPath] : []
   }
   return paths.filter(path => typeof path === 'string' && path !== '')
-    .map(path => digest(`file:${path}`))
 }
 
 /** Fingerprint keys for one tool call, in ledger terms.
@@ -149,7 +154,10 @@ export function callFingerprints(name, raw, { cwd = null, meta = null } = {}) {
     return key === null ? [] : [key]
   }
   if (name === 'write' || name === 'edit' || name === 'apply_patch') {
-    return fileFingerprints(raw, meta)
+    const keys = fileFingerprints(raw, meta)
+    if (keys.length > 0) return keys
+    // Pathless file calls (e.g. apply_patch with no resolvable path) fall back
+    // to the canonical-args key so an identical retry can still recover.
   }
   const args = parseArgsRaw(raw)
   if (args === null) return []

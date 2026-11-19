@@ -1,4 +1,5 @@
 import { formatProgress } from './context.js'
+import { progressLedger } from './ledger.js'
 import { progressProjection } from './projection.js'
 import { summarizeProgress } from './summary.js'
 
@@ -10,6 +11,7 @@ export async function apply(ctx) {
   let disposed = false
   ctx.effect(() => () => { disposed = true })
   const handle = await ctx.sessionProjections.register(progressProjection)
+  const ledger = await ctx.sessionProjections.register(progressLedger)
   if (disposed) return
   ctx.systemPrompt.context({
     name: 'nano-progress-report:progress',

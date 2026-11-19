@@ -1,0 +1,901 @@
+[
+  {
+    "name": "initial-status",
+    "path": "status",
+    "status": 200,
+    "ms": 109,
+    "body": {
+      "v": 1,
+      "epoch": 1,
+      "observedAt": "2026-11-18T12:56:07.889Z",
+      "subject": {
+        "containerName": "kitesurf-dev"
+      },
+      "planes": {
+        "container": {
+          "plane": "container",
+          "state": "stopped",
+          "ok": false
+        },
+        "engine": {
+          "plane": "engine",
+          "state": "down",
+          "ok": false,
+          "httpBase": "http://127.0.0.1:8800",
+          "cdpGeneration": 0
+        },
+        "page": {
+          "plane": "page",
+          "state": "none",
+          "ok": false,
+          "url": null,
+          "detail": "engine not answering"
+        },
+        "dom": {
+          "plane": "dom",
+          "state": "failed",
+          "ok": false,
+          "detail": "no page",
+          "skipped": false
+        },
+        "bridge": {
+          "plane": "bridge",
+          "state": "down",
+          "ok": false,
+          "detail": "HTTP unreachable"
+        },
+        "terminal": {
+          "plane": "terminal",
+          "state": "absent"
+        }
+      },
+      "ready": false,
+      "live": false,
+      "degraded": [
+        "container",
+        "engine",
+        "page",
+        "dom",
+        "bridge"
+      ],
+      "healthy": false,
+      "containerName": "kitesurf-dev",
+      "container": {
+        "state": "stopped",
+        "name": "kitesurf-dev"
+      },
+      "effective": {
+        "httpBase": "http://127.0.0.1:8800",
+        "enginePort": 8800,
+        "bridgePort": 8801
+      },
+      "ports": {
+        "engine": {
+          "port": 8800,
+          "containerPort": 8787,
+          "heldBy": "this-container"
+        },
+        "bridge": {
+          "port": 8801,
+          "containerPort": 8791,
+          "heldBy": "this-container"
+        }
+      },
+      "engineAlive": false,
+      "checks": {
+        "container": {
+          "ok": false,
+          "detail": "stopped"
+        },
+        "engine": {
+          "ok": false,
+          "state": "down",
+          "detail": "down"
+        },
+        "page": {
+          "ok": false,
+          "detail": "engine not answering"
+        },
+        "dom": {
+          "ok": false,
+          "detail": "no page",
+          "skipped": false
+        },
+        "bridge": {
+          "ok": false,
+          "detail": "HTTP unreachable"
+        }
+      },
+      "summary": [
+        {
+          "plane": "container",
+          "label": "容器",
+          "ok": false,
+          "detail": "stopped"
+        },
+        {
+          "plane": "engine",
+          "label": "引擎",
+          "ok": false,
+          "state": "down",
+          "detail": "down"
+        },
+        {
+          "plane": "page",
+          "label": "页面",
+          "ok": false,
+          "detail": "engine not answering"
+        },
+        {
+          "plane": "dom",
+          "label": "DOM",
+          "ok": false,
+          "detail": "no page",
+          "skipped": false
+        },
+        {
+          "plane": "bridge",
+          "label": "桥",
+          "ok": false,
+          "detail": "HTTP unreachable"
+        }
+      ],
+      "buildId": "0.1.0",
+      "cdpGeneration": 0,
+      "phase": "running",
+      "httpBase": "http://127.0.0.1:8800",
+      "ok": true,
+      "viewport": null,
+      "userAgent": "",
+      "media": null,
+      "extraHeaders": null,
+      "kite": {
+        "phase": "running"
+      },
+      "lastPage": {
+        "url": "https://example.com/",
+        "at": "2026-11-17T16:40:44.976Z"
+      }
+    }
+  },
+  {
+    "name": "prepare-stopped-container",
+    "path": "recover",
+    "status": 200,
+    "ms": 4378,
+    "body": {
+      "action": "started",
+      "v": 1,
+      "epoch": 3,
+      "observedAt": "2026-11-18T12:56:10.885Z",
+      "subject": {
+        "containerName": "kitesurf-dev"
+      },
+      "planes": {
+        "container": {
+          "plane": "container",
+          "state": "running",
+          "ok": true
+        },
+        "engine": {
+          "plane": "engine",
+          "state": "cdp",
+          "ok": true,
+          "httpBase": "http://127.0.0.1:8800",
+          "cdpGeneration": 0
+        },
+        "page": {
+          "plane": "page",
+          "state": "blank",
+          "ok": true,
+          "url": "about:blank",
+          "detail": "about:blank"
+        },
+        "dom": {
+          "plane": "dom",
+          "state": "skipped",
+          "ok": true,
+          "detail": "未打开页面（等待打开地址）",
+          "skipped": true
+        },
+        "bridge": {
+          "plane": "bridge",
+          "state": "up",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        },
+        "terminal": {
+          "plane": "terminal",
+          "state": "absent"
+        }
+      },
+      "ready": true,
+      "live": true,
+      "degraded": [],
+      "healthy": true,
+      "containerName": "kitesurf-dev",
+      "container": {
+        "state": "running",
+        "name": "kitesurf-dev"
+      },
+      "effective": {
+        "httpBase": "http://127.0.0.1:8800",
+        "enginePort": 8800,
+        "bridgePort": 8801
+      },
+      "ports": {
+        "engine": {
+          "port": 8800,
+          "containerPort": 8787,
+          "heldBy": "this-container"
+        },
+        "bridge": {
+          "port": 8801,
+          "containerPort": 8791,
+          "heldBy": "this-container"
+        }
+      },
+      "engineAlive": true,
+      "checks": {
+        "container": {
+          "ok": true,
+          "detail": "running"
+        },
+        "engine": {
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        "page": {
+          "ok": true,
+          "detail": "about:blank"
+        },
+        "dom": {
+          "ok": true,
+          "detail": "未打开页面（等待打开地址）",
+          "skipped": true
+        },
+        "bridge": {
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      },
+      "summary": [
+        {
+          "plane": "container",
+          "label": "容器",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "plane": "engine",
+          "label": "引擎",
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        {
+          "plane": "page",
+          "label": "页面",
+          "ok": true,
+          "detail": "about:blank"
+        },
+        {
+          "plane": "dom",
+          "label": "DOM",
+          "ok": true,
+          "detail": "未打开页面（等待打开地址）",
+          "skipped": true
+        },
+        {
+          "plane": "bridge",
+          "label": "桥",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      ],
+      "buildId": "0.1.0",
+      "cdpGeneration": 0,
+      "phase": "running",
+      "httpBase": "http://127.0.0.1:8800",
+      "ok": true,
+      "url": "https://example.com/",
+      "replay": true
+    }
+  },
+  {
+    "name": "prepared-status",
+    "path": "status",
+    "status": 200,
+    "ms": 117,
+    "body": {
+      "v": 1,
+      "epoch": 4,
+      "observedAt": "2026-11-18T12:56:12.386Z",
+      "subject": {
+        "containerName": "kitesurf-dev"
+      },
+      "planes": {
+        "container": {
+          "plane": "container",
+          "state": "running",
+          "ok": true
+        },
+        "engine": {
+          "plane": "engine",
+          "state": "cdp",
+          "ok": true,
+          "httpBase": "http://127.0.0.1:8800",
+          "cdpGeneration": 0
+        },
+        "page": {
+          "plane": "page",
+          "state": "open",
+          "ok": true,
+          "url": "https://example.com/",
+          "detail": "https://example.com/"
+        },
+        "dom": {
+          "plane": "dom",
+          "state": "ready",
+          "ok": true,
+          "detail": "https://example.com/ · 1974B",
+          "skipped": false
+        },
+        "bridge": {
+          "plane": "bridge",
+          "state": "up",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        },
+        "terminal": {
+          "plane": "terminal",
+          "state": "absent"
+        }
+      },
+      "ready": true,
+      "live": true,
+      "degraded": [],
+      "healthy": true,
+      "containerName": "kitesurf-dev",
+      "container": {
+        "state": "running",
+        "name": "kitesurf-dev"
+      },
+      "effective": {
+        "httpBase": "http://127.0.0.1:8800",
+        "enginePort": 8800,
+        "bridgePort": 8801
+      },
+      "ports": {
+        "engine": {
+          "port": 8800,
+          "containerPort": 8787,
+          "heldBy": "this-container"
+        },
+        "bridge": {
+          "port": 8801,
+          "containerPort": 8791,
+          "heldBy": "this-container"
+        }
+      },
+      "engineAlive": true,
+      "checks": {
+        "container": {
+          "ok": true,
+          "detail": "running"
+        },
+        "engine": {
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        "page": {
+          "ok": true,
+          "detail": "https://example.com/"
+        },
+        "dom": {
+          "ok": true,
+          "detail": "https://example.com/ · 1974B",
+          "skipped": false
+        },
+        "bridge": {
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      },
+      "summary": [
+        {
+          "plane": "container",
+          "label": "容器",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "plane": "engine",
+          "label": "引擎",
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        {
+          "plane": "page",
+          "label": "页面",
+          "ok": true,
+          "detail": "https://example.com/"
+        },
+        {
+          "plane": "dom",
+          "label": "DOM",
+          "ok": true,
+          "detail": "https://example.com/ · 1974B",
+          "skipped": false
+        },
+        {
+          "plane": "bridge",
+          "label": "桥",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      ],
+      "buildId": "0.1.0",
+      "cdpGeneration": 0,
+      "phase": "running",
+      "httpBase": "http://127.0.0.1:8800",
+      "ok": true,
+      "viewport": null,
+      "userAgent": "",
+      "media": null,
+      "extraHeaders": null,
+      "kite": {
+        "phase": "running"
+      },
+      "lastPage": {
+        "url": "https://example.com/",
+        "at": "2026-11-17T16:40:44.976Z"
+      }
+    }
+  },
+  {
+    "name": "evaluate-valid",
+    "path": "evaluate",
+    "status": 400,
+    "ms": 7,
+    "body": {
+      "ok": false,
+      "errorId": "kitesurf.evaluate.toolong",
+      "dom": null
+    }
+  },
+  {
+    "name": "mcp-initialize",
+    "path": "mcp",
+    "status": 200,
+    "ms": 7,
+    "body": {
+      "ok": true,
+      "tools": 20
+    }
+  },
+  {
+    "name": "mcp-tools-list",
+    "path": "mcp",
+    "status": 200,
+    "ms": 7,
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+        "tools": [
+          {
+            "name": "sandbox.profile.list",
+            "description": "sandbox.profile.list",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {},
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.profile.describe",
+            "description": "sandbox.profile.describe",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          {
+            "name": "sandbox.instance.ensure",
+            "description": "sandbox.instance.ensure",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sessionId": {
+                  "type": "string"
+                },
+                "policy": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.instance.start",
+            "description": "sandbox.instance.start",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sessionId": {
+                  "type": "string"
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.instance.stop",
+            "description": "sandbox.instance.stop",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sessionId": {
+                  "type": "string"
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.instance.restart",
+            "description": "sandbox.instance.restart",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sessionId": {
+                  "type": "string"
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.instance.status",
+            "description": "sandbox.instance.status",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sessionId": {
+                  "type": "string"
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.diagnostics",
+            "description": "sandbox.diagnostics",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {},
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.console",
+            "description": "sandbox.console",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.operations",
+            "description": "sandbox.operations",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.error_catalog",
+            "description": "sandbox.error_catalog",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {},
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.targets",
+            "description": "sandbox.targets",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {},
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.history",
+            "description": "sandbox.history",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.dom",
+            "description": "sandbox.dom",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {},
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.elements",
+            "description": "sandbox.elements",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.selftest",
+            "description": "sandbox.selftest",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {},
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.network",
+            "description": "sandbox.network",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.ports",
+            "description": "sandbox.ports",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {},
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.recovery_plan",
+            "description": "sandbox.recovery_plan",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {},
+              "required": []
+            }
+          },
+          {
+            "name": "sandbox.bridge_health",
+            "description": "sandbox.bridge_health",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {},
+              "required": []
+            }
+          },
+          {
+            "name": "term.session.create",
+            "description": "term.session.create",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "lane": {
+                  "type": "string"
+                },
+                "sessionId": {
+                  "type": "string"
+                },
+                "shell": {
+                  "type": "string"
+                },
+                "cols": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 512
+                },
+                "rows": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 512
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "term.session.list",
+            "description": "term.session.list",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {},
+              "required": []
+            }
+          },
+          {
+            "name": "term.session.input",
+            "description": "term.session.input",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "data": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "data"
+              ]
+            }
+          },
+          {
+            "name": "term.session.read",
+            "description": "term.session.read",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "lines": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 500
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          {
+            "name": "term.session.resize",
+            "description": "term.session.resize",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "cols": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 512
+                },
+                "rows": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 512
+                }
+              },
+              "required": [
+                "id",
+                "cols",
+                "rows"
+              ]
+            }
+          },
+          {
+            "name": "term.session.close",
+            "description": "term.session.close",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          {
+            "name": "term.audit",
+            "description": "term.audit",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "lines": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 500
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "name": "term.lane.status",
+            "description": "term.lane.status",
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {},
+              "required": []
+            }
+          }
+        ]
+      }
+    }
+  }
+]

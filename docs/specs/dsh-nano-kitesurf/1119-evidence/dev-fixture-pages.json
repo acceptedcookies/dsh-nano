@@ -1,0 +1,91 @@
+[
+  {
+    "kind": "basic",
+    "ms": 389,
+    "status": 200,
+    "dom": {
+      "ok": true,
+      "url": "http://127.0.0.1:9919/basic",
+      "srcdoc": "<html><head><base href=\"http://127.0.0.1:9919/basic\"><title>Delivery Basic 1119</title><style>body{font:18px sans-serif;background:white;color:black;padding:20px}</style></head><body><h1 id=\"title\">BASIC_READY_1119</h1><a href=\"/spa\">SPA next</a><button id=\"action\">Click test</button><input id=\"name\"><p id=\"root\">STATIC_CONTENT</p></body></html>",
+      "bytes": 347,
+      "stripped": {
+        "scripts": 1,
+        "base": 0,
+        "metaRefresh": 0,
+        "handlers": 1,
+        "jsUrls": 0
+      }
+    },
+    "view": {
+      "address": "http://127.0.0.1:9919/basic",
+      "mode": "HTML 原生渲染",
+      "frameText": "BASIC_READY_1119\nSPA nextClick test\n\nSTATIC_CONTENT",
+      "error": ""
+    }
+  },
+  {
+    "kind": "spa",
+    "ms": 386,
+    "status": 200,
+    "dom": {
+      "ok": true,
+      "url": "http://127.0.0.1:9919/spa",
+      "srcdoc": "<html><head><base href=\"http://127.0.0.1:9919/spa\"><title>Delivery /spa</title></head><body><div id=\"root\"></div><pre id=\"net\">{\"ok\":true,\"received\":\"{\\\"fixture\\\":\\\"1119\\\"}\",\"ua\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36\",\"language\":\"en-US,en;q=0.9\",\"cookie\":null,\"trace\":null}</pre></body></html>",
+      "bytes": 374,
+      "stripped": {
+        "scripts": 1,
+        "base": 0,
+        "metaRefresh": 0,
+        "handlers": 0,
+        "jsUrls": 0
+      }
+    },
+    "view": {
+      "address": "http://127.0.0.1:9919/spa",
+      "mode": "HTML 原生渲染",
+      "frameText": "{\"ok\":true,\"received\":\"{\\\"fixture\\\":\\\"1119\\\"}\",\"ua\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36\",\"language\":\"en-US,en;q=0.9\",\"cookie\":null,\"trace\":null}",
+      "error": ""
+    }
+  },
+  {
+    "kind": "spa-later",
+    "dom": {
+      "ok": true,
+      "url": "http://127.0.0.1:9919/spa",
+      "srcdoc": "<html><head><base href=\"http://127.0.0.1:9919/spa\"><title>Delivery /spa</title></head><body><div id=\"root\">SPA_READY_1119</div><pre id=\"net\">{\"ok\":true,\"received\":\"{\\\"fixture\\\":\\\"1119\\\"}\",\"ua\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36\",\"language\":\"en-US,en;q=0.9\",\"cookie\":null,\"trace\":null}</pre></body></html>",
+      "bytes": 388,
+      "stripped": {
+        "scripts": 1,
+        "base": 0,
+        "metaRefresh": 0,
+        "handlers": 0,
+        "jsUrls": 0
+      }
+    },
+    "frameText": "{\"ok\":true,\"received\":\"{\\\"fixture\\\":\\\"1119\\\"}\",\"ua\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36\",\"language\":\"en-US,en;q=0.9\",\"cookie\":null,\"trace\":null}"
+  },
+  {
+    "kind": "broken",
+    "ms": 385,
+    "status": 200,
+    "dom": {
+      "ok": true,
+      "url": "http://127.0.0.1:9919/broken",
+      "srcdoc": "<html><head><base href=\"http://127.0.0.1:9919/broken\"><title>Delivery /broken</title></head><body><div id=\"root\"></div><pre id=\"net\"></pre></body></html>",
+      "bytes": 153,
+      "stripped": {
+        "scripts": 1,
+        "base": 0,
+        "metaRefresh": 0,
+        "handlers": 0,
+        "jsUrls": 0
+      }
+    },
+    "view": {
+      "address": "http://127.0.0.1:9919/broken",
+      "mode": "HTML 原生渲染",
+      "frameText": "",
+      "error": ""
+    }
+  }
+]

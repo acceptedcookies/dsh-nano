@@ -1,0 +1,28 @@
+[
+  {
+    "package": "dsh-nano-kitesurf",
+    "exitCode": 0,
+    "elapsedSeconds": 0.31,
+    "files": 12,
+    "totals": [
+      "# tests 74",
+      "# pass 74",
+      "# fail 0",
+      "# skipped 0"
+    ]
+  },
+  {
+    "package": "dsh-nano-local-sandbox",
+    "exitCode": 1,
+    "elapsedSeconds": 1.68,
+    "files": 47,
+    "totals": [
+      "not ok 170 - the live scanners include DNLS, and dropping it fails both route gates",
+      "not ok 196 - term.session.create does not create audit.jsonl",
+      "# tests 212",
+      "# pass 210",
+      "# fail 2",
+      "# skipped 0"
+    ]
+  }
+]

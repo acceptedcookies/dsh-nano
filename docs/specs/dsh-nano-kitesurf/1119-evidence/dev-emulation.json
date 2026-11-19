@@ -1,0 +1,299 @@
+[
+  {
+    "name": "apply-emulation",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 1,
+        "mobile": false
+      },
+      "userAgent": "DeliveryReview/1119",
+      "media": null,
+      "extraHeaders": {
+        "X-Delivery-Review": "1119"
+      },
+      "locale": "zh-CN",
+      "geolocation": {
+        "latitude": 31.2,
+        "longitude": 121.4
+      },
+      "colorScheme": "dark",
+      "cookies": "delivery_review=one"
+    }
+  },
+  {
+    "name": "open-after-settings",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "url": "http://127.0.0.1:9919/spa"
+    }
+  },
+  {
+    "name": "render-after-settings",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "url": "http://127.0.0.1:9919/spa",
+      "srcdoc": "<html style=\"color-scheme: dark;\"><head><base href=\"http://127.0.0.1:9919/spa\"><title>Delivery /spa</title></head><body><div id=\"root\"></div><pre id=\"net\">{\"ok\":true,\"received\":\"{\\\"fixture\\\":\\\"1119\\\"}\",\"ua\":\"DeliveryReview/1119\",\"language\":\"en-US,en;q=0.9\",\"cookie\":\"delivery_review=one\",\"trace\":\"1119\"}</pre></body></html>",
+      "bytes": 323,
+      "stripped": {
+        "scripts": 1,
+        "base": 0,
+        "metaRefresh": 0,
+        "handlers": 0,
+        "jsUrls": 0
+      }
+    }
+  },
+  {
+    "name": "cookies-before-clear",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "scope": "cookie",
+      "op": "read",
+      "result": {
+        "entries": {
+          "delivery_review": "one"
+        }
+      }
+    }
+  },
+  {
+    "name": "clear-cookie-setting",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 1,
+        "mobile": false
+      },
+      "userAgent": "DeliveryReview/1119",
+      "media": null,
+      "extraHeaders": {
+        "X-Delivery-Review": "1119"
+      },
+      "locale": "zh-CN",
+      "geolocation": null,
+      "colorScheme": "dark",
+      "cookies": ""
+    }
+  },
+  {
+    "name": "cookies-after-clear",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "scope": "cookie",
+      "op": "read",
+      "result": {
+        "entries": {
+          "delivery_review": "one"
+        }
+      }
+    }
+  },
+  {
+    "name": "shot-fixed-viewport",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "mimeType": "image/webp",
+      "format": "webp",
+      "url": "http://127.0.0.1:9919/spa",
+      "scrollX": 0,
+      "scrollY": 0,
+      "targetId": "897102ca6d1442dea922a69e2e4c8120",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 1,
+        "mobile": false
+      },
+      "image": "emulation-fixed.webp"
+    }
+  },
+  {
+    "name": "settings-projection",
+    "status": 200,
+    "body": {
+      "v": 1,
+      "epoch": 6,
+      "observedAt": "2026-11-18T13:04:03.326Z",
+      "subject": {
+        "containerName": "kitesurf-dev"
+      },
+      "planes": {
+        "container": {
+          "plane": "container",
+          "state": "running",
+          "ok": true
+        },
+        "engine": {
+          "plane": "engine",
+          "state": "cdp",
+          "ok": true,
+          "httpBase": "http://127.0.0.1:8800",
+          "cdpGeneration": 0
+        },
+        "page": {
+          "plane": "page",
+          "state": "open",
+          "ok": true,
+          "url": "http://127.0.0.1:9919/spa",
+          "detail": "http://127.0.0.1:9919/spa"
+        },
+        "dom": {
+          "plane": "dom",
+          "state": "ready",
+          "ok": true,
+          "detail": "http://127.0.0.1:9919/spa · 329B",
+          "skipped": false
+        },
+        "bridge": {
+          "plane": "bridge",
+          "state": "up",
+          "ok": true,
+          "detail": "conns 0 · accepted 1 · rejected 0"
+        },
+        "terminal": {
+          "plane": "terminal",
+          "state": "absent"
+        }
+      },
+      "ready": true,
+      "live": true,
+      "degraded": [],
+      "healthy": true,
+      "containerName": "kitesurf-dev",
+      "container": {
+        "state": "running",
+        "name": "kitesurf-dev"
+      },
+      "effective": {
+        "httpBase": "http://127.0.0.1:8800",
+        "enginePort": 8800,
+        "bridgePort": 8801
+      },
+      "ports": {
+        "engine": {
+          "port": 8800,
+          "containerPort": 8787,
+          "heldBy": "this-container"
+        },
+        "bridge": {
+          "port": 8801,
+          "containerPort": 8791,
+          "heldBy": "this-container"
+        }
+      },
+      "engineAlive": true,
+      "checks": {
+        "container": {
+          "ok": true,
+          "detail": "running"
+        },
+        "engine": {
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        "page": {
+          "ok": true,
+          "detail": "http://127.0.0.1:9919/spa"
+        },
+        "dom": {
+          "ok": true,
+          "detail": "http://127.0.0.1:9919/spa · 329B",
+          "skipped": false
+        },
+        "bridge": {
+          "ok": true,
+          "detail": "conns 0 · accepted 1 · rejected 0"
+        }
+      },
+      "summary": [
+        {
+          "plane": "container",
+          "label": "容器",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "plane": "engine",
+          "label": "引擎",
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        {
+          "plane": "page",
+          "label": "页面",
+          "ok": true,
+          "detail": "http://127.0.0.1:9919/spa"
+        },
+        {
+          "plane": "dom",
+          "label": "DOM",
+          "ok": true,
+          "detail": "http://127.0.0.1:9919/spa · 329B",
+          "skipped": false
+        },
+        {
+          "plane": "bridge",
+          "label": "桥",
+          "ok": true,
+          "detail": "conns 0 · accepted 1 · rejected 0"
+        }
+      ],
+      "buildId": "0.1.0",
+      "cdpGeneration": 0,
+      "phase": "running",
+      "httpBase": "http://127.0.0.1:8800",
+      "ok": true,
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 1,
+        "mobile": false
+      },
+      "userAgent": "DeliveryReview/1119",
+      "media": null,
+      "extraHeaders": {
+        "X-Delivery-Review": "1119"
+      },
+      "locale": "zh-CN",
+      "geolocation": null,
+      "colorScheme": "dark",
+      "cookies": "",
+      "kite": {
+        "phase": "running"
+      },
+      "lastPage": {
+        "url": "http://127.0.0.1:9919/spa",
+        "at": "2026-11-18T13:04:03.120Z"
+      }
+    }
+  },
+  {
+    "name": "restore-core-settings",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "viewport": null,
+      "userAgent": "",
+      "media": null,
+      "extraHeaders": null,
+      "locale": "zh-CN",
+      "geolocation": null,
+      "colorScheme": "dark",
+      "cookies": ""
+    }
+  }
+]

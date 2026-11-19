@@ -1,0 +1,38 @@
+
+> dsh-nano-cloud-session@0.1.0 build
+> node scripts/build-client.mjs
+
+baked /Users/seanz/Documents/dsh-plugins/.agents/worktrees/dncs-1119/dsh-nano-cloud-session/lib/bindings.js
+baked /Users/seanz/Documents/dsh-plugins/.agents/worktrees/dncs-1119/dsh-nano-cloud-session/lib/perf-declaration.js
+
+  lib/perf-review-host.js  17.3kb
+
+⚡ Done in 9ms
+
+  lib/devin-api.js  9.0kb
+
+⚡ Done in 3ms
+
+  lib/profiles-store.js  7.6kb
+
+⚡ Done in 2ms
+
+  lib/route-guard.js  7.7kb
+
+⚡ Done in 2ms
+
+  lib/ssh-keys.js  1.2kb
+
+⚡ Done in 1ms
+
+  lib/host.js  123.5kb
+
+⚡ Done in 6ms
+
+  lib/remote/devin-workspace.mjs  35.8kb
+
+⚡ Done in 3ms
+
+  lib/client.body.js  77.3kb
+
+⚡ Done in 7ms

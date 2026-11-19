@@ -1,8 +1,9 @@
 /** Client entry for dsh-nano-progress-report.
- *  Registers the 'progress' conversation view target, the Progress
- *  conversation view tab (primary entry), the workbench tab type and body
- *  (kept as the side-by-side entry), and a session-header action that opens
- *  the workbench tab. No host routes, no stored state — the session event
+ *  Registers the 'progress' data view target, the workbench tab type/body,
+ *  its tab-menu item and a session-header action that opens the workbench tab.
+ *  Progress deliberately does NOT register a conversation.view tab: the chat
+ *  interface already has the trajectory view, and Progress lives in the
+ *  [dsh工作台] only. No host routes, no stored state — the session event
  *  stream is the single source of truth; this plugin only projects it. */
 import { registerProgressProjection } from './events/index.js'
 import ProgressBody from './view/ProgressBody.jsx'
@@ -54,15 +55,6 @@ export function apply(ctx) {
     name: 'sidebar.right.pane.tab',
     key: TAB_ID,
     inject: () => ({ ctx, t }),
-  }, ProgressBody))
-
-  ctx.slots.inject('conversation.view', () => ctx.slots.register({
-    name: 'conversation.view',
-    id: VIEW_ID,
-    // After chat (0) and trajectory (10).
-    order: 30,
-    label: () => t('view.progress'),
-    inject: () => ({ ctx, t, variant: 'view' }),
   }, ProgressBody))
 
   ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({

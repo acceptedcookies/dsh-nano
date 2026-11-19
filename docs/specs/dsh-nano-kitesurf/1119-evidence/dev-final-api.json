@@ -1,0 +1,904 @@
+[
+  {
+    "name": "open-example",
+    "status": 200,
+    "ms": 1856,
+    "body": {
+      "ok": true,
+      "url": "https://example.com/"
+    }
+  },
+  {
+    "name": "real-engine-screenshot",
+    "status": 200,
+    "ms": 149,
+    "body": {
+      "ok": true,
+      "mimeType": "image/png",
+      "format": "png",
+      "url": "https://example.com/",
+      "scrollX": 0,
+      "scrollY": 0,
+      "targetId": "2ce54a47921446be9ecfecac25d3dc93",
+      "viewport": {
+        "width": 572,
+        "height": 773,
+        "deviceScaleFactor": 1,
+        "mobile": false
+      },
+      "image": "engine-example.png"
+    }
+  },
+  {
+    "name": "elements-body-styles",
+    "status": 200,
+    "ms": 54,
+    "body": {
+      "ok": true,
+      "depth": 3,
+      "count": 34,
+      "nodes": [
+        {
+          "nodeId": 0,
+          "level": 0,
+          "tag": "#document"
+        },
+        {
+          "nodeId": 2,
+          "level": 1,
+          "tag": "html"
+        },
+        {
+          "nodeId": 3,
+          "level": 2,
+          "tag": "head"
+        },
+        {
+          "nodeId": 4,
+          "level": 3,
+          "tag": "meta"
+        },
+        {
+          "nodeId": 5,
+          "level": 3,
+          "tag": "link"
+        },
+        {
+          "nodeId": 6,
+          "level": 3,
+          "tag": "meta"
+        },
+        {
+          "nodeId": 7,
+          "level": 3,
+          "tag": "title"
+        },
+        {
+          "nodeId": 8,
+          "level": 4,
+          "tag": "#text"
+        },
+        {
+          "nodeId": 9,
+          "level": 3,
+          "tag": "style"
+        },
+        {
+          "nodeId": 10,
+          "level": 4,
+          "tag": "#text"
+        },
+        {
+          "nodeId": 11,
+          "level": 2,
+          "tag": "body"
+        },
+        {
+          "nodeId": 24,
+          "level": 3,
+          "tag": "style"
+        },
+        {
+          "nodeId": 27,
+          "level": 4,
+          "tag": "#text"
+        },
+        {
+          "nodeId": 25,
+          "level": 3,
+          "tag": "svg"
+        },
+        {
+          "nodeId": 28,
+          "level": 4,
+          "tag": "path"
+        },
+        {
+          "nodeId": 30,
+          "level": 4,
+          "tag": "g"
+        },
+        {
+          "nodeId": 26,
+          "level": 5,
+          "tag": "path"
+        },
+        {
+          "nodeId": 29,
+          "level": 5,
+          "tag": "use"
+        },
+        {
+          "nodeId": 12,
+          "level": 3,
+          "tag": "p"
+        },
+        {
+          "nodeId": 13,
+          "level": 4,
+          "tag": "#text"
+        },
+        {
+          "nodeId": 17,
+          "level": 3,
+          "tag": "p"
+        },
+        {
+          "nodeId": 31,
+          "level": 4,
+          "tag": "#text"
+        },
+        {
+          "nodeId": 18,
+          "level": 3,
+          "tag": "p"
+        },
+        {
+          "nodeId": 32,
+          "level": 4,
+          "tag": "#text"
+        },
+        {
+          "nodeId": 19,
+          "level": 3,
+          "tag": "p"
+        },
+        {
+          "nodeId": 33,
+          "level": 4,
+          "tag": "#text"
+        },
+        {
+          "nodeId": 20,
+          "level": 3,
+          "tag": "p"
+        },
+        {
+          "nodeId": 34,
+          "level": 4,
+          "tag": "#text"
+        },
+        {
+          "nodeId": 21,
+          "level": 3,
+          "tag": "p"
+        },
+        {
+          "nodeId": 35,
+          "level": 4,
+          "tag": "#text"
+        },
+        {
+          "nodeId": 22,
+          "level": 3,
+          "tag": "a"
+        },
+        {
+          "nodeId": 36,
+          "level": 4,
+          "tag": "#text"
+        },
+        {
+          "nodeId": 14,
+          "level": 3,
+          "tag": "script"
+        },
+        {
+          "nodeId": 15,
+          "level": 3,
+          "tag": "#text"
+        }
+      ],
+      "selector": "body",
+      "matched": {
+        "matched": [
+          {
+            "selector": "address, article, aside, blockquote, body, caption, center, col, colgroup, dd, dir, div, dl, dt, fieldset, figcaption, figure, footer, form, h1, h2, h3, h4, h5, h6, header, hgroup, hr, html, legend, li, listing, main, marquee, menu, nav, noframes, ol, p, plaintext, pre, search, section, summary, table, tbody, td, tfoot, th, thead, tr, ul, xmp"
+          },
+          {
+            "selector": "body"
+          },
+          {
+            "selector": "body"
+          }
+        ]
+      },
+      "computed": {
+        "align-items": "normal",
+        "alignment-baseline": "baseline",
+        "backface-visibility": "visible",
+        "baseline-source": "auto",
+        "border-collapse": "separate",
+        "border-image-repeat": "stretch",
+        "box-decoration-break": "slice",
+        "box-sizing": "content-box",
+        "break-inside": "auto",
+        "caption-side": "top",
+        "clear": "none",
+        "column-fill": "balance",
+        "column-span": "none",
+        "contain": "none",
+        "container-type": "normal",
+        "direction": "ltr",
+        "display": "block",
+        "empty-cells": "show",
+        "field-sizing": "fixed",
+        "flex-direction": "row",
+        "flex-wrap": "nowrap",
+        "float": "none",
+        "font-kerning": "auto",
+        "font-language-override": "normal",
+        "font-optical-sizing": "auto",
+        "font-synthesis-style": "auto",
+        "font-variant-caps": "normal",
+        "font-variant-east-asian": "normal",
+        "font-variant-emoji": "normal",
+        "font-variant-ligatures": "normal",
+        "font-variant-numeric": "normal",
+        "font-variant-position": "normal",
+        "forced-color-adjust": "auto",
+        "grid-auto-flow": "row",
+        "hyphens": "manual",
+        "image-orientation": "from-image",
+        "image-rendering": "auto",
+        "isolation": "auto",
+        "justify-items": "normal",
+        "line-break": "auto",
+        "list-style-position": "outside",
+        "mask-type": "luminance",
+        "math-style": "normal",
+        "mix-blend-mode": "normal",
+        "-moz-box-orient": "horizontal",
+        "object-fit": "fill",
+        "outline-style": "none",
+        "overflow-wrap": "normal",
+        "pointer-events": "auto",
+        "position": "static",
+        "position-area": "none",
+        "position-try-order": "normal",
+        "position-visibility": "anchors-visible",
+        "resize": "none",
+        "scroll-behavior": "auto",
+        "scrollbar-gutter": "auto",
+        "scrollbar-width": "auto",
+        "-servo-top-layer": "none",
+        "stroke-linecap": "butt",
+        "stroke-linejoin": "miter",
+        "table-layout": "auto",
+        "text-align": "center",
+        "text-align-last": "auto",
+        "text-autospace": "no-autospace",
+        "text-combine-upright": "none",
+        "text-decoration-line": "none",
+        "text-decoration-skip-ink": "auto",
+        "text-decoration-style": "solid",
+        "text-emphasis-position": "auto",
+        "text-justify": "auto",
+        "text-orientation": "mixed",
+        "text-rendering": "auto",
+        "text-transform": "none",
+        "text-underline-position": "auto",
+        "text-wrap-mode": "wrap",
+        "text-wrap-style": "auto",
+        "touch-action": "auto",
+        "transform-box": "view-box",
+        "transform-style": "flat",
+        "unicode-bidi": "isolate"
+      }
+    }
+  },
+  {
+    "name": "selftest-after-open",
+    "status": 200,
+    "ms": 124,
+    "body": {
+      "v": 1,
+      "epoch": 3,
+      "observedAt": "2026-11-18T13:19:32.023Z",
+      "subject": {
+        "containerName": "kitesurf-dev"
+      },
+      "planes": {
+        "container": {
+          "plane": "container",
+          "state": "running",
+          "ok": true
+        },
+        "engine": {
+          "plane": "engine",
+          "state": "cdp",
+          "ok": true,
+          "httpBase": "http://127.0.0.1:8800",
+          "cdpGeneration": 0
+        },
+        "page": {
+          "plane": "page",
+          "state": "open",
+          "ok": true,
+          "url": "https://example.com/",
+          "detail": "https://example.com/"
+        },
+        "dom": {
+          "plane": "dom",
+          "state": "ready",
+          "ok": true,
+          "detail": "https://example.com/ · 1974B",
+          "skipped": false
+        },
+        "bridge": {
+          "plane": "bridge",
+          "state": "up",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        },
+        "terminal": {
+          "plane": "terminal",
+          "state": "absent"
+        }
+      },
+      "ready": true,
+      "live": true,
+      "degraded": [],
+      "healthy": true,
+      "containerName": "kitesurf-dev",
+      "container": {
+        "state": "running",
+        "name": "kitesurf-dev"
+      },
+      "effective": {
+        "httpBase": "http://127.0.0.1:8800",
+        "enginePort": 8800,
+        "bridgePort": 8801
+      },
+      "ports": {
+        "engine": {
+          "port": 8800,
+          "containerPort": 8787,
+          "heldBy": "this-container"
+        },
+        "bridge": {
+          "port": 8801,
+          "containerPort": 8791,
+          "heldBy": "this-container"
+        }
+      },
+      "engineAlive": true,
+      "checks": [
+        {
+          "id": "container-exists",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "id": "container-running",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "id": "engine-cdp-reachable",
+          "ok": true,
+          "detail": "cdp"
+        },
+        {
+          "id": "engine-version",
+          "ok": true,
+          "detail": "Chrome/145.0.0.0"
+        },
+        {
+          "id": "page-target",
+          "ok": true,
+          "detail": "https://example.com/"
+        },
+        {
+          "id": "page-not-blank",
+          "ok": true,
+          "detail": "has document"
+        },
+        {
+          "id": "dom-renderable",
+          "ok": true,
+          "detail": "https://example.com/ · 1974B"
+        },
+        {
+          "id": "shot-capturable",
+          "ok": true,
+          "detail": "non-empty frame"
+        },
+        {
+          "id": "bridge-health",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        },
+        {
+          "id": "bridge-writer-free",
+          "ok": true,
+          "detail": "no writer held"
+        },
+        {
+          "id": "history-consistent",
+          "ok": true,
+          "detail": "2 entries"
+        }
+      ],
+      "summary": [
+        {
+          "plane": "container",
+          "label": "容器",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "plane": "engine",
+          "label": "引擎",
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        {
+          "plane": "page",
+          "label": "页面",
+          "ok": true,
+          "detail": "https://example.com/"
+        },
+        {
+          "plane": "dom",
+          "label": "DOM",
+          "ok": true,
+          "detail": "https://example.com/ · 1974B",
+          "skipped": false
+        },
+        {
+          "plane": "bridge",
+          "label": "桥",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      ],
+      "buildId": "0.1.0",
+      "cdpGeneration": 0,
+      "phase": "running",
+      "httpBase": "http://127.0.0.1:8800",
+      "ok": true,
+      "passed": true,
+      "failed": 0,
+      "total": 11,
+      "snapshot": {
+        "v": 1,
+        "epoch": 3,
+        "observedAt": "2026-11-18T13:19:32.023Z",
+        "subject": {
+          "containerName": "kitesurf-dev"
+        },
+        "planes": {
+          "container": {
+            "plane": "container",
+            "state": "running",
+            "ok": true
+          },
+          "engine": {
+            "plane": "engine",
+            "state": "cdp",
+            "ok": true,
+            "httpBase": "http://127.0.0.1:8800",
+            "cdpGeneration": 0
+          },
+          "page": {
+            "plane": "page",
+            "state": "open",
+            "ok": true,
+            "url": "https://example.com/",
+            "detail": "https://example.com/"
+          },
+          "dom": {
+            "plane": "dom",
+            "state": "ready",
+            "ok": true,
+            "detail": "https://example.com/ · 1974B",
+            "skipped": false
+          },
+          "bridge": {
+            "plane": "bridge",
+            "state": "up",
+            "ok": true,
+            "detail": "conns 0 · accepted 0 · rejected 0"
+          },
+          "terminal": {
+            "plane": "terminal",
+            "state": "absent"
+          }
+        },
+        "ready": true,
+        "live": true,
+        "degraded": [],
+        "healthy": true,
+        "containerName": "kitesurf-dev",
+        "container": {
+          "state": "running",
+          "name": "kitesurf-dev"
+        },
+        "effective": {
+          "httpBase": "http://127.0.0.1:8800",
+          "enginePort": 8800,
+          "bridgePort": 8801
+        },
+        "ports": {
+          "engine": {
+            "port": 8800,
+            "containerPort": 8787,
+            "heldBy": "this-container"
+          },
+          "bridge": {
+            "port": 8801,
+            "containerPort": 8791,
+            "heldBy": "this-container"
+          }
+        },
+        "engineAlive": true,
+        "checks": {
+          "container": {
+            "ok": true,
+            "detail": "running"
+          },
+          "engine": {
+            "ok": true,
+            "state": "cdp",
+            "detail": "http://127.0.0.1:8800"
+          },
+          "page": {
+            "ok": true,
+            "detail": "https://example.com/"
+          },
+          "dom": {
+            "ok": true,
+            "detail": "https://example.com/ · 1974B",
+            "skipped": false
+          },
+          "bridge": {
+            "ok": true,
+            "detail": "conns 0 · accepted 0 · rejected 0"
+          }
+        },
+        "summary": [
+          {
+            "plane": "container",
+            "label": "容器",
+            "ok": true,
+            "detail": "running"
+          },
+          {
+            "plane": "engine",
+            "label": "引擎",
+            "ok": true,
+            "state": "cdp",
+            "detail": "http://127.0.0.1:8800"
+          },
+          {
+            "plane": "page",
+            "label": "页面",
+            "ok": true,
+            "detail": "https://example.com/"
+          },
+          {
+            "plane": "dom",
+            "label": "DOM",
+            "ok": true,
+            "detail": "https://example.com/ · 1974B",
+            "skipped": false
+          },
+          {
+            "plane": "bridge",
+            "label": "桥",
+            "ok": true,
+            "detail": "conns 0 · accepted 0 · rejected 0"
+          }
+        ],
+        "buildId": "0.1.0",
+        "cdpGeneration": 0,
+        "phase": "running",
+        "httpBase": "http://127.0.0.1:8800"
+      }
+    }
+  },
+  {
+    "name": "network-list",
+    "status": 200,
+    "ms": 7,
+    "body": {
+      "ok": true,
+      "entries": [
+        {
+          "id": "cs-Qen8Iuom-1",
+          "url": "https://example.com/s.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:19:05.171Z",
+          "startedAt": 1795007945171,
+          "timestamp": 3.234,
+          "status": 200,
+          "mimeType": "text/javascript",
+          "size": 1963,
+          "durationMs": 733,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "2308bad2061949be89c3a8fcded687c1",
+          "url": "https://example.com/",
+          "method": "GET",
+          "type": "Document",
+          "at": "2026-11-18T13:19:29.875Z",
+          "startedAt": 1795007969875,
+          "timestamp": 27.938,
+          "status": 200,
+          "mimeType": "text/html",
+          "size": 577,
+          "durationMs": 879,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-Qen8Iuom-2",
+          "url": "https://example.com/s.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:19:30.769Z",
+          "startedAt": 1795007970769,
+          "timestamp": 28.832,
+          "status": 200,
+          "mimeType": "text/javascript",
+          "size": 1963,
+          "durationMs": 720,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        }
+      ]
+    }
+  },
+  {
+    "name": "network-detail-valid",
+    "status": 200,
+    "ms": 14,
+    "body": {
+      "ok": true,
+      "entry": {
+        "id": "cs-Qen8Iuom-1",
+        "url": "https://example.com/s.js",
+        "method": "GET",
+        "type": "Script",
+        "at": "2026-11-18T13:19:05.171Z",
+        "startedAt": 1795007945171,
+        "timestamp": 3.234,
+        "status": 200,
+        "mimeType": "text/javascript",
+        "size": 1963,
+        "durationMs": 733,
+        "failed": false,
+        "error": "",
+        "cached": false,
+        "requestHeaders": {
+          "accept": "*/*",
+          "accept-encoding": "gzip, br",
+          "accept-language": "en-US,en;q=0.9",
+          "referer": "https://example.com/",
+          "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+        },
+        "postData": "",
+        "hasPostData": false,
+        "requestMimeType": "",
+        "responseHeaders": {
+          "age": "3668",
+          "allow": "GET, HEAD",
+          "alt-svc": "h3=\":443\"; ma=86400",
+          "cf-cache-status": "HIT",
+          "cf-ray": "a5c743ca5a87d2f2-FRA",
+          "connection": "keep-alive",
+          "content-encoding": "br",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Wed, 18 Nov 2026 13:19:05 GMT",
+          "etag": "W/\"6afd83cf-7ab\"",
+          "last-modified": "Wed, 18 Nov 2026 10:54:07 GMT",
+          "server": "cloudflare",
+          "transfer-encoding": "chunked"
+        },
+        "statusText": "OK",
+        "protocol": "http/1.1",
+        "remoteAddress": ""
+      },
+      "responseBody": {
+        "body": "",
+        "base64Encoded": false,
+        "truncated": false
+      }
+    }
+  },
+  {
+    "name": "final-status",
+    "status": 200,
+    "ms": 106,
+    "body": {
+      "v": 1,
+      "epoch": 3,
+      "observedAt": "2026-11-18T13:19:32.172Z",
+      "subject": {
+        "containerName": "kitesurf-dev"
+      },
+      "planes": {
+        "container": {
+          "plane": "container",
+          "state": "running",
+          "ok": true
+        },
+        "engine": {
+          "plane": "engine",
+          "state": "cdp",
+          "ok": true,
+          "httpBase": "http://127.0.0.1:8800",
+          "cdpGeneration": 0
+        },
+        "page": {
+          "plane": "page",
+          "state": "open",
+          "ok": true,
+          "url": "https://example.com/",
+          "detail": "https://example.com/"
+        },
+        "dom": {
+          "plane": "dom",
+          "state": "ready",
+          "ok": true,
+          "detail": "https://example.com/ · 1974B",
+          "skipped": false
+        },
+        "bridge": {
+          "plane": "bridge",
+          "state": "up",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        },
+        "terminal": {
+          "plane": "terminal",
+          "state": "absent"
+        }
+      },
+      "ready": true,
+      "live": true,
+      "degraded": [],
+      "healthy": true,
+      "containerName": "kitesurf-dev",
+      "container": {
+        "state": "running",
+        "name": "kitesurf-dev"
+      },
+      "effective": {
+        "httpBase": "http://127.0.0.1:8800",
+        "enginePort": 8800,
+        "bridgePort": 8801
+      },
+      "ports": {
+        "engine": {
+          "port": 8800,
+          "containerPort": 8787,
+          "heldBy": "this-container"
+        },
+        "bridge": {
+          "port": 8801,
+          "containerPort": 8791,
+          "heldBy": "this-container"
+        }
+      },
+      "engineAlive": true,
+      "checks": {
+        "container": {
+          "ok": true,
+          "detail": "running"
+        },
+        "engine": {
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        "page": {
+          "ok": true,
+          "detail": "https://example.com/"
+        },
+        "dom": {
+          "ok": true,
+          "detail": "https://example.com/ · 1974B",
+          "skipped": false
+        },
+        "bridge": {
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      },
+      "summary": [
+        {
+          "plane": "container",
+          "label": "容器",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "plane": "engine",
+          "label": "引擎",
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        {
+          "plane": "page",
+          "label": "页面",
+          "ok": true,
+          "detail": "https://example.com/"
+        },
+        {
+          "plane": "dom",
+          "label": "DOM",
+          "ok": true,
+          "detail": "https://example.com/ · 1974B",
+          "skipped": false
+        },
+        {
+          "plane": "bridge",
+          "label": "桥",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      ],
+      "buildId": "0.1.0",
+      "cdpGeneration": 0,
+      "phase": "running",
+      "httpBase": "http://127.0.0.1:8800",
+      "ok": true,
+      "viewport": null,
+      "userAgent": "",
+      "media": null,
+      "extraHeaders": null,
+      "kite": {
+        "phase": "running"
+      },
+      "lastPage": {
+        "url": "https://example.com/",
+        "at": "2026-11-18T13:19:31.715Z"
+      }
+    }
+  }
+]

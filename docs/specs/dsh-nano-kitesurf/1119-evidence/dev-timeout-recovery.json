@@ -1,0 +1,1563 @@
+[
+  {
+    "endpoint": "diagnostics",
+    "status": 200,
+    "body": {
+      "v": 1,
+      "epoch": 6,
+      "observedAt": "2026-11-18T13:07:30.411Z",
+      "subject": {
+        "containerName": "kitesurf-dev"
+      },
+      "planes": {
+        "container": {
+          "plane": "container",
+          "state": "running",
+          "ok": true
+        },
+        "engine": {
+          "plane": "engine",
+          "state": "cdp",
+          "ok": true,
+          "httpBase": "http://127.0.0.1:8800",
+          "cdpGeneration": 0
+        },
+        "page": {
+          "plane": "page",
+          "state": "open",
+          "ok": true,
+          "url": "https://axtraproperty.com.au/",
+          "detail": "https://axtraproperty.com.au/"
+        },
+        "dom": {
+          "plane": "dom",
+          "state": "ready",
+          "ok": true,
+          "detail": "https://axtraproperty.com.au/ · 2491B",
+          "skipped": false
+        },
+        "bridge": {
+          "plane": "bridge",
+          "state": "up",
+          "ok": true,
+          "detail": "conns 0 · accepted 1 · rejected 0"
+        },
+        "terminal": {
+          "plane": "terminal",
+          "state": "absent"
+        }
+      },
+      "ready": true,
+      "live": true,
+      "degraded": [],
+      "healthy": true,
+      "containerName": "kitesurf-dev",
+      "container": {
+        "state": "running",
+        "name": "kitesurf-dev"
+      },
+      "effective": {
+        "httpBase": "http://127.0.0.1:8800",
+        "enginePort": 8800,
+        "bridgePort": 8801
+      },
+      "ports": {
+        "engine": {
+          "port": 8800,
+          "containerPort": 8787,
+          "heldBy": "this-container"
+        },
+        "bridge": {
+          "port": 8801,
+          "containerPort": 8791,
+          "heldBy": "this-container"
+        }
+      },
+      "engineAlive": true,
+      "checks": {
+        "container": {
+          "ok": true,
+          "detail": "running"
+        },
+        "engine": {
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        "page": {
+          "ok": true,
+          "detail": "https://axtraproperty.com.au/"
+        },
+        "dom": {
+          "ok": true,
+          "detail": "https://axtraproperty.com.au/ · 2491B",
+          "skipped": false
+        },
+        "bridge": {
+          "ok": true,
+          "detail": "conns 0 · accepted 1 · rejected 0"
+        }
+      },
+      "summary": [
+        {
+          "plane": "container",
+          "label": "容器",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "plane": "engine",
+          "label": "引擎",
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        {
+          "plane": "page",
+          "label": "页面",
+          "ok": true,
+          "detail": "https://axtraproperty.com.au/"
+        },
+        {
+          "plane": "dom",
+          "label": "DOM",
+          "ok": true,
+          "detail": "https://axtraproperty.com.au/ · 2491B",
+          "skipped": false
+        },
+        {
+          "plane": "bridge",
+          "label": "桥",
+          "ok": true,
+          "detail": "conns 0 · accepted 1 · rejected 0"
+        }
+      ],
+      "buildId": "0.1.0",
+      "cdpGeneration": 0,
+      "phase": "running",
+      "httpBase": "http://127.0.0.1:8800",
+      "ok": true,
+      "kite": {
+        "phase": "running"
+      },
+      "text": "Kitesurf 环境诊断 · 正常\n实例 kitesurf-dev · 容器 running\n引擎 http://127.0.0.1:8800 · 桥 8801\n✓ 容器：running\n✓ 引擎：http://127.0.0.1:8800\n✓ 页面：https://axtraproperty.com.au/\n✓ DOM：https://axtraproperty.com.au/ · 2491B\n✓ 桥：conns 0 · accepted 1 · rejected 0",
+      "targets": [
+        {
+          "targetId": "browser",
+          "type": "browser",
+          "url": "",
+          "title": ""
+        },
+        {
+          "targetId": "897102ca6d1442dea922a69e2e4c8120",
+          "type": "page",
+          "url": "https://axtraproperty.com.au/",
+          "title": "Axtra Property - Premier Real Estate Master Agent"
+        }
+      ],
+      "console": [
+        {
+          "level": "error",
+          "text": "[/assets/index-Rpf-tHCJ.js] module prefetch failed: module fetch threw for https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js: The operation was aborted",
+          "at": "2026-11-18T13:06:45.421Z"
+        },
+        {
+          "level": "error",
+          "text": "[/assets/index-Rpf-tHCJ.js] module prefetch failed: module fetch threw for https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js: The operation was aborted",
+          "at": "2026-11-18T13:06:45.422Z"
+        },
+        {
+          "level": "error",
+          "text": "[/assets/index-Rpf-tHCJ.js] module prefetch failed: module fetch threw for https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js: The operation was aborted",
+          "at": "2026-11-18T13:06:45.422Z"
+        },
+        {
+          "level": "error",
+          "text": "[/assets/index-Rpf-tHCJ.js] module prefetch failed: module fetch threw for https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js: The operation was aborted",
+          "at": "2026-11-18T13:06:45.422Z"
+        },
+        {
+          "level": "error",
+          "text": "[/assets/index-Rpf-tHCJ.js] module prefetch failed: module fetch threw for https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js: The operation was aborted",
+          "at": "2026-11-18T13:06:45.422Z"
+        },
+        {
+          "level": "error",
+          "text": "[/assets/index-Rpf-tHCJ.js] module prefetch failed: module fetch threw for https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js: The operation was aborted",
+          "at": "2026-11-18T13:06:45.422Z"
+        },
+        {
+          "level": "error",
+          "text": "[/assets/index-Rpf-tHCJ.js] module prefetch failed: module fetch threw for https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js: The operation was aborted",
+          "at": "2026-11-18T13:06:45.422Z"
+        },
+        {
+          "level": "error",
+          "text": "[/assets/index-Rpf-tHCJ.js] module prefetch failed: module fetch threw for https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js: The operation was aborted",
+          "at": "2026-11-18T13:06:45.422Z"
+        },
+        {
+          "level": "error",
+          "text": "[/assets/index-Rpf-tHCJ.js] module prefetch failed: module fetch threw for https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js: The operation was aborted",
+          "at": "2026-11-18T13:06:45.423Z"
+        },
+        {
+          "level": "error",
+          "text": "[/assets/index-Rpf-tHCJ.js] module prefetch failed: module fetch threw for https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js: The operation was aborted",
+          "at": "2026-11-18T13:06:45.423Z"
+        }
+      ],
+      "network": [
+        {
+          "id": "cs-tTQpp8P3-171",
+          "url": "https://axtraproperty.com.au/assets/jsx-runtime-DUAcabCT.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:05:59.969Z",
+          "startedAt": 1795007159969,
+          "timestamp": 589.471,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10011,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "https://axtraproperty.com.au",
+            "referer": "https://axtraproperty.com.au/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {},
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-172",
+          "url": "https://axtraproperty.com.au/assets/react-DbyrFoBd.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:05:59.969Z",
+          "startedAt": 1795007159969,
+          "timestamp": 589.471,
+          "status": 200,
+          "mimeType": "text/javascript",
+          "size": 7527,
+          "durationMs": 7926,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "https://axtraproperty.com.au",
+            "referer": "https://axtraproperty.com.au/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {
+            "cache-control": "no-cache",
+            "connection": "keep-alive",
+            "content-encoding": "gzip",
+            "content-type": "text/javascript",
+            "date": "Wed, 18 Nov 2026 13:06:02 GMT",
+            "etag": "W/\"7527-1790133663578\"",
+            "last-modified": "Wed, 23 Sep 2026 03:21:03 GMT",
+            "server": "openresty",
+            "transfer-encoding": "chunked",
+            "vary": "Origin",
+            "x-served-by": "axtraproperty.com.au"
+          },
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-173",
+          "url": "https://axtraproperty.com.au/assets/jsx-runtime-DUAcabCT.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:06:10.148Z",
+          "startedAt": 1795007170148,
+          "timestamp": 599.65,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10002,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "https://axtraproperty.com.au",
+            "referer": "https://axtraproperty.com.au/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {},
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-174",
+          "url": "https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:06:10.153Z",
+          "startedAt": 1795007170153,
+          "timestamp": 599.655,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10006,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "https://axtraproperty.com.au",
+            "referer": "https://axtraproperty.com.au/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {},
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-175",
+          "url": "https://axtraproperty.com.au/assets/jsx-runtime-DUAcabCT.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:06:20.470Z",
+          "startedAt": 1795007180470,
+          "timestamp": 609.972,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10005,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "https://axtraproperty.com.au",
+            "referer": "https://axtraproperty.com.au/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {},
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-176",
+          "url": "https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:06:20.487Z",
+          "startedAt": 1795007180487,
+          "timestamp": 609.989,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10002,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "https://axtraproperty.com.au",
+            "referer": "https://axtraproperty.com.au/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {},
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-177",
+          "url": "https://axtraproperty.com.au/assets/jsx-runtime-DUAcabCT.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:06:30.476Z",
+          "startedAt": 1795007190476,
+          "timestamp": 619.978,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10008,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "https://axtraproperty.com.au",
+            "referer": "https://axtraproperty.com.au/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {},
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-178",
+          "url": "https://axtraproperty.com.au/assets/jsx-runtime-DUAcabCT.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:06:40.652Z",
+          "startedAt": 1795007200652,
+          "timestamp": 630.154,
+          "status": 200,
+          "mimeType": "text/javascript",
+          "size": 1066,
+          "durationMs": 4407,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "https://axtraproperty.com.au",
+            "referer": "https://axtraproperty.com.au/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {
+            "cache-control": "no-cache",
+            "connection": "keep-alive",
+            "content-encoding": "gzip",
+            "content-type": "text/javascript",
+            "date": "Wed, 18 Nov 2026 13:06:42 GMT",
+            "etag": "W/\"1066-1790133663578\"",
+            "last-modified": "Wed, 23 Sep 2026 03:21:03 GMT",
+            "server": "openresty",
+            "transfer-encoding": "chunked",
+            "vary": "Origin",
+            "x-served-by": "axtraproperty.com.au"
+          },
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-179",
+          "url": "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap",
+          "method": "GET",
+          "type": "Stylesheet",
+          "at": "2026-11-18T13:06:45.199Z",
+          "startedAt": 1795007205199,
+          "timestamp": 634.701,
+          "status": 200,
+          "mimeType": "text/css",
+          "size": 20867,
+          "durationMs": 97,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "text/css,*/*;q=0.1",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "https://axtraproperty.com.au",
+            "referer": "https://axtraproperty.com.au/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {
+            "access-control-allow-origin": "*",
+            "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+            "cache-control": "private, max-age=86400, stale-while-revalidate=604800",
+            "content-encoding": "gzip",
+            "content-type": "text/css; charset=utf-8",
+            "cross-origin-opener-policy": "same-origin-allow-popups",
+            "cross-origin-resource-policy": "cross-origin",
+            "date": "Wed, 18 Nov 2026 13:06:45 GMT",
+            "expires": "Wed, 18 Nov 2026 13:06:45 GMT",
+            "last-modified": "Wed, 18 Nov 2026 13:06:45 GMT",
+            "link": "<https://fonts.gstatic.com>; rel=preconnect; crossorigin",
+            "server": "ESF",
+            "strict-transport-security": "max-age=31536000",
+            "timing-allow-origin": "*",
+            "transfer-encoding": "chunked",
+            "vary": "Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site",
+            "x-content-type-options": "nosniff",
+            "x-frame-options": "SAMEORIGIN",
+            "x-xss-protection": "0"
+          },
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-180",
+          "url": "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap",
+          "method": "GET",
+          "type": "Stylesheet",
+          "at": "2026-11-18T13:06:45.317Z",
+          "startedAt": 1795007205317,
+          "timestamp": 634.819,
+          "status": 200,
+          "mimeType": "text/css",
+          "size": 20867,
+          "durationMs": 41,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "text/css,*/*;q=0.1",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "referer": "https://axtraproperty.com.au/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {
+            "access-control-allow-origin": "*",
+            "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+            "cache-control": "private, max-age=86400, stale-while-revalidate=604800",
+            "content-encoding": "gzip",
+            "content-type": "text/css; charset=utf-8",
+            "cross-origin-opener-policy": "same-origin-allow-popups",
+            "cross-origin-resource-policy": "cross-origin",
+            "date": "Wed, 18 Nov 2026 13:06:45 GMT",
+            "expires": "Wed, 18 Nov 2026 13:06:45 GMT",
+            "last-modified": "Wed, 18 Nov 2026 13:06:45 GMT",
+            "link": "<https://fonts.gstatic.com>; rel=preconnect; crossorigin",
+            "server": "ESF",
+            "strict-transport-security": "max-age=31536000",
+            "timing-allow-origin": "*",
+            "transfer-encoding": "chunked",
+            "vary": "Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site",
+            "x-content-type-options": "nosniff",
+            "x-frame-options": "SAMEORIGIN",
+            "x-xss-protection": "0"
+          },
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        }
+      ],
+      "operations": [
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:16.418Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:17.807Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:17.918Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:19.309Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:19.417Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:20.815Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:20.948Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:22.315Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:22.418Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:23.811Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:23.922Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:25.309Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:25.416Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:26.807Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:26.918Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:28.308Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:28.418Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:29.812Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:29.918Z"
+        },
+        {
+          "path": "/nano-local-sandbox/diagnostics",
+          "method": "GET",
+          "at": "2026-11-18T13:07:30.222Z"
+        }
+      ],
+      "history": [
+        {
+          "id": "url-5e9d65cb535f051db1ca6cc9",
+          "url": "http://127.0.0.1:9919/broken",
+          "at": "2026-11-18T13:00:30.702Z",
+          "count": 1
+        },
+        {
+          "id": "url-de52cc7d8581c98764e46d9f",
+          "url": "http://127.0.0.1:9919/slow",
+          "at": "2026-11-18T13:01:49.952Z",
+          "count": 1
+        },
+        {
+          "id": "url-b2facdcff8c610a2a7b244d5",
+          "url": "http://127.0.0.1:9919/spa",
+          "at": "2026-11-18T13:02:37.897Z",
+          "count": 1
+        },
+        {
+          "id": "url-4a525edfc610bc6d33564bb7",
+          "url": "http://127.0.0.1:9919/basic",
+          "at": "2026-11-18T13:02:42.781Z",
+          "count": 1
+        },
+        {
+          "id": "url-b2facdcff8c610a2a7b244d5",
+          "url": "http://127.0.0.1:9919/spa",
+          "at": "2026-11-18T13:04:03.120Z",
+          "count": 1
+        },
+        {
+          "id": "url-0f115db062b7c0dd030b1687",
+          "url": "https://example.com/",
+          "at": "2026-11-18T13:04:58.043Z",
+          "count": 1
+        },
+        {
+          "id": "url-7630c14a6e2b99f60f929f47",
+          "url": "https://www.iana.org/help/example-domains",
+          "at": "2026-11-18T13:05:03.198Z",
+          "count": 1
+        },
+        {
+          "id": "url-0ddd2c29c6c96e0eee7ef64b",
+          "url": "https://www.rfc-editor.org/rfc/rfc2616.html",
+          "at": "2026-11-18T13:05:09.934Z",
+          "count": 1
+        },
+        {
+          "id": "url-ddc6a11b6e0607cf0fced41d",
+          "url": "https://react.dev/",
+          "at": "2026-11-18T13:05:19.898Z",
+          "count": 1
+        },
+        {
+          "id": "url-f649d422df3245ca0bdcd8cb",
+          "url": "https://archy.studio/",
+          "at": "2026-11-18T13:05:44.111Z",
+          "count": 1
+        }
+      ],
+      "hints": []
+    }
+  },
+  {
+    "endpoint": "console?level=error,exception&limit=200",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "entries": []
+    }
+  },
+  {
+    "endpoint": "network?failedOnly=true&limit=200",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "entries": [
+        {
+          "id": "cs-tTQpp8P3-5",
+          "url": "http://127.0.0.1:9919/broken.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:00:30.465Z",
+          "startedAt": 1795006830465,
+          "timestamp": 259.967,
+          "status": 404,
+          "mimeType": "application/javascript",
+          "size": 19,
+          "durationMs": 26,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "Not Found",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-6",
+          "url": "http://127.0.0.1:9919/slow.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:01:19.043Z",
+          "startedAt": 1795006879043,
+          "timestamp": 308.545,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10003,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-7",
+          "url": "http://127.0.0.1:9919/slow.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:01:29.270Z",
+          "startedAt": 1795006889270,
+          "timestamp": 318.772,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10001,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-8",
+          "url": "http://127.0.0.1:9919/slow.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:01:39.692Z",
+          "startedAt": 1795006899692,
+          "timestamp": 329.194,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10008,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-121",
+          "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-B1E83PJ3RT&gtm=45je6bg2v9119811439za200zd9119811439xf1&_p=1795007119364&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&cid=1682632673.1795007120&frm=0&ngs=1&pscdl=noapi&rcb=13&sr=572x532&ul=zh-cn&_s=2&tag_exp=115616985~115938466~115938469~118897920~118897930~119860443~120213116~120385423~120412526~120420416~120469145~120469153~121246026~121246034~124320990&sid=1795007119&sct=1&seg=1&dl=https%3A%2F%2Freact.dev%2F&dt=React&en=timing&_ee=1&ep.event_label=JS%20Dependencies&ep.event=unload&_et=16261&tfd=1795007135815",
+          "method": "POST",
+          "type": "Fetch",
+          "at": "2026-11-18T13:05:35.832Z",
+          "startedAt": 1795007135832,
+          "timestamp": 565.334,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10002,
+          "failed": true,
+          "error": "kitesurf: egress headers timeout after 10000ms",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-155",
+          "url": "https://archy.studio/vendor/fontawesome/webfonts/fa-thin-100.woff2",
+          "method": "GET",
+          "type": "Font",
+          "at": "2026-11-18T13:05:44.256Z",
+          "startedAt": 1795007144256,
+          "timestamp": 573.758,
+          "status": 404,
+          "mimeType": "text/html",
+          "size": 12976,
+          "durationMs": 4155,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "Not Found",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-170",
+          "url": "https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:05:59.969Z",
+          "startedAt": 1795007159969,
+          "timestamp": 589.471,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10001,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-171",
+          "url": "https://axtraproperty.com.au/assets/jsx-runtime-DUAcabCT.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:05:59.969Z",
+          "startedAt": 1795007159969,
+          "timestamp": 589.471,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10011,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-173",
+          "url": "https://axtraproperty.com.au/assets/jsx-runtime-DUAcabCT.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:06:10.148Z",
+          "startedAt": 1795007170148,
+          "timestamp": 599.65,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10002,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-174",
+          "url": "https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:06:10.153Z",
+          "startedAt": 1795007170153,
+          "timestamp": 599.655,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10006,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-175",
+          "url": "https://axtraproperty.com.au/assets/jsx-runtime-DUAcabCT.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:06:20.470Z",
+          "startedAt": 1795007180470,
+          "timestamp": 609.972,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10005,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-176",
+          "url": "https://axtraproperty.com.au/assets/index-Rpf-tHCJ.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:06:20.487Z",
+          "startedAt": 1795007180487,
+          "timestamp": 609.989,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10002,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-177",
+          "url": "https://axtraproperty.com.au/assets/jsx-runtime-DUAcabCT.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:06:30.476Z",
+          "startedAt": 1795007190476,
+          "timestamp": 619.978,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10008,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "hasPostData": false,
+          "requestMimeType": "",
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        }
+      ]
+    }
+  },
+  {
+    "endpoint": "operations?errorsOnly=true",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "entries": [
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:20.920Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:22.308Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:22.416Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:23.818Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:23.924Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:25.310Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:25.429Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:26.806Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:26.919Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:28.306Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:28.418Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:29.821Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:29.921Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:31.308Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:31.418Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:32.810Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:32.921Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:34.309Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:34.419Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:35.816Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:35.920Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:37.307Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:37.419Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:38.809Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:38.923Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:40.322Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:40.420Z"
+        },
+        {
+          "path": "/nano-local-sandbox/status",
+          "method": "GET",
+          "at": "2026-11-18T13:06:41.709Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:41.806Z"
+        },
+        {
+          "path": "/nano-local-sandbox/dom",
+          "method": "GET",
+          "at": "2026-11-18T13:06:41.847Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:41.917Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:43.309Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:43.418Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:44.807Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:44.918Z"
+        },
+        {
+          "path": "/nano-local-sandbox/diagnostics",
+          "method": "GET",
+          "at": "2026-11-18T13:06:45.455Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:46.308Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:46.420Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:47.812Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:47.923Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:49.308Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:49.419Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:50.808Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:50.920Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:52.336Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:52.424Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:53.806Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:53.918Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:55.308Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:55.417Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:56.809Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:56.919Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:58.309Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:58.419Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:06:59.811Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:06:59.918Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:01.307Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:01.419Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:02.815Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:02.947Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:04.309Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:04.420Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:05.832Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:05.919Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:07.309Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:07.420Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:08.810Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:08.919Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:10.312Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:10.417Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:11.807Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:11.917Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:13.307Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:13.418Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:14.810Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:14.918Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:16.308Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:16.418Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:17.807Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:17.918Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:19.309Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:19.417Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:20.815Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:20.948Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:22.315Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:22.418Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:23.811Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:23.922Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:25.309Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:25.416Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:26.807Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:26.918Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:28.308Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:28.418Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:29.812Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:07:29.918Z"
+        },
+        {
+          "path": "/nano-local-sandbox/diagnostics",
+          "method": "GET",
+          "at": "2026-11-18T13:07:30.222Z"
+        },
+        {
+          "path": "/nano-local-sandbox/console",
+          "method": "GET",
+          "at": "2026-11-18T13:07:30.426Z"
+        },
+        {
+          "path": "/nano-local-sandbox/network",
+          "method": "GET",
+          "at": "2026-11-18T13:07:30.432Z"
+        },
+        {
+          "path": "/nano-local-sandbox/operations",
+          "method": "GET",
+          "at": "2026-11-18T13:07:30.438Z"
+        }
+      ]
+    }
+  },
+  {
+    "name": "settings-after-axtra",
+    "text": "环境自检\n● 异常\n插件\n未知\n引擎\n—\n容器\n—\n端口\n—\n一键准备环境\n复制诊断信息\n引擎日志\n依次检查容器、端口、引擎健康并自动修复"
+  },
+  {
+    "name": "recovery-after-timeout",
+    "view": {
+      "title": "Delivery Basic 1119",
+      "text": "BASIC_READY_1119\nSPA nextClick test\n\nSTATIC_CONTENT",
+      "error": ""
+    }
+  }
+]

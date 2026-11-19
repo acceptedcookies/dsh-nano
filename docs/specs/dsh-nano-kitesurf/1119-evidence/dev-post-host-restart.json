@@ -1,0 +1,408 @@
+{
+  "status": {
+    "status": 200,
+    "body": {
+      "v": 1,
+      "epoch": 1,
+      "observedAt": "2026-11-18T13:19:02.192Z",
+      "subject": {
+        "containerName": "kitesurf-dev"
+      },
+      "planes": {
+        "container": {
+          "plane": "container",
+          "state": "running",
+          "ok": true
+        },
+        "engine": {
+          "plane": "engine",
+          "state": "cdp",
+          "ok": true,
+          "httpBase": "http://127.0.0.1:8800",
+          "cdpGeneration": 0
+        },
+        "page": {
+          "plane": "page",
+          "state": "blank",
+          "ok": true,
+          "url": "about:blank",
+          "detail": "about:blank"
+        },
+        "dom": {
+          "plane": "dom",
+          "state": "skipped",
+          "ok": true,
+          "detail": "未打开页面（等待打开地址）",
+          "skipped": true
+        },
+        "bridge": {
+          "plane": "bridge",
+          "state": "up",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        },
+        "terminal": {
+          "plane": "terminal",
+          "state": "absent"
+        }
+      },
+      "ready": true,
+      "live": true,
+      "degraded": [],
+      "healthy": true,
+      "containerName": "kitesurf-dev",
+      "container": {
+        "state": "running",
+        "name": "kitesurf-dev"
+      },
+      "effective": {
+        "httpBase": "http://127.0.0.1:8800",
+        "enginePort": 8800,
+        "bridgePort": 8801
+      },
+      "ports": {
+        "engine": {
+          "port": 8800,
+          "containerPort": 8787,
+          "heldBy": "this-container"
+        },
+        "bridge": {
+          "port": 8801,
+          "containerPort": 8791,
+          "heldBy": "this-container"
+        }
+      },
+      "engineAlive": true,
+      "checks": {
+        "container": {
+          "ok": true,
+          "detail": "running"
+        },
+        "engine": {
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        "page": {
+          "ok": true,
+          "detail": "about:blank"
+        },
+        "dom": {
+          "ok": true,
+          "detail": "未打开页面（等待打开地址）",
+          "skipped": true
+        },
+        "bridge": {
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      },
+      "summary": [
+        {
+          "plane": "container",
+          "label": "容器",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "plane": "engine",
+          "label": "引擎",
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        {
+          "plane": "page",
+          "label": "页面",
+          "ok": true,
+          "detail": "about:blank"
+        },
+        {
+          "plane": "dom",
+          "label": "DOM",
+          "ok": true,
+          "detail": "未打开页面（等待打开地址）",
+          "skipped": true
+        },
+        {
+          "plane": "bridge",
+          "label": "桥",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      ],
+      "buildId": "0.1.0",
+      "cdpGeneration": 0,
+      "phase": "running",
+      "httpBase": "http://127.0.0.1:8800",
+      "ok": true,
+      "viewport": null,
+      "userAgent": "",
+      "media": null,
+      "extraHeaders": null,
+      "kite": {
+        "phase": "running"
+      },
+      "lastPage": {
+        "url": "https://example.com/",
+        "at": "2026-11-18T13:17:15.291Z"
+      }
+    }
+  },
+  "browse-history?limit=100": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "total": 0,
+      "entries": [],
+      "source": "plugin-store"
+    }
+  },
+  "control": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "control": {
+        "writer": false,
+        "owner": null,
+        "ownerSince": null,
+        "lastWriteAt": null,
+        "humanHold": {
+          "active": false,
+          "owner": null,
+          "since": null,
+          "note": null
+        },
+        "lastAction": null,
+        "lastCallAt": null
+      }
+    }
+  },
+  "diagnostics": {
+    "status": 200,
+    "body": {
+      "v": 1,
+      "epoch": 2,
+      "observedAt": "2026-11-18T13:19:02.295Z",
+      "subject": {
+        "containerName": "kitesurf-dev"
+      },
+      "planes": {
+        "container": {
+          "plane": "container",
+          "state": "running",
+          "ok": true
+        },
+        "engine": {
+          "plane": "engine",
+          "state": "cdp",
+          "ok": true,
+          "httpBase": "http://127.0.0.1:8800",
+          "cdpGeneration": 0
+        },
+        "page": {
+          "plane": "page",
+          "state": "open",
+          "ok": true,
+          "url": "https://example.com/",
+          "detail": "https://example.com/"
+        },
+        "dom": {
+          "plane": "dom",
+          "state": "skipped",
+          "ok": true,
+          "detail": "未打开页面（等待打开地址）",
+          "skipped": true
+        },
+        "bridge": {
+          "plane": "bridge",
+          "state": "up",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        },
+        "terminal": {
+          "plane": "terminal",
+          "state": "absent"
+        }
+      },
+      "ready": true,
+      "live": true,
+      "degraded": [],
+      "healthy": true,
+      "containerName": "kitesurf-dev",
+      "container": {
+        "state": "running",
+        "name": "kitesurf-dev"
+      },
+      "effective": {
+        "httpBase": "http://127.0.0.1:8800",
+        "enginePort": 8800,
+        "bridgePort": 8801
+      },
+      "ports": {
+        "engine": {
+          "port": 8800,
+          "containerPort": 8787,
+          "heldBy": "this-container"
+        },
+        "bridge": {
+          "port": 8801,
+          "containerPort": 8791,
+          "heldBy": "this-container"
+        }
+      },
+      "engineAlive": true,
+      "checks": {
+        "container": {
+          "ok": true,
+          "detail": "running"
+        },
+        "engine": {
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        "page": {
+          "ok": true,
+          "detail": "https://example.com/"
+        },
+        "dom": {
+          "ok": true,
+          "detail": "未打开页面（等待打开地址）",
+          "skipped": true
+        },
+        "bridge": {
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      },
+      "summary": [
+        {
+          "plane": "container",
+          "label": "容器",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "plane": "engine",
+          "label": "引擎",
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        {
+          "plane": "page",
+          "label": "页面",
+          "ok": true,
+          "detail": "https://example.com/"
+        },
+        {
+          "plane": "dom",
+          "label": "DOM",
+          "ok": true,
+          "detail": "未打开页面（等待打开地址）",
+          "skipped": true
+        },
+        {
+          "plane": "bridge",
+          "label": "桥",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      ],
+      "buildId": "0.1.0",
+      "cdpGeneration": 0,
+      "phase": "running",
+      "httpBase": "http://127.0.0.1:8800",
+      "ok": true,
+      "kite": {
+        "phase": "running"
+      },
+      "text": "Kitesurf 环境诊断 · 正常\n实例 kitesurf-dev · 容器 running\n引擎 http://127.0.0.1:8800 · 桥 8801\n✓ 容器：running\n✓ 引擎：http://127.0.0.1:8800\n✓ 页面：https://example.com/\n○ DOM：未打开页面（等待打开地址）\n✓ 桥：conns 0 · accepted 0 · rejected 0",
+      "targets": [
+        {
+          "targetId": "browser",
+          "type": "browser",
+          "url": "",
+          "title": ""
+        },
+        {
+          "targetId": "2ce54a47921446be9ecfecac25d3dc93",
+          "type": "page",
+          "url": "https://example.com/",
+          "title": ""
+        }
+      ],
+      "console": [],
+      "network": [
+        {
+          "id": "d8ec444c63614fb48ed356d5d4397353",
+          "url": "https://example.com/",
+          "method": "GET",
+          "type": "Document",
+          "at": "2026-11-18T13:19:02.198Z",
+          "startedAt": 1795007942198,
+          "timestamp": 0.261,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": null,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {},
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        }
+      ],
+      "operations": [
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:19:01.476Z",
+          "repeat": 62
+        },
+        {
+          "path": "/nano-local-sandbox/status",
+          "method": "GET",
+          "at": "2026-11-18T13:19:01.905Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:19:01.927Z"
+        },
+        {
+          "path": "/nano-local-sandbox/status",
+          "method": "GET",
+          "at": "2026-11-18T13:19:02.197Z"
+        },
+        {
+          "path": "/nano-local-sandbox/browse-history",
+          "method": "GET",
+          "at": "2026-11-18T13:19:02.226Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:19:02.236Z"
+        },
+        {
+          "path": "/nano-local-sandbox/diagnostics",
+          "method": "GET",
+          "at": "2026-11-18T13:19:02.243Z"
+        }
+      ],
+      "history": [],
+      "hints": []
+    }
+  }
+}

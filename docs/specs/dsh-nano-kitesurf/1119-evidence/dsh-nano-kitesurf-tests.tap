@@ -1,0 +1,455 @@
+TAP version 13
+# Subtest: loopback helpers still read the endpoint
+ok 1 - loopback helpers still read the endpoint
+  ---
+  duration_ms: 0.42225
+  type: 'test'
+  ...
+# Subtest: retired container exports are gone (no shadow lifecycle)
+ok 2 - retired container exports are gone (no shadow lifecycle)
+  ---
+  duration_ms: 0.140667
+  type: 'test'
+  ...
+# Subtest: hostPortFree is a probe: a live port reads not-free, a dead one reads free
+ok 3 - hostPortFree is a probe: a live port reads not-free, a dead one reads free
+  ---
+  duration_ms: 2.339333
+  type: 'test'
+  ...
+# Subtest: the catalogue is a single truth: every row maps to the status it declares
+ok 4 - the catalogue is a single truth: every row maps to the status it declares
+  ---
+  duration_ms: 1.227166
+  type: 'test'
+  ...
+# Subtest: every real kitesurf.* errorId is catalogued or a bridge-local id
+ok 5 - every real kitesurf.* errorId is catalogued or a bridge-local id
+  ---
+  duration_ms: 5.01575
+  type: 'test'
+  ...
+# Subtest: operations ring is bounded, filterable and carries the failure id
+ok 6 - operations ring is bounded, filterable and carries the failure id
+  ---
+  duration_ms: 1.440791
+  type: 'test'
+  ...
+# Subtest: console ring counts by level and clears
+ok 7 - console ring counts by level and clears
+  ---
+  duration_ms: 0.208959
+  type: 'test'
+  ...
+# Subtest: diagnosticsSummary reports latency, failures and the catalogue
+ok 8 - diagnosticsSummary reports latency, failures and the catalogue
+  ---
+  duration_ms: 0.18825
+  type: 'test'
+  ...
+# Subtest: browser socket is the kitesurf CDP path
+ok 9 - browser socket is the kitesurf CDP path
+  ---
+  duration_ms: 0.490541
+  type: 'test'
+  ...
+# Subtest: page urls stay credential-free http(s)
+ok 10 - page urls stay credential-free http(s)
+  ---
+  duration_ms: 0.416458
+  type: 'test'
+  ...
+# Subtest: pick points are finite viewport pixels
+ok 11 - pick points are finite viewport pixels
+  ---
+  duration_ms: 0.364709
+  type: 'test'
+  ...
+# Subtest: an engine egress timeout is its own error, not a blank success
+ok 12 - an engine egress timeout is its own error, not a blank success
+  ---
+  duration_ms: 0.057292
+  type: 'test'
+  ...
+# Subtest: viewport preset rejects an unknown width before talking to the engine
+ok 13 - viewport preset rejects an unknown width before talking to the engine
+  ---
+  duration_ms: 0.195458
+  type: 'test'
+  ...
+# Subtest: screenshot scroll is a small finite step
+ok 14 - screenshot scroll is a small finite step
+  ---
+  duration_ms: 0.080708
+  type: 'test'
+  ...
+# Subtest: element packets never invent a component stack
+ok 15 - element packets never invent a component stack
+  ---
+  duration_ms: 0.135708
+  type: 'test'
+  ...
+# Subtest: pickSelector accepts a selector, rejects junk
+ok 16 - pickSelector accepts a selector, rejects junk
+  ---
+  duration_ms: 0.166708
+  type: 'test'
+  ...
+# Subtest: editBody validates selector + text
+ok 17 - editBody validates selector + text
+  ---
+  duration_ms: 0.3055
+  type: 'test'
+  ...
+# Subtest: zh and en copy have the same non-empty keys
+ok 18 - zh and en copy have the same non-empty keys
+  ---
+  duration_ms: 0.985667
+  type: 'test'
+  ...
+# Subtest: the pane source has no user-facing Chinese outside the copy table
+ok 19 - the pane source has no user-facing Chinese outside the copy table
+  ---
+  duration_ms: 0.914167
+  type: 'test'
+  ...
+# Subtest: plugin locale cards describe the same product in both languages
+ok 20 - plugin locale cards describe the same product in both languages
+  ---
+  duration_ms: 0.209375
+  type: 'test'
+  ...
+# kitesurf mcp bridge on :19643 conns<=8 frame<=1048576B
+# Subtest: the WebSocket accept key matches RFC 6455
+ok 21 - the WebSocket accept key matches RFC 6455
+  ---
+  duration_ms: 2.136291
+  type: 'test'
+  ...
+# Subtest: a missing Origin is allowed; a listed prefix matches any port; others are refused
+ok 22 - a missing Origin is allowed; a listed prefix matches any port; others are refused
+  ---
+  duration_ms: 0.136958
+  type: 'test'
+  ...
+# Subtest: a masked text frame decodes to a message
+ok 23 - a masked text frame decodes to a message
+  ---
+  duration_ms: 0.411667
+  type: 'test'
+  ...
+# Subtest: fragmented text frames reassemble across chunks
+ok 24 - fragmented text frames reassemble across chunks
+  ---
+  duration_ms: 0.132083
+  type: 'test'
+  ...
+# Subtest: a ping produces a pong callback and a close ends the stream
+ok 25 - a ping produces a pong callback and a close ends the stream
+  ---
+  duration_ms: 0.170291
+  type: 'test'
+  ...
+# Subtest: an RSV bit is a protocol violation and oversize frames are refused
+ok 26 - an RSV bit is a protocol violation and oversize frames are refused
+  ---
+  duration_ms: 0.055041
+  type: 'test'
+  ...
+# Subtest: sendText writes a FIN text frame
+ok 27 - sendText writes a FIN text frame
+  ---
+  duration_ms: 0.105709
+  type: 'test'
+  ...
+# Subtest: POST /control takeover then release toggles humanHold visible on /health
+ok 28 - POST /control takeover then release toggles humanHold visible on /health
+  ---
+  duration_ms: 181.0365
+  type: 'test'
+  ...
+# Subtest: init writes a lock once and the second call returns it
+ok 29 - init writes a lock once and the second call returns it
+  ---
+  duration_ms: 1.580458
+  type: 'test'
+  ...
+# Subtest: an old Node does not write the lock
+ok 30 - an old Node does not write the lock
+  ---
+  duration_ms: 0.374125
+  type: 'test'
+  ...
+# Subtest: start, suspend, and resume follow one path and call the engine hooks
+ok 31 - start, suspend, and resume follow one path and call the engine hooks
+  ---
+  duration_ms: 0.554875
+  type: 'test'
+  ...
+# Subtest: a failed start does not leave the engine running
+ok 32 - a failed start does not leave the engine running
+  ---
+  duration_ms: 0.100666
+  type: 'test'
+  ...
+# Subtest: a remote engine needs allowRemote, and credentials are never allowed
+ok 33 - a remote engine needs allowRemote, and credentials are never allowed
+  ---
+  duration_ms: 0.326333
+  type: 'test'
+  ...
+# Subtest: init on an old Node refuses even when a lock already exists
+ok 34 - init on an old Node refuses even when a lock already exists
+  ---
+  duration_ms: 0.08725
+  type: 'test'
+  ...
+# Subtest: navigation and screenshot HTTP deadlines exceed their host CDP budgets
+ok 35 - navigation and screenshot HTTP deadlines exceed their host CDP budgets
+  ---
+  duration_ms: 0.404917
+  type: 'test'
+  ...
+# Subtest: one intent waits for navigation before one capture, accepts the final redirect URL
+ok 36 - one intent waits for navigation before one capture, accepts the final redirect URL
+  ---
+  duration_ms: 0.417375
+  type: 'test'
+  ...
+# Subtest: a navigation error is not silently retried or hidden by capture
+ok 37 - a navigation error is not silently retried or hidden by capture
+  ---
+  duration_ms: 0.239125
+  type: 'test'
+  ...
+# Subtest: a blank frame is not counted as a successful navigation
+ok 38 - a blank frame is not counted as a successful navigation
+  ---
+  duration_ms: 0.554875
+  type: 'test'
+  ...
+# Subtest: design note stays under the budget and drops empty styles
+ok 39 - design note stays under the budget and drops empty styles
+  ---
+  duration_ms: 1.616958
+  type: 'test'
+  ...
+# Subtest: a page-root hit does not quote the whole document
+ok 40 - a page-root hit does not quote the whole document
+  ---
+  duration_ms: 0.456208
+  type: 'test'
+  ...
+# Subtest: several notes leave as one batch, not eight messages
+ok 41 - several notes leave as one batch, not eight messages
+  ---
+  duration_ms: 0.585208
+  type: 'test'
+  ...
+# Subtest: an image note keeps alt and a short src, not a data url
+ok 42 - an image note keeps alt and a short src, not a data url
+  ---
+  duration_ms: 0.768792
+  type: 'test'
+  ...
+# Subtest: a shift-drag is an arrow, not a text dump
+ok 43 - a shift-drag is an arrow, not a text dump
+  ---
+  duration_ms: 0.499833
+  type: 'test'
+  ...
+# Subtest: a dragged area is a box, not a DOM dump
+ok 44 - a dragged area is a box, not a DOM dump
+  ---
+  duration_ms: 0.258583
+  type: 'test'
+  ...
+# Subtest: iframe and empty box are explicit, not a DOM dump
+ok 45 - iframe and empty box are explicit, not a DOM dump
+  ---
+  duration_ms: 0.168667
+  type: 'test'
+  ...
+# Subtest: an alt-drag ellipse is a marked box, not a DOM dump
+ok 46 - an alt-drag ellipse is a marked box, not a DOM dump
+  ---
+  duration_ms: 0.065375
+  type: 'test'
+  ...
+# Subtest: shift-click multi-select folds into one numbered note
+ok 47 - shift-click multi-select folds into one numbered note
+  ---
+  duration_ms: 0.287042
+  type: 'test'
+  ...
+# Subtest: multiNote of one delegates to designNote
+ok 48 - multiNote of one delegates to designNote
+  ---
+  duration_ms: 0.315292
+  type: 'test'
+  ...
+# Subtest: T22: the source walk reached the DNK author tree
+ok 49 - T22: the source walk reached the DNK author tree
+  ---
+  duration_ms: 0.568708
+  type: 'test'
+  ...
+# Subtest: T22 control: the zero-scan patterns report a fixture that carries them
+ok 50 - T22 control: the zero-scan patterns report a fixture that carries them
+  ---
+  duration_ms: 0.780042
+  type: 'test'
+  ...
+# Subtest: T22: the pane scheme comes from ThemeScope, not a local schemeOf
+ok 51 - T22: the pane scheme comes from ThemeScope, not a local schemeOf
+  ---
+  duration_ms: 0.488375
+  type: 'test'
+  ...
+# Subtest: T22: the settings dialog is a window overlay inside the workspace
+ok 52 - T22: the settings dialog is a window overlay inside the workspace
+  ---
+  duration_ms: 0.3855
+  type: 'test'
+  ...
+# Subtest: T22: menus render inside the workspace without a theme parameter
+ok 53 - T22: menus render inside the workspace without a theme parameter
+  ---
+  duration_ms: 0.213042
+  type: 'test'
+  ...
+# Subtest: T22: the interactive toast is NanoToast with actions and an anchor
+ok 54 - T22: the interactive toast is NanoToast with actions and an anchor
+  ---
+  duration_ms: 0.399834
+  type: 'test'
+  ...
+# Subtest: T22: browser arrows are catalog chevrons, not hand-drawn SVG
+ok 55 - T22: browser arrows are catalog chevrons, not hand-drawn SVG
+  ---
+  duration_ms: 0.24925
+  type: 'test'
+  ...
+# Subtest: T22: every nks-* class in source has a style definition (U9 = 0)
+ok 56 - T22: every nks-* class in source has a style definition (U9 = 0)
+  ---
+  duration_ms: 7.264917
+  type: 'test'
+  ...
+# Subtest: T22: the settings tab strip still follows the nano-ui NanoTabs contract
+ok 57 - T22: the settings tab strip still follows the nano-ui NanoTabs contract
+  ---
+  duration_ms: 0.397208
+  type: 'test'
+  ...
+# Subtest: T22 control: the layer and token scans report a fixture that carries them
+ok 58 - T22 control: the layer and token scans report a fixture that carries them
+  ---
+  duration_ms: 0.481834
+  type: 'test'
+  ...
+# Subtest: T22: no numeric stacking values and no DESIGN.md §2 「不要写」tokens
+ok 59 - T22: no numeric stacking values and no DESIGN.md §2 「不要写」tokens
+  ---
+  duration_ms: 0.567417
+  type: 'test'
+  ...
+# Subtest: content is centered on BOTH axes (matches object-position: center)
+ok 60 - content is centered on BOTH axes (matches object-position: center)
+  ---
+  duration_ms: 0.392542
+  type: 'test'
+  ...
+# Subtest: a click in the drawn band maps into screenshot pixels
+ok 61 - a click in the drawn band maps into screenshot pixels
+  ---
+  duration_ms: 0.323667
+  type: 'test'
+  ...
+# Subtest: clicks above/below the drawn band are letterbox, not page
+ok 62 - clicks above/below the drawn band are letterbox, not page
+  ---
+  duration_ms: 0.054291
+  type: 'test'
+  ...
+# Subtest: a short/wide element letterboxes horizontally instead
+ok 63 - a short/wide element letterboxes horizontally instead
+  ---
+  duration_ms: 0.055459
+  type: 'test'
+  ...
+# Subtest: generated SKILL.md files exactly match the single source of truth
+ok 64 - generated SKILL.md files exactly match the single source of truth
+  ---
+  duration_ms: 0.601625
+  type: 'test'
+  ...
+# Subtest: skill bodies are generated from ERROR_CATALOG (no hand-copied table)
+ok 65 - skill bodies are generated from ERROR_CATALOG (no hand-copied table)
+  ---
+  duration_ms: 0.245291
+  type: 'test'
+  ...
+# Subtest: generated SKILL.md files exactly match the single source of truth (+ version/date frontmatter)
+ok 66 - generated SKILL.md files exactly match the single source of truth (+ version/date frontmatter)
+  ---
+  duration_ms: 0.299792
+  type: 'test'
+  ...
+# Subtest: kitesurf-cdp is a directory skill: entry ≤90 lines + resourceBase directory + references on disk
+ok 67 - kitesurf-cdp is a directory skill: entry ≤90 lines + resourceBase directory + references on disk
+  ---
+  duration_ms: 0.600916
+  type: 'test'
+  ...
+# Subtest: coverage reconciliation: every BINDING_TABLE path and kitesurf_* tool is documented in the tree
+ok 68 - coverage reconciliation: every BINDING_TABLE path and kitesurf_* tool is documented in the tree
+  ---
+  duration_ms: 1.225959
+  type: 'test'
+  ...
+# Subtest: error catalogue reference is generated from ERROR_CATALOG (no hand-copied table)
+ok 69 - error catalogue reference is generated from ERROR_CATALOG (no hand-copied table)
+  ---
+  duration_ms: 0.17275
+  type: 'test'
+  ...
+# Subtest: skill bodies carry the hard agentic constraints
+ok 70 - skill bodies carry the hard agentic constraints
+  ---
+  duration_ms: 0.528583
+  type: 'test'
+  ...
+# Subtest: snapshotExpression injects a bounded, self-contained walker
+ok 71 - snapshotExpression injects a bounded, self-contained walker
+  ---
+  duration_ms: 0.978958
+  type: 'test'
+  ...
+# Subtest: maxNodes is clamped to a safe bound
+ok 72 - maxNodes is clamped to a safe bound
+  ---
+  duration_ms: 0.07375
+  type: 'test'
+  ...
+# Subtest: element ref store: @N round-trips to a selector
+ok 73 - element ref store: @N round-trips to a selector
+  ---
+  duration_ms: 0.946208
+  type: 'test'
+  ...
+# Subtest: a fresh snapshot replaces the whole ref table — stale refs never linger
+ok 74 - a fresh snapshot replaces the whole ref table — stale refs never linger
+  ---
+  duration_ms: 0.062291
+  type: 'test'
+  ...
+1..74
+# tests 74
+# suites 0
+# pass 74
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 275.302083

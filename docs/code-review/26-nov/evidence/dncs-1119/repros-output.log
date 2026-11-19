@@ -1,0 +1,44 @@
+===== 1-track-rejection exit=1 signal=none
+--- stdout ---
+CALLER_CAUGHT
+--- stderr ---
+file:///Users/seanz/Documents/dsh-plugins/.agents/worktrees/dncs-1119/[eval1]:4
+try { await s.track({}, Promise.reject(new Error('CONTROLLED_RESOURCE_REJECTION'))) } catch { console.log('CALLER_CAUGHT') }
+                                       ^
+
+Error: CONTROLLED_RESOURCE_REJECTION
+    at file:///Users/seanz/Documents/dsh-plugins/.agents/worktrees/dncs-1119/[eval1]:4:40
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:282:26)
+    at async ModuleLoader.executeModuleJob (node:internal/modules/esm/loader:278:20)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v22.23.4
+===== 2-stale-read exit=0 signal=none
+--- stdout ---
+{ returned: 'LATE_OLD_GENERATION_DATA', remaining: 0 }
+--- stderr ---
+(empty)
+===== 3-pagination-complete exit=0 signal=none
+--- stdout ---
+{ pages: 2, items: 2, complete: true, cursorStuck: false }
+--- stderr ---
+(empty)
+===== 4-symlink-rename exit=0 signal=none
+--- stdout ---
+{
+  root: '/var/folders/vg/sjg5n6857zl4jvrz1cpdywhm0000gn/T/dncs-review-symlink-7ifL7q',
+  targetExists: false,
+  movedExists: true,
+  linkTarget: 'target.txt'
+}
+--- stderr ---
+(empty)
+===== 5-invalid-codec-http exit=0 signal=none
+--- stdout ---
+{
+  http: 500,
+  json: { ok: false, reason: 'failed', message: 'length is above 65536' }
+}
+--- stderr ---
+(empty)

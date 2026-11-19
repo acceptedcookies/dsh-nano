@@ -1,0 +1,407 @@
+{
+  "recordedAt": "2026-11-18T13:20:13.269519+00:00",
+  "rows": [
+    {
+      "path": "dsh-nano-local-sandbox/index.js",
+      "sourceHash": "26e07fb46146f29c5c73bb9dfa46ac279bad669bc173acfd8c8cff6c50d3e15f",
+      "deployedHash": "26e07fb46146f29c5c73bb9dfa46ac279bad669bc173acfd8c8cff6c50d3e15f",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/AGENTS.md",
+      "sourceHash": "471ab7c119e13a9eee118a0a0cdce04c548de4e9ad83c91cb186fbd1e61fda10",
+      "deployedHash": "471ab7c119e13a9eee118a0a0cdce04c548de4e9ad83c91cb186fbd1e61fda10",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/cordis.patch.yml",
+      "sourceHash": "da4b6a25a46b096d9370dfc93caf1b3da6b6e5fb29fa7e149226f431efaa9c25",
+      "deployedHash": "da4b6a25a46b096d9370dfc93caf1b3da6b6e5fb29fa7e149226f431efaa9c25",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/icon.svg",
+      "sourceHash": "bf30b887df6865b7103c83ee49e9c7e7916f900b8e3bc486c4c6f0dbcdd96e5a",
+      "deployedHash": "bf30b887df6865b7103c83ee49e9c7e7916f900b8e3bc486c4c6f0dbcdd96e5a",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/locale/en.json",
+      "sourceHash": "f0acbde165a833ebcc9115d07c1418ff18202c72ed06e964e8c74a07d19a411e",
+      "deployedHash": "f0acbde165a833ebcc9115d07c1418ff18202c72ed06e964e8c74a07d19a411e",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/locale/zh-Hans.json",
+      "sourceHash": "44881711ae81796dc8e824e1050cc64643bfbf6f056c56b58173bb5bcccfd0d1",
+      "deployedHash": "44881711ae81796dc8e824e1050cc64643bfbf6f056c56b58173bb5bcccfd0d1",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/backend-apple.js",
+      "sourceHash": "daa7fdc221c67a511dba762ac5bf317003a47ec63ebdee5362650d7c7e6bc422",
+      "deployedHash": "daa7fdc221c67a511dba762ac5bf317003a47ec63ebdee5362650d7c7e6bc422",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/backend-nvx.js",
+      "sourceHash": "597c0a6059fe48d248665ed7841f45fe4039d6ba465f66091ddf2c0b214eae8c",
+      "deployedHash": "597c0a6059fe48d248665ed7841f45fe4039d6ba465f66091ddf2c0b214eae8c",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/backend.js",
+      "sourceHash": "8d937c01f2f2277f3e5df60e531fbb1e8e5ef61969f91376ba209dfbec840c71",
+      "deployedHash": "8d937c01f2f2277f3e5df60e531fbb1e8e5ef61969f91376ba209dfbec840c71",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/browser-history-adapter.js",
+      "sourceHash": "df000fef0ca79f35dd6cb9ae897cb3f6fb29ef4fd4ae0f3fcc3b7eba7f4ea7f5",
+      "deployedHash": "df000fef0ca79f35dd6cb9ae897cb3f6fb29ef4fd4ae0f3fcc3b7eba7f4ea7f5",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/browser-settings-adapter.js",
+      "sourceHash": "75dd006c5aae37a8c6eabff649c509b8585cdca6d0dbc1669657a05fa69ccbd7",
+      "deployedHash": "75dd006c5aae37a8c6eabff649c509b8585cdca6d0dbc1669657a05fa69ccbd7",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/build.js",
+      "sourceHash": "df38f4819df554026d7d0c843b5f30b940be8aa8f716118346e33c074d3859f8",
+      "deployedHash": "df38f4819df554026d7d0c843b5f30b940be8aa8f716118346e33c074d3859f8",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/cdp-elements.js",
+      "sourceHash": "4920d54b64a2332cc5452fd52a92489c2ecd39050013814d0ae934973098b5a3",
+      "deployedHash": "4920d54b64a2332cc5452fd52a92489c2ecd39050013814d0ae934973098b5a3",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/cdp-keeper.js",
+      "sourceHash": "7824287d95cfec916ba11283c9368d44b79aed438d5cc472ff40507ac25e0b49",
+      "deployedHash": "7824287d95cfec916ba11283c9368d44b79aed438d5cc472ff40507ac25e0b49",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/dom-srcdoc.js",
+      "sourceHash": "e2b5bbf6cad72bc3bbbcf7b8eff383bfd1a9c9c2d697365f9decd6710afcf45f",
+      "deployedHash": "e2b5bbf6cad72bc3bbbcf7b8eff383bfd1a9c9c2d697365f9decd6710afcf45f",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/error-catalog.js",
+      "sourceHash": "c19c53b36eadffbf58d68902b1a8458c24b2286026665dd027633a593e88a5fa",
+      "deployedHash": "c19c53b36eadffbf58d68902b1a8458c24b2286026665dd027633a593e88a5fa",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/instance-registry.js",
+      "sourceHash": "63d4e6fd96a7ffe8ba80b08bca6e3b03ce7279505b35f1678d2cba1af6981cb0",
+      "deployedHash": "63d4e6fd96a7ffe8ba80b08bca6e3b03ce7279505b35f1678d2cba1af6981cb0",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/kitesurf-reconciliation.js",
+      "sourceHash": "7a60c423ded3447829da93aa097b0d48ffc9d7ae6acd5d9861ca8371b049d436",
+      "deployedHash": "7a60c423ded3447829da93aa097b0d48ffc9d7ae6acd5d9861ca8371b049d436",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/kitesurf-runtime.js",
+      "sourceHash": "435b4455e92ae75ad046126f2e41e2e6bf07ec398b11c814f355c26ec530fb54",
+      "deployedHash": "435b4455e92ae75ad046126f2e41e2e6bf07ec398b11c814f355c26ec530fb54",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/mcp-sandbox.js",
+      "sourceHash": "a87052bbbf60447c64823d23c5282e1671882b74d8860a1894a2ad36b9f90dda",
+      "deployedHash": "a87052bbbf60447c64823d23c5282e1671882b74d8860a1894a2ad36b9f90dda",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/observe.js",
+      "sourceHash": "913e8d1e209ec9ccebb2beb6afb5294810b365164775415a5968511405034003",
+      "deployedHash": "913e8d1e209ec9ccebb2beb6afb5294810b365164775415a5968511405034003",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/policy-adapter.js",
+      "sourceHash": "9e5d5c4eb8b69079e941495aaf29358561714c7275afc6f264f4ee5297a1709c",
+      "deployedHash": "9e5d5c4eb8b69079e941495aaf29358561714c7275afc6f264f4ee5297a1709c",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/profile-registry.js",
+      "sourceHash": "2efd1b93dd38731f1ce6b3136e6449a5754e0aa6dcd7f33994dad758f93d2ea5",
+      "deployedHash": "2efd1b93dd38731f1ce6b3136e6449a5754e0aa6dcd7f33994dad758f93d2ea5",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/routes.js",
+      "sourceHash": "b3eeb4d3e3dc223aeae31cbf3c70035618abb133432e5f866f517fb6750ea743",
+      "deployedHash": "b3eeb4d3e3dc223aeae31cbf3c70035618abb133432e5f866f517fb6750ea743",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/state-service.js",
+      "sourceHash": "22d2d8ddd3f266919c8c6b584f487114aac294510eb1b1475ff48e2141fce2e6",
+      "deployedHash": "22d2d8ddd3f266919c8c6b584f487114aac294510eb1b1475ff48e2141fce2e6",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/term-bridge.js",
+      "sourceHash": "6593ce780afa3e8d1551cfd0ac4de79b60f63d0a4d5599813435ce6653520fe0",
+      "deployedHash": "6593ce780afa3e8d1551cfd0ac4de79b60f63d0a4d5599813435ce6653520fe0",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/term-ws.js",
+      "sourceHash": "f66d51e4d626cb2cbe41e78090a7d242dd24b151276583d2937689090c7b7cd7",
+      "deployedHash": "f66d51e4d626cb2cbe41e78090a7d242dd24b151276583d2937689090c7b7cd7",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/terminal-driver.js",
+      "sourceHash": "e06252edf06ce5b237559e0c645d7b2864762ce99c9c25244485606b215c0c35",
+      "deployedHash": "e06252edf06ce5b237559e0c645d7b2864762ce99c9c25244485606b215c0c35",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/src/host/yaml.js",
+      "sourceHash": "de7c7fbaf343fe78ce118922e240c9d8ae99ad461c599ff2062b5fa08c88d730",
+      "deployedHash": "de7c7fbaf343fe78ce118922e240c9d8ae99ad461c599ff2062b5fa08c88d730",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/profiles/kitesurf/profile.yaml",
+      "sourceHash": "3b594387da5f7c715125b38effc5ca4e7a990fa6f2f6ccd6df77cea7d64465b8",
+      "deployedHash": "3b594387da5f7c715125b38effc5ca4e7a990fa6f2f6ccd6df77cea7d64465b8",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/profiles/kitesurf/Dockerfile",
+      "sourceHash": "b91b407eaea676cd0ca64096a3a323872fd794b6f128a13d4569732a0175ce5a",
+      "deployedHash": "b91b407eaea676cd0ca64096a3a323872fd794b6f128a13d4569732a0175ce5a",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/profiles/kitesurf/entrypoint.sh",
+      "sourceHash": "7c9f1c16518b1d81c39fe63e8490de0caa3578073967bef7b9357c5526f93e64",
+      "deployedHash": "7c9f1c16518b1d81c39fe63e8490de0caa3578073967bef7b9357c5526f93e64",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/profiles/kitesurf/mcp-bridge.mjs",
+      "sourceHash": "def414cafe98f2d0f854a54fd1730ac7cfab663eb0d3c3e87281f32a1425aebb",
+      "deployedHash": "def414cafe98f2d0f854a54fd1730ac7cfab663eb0d3c3e87281f32a1425aebb",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/profiles/terminal/pty-entry.mjs",
+      "sourceHash": "6f25f3b6036eedbf98298b9f48af9e4daf3123772851fb42000672f4ae492b1b",
+      "deployedHash": "6f25f3b6036eedbf98298b9f48af9e4daf3123772851fb42000672f4ae492b1b",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/lib/route-guard.js",
+      "sourceHash": "d829bd522c47d665d2e4ac598e3efaeef8f101ad66fa9868b46b733ba2ee3664",
+      "deployedHash": "d829bd522c47d665d2e4ac598e3efaeef8f101ad66fa9868b46b733ba2ee3664",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/lib/bindings.js",
+      "sourceHash": "510149441671c91bb0d7f0ef40a023907385e156daa2158b6c7fddc499255e1a",
+      "deployedHash": "510149441671c91bb0d7f0ef40a023907385e156daa2158b6c7fddc499255e1a",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-local-sandbox/lib/perf-review-host.js",
+      "sourceHash": "6af1b6f4c641c8021787121f58fb0e98eda4aec388b9b75e93666cbd142de291",
+      "deployedHash": "6af1b6f4c641c8021787121f58fb0e98eda4aec388b9b75e93666cbd142de291",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/index.js",
+      "sourceHash": "a5a4e38b0cb73f2c95afa06b618b28713592214062f447b5084272a5a340cb85",
+      "deployedHash": "a5a4e38b0cb73f2c95afa06b618b28713592214062f447b5084272a5a340cb85",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/AGENTS.md",
+      "sourceHash": "439c4ca7227abfe26280b9cf5e222d4799818e253c439f7e8c71913ca6f47de8",
+      "deployedHash": "439c4ca7227abfe26280b9cf5e222d4799818e253c439f7e8c71913ca6f47de8",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/cordis.patch.yml",
+      "sourceHash": "60da459ad919807a782954031d79acd595349edb98762f34ce86c53722dc5ce6",
+      "deployedHash": "60da459ad919807a782954031d79acd595349edb98762f34ce86c53722dc5ce6",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/icon.svg",
+      "sourceHash": "c31d41ddd6af9a585f1db2d149eab456ed1d6d9dd63ddb0f733a0e03c640c83f",
+      "deployedHash": "c31d41ddd6af9a585f1db2d149eab456ed1d6d9dd63ddb0f733a0e03c640c83f",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/locale/en.json",
+      "sourceHash": "aad21fa4d264b38a934d30cb8001fbccb5455d4d7cd8eb848e29fefc0a8f0655",
+      "deployedHash": "aad21fa4d264b38a934d30cb8001fbccb5455d4d7cd8eb848e29fefc0a8f0655",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/locale/zh.json",
+      "sourceHash": "e03fef91ef4827f8afd3d188985287ca56a84b6520790ab8d5ec2bed3567a71e",
+      "deployedHash": "e03fef91ef4827f8afd3d188985287ca56a84b6520790ab8d5ec2bed3567a71e",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/client.js",
+      "sourceHash": "72c936afb0ba7f1ce3b86016e382502a2725561b88f4a1ecd13dd23e59161625",
+      "deployedHash": "72c936afb0ba7f1ce3b86016e382502a2725561b88f4a1ecd13dd23e59161625",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/engine.js",
+      "sourceHash": "6bfd661e722bd62764ea4ca6782c9b02323f400c40bd0d032cd1e84eeffebbdd",
+      "deployedHash": "6bfd661e722bd62764ea4ca6782c9b02323f400c40bd0d032cd1e84eeffebbdd",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/perf-host.js",
+      "sourceHash": "9bb94b42676a02b7e6290caa68dcde0e8a7f7348823fef2ab8e100b44bc72ddd",
+      "deployedHash": "9bb94b42676a02b7e6290caa68dcde0e8a7f7348823fef2ab8e100b44bc72ddd",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/route-guard.js",
+      "sourceHash": "d12495b9eff29fcd2afbd693bdee0fd1715397652d36c95b123d7d1a8126d876",
+      "deployedHash": "d12495b9eff29fcd2afbd693bdee0fd1715397652d36c95b123d7d1a8126d876",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/bindings.js",
+      "sourceHash": "23bcbb8dc5d53b1e3d25ed2b914f76b89fc207841c58ba075b94c7708a3369ca",
+      "deployedHash": "23bcbb8dc5d53b1e3d25ed2b914f76b89fc207841c58ba075b94c7708a3369ca",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/skill.js",
+      "sourceHash": "e3916c211da24c05f15b680edfe402da6d48c8e73f6e6b707863937f8f385dbe",
+      "deployedHash": "e3916c211da24c05f15b680edfe402da6d48c8e73f6e6b707863937f8f385dbe",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/nano-kite.js",
+      "sourceHash": "a12bdb955425f75937f852821fafe3acb73dc8022a212ae7f7b3c425fbb8e26b",
+      "deployedHash": "a12bdb955425f75937f852821fafe3acb73dc8022a212ae7f7b3c425fbb8e26b",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/container-engine.js",
+      "sourceHash": "3383d9dbeeff46b866c955bf1ac81808eb3ca0ac7b5d9c04f78a13efc14782f8",
+      "deployedHash": "3383d9dbeeff46b866c955bf1ac81808eb3ca0ac7b5d9c04f78a13efc14782f8",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/diagnostics.js",
+      "sourceHash": "6a71f0332b337de5963afe9b8951cb649fd642c2f8b2c6ff1fbb756bd45796ab",
+      "deployedHash": "6a71f0332b337de5963afe9b8951cb649fd642c2f8b2c6ff1fbb756bd45796ab",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/history.js",
+      "sourceHash": "0ef4e9ee9c0ad64d149f604c7952f540c8d6fb6823019a9dfd8c93616d7c22bf",
+      "deployedHash": "0ef4e9ee9c0ad64d149f604c7952f540c8d6fb6823019a9dfd8c93616d7c22bf",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/dom.js",
+      "sourceHash": "52af2fa00dc9ba37abf7dce5a42b4a319e43d9bb1d7fbc7a403ce71601b83067",
+      "deployedHash": "52af2fa00dc9ba37abf7dce5a42b4a319e43d9bb1d7fbc7a403ce71601b83067",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/lib/snapshot.js",
+      "sourceHash": "ac6d5ff90d453588d35f897126b3446265d92ea0b1244a173b4165f71307e93d",
+      "deployedHash": "ac6d5ff90d453588d35f897126b3446265d92ea0b1244a173b4165f71307e93d",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/kitesurf-cdp/SKILL.md",
+      "sourceHash": "f84470de062295863c42fe033b91ae80c0b5177b78bf484e6e963a9722dfd1e5",
+      "deployedHash": "f84470de062295863c42fe033b91ae80c0b5177b78bf484e6e963a9722dfd1e5",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/kitesurf-cdp/references/element-packets.md",
+      "sourceHash": "1162c67a6a40de5ee1494d6b4c0db8c57bc2b663911d783a3674e31267d75af6",
+      "deployedHash": "1162c67a6a40de5ee1494d6b4c0db8c57bc2b663911d783a3674e31267d75af6",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/kitesurf-cdp/references/emulation.md",
+      "sourceHash": "217bce5ae535567421b6f6a2c7c47423313da96c437c98a17f8108f168507cef",
+      "deployedHash": "217bce5ae535567421b6f6a2c7c47423313da96c437c98a17f8108f168507cef",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/kitesurf-cdp/references/error-catalog.md",
+      "sourceHash": "9c4a4c8abfc205baeee819811ed8aeb1fb447300ccc5e7074c960b00fef841dc",
+      "deployedHash": "9c4a4c8abfc205baeee819811ed8aeb1fb447300ccc5e7074c960b00fef841dc",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/kitesurf-cdp/references/mcp-bridge.md",
+      "sourceHash": "efe8c1a5f86735204f7fd40d30ea8c64070f162aa1b7fd666403723d6f6b8497",
+      "deployedHash": "efe8c1a5f86735204f7fd40d30ea8c64070f162aa1b7fd666403723d6f6b8497",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/kitesurf-cdp/references/observability.md",
+      "sourceHash": "f09a1968036168880727ca4e36c082fe7bb60b2c3270c0749a9a1776c61d8d61",
+      "deployedHash": "f09a1968036168880727ca4e36c082fe7bb60b2c3270c0749a9a1776c61d8d61",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/kitesurf-cdp/references/recipes.md",
+      "sourceHash": "bc073d18a5e8bbaa1495cc8fb57d98306385c87d281a222c344c8be233304173",
+      "deployedHash": "bc073d18a5e8bbaa1495cc8fb57d98306385c87d281a222c344c8be233304173",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/kitesurf-cdp/references/recovery-playbook.md",
+      "sourceHash": "627b7c679dac5d50bbc57043df7971b6bad3c1fc3b388428114984ab5c2d8c72",
+      "deployedHash": "627b7c679dac5d50bbc57043df7971b6bad3c1fc3b388428114984ab5c2d8c72",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/kitesurf-cdp/references/routes.md",
+      "sourceHash": "6cd4a6d83dc802c7b7c7d4fd059972fc576df3096510c55655b9d2d86c3b040e",
+      "deployedHash": "6cd4a6d83dc802c7b7c7d4fd059972fc576df3096510c55655b9d2d86c3b040e",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/kitesurf-cdp/templates/feedback-report.md",
+      "sourceHash": "e493b34c0d2e6359876f6a181cf2aeb76ea840208d04568146e116ef686b36eb",
+      "deployedHash": "e493b34c0d2e6359876f6a181cf2aeb76ea840208d04568146e116ef686b36eb",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/kitesurf-cdp/templates/probe.sh",
+      "sourceHash": "6245163b1cb13c31de8af50b8014653a8e69b8a5192d5673116ecfaea78d6535",
+      "deployedHash": "6245163b1cb13c31de8af50b8014653a8e69b8a5192d5673116ecfaea78d6535",
+      "same": true
+    },
+    {
+      "path": "dsh-nano-kitesurf/skills/nano-kite/SKILL.md",
+      "sourceHash": "a083c1a82dabcd201003c89d11ecb061efe9af1f2ffea391fccc35c8f10b1d8a",
+      "deployedHash": "a083c1a82dabcd201003c89d11ecb061efe9af1f2ffea391fccc35c8f10b1d8a",
+      "same": true
+    }
+  ]
+}

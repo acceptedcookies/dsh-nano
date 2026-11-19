@@ -1,0 +1,246 @@
+{
+  "status": {
+    "status": 200,
+    "body": {
+      "v": 1,
+      "epoch": 11,
+      "observedAt": "2026-11-18T13:17:15.451Z",
+      "subject": {
+        "containerName": "kitesurf-dev"
+      },
+      "planes": {
+        "container": {
+          "plane": "container",
+          "state": "running",
+          "ok": true
+        },
+        "engine": {
+          "plane": "engine",
+          "state": "cdp",
+          "ok": true,
+          "httpBase": "http://127.0.0.1:8800",
+          "cdpGeneration": 2
+        },
+        "page": {
+          "plane": "page",
+          "state": "open",
+          "ok": true,
+          "url": "https://example.com/",
+          "detail": "https://example.com/"
+        },
+        "dom": {
+          "plane": "dom",
+          "state": "ready",
+          "ok": true,
+          "detail": "https://example.com/ · 2003B",
+          "skipped": false
+        },
+        "bridge": {
+          "plane": "bridge",
+          "state": "up",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        },
+        "terminal": {
+          "plane": "terminal",
+          "state": "absent"
+        }
+      },
+      "ready": true,
+      "live": true,
+      "degraded": [],
+      "healthy": true,
+      "containerName": "kitesurf-dev",
+      "container": {
+        "state": "running",
+        "name": "kitesurf-dev"
+      },
+      "effective": {
+        "httpBase": "http://127.0.0.1:8800",
+        "enginePort": 8800,
+        "bridgePort": 8801
+      },
+      "ports": {
+        "engine": {
+          "port": 8800,
+          "containerPort": 8787,
+          "heldBy": "this-container"
+        },
+        "bridge": {
+          "port": 8801,
+          "containerPort": 8791,
+          "heldBy": "this-container"
+        }
+      },
+      "engineAlive": true,
+      "checks": {
+        "container": {
+          "ok": true,
+          "detail": "running"
+        },
+        "engine": {
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        "page": {
+          "ok": true,
+          "detail": "https://example.com/"
+        },
+        "dom": {
+          "ok": true,
+          "detail": "https://example.com/ · 2003B",
+          "skipped": false
+        },
+        "bridge": {
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      },
+      "summary": [
+        {
+          "plane": "container",
+          "label": "容器",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "plane": "engine",
+          "label": "引擎",
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        {
+          "plane": "page",
+          "label": "页面",
+          "ok": true,
+          "detail": "https://example.com/"
+        },
+        {
+          "plane": "dom",
+          "label": "DOM",
+          "ok": true,
+          "detail": "https://example.com/ · 2003B",
+          "skipped": false
+        },
+        {
+          "plane": "bridge",
+          "label": "桥",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      ],
+      "buildId": "0.1.0",
+      "cdpGeneration": 2,
+      "phase": "running",
+      "httpBase": "http://127.0.0.1:8800",
+      "ok": true,
+      "viewport": null,
+      "userAgent": "",
+      "media": null,
+      "extraHeaders": null,
+      "locale": "en-US",
+      "geolocation": null,
+      "colorScheme": "light",
+      "cookies": "",
+      "kite": {
+        "phase": "running"
+      },
+      "lastPage": {
+        "url": "https://example.com/",
+        "at": "2026-11-18T13:17:15.291Z"
+      }
+    }
+  },
+  "browse-history?limit=100": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "total": 10,
+      "entries": [
+        {
+          "id": "url-0f115db062b7c0dd030b1687",
+          "url": "https://example.com/",
+          "at": "2026-11-18T13:17:15.291Z",
+          "count": 5
+        },
+        {
+          "id": "url-6e8f340b1a65693cbb2d96c5",
+          "url": "http://127.0.0.1:9919/",
+          "at": "2026-11-18T13:15:06.835Z",
+          "count": 1
+        },
+        {
+          "id": "url-7630c14a6e2b99f60f929f47",
+          "url": "https://www.iana.org/help/example-domains",
+          "at": "2026-11-18T13:10:13.163Z",
+          "count": 2
+        },
+        {
+          "id": "url-4a525edfc610bc6d33564bb7",
+          "url": "http://127.0.0.1:9919/basic",
+          "at": "2026-11-18T13:07:34.632Z",
+          "count": 3
+        },
+        {
+          "id": "url-f649d422df3245ca0bdcd8cb",
+          "url": "https://archy.studio/",
+          "at": "2026-11-18T13:05:44.111Z",
+          "count": 1
+        },
+        {
+          "id": "url-ddc6a11b6e0607cf0fced41d",
+          "url": "https://react.dev/",
+          "at": "2026-11-18T13:05:19.898Z",
+          "count": 1
+        },
+        {
+          "id": "url-0ddd2c29c6c96e0eee7ef64b",
+          "url": "https://www.rfc-editor.org/rfc/rfc2616.html",
+          "at": "2026-11-18T13:05:09.934Z",
+          "count": 1
+        },
+        {
+          "id": "url-b2facdcff8c610a2a7b244d5",
+          "url": "http://127.0.0.1:9919/spa",
+          "at": "2026-11-18T13:04:03.120Z",
+          "count": 3
+        },
+        {
+          "id": "url-de52cc7d8581c98764e46d9f",
+          "url": "http://127.0.0.1:9919/slow",
+          "at": "2026-11-18T13:01:49.952Z",
+          "count": 1
+        },
+        {
+          "id": "url-5e9d65cb535f051db1ca6cc9",
+          "url": "http://127.0.0.1:9919/broken",
+          "at": "2026-11-18T13:00:30.702Z",
+          "count": 1
+        }
+      ],
+      "source": "plugin-store"
+    }
+  },
+  "control": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "control": {
+        "writer": false,
+        "owner": null,
+        "ownerSince": null,
+        "lastWriteAt": null,
+        "humanHold": {
+          "active": false,
+          "owner": null,
+          "since": null,
+          "note": null
+        },
+        "lastAction": null,
+        "lastCallAt": null
+      }
+    }
+  }
+}

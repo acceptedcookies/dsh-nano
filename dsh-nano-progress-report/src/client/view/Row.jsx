@@ -57,9 +57,10 @@ function DetailBody({ row, t }) {
 }
 
 /**
- * @param {{ row: object, now: number, t: Function, open: boolean, onToggle: Function }} props
+ * @param {{ row: object, now: number, t: Function, open: boolean,
+ *   onToggle: Function, level?: 0|1 }} props
  */
-export function Row({ row, now, t, open, onToggle }) {
+export function Row({ row, now, t, open, onToggle, level = 0 }) {
   const Icon = TYPE_ICON[row.type] ?? FALLBACK_ICON
   const time = relTime(row.time, now, t)
   return h('div', {
@@ -68,6 +69,8 @@ export function Row({ row, now, t, open, onToggle }) {
     'data-row-key': row.key,
     'data-type': row.type,
     'data-status': row.status,
+    'data-role': row.role,
+    'data-level': level,
     'data-open': open ? 'true' : undefined,
   },
   h(DisclosureRow, {

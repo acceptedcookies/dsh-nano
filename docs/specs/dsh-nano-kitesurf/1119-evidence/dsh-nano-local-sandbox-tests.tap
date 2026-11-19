@@ -1,0 +1,1314 @@
+TAP version 13
+# Subtest: inspect JSON yields the loopback host port for the engine
+ok 1 - inspect JSON yields the loopback host port for the engine
+  ---
+  duration_ms: 0.415584
+  type: 'test'
+  ...
+# Subtest: an idle session adopts a running container inspect
+ok 2 - an idle session adopts a running container inspect
+  ---
+  duration_ms: 9.18625
+  type: 'test'
+  ...
+# Subtest: thirteen methods; NVX rejects all but capabilities with the internal code
+ok 3 - thirteen methods; NVX rejects all but capabilities with the internal code
+  ---
+  duration_ms: 1.870666
+  type: 'test'
+  ...
+# Subtest: apple nouns in the public spec throw at construction
+ok 4 - apple nouns in the public spec throw at construction
+  ---
+  duration_ms: 0.134917
+  type: 'test'
+  ...
+# Subtest: the NVX internal code is not an ERROR_CATALOG id
+ok 5 - the NVX internal code is not an ERROR_CATALOG id
+  ---
+  duration_ms: 1.461791
+  type: 'test'
+  ...
+# Subtest: confine is the only build path, and a missing sandbox does not spawn
+ok 6 - confine is the only build path, and a missing sandbox does not spawn
+  ---
+  duration_ms: 0.856333
+  type: 'test'
+  ...
+# Subtest: readElements returns computed styles and matched rules for a selector
+ok 7 - readElements returns computed styles and matched rules for a selector
+  ---
+  duration_ms: 1.15925
+  type: 'test'
+  ...
+# Subtest: an open socket is not page-lost, and a closed socket is either page-lost or a new page
+ok 8 - an open socket is not page-lost, and a closed socket is either page-lost or a new page
+  ---
+  duration_ms: 0.472334
+  type: 'test'
+  ...
+# Subtest: evaluate over 2000 characters does not run and does not return the previous DOM
+ok 9 - evaluate over 2000 characters does not run and does not return the previous DOM
+  ---
+  duration_ms: 0.13925
+  type: 'test'
+  ...
+# Subtest: a cached client that is already dead is replaced before any request
+ok 10 - a cached client that is already dead is replaced before any request
+  ---
+  duration_ms: 2.193708
+  type: 'test'
+  ...
+# Subtest: an idle probe timeout preserves a socket whose transport is still open
+ok 11 - an idle probe timeout preserves a socket whose transport is still open
+  ---
+  duration_ms: 0.198
+  type: 'test'
+  ...
+# Subtest: an actual transport failure during a probe replaces the socket
+ok 12 - an actual transport failure during a probe replaces the socket
+  ---
+  duration_ms: 0.1085
+  type: 'test'
+  ...
+# Subtest: a live client is reused without reconnecting
+ok 13 - a live client is reused without reconnecting
+  ---
+  duration_ms: 0.069417
+  type: 'test'
+  ...
+# Subtest: an idle live client is probed, and a passing probe keeps the same socket
+ok 14 - an idle live client is probed, and a passing probe keeps the same socket
+  ---
+  duration_ms: 0.138667
+  type: 'test'
+  ...
+# Subtest: a navigation in progress skips the idle liveness probe
+ok 15 - a navigation in progress skips the idle liveness probe
+  ---
+  duration_ms: 0.324958
+  type: 'test'
+  ...
+# Subtest: concurrent cold acquisitions share one connection and one initialization
+ok 16 - concurrent cold acquisitions share one connection and one initialization
+  ---
+  duration_ms: 0.197792
+  type: 'test'
+  ...
+# Subtest: concurrent expired probes cannot close a newly acquired socket
+ok 17 - concurrent expired probes cannot close a newly acquired socket
+  ---
+  duration_ms: 0.090042
+  type: 'test'
+  ...
+# Subtest: a failed connection clears its flight so a later acquisition can retry
+ok 18 - a failed connection clears its flight so a later acquisition can retry
+  ---
+  duration_ms: 0.453833
+  type: 'test'
+  ...
+# Subtest: explicit navigations for the same session run sequentially without retries
+ok 19 - explicit navigations for the same session run sequentially without retries
+  ---
+  duration_ms: 1.732209
+  type: 'test'
+  ...
+# Subtest: a failed navigation releases its queue without retrying the failed command
+ok 20 - a failed navigation releases its queue without retrying the failed command
+  ---
+  duration_ms: 0.366917
+  type: 'test'
+  ...
+# Subtest: a cancelled queued navigation never runs after the preceding page finishes
+ok 21 - a cancelled queued navigation never runs after the preceding page finishes
+  ---
+  duration_ms: 0.205792
+  type: 'test'
+  ...
+# Subtest: navigation surfaces a refused result and a missing page as failures
+ok 22 - navigation surfaces a refused result and a missing page as failures
+  ---
+  duration_ms: 0.20375
+  type: 'test'
+  ...
+# Subtest: resetClient closes the socket and clears the slot
+ok 23 - resetClient closes the socket and clears the slot
+  ---
+  duration_ms: 0.049209
+  type: 'test'
+  ...
+# Subtest: production command budgets preserve slow navigation and screenshot work
+ok 24 - production command budgets preserve slow navigation and screenshot work
+  ---
+  duration_ms: 0.78325
+  type: 'test'
+  ...
+# Subtest: method-aware transport budgets allow delayed navigation and screenshots
+ok 25 - method-aware transport budgets allow delayed navigation and screenshots
+  ---
+  duration_ms: 47.988041
+  type: 'test'
+  ...
+# Subtest: a probe deadline preserves the socket and the next command can succeed
+ok 26 - a probe deadline preserves the socket and the next command can succeed
+  ---
+  duration_ms: 1510.365834
+  type: 'test'
+  ...
+# Subtest: a navigation deadline stays non-destructive until a late engine reply
+ok 27 - a navigation deadline stays non-destructive until a late engine reply
+  ---
+  duration_ms: 6.412291
+  type: 'test'
+  ...
+# Subtest: an actual socket close invalidates transport and rejects pending work
+ok 28 - an actual socket close invalidates transport and rejects pending work
+  ---
+  duration_ms: 0.69775
+  type: 'test'
+  ...
+# Subtest: an actual socket error invalidates transport and rejects pending work
+ok 29 - an actual socket error invalidates transport and rejects pending work
+  ---
+  duration_ms: 0.846875
+  type: 'test'
+  ...
+# Subtest: a synchronous send failure is not mistaken for a close/error event
+ok 30 - a synchronous send failure is not mistaken for a close/error event
+  ---
+  duration_ms: 1.120583
+  type: 'test'
+  ...
+# Subtest: a handshake deadline closes the unopened socket and rejects promptly
+ok 31 - a handshake deadline closes the unopened socket and rejects promptly
+  ---
+  duration_ms: 7.03175
+  type: 'test'
+  ...
+# Subtest: a close before the handshake finishes rejects without waiting for its deadline
+ok 32 - a close before the handshake finishes rejects without waiting for its deadline
+  ---
+  duration_ms: 0.63375
+  type: 'test'
+  ...
+# Subtest: inside DNLS the container CLI appears only in backend-apple.js
+ok 33 - inside DNLS the container CLI appears only in backend-apple.js
+  ---
+  duration_ms: 4.152334
+  type: 'test'
+  ...
+# Subtest: U10 rows are appended and earlier fingerprints stay unchanged
+ok 34 - U10 rows are appended and earlier fingerprints stay unchanged
+  ---
+  duration_ms: 0.605084
+  type: 'test'
+  ...
+# Subtest: /dom returns a sanitized srcdoc, not just a url
+ok 35 - /dom returns a sanitized srcdoc, not just a url
+  ---
+  duration_ms: 3.788833
+  type: 'test'
+  ...
+# Subtest: /dom reports dom.blank instead of pretending success on about:blank
+ok 36 - /dom reports dom.blank instead of pretending success on about:blank
+  ---
+  duration_ms: 0.2415
+  type: 'test'
+  ...
+# Subtest: /dom reports dom.empty when the document has no html
+ok 37 - /dom reports dom.empty when the document has no html
+  ---
+  duration_ms: 0.235
+  type: 'test'
+  ...
+# Subtest: /selftest runs the 11 declared checks and names every one
+ok 38 - /selftest runs the 11 declared checks and names every one
+  ---
+  duration_ms: 8.314459
+  type: 'test'
+  ...
+# Subtest: /diagnostics ships a human report and only includes the catalog on request
+ok 39 - /diagnostics ships a human report and only includes the catalog on request
+  ---
+  duration_ms: 2.038667
+  type: 'test'
+  ...
+# Subtest: /diagnostics collapses repeated polling rows instead of drowning the trace
+ok 40 - /diagnostics collapses repeated polling rows instead of drowning the trace
+  ---
+  duration_ms: 1.1565
+  type: 'test'
+  ...
+# Subtest: /ports probes every plane so the OK badge cannot mean "container up only"
+ok 41 - /ports probes every plane so the OK badge cannot mean "container up only"
+  ---
+  duration_ms: 3.381042
+  type: 'test'
+  ...
+# Subtest: /recover stop+starts a running http-only engine and does not call restart
+ok 42 - /recover stop+starts a running http-only engine and does not call restart
+  ---
+  duration_ms: 3.314625
+  type: 'test'
+  ...
+# Subtest: a blank page is not a reason to restart
+ok 43 - a blank page is not a reason to restart
+  ---
+  duration_ms: 2.085375
+  type: 'test'
+  ...
+# Subtest: sanitizeHtml strips scripts, base, meta-refresh, handlers and javascript: urls
+ok 44 - sanitizeHtml strips scripts, base, meta-refresh, handlers and javascript: urls
+  ---
+  duration_ms: 0.74775
+  type: 'test'
+  ...
+# Subtest: buildSrcDoc rebases on the live url and keeps one base tag
+ok 45 - buildSrcDoc rebases on the live url and keeps one base tag
+  ---
+  duration_ms: 0.137625
+  type: 'test'
+  ...
+# Subtest: buildSrcDoc wraps a fragment that has no head
+ok 46 - buildSrcDoc wraps a fragment that has no head
+  ---
+  duration_ms: 0.111292
+  type: 'test'
+  ...
+# Subtest: buildSrcDoc never injects a picker script (the pane binds its own)
+ok 47 - buildSrcDoc never injects a picker script (the pane binds its own)
+  ---
+  duration_ms: 0.141041
+  type: 'test'
+  ...
+# Subtest: buildSrcDoc escapes the url so it cannot break out of the attribute
+ok 48 - buildSrcDoc escapes the url so it cannot break out of the attribute
+  ---
+  duration_ms: 0.072459
+  type: 'test'
+  ...
+# Subtest: an empty page degrades to an empty document, not a throw
+ok 49 - an empty page degrades to an empty document, not a throw
+  ---
+  duration_ms: 0.055417
+  type: 'test'
+  ...
+# Subtest: the forked e2e names the 23 records and only calls the new prefix
+ok 50 - the forked e2e names the 23 records and only calls the new prefix
+  ---
+  duration_ms: 0.897667
+  type: 'test'
+  ...
+# Subtest: elements returns computed and matched styles from the engine capture
+ok 51 - elements returns computed and matched styles from the engine capture
+  ---
+  duration_ms: 2.563958
+  type: 'test'
+  ...
+# Subtest: elements without an engine page is JSON 502, not an empty body
+ok 52 - elements without an engine page is JSON 502, not an empty body
+  ---
+  duration_ms: 0.245666
+  type: 'test'
+  ...
+# Subtest: each local environment derives its own container name
+ok 53 - each local environment derives its own container name
+  ---
+  duration_ms: 0.477458
+  type: 'test'
+  ...
+# Subtest: KITESURF_ENV wins over DSH_HOME and is validated
+ok 54 - KITESURF_ENV wins over DSH_HOME and is validated
+  ---
+  duration_ms: 0.089417
+  type: 'test'
+  ...
+# Subtest: the three environments never collide on a host port
+ok 55 - the three environments never collide on a host port
+  ---
+  duration_ms: 0.378875
+  type: 'test'
+  ...
+# Subtest: an explicit session container name is never overridden
+ok 56 - an explicit session container name is never overridden
+  ---
+  duration_ms: 0.114709
+  type: 'test'
+  ...
+# Subtest: the catalogue has one row per required id and shot.fit is 400
+ok 57 - the catalogue has one row per required id and shot.fit is 400
+  ---
+  duration_ms: 0.552334
+  type: 'test'
+  ...
+# Subtest: history rows on the instance volume match writes and there is no second file
+ok 58 - history rows on the instance volume match writes and there is no second file
+  ---
+  duration_ms: 4.893541
+  type: 'test'
+  ...
+# Subtest: package id, engine range, and file whitelist
+ok 59 - package id, engine range, and file whitelist
+  ---
+  duration_ms: 0.73625
+  type: 'test'
+  ...
+# Subtest: inject is exactly the five host services
+ok 60 - inject is exactly the five host services
+  ---
+  duration_ms: 0.155083
+  type: 'test'
+  ...
+# Subtest: the same triple reuses one id and create runs once; degrade does not cross instances
+ok 61 - the same triple reuses one id and create runs once; degrade does not cross instances
+  ---
+  duration_ms: 2.2105
+  type: 'test'
+  ...
+# Subtest: sandbox.instance.ensure without a sessionId keeps the env-scoped container
+ok 62 - sandbox.instance.ensure without a sessionId keeps the env-scoped container
+  ---
+  duration_ms: 5.57425
+  type: 'test'
+  ...
+# Subtest: sandbox.instance.ensure with a sessionId indexes the env container and invents no terminal endpoint
+ok 63 - sandbox.instance.ensure with a sessionId indexes the env container and invents no terminal endpoint
+  ---
+  duration_ms: 1.906208
+  type: 'test'
+  ...
+# Subtest: two sessions index the same env container
+ok 64 - two sessions index the same env container
+  ---
+  duration_ms: 1.047
+  type: 'test'
+  ...
+# Subtest: the same session reuses its instance instead of creating a second container
+ok 65 - the same session reuses its instance instead of creating a second container
+  ---
+  duration_ms: 0.815833
+  type: 'test'
+  ...
+# Subtest: a changed policy fingerprint is refused, not hot-remounted
+ok 66 - a changed policy fingerprint is refused, not hot-remounted
+  ---
+  duration_ms: 1.842125
+  type: 'test'
+  ...
+# Subtest: the tool catalog still advertises every instance tool
+ok 67 - the tool catalog still advertises every instance tool
+  ---
+  duration_ms: 0.323083
+  type: 'test'
+  ...
+# Subtest: profile selection and runtime/image/resources all follow the same recipe
+ok 68 - profile selection and runtime/image/resources all follow the same recipe
+  ---
+  duration_ms: 4.35125
+  type: 'test'
+  ...
+# Subtest: runtime mounts require nonempty outputs and never create missing runtime paths
+ok 69 - runtime mounts require nonempty outputs and never create missing runtime paths
+  ---
+  duration_ms: 7.552417
+  type: 'test'
+  ...
+# Subtest: an explicit derived runtime wins, but a git source checkout or unsafe path cannot be mounted
+ok 70 - an explicit derived runtime wins, but a git source checkout or unsafe path cannot be mounted
+  ---
+  duration_ms: 4.935792
+  type: 'test'
+  ...
+# Subtest: the sibling build receipt must identify the exact profile ref, including for an override
+ok 71 - the sibling build receipt must identify the exact profile ref, including for an override
+  ---
+  duration_ms: 4.969917
+  type: 'test'
+  ...
+# Subtest: images never fall back to an untagged reference or moving default
+ok 72 - images never fall back to an untagged reference or moving default
+  ---
+  duration_ms: 2.84075
+  type: 'test'
+  ...
+# Subtest: prepare creates only from the selected profile runtime and keeps env ports/state isolation
+ok 73 - prepare creates only from the selected profile runtime and keeps env ports/state isolation
+  ---
+  duration_ms: 11.444041
+  type: 'test'
+  ...
+# Subtest: prepare is honest about missing builds, including before destructive resource reconciliation
+ok 74 - prepare is honest about missing builds, including before destructive resource reconciliation
+  ---
+  duration_ms: 3.664916
+  type: 'test'
+  ...
+# Subtest: existing running/stopped containers remain adoptable without rebuilding runtime
+ok 75 - existing running/stopped containers remain adoptable without rebuilding runtime
+  ---
+  duration_ms: 3.549959
+  type: 'test'
+  ...
+# Subtest: resource drift still rebuilds with the same state mount and the new profile resources
+ok 76 - resource drift still rebuilds with the same state mount and the new profile resources
+  ---
+  duration_ms: 6.259209
+  type: 'test'
+  ...
+# Subtest: entrypoint exports expose-gc once while preserving every caller flag
+ok 77 - entrypoint exports expose-gc once while preserving every caller flag
+  ---
+  duration_ms: 36.534584
+  type: 'test'
+  ...
+# Subtest: kite suspend and resume follow the running session and history stays off workerd-kv
+ok 78 - kite suspend and resume follow the running session and history stays off workerd-kv
+  ---
+  duration_ms: 12.109708
+  type: 'test'
+  ...
+# Subtest: twenty soak runs match the specified trace
+ok 79 - twenty soak runs match the specified trace
+  ---
+  duration_ms: 9.399125
+  type: 'test'
+  ...
+# Subtest: sweep reads the fixture profile and the production timeout stays 1800000
+ok 80 - sweep reads the fixture profile and the production timeout stays 1800000
+  ---
+  duration_ms: 6.226333
+  type: 'test'
+  ...
+# Subtest: tools/list sandbox set is exactly the frozen twenty and does not wait for a host push
+ok 81 - tools/list sandbox set is exactly the frozen twenty and does not wait for a host push
+  ---
+  duration_ms: 0.778708
+  type: 'test'
+  ...
+# Subtest: every tool advertises a non-empty additionalProperties:false inputSchema (no {properties:{}} stub)
+ok 82 - every tool advertises a non-empty additionalProperties:false inputSchema (no {properties:{}} stub)
+  ---
+  duration_ms: 0.96825
+  type: 'test'
+  ...
+# Subtest: dispatch validates params: extra field and missing required are rejected, never pass-through
+ok 83 - dispatch validates params: extra field and missing required are rejected, never pass-through
+  ---
+  duration_ms: 0.084125
+  type: 'test'
+  ...
+# Subtest: dispatch calls the REAL injected owner and returns {ok:true,data}; unknown tool is an error
+ok 84 - dispatch calls the REAL injected owner and returns {ok:true,data}; unknown tool is an error
+  ---
+  duration_ms: 0.142875
+  type: 'test'
+  ...
+# Subtest: a loopback start builds a detached container command
+ok 85 - a loopback start builds a detached container command
+  ---
+  duration_ms: 0.619083
+  type: 'test'
+  ...
+# Subtest: a remote origin is not started on this machine
+ok 86 - a remote origin is not started on this machine
+  ---
+  duration_ms: 0.183875
+  type: 'test'
+  ...
+# Subtest: a missing local container is created, and suspend stops it
+ok 87 - a missing local container is created, and suspend stops it
+  ---
+  duration_ms: 3.637667
+  type: 'test'
+  ...
+# Subtest: an existing container with matching ports is started, not recreated
+ok 88 - an existing container with matching ports is started, not recreated
+  ---
+  duration_ms: 0.30975
+  type: 'test'
+  ...
+# Subtest: a container whose published ports drifted is deleted and recreated
+ok 89 - a container whose published ports drifted is deleted and recreated
+  ---
+  duration_ms: 0.253625
+  type: 'test'
+  ...
+# Subtest: a remap onto an occupied host port must NOT delete the working container
+ok 90 - a remap onto an occupied host port must NOT delete the working container
+  ---
+  duration_ms: 0.21575
+  type: 'test'
+  ...
+# Subtest: when the requested port is busy but the container still owns its own port, adopt it
+ok 91 - when the requested port is busy but the container still owns its own port, adopt it
+  ---
+  duration_ms: 0.166834
+  type: 'test'
+  ...
+# Subtest: a cold subsystem failure surfaces the system-start error, not the run
+ok 92 - a cold subsystem failure surfaces the system-start error, not the run
+  ---
+  duration_ms: 0.204334
+  type: 'test'
+  ...
+# Subtest: a missing checkout is a config fault, not an engine failure
+ok 93 - a missing checkout is a config fault, not an engine failure
+  ---
+  duration_ms: 2.135042
+  type: 'test'
+  ...
+# Subtest: init writes a lock once and the second call returns it
+ok 94 - init writes a lock once and the second call returns it
+  ---
+  duration_ms: 0.45575
+  type: 'test'
+  ...
+# Subtest: an old Node does not write the lock
+ok 95 - an old Node does not write the lock
+  ---
+  duration_ms: 3.645542
+  type: 'test'
+  ...
+# Subtest: start, suspend, and resume follow one path and call the engine hooks
+ok 96 - start, suspend, and resume follow one path and call the engine hooks
+  ---
+  duration_ms: 0.182292
+  type: 'test'
+  ...
+# Subtest: a failed start does not leave the engine running
+ok 97 - a failed start does not leave the engine running
+  ---
+  duration_ms: 0.36525
+  type: 'test'
+  ...
+# Subtest: a remote engine needs allowRemote, and credentials are never allowed
+ok 98 - a remote engine needs allowRemote, and credentials are never allowed
+  ---
+  duration_ms: 0.124
+  type: 'test'
+  ...
+# Subtest: init on an old Node refuses even when a lock already exists
+ok 99 - init on an old Node refuses even when a lock already exists
+  ---
+  duration_ms: 0.096583
+  type: 'test'
+  ...
+# Subtest: /open normalizes a bare hostname and only records a completed navigation
+ok 100 - /open normalizes a bare hostname and only records a completed navigation
+  ---
+  duration_ms: 5.112083
+  type: 'test'
+  ...
+# Subtest: /open propagates an actual CDP navigation error instead of returning ok:true
+ok 101 - /open propagates an actual CDP navigation error instead of returning ok:true
+  ---
+  duration_ms: 0.677292
+  type: 'test'
+  ...
+# Subtest: /open rejects an errorText navigation result instead of recording success
+ok 102 - /open rejects an errorText navigation result instead of recording success
+  ---
+  duration_ms: 0.539416
+  type: 'test'
+  ...
+# Subtest: /open does not issue navigation for a request already aborted by its caller
+ok 103 - /open does not issue navigation for a request already aborted by its caller
+  ---
+  duration_ms: 0.104333
+  type: 'test'
+  ...
+# Subtest: /open rejects credentials and non-HTTP URLs before touching the engine
+ok 104 - /open rejects credentials and non-HTTP URLs before touching the engine
+  ---
+  duration_ms: 0.578958
+  type: 'test'
+  ...
+# Subtest: the network route filters failed rows, applies since/limit, and keeps gap markers out
+ok 105 - the network route filters failed rows, applies since/limit, and keeps gap markers out
+  ---
+  duration_ms: 3.052916
+  type: 'test'
+  ...
+# Subtest: the network clear action empties the driver ring
+ok 106 - the network clear action empties the driver ring
+  ---
+  duration_ms: 0.137
+  type: 'test'
+  ...
+# Subtest: the network list omits detail-only headers and payloads
+ok 107 - the network list omits detail-only headers and payloads
+  ---
+  duration_ms: 0.1155
+  type: 'test'
+  ...
+# Subtest: the network detail route reports a missing request without touching the engine
+ok 108 - the network detail route reports a missing request without touching the engine
+  ---
+  duration_ms: 0.12375
+  type: 'test'
+  ...
+# Subtest: network lifecycle records resource type, transfer size, duration and cached state
+ok 109 - network lifecycle records resource type, transfer size, duration and cached state
+  ---
+  duration_ms: 1.928333
+  type: 'test'
+  ...
+# Subtest: redirects keep one row with the final request while preserving redirect evidence
+ok 110 - redirects keep one row with the final request while preserving redirect evidence
+  ---
+  duration_ms: 0.242375
+  type: 'test'
+  ...
+# Subtest: failed requests keep the error and duration rather than pretending to finish
+ok 111 - failed requests keep the error and duration rather than pretending to finish
+  ---
+  duration_ms: 0.215042
+  type: 'test'
+  ...
+# Subtest: request details retain request/response headers, payload and status metadata
+ok 112 - request details retain request/response headers, payload and status metadata
+  ---
+  duration_ms: 0.596708
+  type: 'test'
+  ...
+# Subtest: runtime source has no SandboxProvider and no shell seam assignment
+ok 113 - runtime source has no SandboxProvider and no shell seam assignment
+  ---
+  duration_ms: 5.491209
+  type: 'test'
+  ...
+# Subtest: the phase-6 pack archive already exists and matches a fresh dry run
+ok 114 - the phase-6 pack archive already exists and matches a fresh dry run
+  ---
+  duration_ms: 838.127
+  type: 'test'
+  ...
+# Subtest: pick, targets, network and har read the session CDP client
+ok 115 - pick, targets, network and har read the session CDP client
+  ---
+  duration_ms: 4.090875
+  type: 'test'
+  ...
+# Subtest: mode and workspaceRoot changes are stale, and an unrelated label is not
+ok 116 - mode and workspaceRoot changes are stale, and an unrelated label is not
+  ---
+  duration_ms: 3.3315
+  type: 'test'
+  ...
+# Subtest: scope is read from profile.yaml and the recipe stays in this package
+ok 117 - scope is read from profile.yaml and the recipe stays in this package
+  ---
+  duration_ms: 5.945375
+  type: 'test'
+  ...
+# Subtest: missing field, latest, caret, floating pin, bad digest, bad ref, verify, and container machine all refuse
+ok 118 - missing field, latest, caret, floating pin, bad digest, bad ref, verify, and container machine all refuse
+  ---
+  duration_ms: 27.439291
+  type: 'test'
+  ...
+# Subtest: deleted DNK and DNT titles still exist with at least as many asserts
+ok 119 - deleted DNK and DNT titles still exist with at least as many asserts
+  ---
+  duration_ms: 181.814167
+  type: 'test'
+  ...
+# Subtest: simulation settings are projected without changing the legacy defaults
+ok 120 - simulation settings are projected without changing the legacy defaults
+  ---
+  duration_ms: 0.80425
+  type: 'test'
+  ...
+# Subtest: DNK width-only 390 becomes a real override with height 900
+ok 121 - DNK width-only 390 becomes a real override with height 900
+  ---
+  duration_ms: 0.596292
+  type: 'test'
+  ...
+# Subtest: DNK width-only 768 becomes a real override with height 900
+ok 122 - DNK width-only 768 becomes a real override with height 900
+  ---
+  duration_ms: 0.110792
+  type: 'test'
+  ...
+# Subtest: DNK width-only 1280 becomes a real override with height 900
+ok 123 - DNK width-only 1280 becomes a real override with height 900
+  ---
+  duration_ms: 0.189167
+  type: 'test'
+  ...
+# Subtest: width-only retains the current fixed height, without coercing input values
+ok 124 - width-only retains the current fixed height, without coercing input values
+  ---
+  duration_ms: 2.4955
+  type: 'test'
+  ...
+# Subtest: viewport boundaries, all scale factors, and mobile booleans are accepted
+ok 125 - viewport boundaries, all scale factors, and mobile booleans are accepted
+  ---
+  duration_ms: 0.674083
+  type: 'test'
+  ...
+# Subtest: null restores lastFit with a supported override, or the known 1280x720 fallback
+ok 126 - null restores lastFit with a supported override, or the known 1280x720 fallback
+  ---
+  duration_ms: 0.244834
+  type: 'test'
+  ...
+# Subtest: effectiveViewport is a pure fixed-before-fit selector returning detached values
+ok 127 - effectiveViewport is a pure fixed-before-fit selector returning detached values
+  ---
+  duration_ms: 0.078375
+  type: 'test'
+  ...
+# Subtest: shot fit cannot overwrite fixed viewport, but is remembered for returning to auto
+ok 128 - shot fit cannot overwrite fixed viewport, but is remembered for returning to auto
+  ---
+  duration_ms: 0.368833
+  type: 'test'
+  ...
+# Subtest: auto shot fit stores only a successful fit and does not make it a fixed setting
+ok 129 - auto shot fit stores only a successful fit and does not make it a fixed setting
+  ---
+  duration_ms: 0.360875
+  type: 'test'
+  ...
+# Subtest: malformed fit is rejected before page acquisition, including while viewport is fixed
+ok 130 - malformed fit is rejected before page acquisition, including while viewport is fixed
+  ---
+  duration_ms: 0.261667
+  type: 'test'
+  ...
+# Subtest: invalid entire patches, UA and media are rejected instead of silently ignored
+ok 131 - invalid entire patches, UA and media are rejected instead of silently ignored
+  ---
+  duration_ms: 0.888833
+  type: 'test'
+  ...
+# Subtest: every header must be legal; forbidden/case aliases, count overflow and injection fail the whole patch
+ok 132 - every header must be legal; forbidden/case aliases, count overflow and injection fail the whole patch
+  ---
+  duration_ms: 0.593125
+  type: 'test'
+  ...
+# Subtest: valid UA/media/20 headers are applied once under one attachment; null/empty values clear
+ok 133 - valid UA/media/20 headers are applied once under one attachment; null/empty values clear
+  ---
+  duration_ms: 0.409333
+  type: 'test'
+  ...
+# Subtest: each possible CDP failure rolls back the failed command and previous writes; session never commits early
+ok 134 - each possible CDP failure rolls back the failed command and previous writes; session never commits early
+  ---
+  duration_ms: 0.429208
+  type: 'test'
+  ...
+# Subtest: rollback to initially unset settings uses real defaults, not unsupported clear or ghost session fields
+ok 135 - rollback to initially unset settings uses real defaults, not unsupported clear or ghost session fields
+  ---
+  duration_ms: 0.153792
+  type: 'test'
+  ...
+# Subtest: rollback failures are surfaced and do not prevent attempts to restore other writes
+ok 136 - rollback failures are surfaced and do not prevent attempts to restore other writes
+  ---
+  duration_ms: 0.214458
+  type: 'test'
+  ...
+# Subtest: fit failure rolls back metrics and never stores a failed fit
+ok 137 - fit failure rolls back metrics and never stores a failed fit
+  ---
+  duration_ms: 0.095125
+  type: 'test'
+  ...
+# Subtest: replay sends fixed or automatic settings on the caller-owned page and propagates errors
+ok 138 - replay sends fixed or automatic settings on the caller-owned page and propagates errors
+  ---
+  duration_ms: 0.2235
+  type: 'test'
+  ...
+# Subtest: concurrent patches and fits serialize on this session without precommitting or capturing stale height
+ok 139 - concurrent patches and fits serialize on this session without precommitting or capturing stale height
+  ---
+  duration_ms: 0.158584
+  type: 'test'
+  ...
+# Subtest: a rejected transaction does not poison the per-session queue or another session
+ok 140 - a rejected transaction does not poison the per-session queue or another session
+  ---
+  duration_ms: 0.150667
+  type: 'test'
+  ...
+# Subtest: missing page propagates an existing driver error; empty patch and reads have no engine side effects
+ok 141 - missing page propagates an existing driver error; empty patch and reads have no engine side effects
+  ---
+  duration_ms: 0.097333
+  type: 'test'
+  ...
+# Subtest: history projects legacy visits newest-first with stable address ids and counts
+ok 142 - history projects legacy visits newest-first with stable address ids and counts
+  ---
+  duration_ms: 1.138
+  type: 'test'
+  ...
+# Subtest: history query and limit match the DNK address list and search consumers
+ok 143 - history query and limit match the DNK address list and search consumers
+  ---
+  duration_ms: 0.28725
+  type: 'test'
+  ...
+# Subtest: history limit defaults to 100 and is capped at 1000 without truncating canonical visits
+ok 144 - history limit defaults to 100 and is capped at 1000 without truncating canonical visits
+  ---
+  duration_ms: 8.51725
+  type: 'test'
+  ...
+# Subtest: recording uses only the current session array and sees outside updates
+ok 145 - recording uses only the current session array and sees outside updates
+  ---
+  duration_ms: 0.375333
+  type: 'test'
+  ...
+# Subtest: DELETE by URL removes every visit of the tab and leaves unrelated addresses
+ok 146 - DELETE by URL removes every visit of the tab and leaves unrelated addresses
+  ---
+  duration_ms: 0.113959
+  type: 'test'
+  ...
+# Subtest: DELETE by projected stable id or legacy row id removes its address
+ok 147 - DELETE by projected stable id or legacy row id removes its address
+  ---
+  duration_ms: 0.109
+  type: 'test'
+  ...
+# Subtest: clear empties the same canonical array and never resurrects old visits
+ok 148 - clear empties the same canonical array and never resurrects old visits
+  ---
+  duration_ms: 0.136959
+  type: 'test'
+  ...
+# Subtest: back uses the owning flattened CDP session and a 45-second navigation budget
+ok 149 - back uses the owning flattened CDP session and a 45-second navigation budget
+  ---
+  duration_ms: 0.266125
+  type: 'test'
+  ...
+# Subtest: forward attaches only when needed and at either boundary returns moved:false
+ok 150 - forward attaches only when needed and at either boundary returns moved:false
+  ---
+  duration_ms: 0.319625
+  type: 'test'
+  ...
+# Subtest: invalid deltas are rejected before talking to CDP
+ok 151 - invalid deltas are rejected before talking to CDP
+  ---
+  duration_ms: 0.491208
+  type: 'test'
+  ...
+# Subtest: history navigation awaits completion and propagates failure without replay or closing the socket
+ok 152 - history navigation awaits completion and propagates failure without replay or closing the socket
+  ---
+  duration_ms: 3.032292
+  type: 'test'
+  ...
+# Subtest: a swallowed upstream navigation error cannot report the recorded target as arrival
+ok 153 - a swallowed upstream navigation error cannot report the recorded target as arrival
+  ---
+  duration_ms: 0.180709
+  type: 'test'
+  ...
+# Subtest: history redirects report the observed page URL, not the recorded destination
+ok 154 - history redirects report the observed page URL, not the recorded destination
+  ---
+  duration_ms: 0.059417
+  type: 'test'
+  ...
+# Subtest: missing page is a real driver failure, not a fabricated history success
+ok 155 - missing page is a real driver failure, not a fabricated history success
+  ---
+  duration_ms: 0.112125
+  type: 'test'
+  ...
+# Subtest: recipe image build executes only the command returned by the host confinement seam
+ok 156 - recipe image build executes only the command returned by the host confinement seam
+  ---
+  duration_ms: 0.836917
+  type: 'test'
+  ...
+# Subtest: no sandbox or invalid confinement result cannot execute image creation
+ok 157 - no sandbox or invalid confinement result cannot execute image creation
+  ---
+  duration_ms: 0.841542
+  type: 'test'
+  ...
+# Subtest: inspect retains Apple image reference/digest, actual mounts and GC/recipe evidence
+ok 158 - inspect retains Apple image reference/digest, actual mounts and GC/recipe evidence
+  ---
+  duration_ms: 4.563125
+  type: 'test'
+  ...
+# Subtest: image aliases compare equally and absent fixture fields or GC env do not invent drift
+ok 159 - image aliases compare equally and absent fixture fields or GC env do not invent drift
+  ---
+  duration_ms: 0.266458
+  type: 'test'
+  ...
+# Subtest: a missing new image preserves the old running or stopped container and socket
+    # Subtest: running
+    ok 1 - running
+      ---
+      duration_ms: 9.796875
+      type: 'test'
+      ...
+    # Subtest: stopped
+    ok 2 - stopped
+      ---
+      duration_ms: 6.995208
+      type: 'test'
+      ...
+    1..2
+ok 160 - a missing new image preserves the old running or stopped container and socket
+  ---
+  duration_ms: 17.034542
+  type: 'test'
+  ...
+# Subtest: image-only and runtime-only drift each recreate a running container with the current recipe
+    # Subtest: image
+    ok 1 - image
+      ---
+      duration_ms: 12.746041
+      type: 'test'
+      ...
+    # Subtest: mounts
+    ok 2 - mounts
+      ---
+      duration_ms: 8.126375
+      type: 'test'
+      ...
+    1..2
+ok 161 - image-only and runtime-only drift each recreate a running container with the current recipe
+  ---
+  duration_ms: 21.103042
+  type: 'test'
+  ...
+# Subtest: stopped containers reconcile recipe/resource drift before any start
+    # Subtest: image
+    ok 1 - image
+      ---
+      duration_ms: 7.218208
+      type: 'test'
+      ...
+    # Subtest: mounts
+    ok 2 - mounts
+      ---
+      duration_ms: 6.859416
+      type: 'test'
+      ...
+    # Subtest: resources
+    ok 3 - resources
+      ---
+      duration_ms: 7.816292
+      type: 'test'
+      ...
+    1..3
+ok 162 - stopped containers reconcile recipe/resource drift before any start
+  ---
+  duration_ms: 22.436666
+  type: 'test'
+  ...
+# Subtest: combined recipe/resource drift recreates once and a second prepare is noop
+ok 163 - combined recipe/resource drift recreates once and a second prepare is noop
+  ---
+  duration_ms: 9.316792
+  type: 'test'
+  ...
+# Subtest: missing, incomplete or wrong-receipt new runtime never stops/removes/starts the old container
+    # Subtest: running/missing
+    ok 1 - running/missing
+      ---
+      duration_ms: 4.150458
+      type: 'test'
+      ...
+    # Subtest: running/incomplete
+    ok 2 - running/incomplete
+      ---
+      duration_ms: 5.277541
+      type: 'test'
+      ...
+    # Subtest: running/receipt
+    ok 3 - running/receipt
+      ---
+      duration_ms: 5.216875
+      type: 'test'
+      ...
+    # Subtest: stopped/missing
+    ok 4 - stopped/missing
+      ---
+      duration_ms: 2.903417
+      type: 'test'
+      ...
+    # Subtest: stopped/incomplete
+    ok 5 - stopped/incomplete
+      ---
+      duration_ms: 4.686417
+      type: 'test'
+      ...
+    # Subtest: stopped/receipt
+    ok 6 - stopped/receipt
+      ---
+      duration_ms: 5.590333
+      type: 'test'
+      ...
+    1..6
+ok 164 - missing, incomplete or wrong-receipt new runtime never stops/removes/starts the old container
+  ---
+  duration_ms: 28.130125
+  type: 'test'
+  ...
+# Subtest: stop/remove errors propagate and never create; CDP resets only once stopped
+    # Subtest: stop
+    ok 1 - stop
+      ---
+      duration_ms: 5.922792
+      type: 'test'
+      ...
+    # Subtest: remove
+    ok 2 - remove
+      ---
+      duration_ms: 6.054708
+      type: 'test'
+      ...
+    1..2
+ok 165 - stop/remove errors propagate and never create; CDP resets only once stopped
+  ---
+  duration_ms: 12.118667
+  type: 'test'
+  ...
+# Subtest: http-only recovery also resets CDP only after its stop succeeds
+ok 166 - http-only recovery also resets CDP only after its stop succeeds
+  ---
+  duration_ms: 7.851375
+  type: 'test'
+  ...
+# Subtest: matching production inspect is noop/resume with no runtime build and retains the live CDP socket
+ok 167 - matching production inspect is noop/resume with no runtime build and retains the live CDP socket
+  ---
+  duration_ms: 3.5135
+  type: 'test'
+  ...
+# Subtest: stage verifies the approved source tree, not just equal local pin/build copies
+ok 168 - stage verifies the approved source tree, not just equal local pin/build copies
+  ---
+  duration_ms: 106.750208
+  type: 'test'
+  ...
+# Subtest: retired literals stay in the historical documents, and the container CLI stays in backend-apple.js
+ok 169 - retired literals stay in the historical documents, and the container CLI stays in backend-apple.js
+  ---
+  duration_ms: 158.740125
+  type: 'test'
+  ...
+# Subtest: the live scanners include DNLS, and dropping it fails both route gates
+not ok 170 - the live scanners include DNLS, and dropping it fails both route gates
+  ---
+  duration_ms: 6.667792
+  type: 'test'
+  location: '/Users/seanz/Documents/dsh-plugins/.agents/worktrees/kitesurf-delivery-review/dsh-nano-local-sandbox/test/route-scan-coverage.test.mjs:14:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/seanz/Documents/dsh-plugins/.agents/worktrees/kitesurf-delivery-review/dsh-nano-local-sandbox/test/route-scan-coverage.test.mjs:24:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: an extra DNLS route constant fails the scanner, and a bare import fails clean-lib
+ok 171 - an extra DNLS route constant fails the scanner, and a bare import fails clean-lib
+  ---
+  duration_ms: 1.750541
+  type: 'test'
+  ...
+# Subtest: an unlisted route never reaches webServer.register
+ok 172 - an unlisted route never reaches webServer.register
+  ---
+  duration_ms: 1.229042
+  type: 'test'
+  ...
+# Subtest: missing requestRejection registers nothing
+ok 173 - missing requestRejection registers nothing
+  ---
+  duration_ms: 0.101417
+  type: 'test'
+  ...
+# Subtest: the ledger is the only sessionBinding source and apply does not register directly
+ok 174 - the ledger is the only sessionBinding source and apply does not register directly
+  ---
+  duration_ms: 0.577458
+  type: 'test'
+  ...
+# Subtest: websocket handshake waits for requestRejection
+ok 175 - websocket handshake waits for requestRejection
+  ---
+  duration_ms: 0.074833
+  type: 'test'
+  ...
+# Subtest: term.session.create without sessionId does not listen and is not term-1
+ok 176 - term.session.create without sessionId does not listen and is not term-1
+  ---
+  duration_ms: 8.782667
+  type: 'test'
+  ...
+# Subtest: term.session.create round-trips bytes on the returned socket
+ok 177 - term.session.create round-trips bytes on the returned socket
+  ---
+  duration_ms: 15.834584
+  type: 'test'
+  ...
+# Subtest: the same session reuses one pty and a stopped container returns no url
+ok 178 - the same session reuses one pty and a stopped container returns no url
+  ---
+  duration_ms: 4.989541
+  type: 'test'
+  ...
+# Subtest: container pty is asked to exec inside the named container
+ok 179 - container pty is asked to exec inside the named container
+  ---
+  duration_ms: 0.844833
+  type: 'test'
+  ...
+# Subtest: term.create goes through backend.openPty with the env container name
+ok 180 - term.create goes through backend.openPty with the env container name
+  ---
+  duration_ms: 2.315042
+  type: 'test'
+  ...
+# Subtest: a stale policy does not listen
+ok 181 - a stale policy does not listen
+  ---
+  duration_ms: 1.084042
+  type: 'test'
+  ...
+# Subtest: a changed live policy fingerprint blocks create from the registry row
+ok 182 - a changed live policy fingerprint blocks create from the registry row
+  ---
+  duration_ms: 1.053459
+  type: 'test'
+  ...
+# Subtest: overlapping status reads share one probe pass
+ok 183 - overlapping status reads share one probe pass
+  ---
+  duration_ms: 65.031083
+  type: 'test'
+  ...
+# Subtest: resetClient bumps generation and records one network gap
+ok 184 - resetClient bumps generation and records one network gap
+  ---
+  duration_ms: 0.323625
+  type: 'test'
+  ...
+# Subtest: resize reaches the pty: stty sees the new size
+ok 185 - resize reaches the pty: stty sees the new size
+  ---
+  duration_ms: 185.563667
+  type: 'test'
+  ...
+# Subtest: term.session.* failures use frozen dnt kinds and HTTP status, not new errorIds
+ok 186 - term.session.* failures use frozen dnt kinds and HTTP status, not new errorIds
+  ---
+  duration_ms: 1.425125
+  type: 'test'
+  ...
+# Subtest: terminal schemas reject bounds and extra fields, and create has no path
+ok 187 - terminal schemas reject bounds and extra fields, and create has no path
+  ---
+  duration_ms: 0.63125
+  type: 'test'
+  ...
+# Subtest: bad digest and a short checkout ref never call ensureImage
+ok 188 - bad digest and a short checkout ref never call ensureImage
+  ---
+  duration_ms: 5.64075
+  type: 'test'
+  ...
+# Subtest: a checkout path that escapes the profile never reaches confine or spawn
+ok 189 - a checkout path that escapes the profile never reaches confine or spawn
+  ---
+  duration_ms: 0.26925
+  type: 'test'
+  ...
+# Subtest: building without ctx.sandbox throws and does not spawn npm or curl
+ok 190 - building without ctx.sandbox throws and does not spawn npm or curl
+  ---
+  duration_ms: 0.266375
+  type: 'test'
+  ...
+# Subtest: one instance workspace root is not mounted into another instance
+ok 191 - one instance workspace root is not mounted into another instance
+  ---
+  duration_ms: 1.154083
+  type: 'test'
+  ...
+# Subtest: fingerprint ignores fields outside the tuple and changes with workspaceRoot
+ok 192 - fingerprint ignores fields outside the tuple and changes with workspaceRoot
+  ---
+  duration_ms: 0.161708
+  type: 'test'
+  ...
+# Subtest: unauthenticated HTTP and websocket upgrade do not run the handler first
+ok 193 - unauthenticated HTTP and websocket upgrade do not run the handler first
+  ---
+  duration_ms: 1.143625
+  type: 'test'
+  ...
+# Subtest: a recipe that mentions container machine is refused before spawn
+ok 194 - a recipe that mentions container machine is refused before spawn
+  ---
+  duration_ms: 2.895667
+  type: 'test'
+  ...
+# Subtest: evaluate over 2000 characters does not execute and is not the previous DOM
+ok 195 - evaluate over 2000 characters does not execute and is not the previous DOM
+  ---
+  duration_ms: 0.144375
+  type: 'test'
+  ...
+# Subtest: term.session.create does not create audit.jsonl
+not ok 196 - term.session.create does not create audit.jsonl
+  ---
+  duration_ms: 1.154875
+  type: 'test'
+  location: '/Users/seanz/Documents/dsh-plugins/.agents/worktrees/kitesurf-delivery-review/dsh-nano-local-sandbox/test/threat.spike.test.mjs:170:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'url')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/seanz/Documents/dsh-plugins/.agents/worktrees/kitesurf-delivery-review/dsh-nano-local-sandbox/test/threat.spike.test.mjs:189:54)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a shot with no agent is not 200, and rejection runs before the handler
+ok 197 - a shot with no agent is not 200, and rejection runs before the handler
+  ---
+  duration_ms: 2.657041
+  type: 'test'
+  ...
+1..197
+# tests 212
+# suites 0
+# pass 210
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1640.083375

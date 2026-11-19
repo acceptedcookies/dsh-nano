@@ -1,6 +1,6 @@
-/** Jobs view — `ctx.jobs.state.rows[sessionId]` (the same service face the
- *  session sidebar reads), shown as a drawer view so the timeline stays a pure
- *  event stream. Same `StateDot` status language as Tasks. */
+/** Jobs list — `ctx.jobs.state.rows[sessionId]`, the same service face the
+ *  session sidebar reads. Same row metrics as Tasks; the status word is the
+ *  only trailing text. */
 import React from 'react'
 import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import { JOB_DOT } from '../icons.js'
@@ -14,10 +14,10 @@ export function JobsView({ jobs, t }) {
   if (jobs.length === 0) {
     return h('div', { className: 'npr-empty', 'data-npr': 'jobs-empty' }, t('jobs.empty'))
   }
-  return h('div', { className: 'npr-jobs', 'data-npr': 'jobs' },
+  return h('div', { className: 'npr-task-list', 'data-npr': 'jobs' },
     jobs.map(job => h('div', {
       key: String(job.id),
-      className: 'npr-job',
+      className: 'npr-task npr-job',
       'data-npr': 'job',
       'data-status': job.status,
     },

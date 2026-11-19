@@ -223,3 +223,4 @@ U5 只覆盖上面三种模式。宿主 `data-*` 属性被当作样式钩子或�
 | `dsh-nano-notepad/src/client/panel.js`（`.np-fx-tag` / `.np-fx-tag-x`） | fx composer 的引用 chip 是可移除令牌：innerHTML 列表 + 一个委托删除处理器；宿主 `Tag` 在 `catalog/primitives.json` 只登记导出名、没有公开 props，无法从 HTML 串挂上移除键，故 chip 由本包自绘 |
 | `dsh-nano-terminal/src/client/NanoTerm.jsx`（`.dnt-bar-btn` / `.dnt-header .dnt-toolbtn`，9 个原生 `<button>`） | 宿主 `Button` 最小档 28px（size md/sm），状态条 24px 与窗格头 20px 图标密度没有对应档；9 个按钮保留原生实现（`P3-03`） |
 | `dsh-nano-kitesurf/src/client/index.js`（`.nks-nav-tabs` / `.nks-nav-tab` / `.nks-nav-tab-url` / `.nks-nav-tab-count` / `.nks-nav-tab-x`） | 宿主没有可关闭的文档页签条：`SegmentedControl` 只能表达互斥选中，不能逐项关闭、不能带每项打开次数计数，也不接受每行前置图标；这些行是可关闭的浏览记录页签，故由本包自绘 |
+| `dsh-nano-progress-report/src/client/styles.js`（`.npr-progress` / `.npr-progress-fill`） | 宿主与 nano-ui 都没有进度条 / meter primitive；Tasks 头部需要 Devin 式的 `done/total` 细条，故按 §2 令牌自绘（轨道 `border-l3`、填充 `state-business-primary`） |

@@ -53,49 +53,41 @@ async function gotoApp(page, url) {
   return false
 }
 
-/** Bring the Progress pane on screen: activate the tab chip when the host has
- *  one (inactive panes are unmounted, so "mounted" means "active"), otherwise
- *  reveal the right pane and use its guide card. */
+/** Bring the workbench Progress pane on screen: existing -> pane tab chip ->
+ *  open the sidebar -> "+" guide -> Progress card. */
 async function ensureProgressPane(page) {
   const mountedNow = () => page.evaluate(src => eval(src) !== null, ROOT_SRC)
   if (await mountedNow()) return true
-  const steps = [
-    async () => page.evaluate(() => {
-      const chip = [...document.querySelectorAll('[role="tab"], button')]
-        .find(e => (e.textContent ?? '').trim() === 'Progress' && e.getBoundingClientRect().y < 90)
-      if (!chip) return false
-      chip.click()
-      return true
-    }),
-    async () => page.evaluate(() => {
-      const b = [...document.querySelectorAll('button[aria-label]')]
-        .find(e => /打开右侧边栏/.test(e.getAttribute('aria-label') || ''))
-      b?.click()
-      return Boolean(b)
-    }),
-    async () => page.evaluate(() => {
-      const chip = [...document.querySelectorAll('[role="tab"], button')]
-        .find(e => (e.textContent ?? '').trim() === 'Progress' && e.getBoundingClientRect().y < 90)
-      if (!chip) return false
-      chip.click()
-      return true
-    }),
-    async () => page.evaluate(() => {
-      const el = [...document.querySelectorAll('button, [role="button"], [role="menuitem"], li')]
-        .find(e => e.textContent?.trim() === 'Progress' && e.getBoundingClientRect().x > 700)
-      if (!el) return false
-      el.click()
-      return true
-    }),
-  ]
-  for (const step of steps) {
-    const acted = await step()
-    if (acted !== false) {
-      for (let i = 0; i < 12; i += 1) {
-        if (await mountedNow()) return true
-        await new Promise(r => setTimeout(r, 400))
-      }
-    }
+  await page.evaluate(() => {
+    const chip = [...document.querySelectorAll('[role="tab"]')]
+      .find(e => (e.textContent ?? '').trim() === 'Progress' && e.getBoundingClientRect().x > 700)
+    chip?.click()
+  })
+  await new Promise(r => setTimeout(r, 1200))
+  if (await mountedNow()) return true
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button[aria-label]')]
+      .find(e => /打开右侧边栏/.test(e.getAttribute('aria-label') || ''))
+    b?.click()
+  })
+  await new Promise(r => setTimeout(r, 1500))
+  if (await mountedNow()) return true
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button[aria-label="新标签页"]')]
+      .find(e => e.getBoundingClientRect().x > 700 && e.getBoundingClientRect().width > 0)
+    b?.click()
+  })
+  await new Promise(r => setTimeout(r, 1200))
+  const card = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('button, [role="button"]')]
+      .find(e => (e.textContent ?? '').trim() === 'Progress'
+        && e.getBoundingClientRect().x > 700 && e.getBoundingClientRect().y > 100)
+    if (!el) return false
+    el.click(); return true
+  })
+  if (!card) return false
+  for (let i = 0; i < 20; i += 1) {
+    if (await mountedNow()) return true
     await new Promise(r => setTimeout(r, 400))
   }
   return await mountedNow()
@@ -146,7 +138,7 @@ async function main() {
     }, ROOT_SRC)
     await new Promise(r => setTimeout(r, 500))
     await page.evaluate(src => {
-      eval(src)?.querySelector('.npr-load-older')?.click()
+      eval(src)?.querySelector('.npr-older [data-npr="load-older"]')?.click()
     }, ROOT_SRC)
     await new Promise(r => setTimeout(r, 1500))
   }

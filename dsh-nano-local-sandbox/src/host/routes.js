@@ -1148,11 +1148,11 @@ function send(res, status, body) {
     res.__op.durationMs = Date.now() - res.__op.startedMs
     // Errors get a correlatable incidentId — the diagnostic "this route call
     // failed" receipt an agent can grep in the ops ring (same shape the perf
-    // span events carry). It is echoed BACK on the response so the caller can
-    // find its own row in /operations.
+    // span events carry). T-O-68/R-10: the id lives ONLY on the operations
+    // row (readable via /operations); failure bodies keep the
+    // {ok, errorId, error?, hint?} whitelist and never echo it back.
     if ((status >= 400 || rpcFail) && !res.__op.incidentId) {
       res.__op.incidentId = `op-${Date.now().toString(36)}-${(++opSeq).toString(36)}`
-      if (body && typeof body === 'object' && !Array.isArray(body)) body.incidentId = res.__op.incidentId
     }
   }
   res.statusCode = status

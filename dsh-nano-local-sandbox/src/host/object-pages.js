@@ -139,7 +139,19 @@ export function createObjectPages({ registry, envId, resolvePrincipal, connectio
     } finally { active = false }
     await inspect(initial.binding.locator)
     const body = text ? JSON.parse(text) : {}
-    if (res.statusCode >= 400) return { status: res.statusCode, body: { ok: false, ...(body.errorId && { errorId: body.errorId }) } }
+    // T-O-68: kernel failures (authorization + generation passed, handler ran,
+    // status ≥ 400) project a fixed whitelist — always ok/errorId; the kernel's
+    // own reason text in `error` capped at the same 240 chars the /operations
+    // row uses; `hint` verbatim when the handler issued one. incidentId and any
+    // other keys never cross this line; the projection is still redacted.
+    // Pre-dispatch fail() throws (authz, visibility, generation, admission)
+    // never reach this branch.
+    if (res.statusCode >= 400) {
+      const failure = { ok: false, errorId: body.errorId }
+      if (body.error != null) failure.error = String(body.error).slice(0, 240)
+      if (body.hint != null) failure.hint = body.hint
+      return { status: res.statusCode, body: redact(failure) }
+    }
     return { status: res.statusCode, body: redact(body) }
   }
   function close() { closed = true; grants.disable(); for (const id of contexts.keys()) retire(id) }

@@ -203,7 +203,6 @@ const STYLE = `
 .nks-open-url{color:var(--dsw-alias-label-tertiary);unicode-bidi:plaintext}
 .nks-open-repair{margin-top:10px;height:28px;padding:0 12px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);cursor:pointer}
 .nks-open-repair:hover{background:var(--dsw-alias-bg-layer-3)}
-.nks-open-log{margin:6px 0 0;max-height:140px;overflow:auto;padding:6px 8px;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
 .nks-simulation-body{min-height:0}
 .nks-settings-stack{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto}
@@ -383,6 +382,10 @@ function postRequest(fetch, path, body) {
     if (!response.ok || payload.ok === false) {
       const error = new Error(payload.error || payload.reason || `request failed (${response.status})`)
       error.errorId = payload.errorId || payload.reason || 'kitesurf.unknown'
+      // T-O-68: the managed host attaches an actionable topology hint on some
+      // kernel failures — carry it on the error object so the open-failure
+      // dialog can show the host's own words instead of a client-side guess.
+      if (typeof payload.hint === 'string' && payload.hint) error.hint = payload.hint
       throw error
     }
     return payload
@@ -1407,18 +1410,10 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
     dialogOpenRef.current = true
     let dialog = null
     const finish = () => { dialogOpenRef.current = false }
-    // A refused connection to a loopback host is the single most common
-    // "nothing opens" report, and the raw `net::ERR_CONNECTION_REFUSED` in
-    // this dialog never said why: the URL is resolved INSIDE the container, so
-    // `localhost` is the container, not the machine the dev server runs on.
-    // Say that here instead of letting the message imply the pane is broken.
-    const loopback = (() => {
-      try {
-        const host = new URL(url || '').hostname.toLowerCase()
-        return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0'
-          || host === '::1' || host === '[::1]' || host.endsWith('.localhost')
-      } catch { return false }
-    })()
+    // The host is the only writer of topology advice now (T-O-68): its
+    // navigate hint rides on the failure body and the request layer already
+    // parked it on `cause.hint`. The pane's own loopback guess and the dead
+    // engineLog slot are gone — no second, unverified judgment.
     const canRepair = RECOVERABLE.test(errorId)
     dialog = openNanoDialog({
       copy: { cancel: copy.close, confirm: url ? copy.retry : copy.close, close: copy.close },
@@ -1435,11 +1430,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
       },
       children: h('div', { 'data-nks-open-error': '1' },
         h('p', { className: 'nks-open-error' }, message),
-        loopback ? h('p', { className: 'nks-open-error', 'data-nks-open-loopback': '1' }, copy.openErrorLoopback) : null,
+        cause?.hint ? h('p', { className: 'nks-open-error', 'data-nks-open-hint': '1' }, cause.hint) : null,
         url ? h('p', { className: 'nks-open-error nks-open-url' }, url) : null,
-        cause?.detail?.engineLog
-          ? h('pre', { className: 'nks-open-log', 'data-nks-open-log': '1' }, cause.detail.engineLog)
-          : null,
         // The toast has had a repair shortcut all along; the dialog did not,
         // so a navigation failure was a dead end with only "retry". The engine
         // can die mid-navigate (workerd terminates the page script), and then

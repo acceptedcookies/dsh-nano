@@ -520,16 +520,19 @@ test('/wait fn mode evaluates the expression and honors truthiness', async () =>
   assert.equal(oversized.body.errorId, 'kitesurf.wait.query')
 })
 
-// ── ops incidentId: a failed call must be greppable back to its ops row ──
+// ── ops incidentId: a failed call stamps it ONLY on the ops row (R-10) ──
 
-test('a 4xx route call stamps incidentId on the response AND the ops row', async () => {
+test('a 4xx route call keeps incidentId off the failure body and on the ops row', async () => {
   const routes = routesFor(depsWith())
   const bad = await call(routes['/nano-local-sandbox/wait'], { method: 'POST', body: { selector: 'a', timeoutMs: 'abc' } })
   assert.equal(bad.status, 400)
-  assert.match(bad.body.incidentId || '', /^op-/, 'response must carry the incident echo')
+  assert.equal('incidentId' in bad.body, false, 'T-O-68: the failure body never echoes incidentId')
   const ops = await call(routes['/nano-local-sandbox/operations'], { url: '/nano-local-sandbox/operations' })
-  const row = (ops.body.entries || []).find((entry) => entry.incidentId === bad.body.incidentId)
-  assert.ok(row, 'ops ring must hold the same incidentId')
+  // The same failed call's row is still greppable in the ring (the /operations
+  // read itself is the tail row, so match on the failing errorId).
+  const row = (ops.body.entries || []).filter((entry) => entry.errorId === 'kitesurf.query.timeoutMs').at(-1)
+  assert.ok(row, 'ops ring must hold the call row')
+  assert.match(row.incidentId || '', /^op-/, 'ops row carries the incident receipt')
   assert.equal(row.status, 400)
   assert.equal(row.errorId, 'kitesurf.query.timeoutMs')
   assert.equal(typeof row.durationMs, 'number')

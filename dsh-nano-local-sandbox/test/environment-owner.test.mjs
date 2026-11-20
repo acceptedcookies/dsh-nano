@@ -30,7 +30,7 @@ function ownerPeer(controller = new AbortController()) {
   return { principal: { kind: 'owner' }, signal: controller.signal }
 }
 
-async function setup(t, scoped = false, backendOverride = null) {
+async function setup(t, scoped = false, backendOverride = null, extraDeps = {}) {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'dnls-env-owner-')))
   const profilesRoot = join(home, 'profiles')
   cpSync(join(packageRoot, 'profiles', 'kitesurf'), join(profilesRoot, 'kitesurf'), { recursive: true })
@@ -59,6 +59,7 @@ async function setup(t, scoped = false, backendOverride = null) {
     ...(scoped && { resolvePrincipal: input => resolveOwnerPrincipal(input) && {
       key: 'fixture-user', operator: true, canUse: true, canSee: true,
     } }),
+    ...extraDeps,
     // Frozen clock: the usage sampler's first tick lands a full minute out
     // (unref'd) so backend call counts stay exact for the whole test.
     clock: () => 0,
@@ -95,7 +96,7 @@ async function setup(t, scoped = false, backendOverride = null) {
     await owner.close()
     rmSync(home, { recursive: true, force: true })
   })
-  return { home, env, backend, audits, owner, call, create, setPeer, manifest: ready.manifest }
+  return { home, env, backend, audits, owner, call, create, setPeer, specs, manifest: ready.manifest }
 }
 
 test('environment-owner create: real registry row, bound generation, actual spec evidence', async (t) => {
@@ -512,4 +513,136 @@ test('the retired /res proxy registers nowhere: not in bindings, specs, capabili
   assert.equal(specs.find((spec) => spec.path === '/nano-local-sandbox/res'), undefined)
   const { errorCatalog } = await import('../src/host/error-catalog.js')
   assert.equal(errorCatalog().some((row) => /^kitesurf\.res\.|^res\./.test(row.example)), false)
+})
+
+/* ── T-O-68: the managed failure projection is a four-key whitelist ──
+ *
+ * A kernel failure (authorization + generation passed, the route handler ran,
+ * status ≥ 400) projects {ok:false, errorId, error?, hint?} — error capped at
+ * the 240 chars the /operations row uses, hint verbatim, incidentId and every
+ * other key never crossing. Pre-dispatch refusals (contract version, authz,
+ * generation, admission) keep status + errorId with no error/hint.
+ */
+
+/**
+ * A CDP stand-in for the managed object pages: every unknown command answers
+ * {}, page sessions resolve through withPage, and `send` lets a test script
+ * the kernel's replies (e.g. Page.navigate errorText / exceptionDetails).
+ */
+function fakePageClient(respond = {}) {
+  const client = {
+    alive: true,
+    pageSessionId: null,
+    pageTargetId: null,
+    listen() {},
+    close() {},
+    async send(method, params = {}) {
+      const custom = respond[method]
+      if (typeof custom === 'function') {
+        const value = await custom(params)
+        if (value !== undefined) return value
+      }
+      if (method === 'Target.getTargets') {
+        return { targetInfos: [{ targetId: 't1', type: 'page', url: 'about:blank' }] }
+      }
+      if (method === 'Target.attachToTarget') return { sessionId: 's1' }
+      return {}
+    },
+  }
+  return client
+}
+
+async function pageRequest(owner, capability, sandboxId, { method = 'POST', args = {} } = {}) {
+  return owner.execute({
+    capability,
+    sandboxId,
+    peer: ownerPeer(),
+    args,
+    req: { method, url: `/nano-local-sandbox/${capability.slice('dnls.'.length)}?sandboxId=${sandboxId}`, headers: {}, body: args },
+  })
+}
+
+test('T-O-68 kernel failure: navigate refusal projects exactly {ok,errorId,error,hint} and the ops row keeps incidentId', async (t) => {
+  const client = fakePageClient({
+    'Page.navigate': () => ({ errorText: 'net::ERR_CONNECTION_REFUSED' }),
+  })
+  const { owner, create } = await setup(t, false, null, { connect: async () => client })
+  const row = await create('fail-projection')
+
+  const failure = await pageRequest(owner, 'dnls.open', row.sandboxId, { args: { url: 'http://localhost:65535/' } })
+  assert.equal(failure.status, 502)
+  assert.equal(failure.body.ok, false)
+  assert.equal(failure.body.errorId, 'sandbox.navigate.failed')
+  assert.equal(failure.body.error, 'net::ERR_CONNECTION_REFUSED')
+  assert.match(failure.body.hint || '', /localhost|回环/, 'loopback topology hint projects verbatim')
+  // The whitelist is exact — sorted keys are the whole contract. incidentId
+  // (R-10) and every other kernel-body key stay out of the failure body.
+  assert.deepEqual(Object.keys(failure.body).sort(), ['error', 'errorId', 'hint', 'ok'])
+
+  // incidentId is not gone — it lives only on the per-call operations row,
+  // surfaced by the same projection through /diagnostics.operations.
+  const diagnostics = await pageRequest(owner, 'dnls.diagnostics', row.sandboxId, { method: 'GET' })
+  assert.equal(diagnostics.status, 200, JSON.stringify(diagnostics.body).slice(0, 200))
+  const op = (diagnostics.body.operations || []).filter((entry) =>
+    entry.errorId === 'sandbox.navigate.failed' && entry.path === '/nano-local-sandbox/open').at(-1)
+  assert.ok(op, 'ops ring holds the failed call')
+  assert.match(op.incidentId || '', /^op-/)
+  assert.equal(op.status, 502)
+})
+
+test('T-O-68 kernel failure: an over-240-char error is truncated to the ops-row cap', async (t) => {
+  const longText = `engine failure: ${'x'.repeat(320)}`
+  const client = fakePageClient({
+    'Runtime.evaluate': (params) => params.returnByValue === true ? { exceptionDetails: { text: longText } } : undefined,
+  })
+  const { owner, create } = await setup(t, false, null, { connect: async () => client })
+  const row = await create('fail-truncation')
+
+  const failure = await pageRequest(owner, 'dnls.evaluate', row.sandboxId, { args: { expression: '1+1' } })
+  assert.equal(failure.status, 400)
+  assert.equal(failure.body.errorId, 'sandbox.evaluate.threw')
+  assert.equal(failure.body.error.length, 240)
+  assert.equal(failure.body.error, longText.slice(0, 240))
+  assert.equal('hint' in failure.body, false, 'no hint was issued — the key must not appear')
+  assert.equal('incidentId' in failure.body, false)
+})
+
+test('T-O-68 kernel failure without hint keeps {ok,errorId,error} and nothing else', async (t) => {
+  // No matching hint rule for this errorText and no tunnel suffix — hint is
+  // optional, never fabricated to fill the envelope.
+  const client = fakePageClient({
+    'Page.navigate': () => ({ errorText: 'net::ERR_UNUSUAL_TRANSPORT' }),
+  })
+  const { owner, create } = await setup(t, false, null, { connect: async () => client })
+  const row = await create('fail-no-hint')
+
+  const failure = await pageRequest(owner, 'dnls.open', row.sandboxId, { args: { url: 'https://example.net/odd' } })
+  assert.equal(failure.status, 502)
+  assert.equal(failure.body.errorId, 'sandbox.navigate.failed')
+  assert.equal('hint' in failure.body, false)
+  assert.deepEqual(Object.keys(failure.body).sort(), ['error', 'errorId', 'ok'])
+})
+
+test('T-O-68 pre-dispatch refusal returns status + errorId only — no error, no hint', async (t) => {
+  const { specs, create } = await setup(t)
+  const row = await create('fail-predispatch')
+  const open = specs.find((spec) => spec.path === '/nano-local-sandbox/open')
+  assert.ok(open, 'managed /open spec registered')
+  // A missing contract version fails BEFORE authorization, selection and any
+  // page handler: the envelope carries the status + catalog errorId — never a
+  // kernel reason line or a hint.
+  const res = { statusCode: 0, headers: {}, setHeader(k, v) { this.headers[k] = v }, end(text) { this.text = text } }
+  await open.handler({
+    method: 'POST',
+    url: `/nano-local-sandbox/open?sandboxId=${row.sandboxId}`,
+    headers: {},
+    body: { url: 'https://example.net/' },
+  }, res)
+  assert.equal(res.statusCode, 400)
+  const body = JSON.parse(res.text)
+  assert.equal(body.ok, false)
+  assert.equal(body.errorId, 'sandbox.contract_mismatch')
+  assert.equal('error' in body, false, 'pre-dispatch bodies never carry the kernel reason')
+  assert.equal('hint' in body, false, 'pre-dispatch bodies never carry a hint')
+  assert.equal('incidentId' in body, false)
 })

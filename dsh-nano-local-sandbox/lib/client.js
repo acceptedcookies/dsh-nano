@@ -1666,7 +1666,7 @@ ${LAYER_CSS}
         // dashboard
         fleetTitle: "Sandbox overview",
         fleetStats: "{running} running \xB7 {stopped} stopped \xB7 {attention} need attention",
-        quotaUnavailable: "provider quota not available",
+        fleetAttention: "Needs attention",
         healthUnverified: "Service health not yet verified",
         opLine: "{action} \xB7 {state}",
         opIdLine: "Operation {operationId}",
@@ -1680,6 +1680,7 @@ ${LAYER_CSS}
         stateStarting: "starting",
         idleHint: "leave blank to keep the current policy",
         startConfirmTitle: "Start sandbox",
+        startConfirmBody: "Start {name} and resume its declared services?",
         stopConfirmTitle: "Stop sandbox",
         restartConfirmTitle: "Restart sandbox",
         lifecycleAcknowledge: "I understand this interrupts terminals and in-flight work",
@@ -1825,7 +1826,7 @@ ${LAYER_CSS}
         // dashboard
         fleetTitle: "\u6C99\u7BB1\u603B\u89C8",
         fleetStats: "{running} \u8FD0\u884C \xB7 {stopped} \u505C\u6B62 \xB7 {attention} \u9700\u8981\u6CE8\u610F",
-        quotaUnavailable: "provider \u672A\u63D0\u4F9B\u914D\u989D",
+        fleetAttention: "\u9700\u8981\u5173\u6CE8",
         healthUnverified: "\u670D\u52A1\u5065\u5EB7\u5C1A\u672A\u9A8C\u8BC1",
         opLine: "{action} \xB7 {state}",
         opIdLine: "\u64CD\u4F5C {operationId}",
@@ -1839,6 +1840,7 @@ ${LAYER_CSS}
         stateStarting: "\u542F\u52A8\u4E2D",
         idleHint: "\u7559\u7A7A\u5219\u4FDD\u7559\u5F53\u524D\u7B56\u7565",
         startConfirmTitle: "\u542F\u52A8\u6C99\u7BB1",
+        startConfirmBody: "\u542F\u52A8 {name} \u5E76\u6062\u590D\u5176\u58F0\u660E\u7684\u670D\u52A1\uFF1F",
         stopConfirmTitle: "\u505C\u6B62\u6C99\u7BB1",
         restartConfirmTitle: "\u91CD\u542F\u6C99\u7BB1",
         lifecycleAcknowledge: "\u6211\u4E86\u89E3\u8FD9\u4F1A\u4E2D\u65AD\u7EC8\u7AEF\u4E0E\u8FDB\u884C\u4E2D\u7684\u5DE5\u4F5C",
@@ -2121,7 +2123,7 @@ ${LAYER_CSS}
       if (writeLock.current) return;
       const found = (rows ?? []).find((entry) => entry.sandboxId === sandboxId);
       if (!found) return;
-      invalidate("detail", "process", "operation", "profiles", "engine", "term", "settings");
+      invalidate("detail", "process", "operation", "profiles", "engine", "term", "settings", "logs");
       setSelection({ sandboxId: found.sandboxId, name: found.name ?? found.sandboxId, envId: found.envId });
       setDetail(null);
       setDetailError(null);
@@ -2145,7 +2147,7 @@ ${LAYER_CSS}
     }
     function unchoose() {
       if (writeLock.current) return;
-      invalidate("detail", "process", "operation", "engine", "term", "settings");
+      invalidate("detail", "process", "operation", "engine", "term", "settings", "logs");
       setSelection(null);
       setDetail(null);
       setDetailError(null);
@@ -2245,7 +2247,7 @@ ${LAYER_CSS}
         if (body.state !== "succeeded") return;
         loadList();
         if (selection?.sandboxId === record.sandboxId && view === "control") {
-          invalidate("process", "engine", "term");
+          invalidate("process", "engine", "term", "logs");
           setProcs(null);
           setProcsBusy(false);
           setEngine(null);
@@ -2395,12 +2397,12 @@ ${LAYER_CSS}
         }
       })();
     }
-    function openTerminal(terminalId) {
+    function openTerminal(term) {
       if (!selection || !host?.openTerminal) return;
       const envId = detail?.envId ?? selection.envId;
       try {
-        const address = terminalAddress2({ envId, sandboxId: selection.sandboxId, terminalId });
-        if (host.openTerminal(address) !== true) setError(new Error(copy.terminalUnavailable));
+        const address = terminalAddress2({ envId, sandboxId: selection.sandboxId, terminalId: term.terminalId });
+        if (term.address !== address || host.openTerminal(address) !== true) setError(new Error(copy.terminalUnavailable));
       } catch (cause) {
         setError(cause);
       }
@@ -2426,7 +2428,7 @@ ${LAYER_CSS}
     }
     function saveResources() {
       if (!selection || !detail?.configuration) return;
-      const overrides = { ...detail.configuration.overrides ?? {} };
+      const overrides = Object.fromEntries(Object.entries(detail.configuration.overrides ?? {}).filter(([, v]) => v != null));
       if (cfgCpus.trim() !== "") {
         const cpus = Number(cfgCpus);
         if (!Number.isInteger(cpus) || cpus < 1) {
@@ -2520,7 +2522,7 @@ ${LAYER_CSS}
       const stats = {
         running: visibleRows.filter((e) => e.observedState === "running").length,
         stopped: visibleRows.filter((e) => e.observedState === "stopped").length,
-        attention: visibleRows.filter((e) => e.observedState === "failed" || e.observedState === "missing").length
+        attention: visibleRows.filter((e) => !["running", "stopped"].includes(e.observedState) || ["indeterminate", "failed"].includes(e.operation?.state)).length
       };
       if (phase === "failed") {
         return h8(
@@ -2540,7 +2542,7 @@ ${LAYER_CSS}
           "data-dnls-pane": "1",
           title: copy.fleetTitle,
           kicker: (envIds ?? []).length ? (envIds ?? []).join(" \xB7 ") : void 0,
-          description: total !== null ? `${fill2(copy.listShort, { shown: visibleRows.length, total })}${complete ? "" : ` \xB7 ${copy.listPartial}`} \xB7 ${copy.quotaUnavailable}` : void 0,
+          description: total !== null ? `${fill2(copy.listShort, { shown: visibleRows.length, total })}${complete && rows?.length === total ? "" : ` \xB7 ${copy.listPartial}`}` : void 0,
           actions: h8(
             React13.Fragment,
             null,
@@ -2552,7 +2554,7 @@ ${LAYER_CSS}
         h8(FactGrid2, { items: [
           { label: copy.stateRunning, value: stats.running },
           { label: copy.stateStopped, value: stats.stopped },
-          { label: copy.health, value: stats.attention }
+          { label: copy.fleetAttention, value: stats.attention }
         ] }),
         h8(
           Toolbar2,
@@ -2791,7 +2793,7 @@ ${LAYER_CSS}
               "p",
               { key: term.terminalId },
               `${term.terminalId.slice(0, 8)} ${term.state ?? ""} `,
-              active ? h8(Button4, { variant: "ghost", size: "sm", disabled: termBusy, onClick: () => openTerminal(term.terminalId) }, copy.terminalOpen) : null,
+              active && typeof term.address === "string" ? h8(Button4, { variant: "ghost", size: "sm", disabled: termBusy, onClick: () => openTerminal(term) }, copy.terminalOpen) : null,
               " ",
               live && supports("term.session.close") ? h8(Button4, { variant: "ghost", size: "sm", disabled: termBusy, onClick: () => {
                 setConfirm({ kind: "closeTerminal", terminalId: term.terminalId });
@@ -3009,7 +3011,7 @@ ${LAYER_CSS}
     const startDialog = confirm?.kind === "start" ? h8(NanoDialog2, {
       copy,
       title: copy.startConfirmTitle,
-      description: fill2(copy.confirmBody, { action: copy.start, name: sandboxName }),
+      description: fill2(copy.startConfirmBody, { name: sandboxName }),
       confirmLabel: busy ? copy.creating : copy.start,
       confirmDisabled: busy,
       busy,
@@ -3036,8 +3038,8 @@ ${LAYER_CSS}
       openKitesurf: () => ctx.sidebarRight?.openTab?.("kitesurf"),
       openTerminal: (address) => {
         const candidates = ctx.sidebarRightTabs?.candidates?.(address) ?? [];
-        if (!candidates.some((def) => def?.kind === "dnt-sandbox-terminal")) return false;
-        ctx.sidebarRight?.openResource?.(address);
+        if (candidates[0]?.kind !== "dnt-sandbox-terminal" || typeof ctx.sidebarRight?.openResource !== "function") return false;
+        ctx.sidebarRight.openResource(address);
         return true;
       }
     };

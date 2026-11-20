@@ -147,7 +147,7 @@ const EN = {
   stateStarting: 'starting',
   idleHint: 'leave blank to keep the current policy',
   startConfirmTitle: 'Start sandbox',
-  startConfirmBody: 'Start {name}? The sandbox resumes its declared services; nothing running inside it is interrupted.'
+  startConfirmBody: 'Start {name} and resume its declared services?',
   stopConfirmTitle: 'Stop sandbox',
   restartConfirmTitle: 'Restart sandbox',
   lifecycleAcknowledge: 'I understand this interrupts terminals and in-flight work',
@@ -308,7 +308,7 @@ const ZH = {
   stateStarting: '启动中',
   idleHint: '留空则保留当前策略',
   startConfirmTitle: '启动沙箱',
-  startConfirmBody: '启动 {name}？沙箱将恢复其已声明的服务，不会中断任何已在运行的工作。'
+  startConfirmBody: '启动 {name} 并恢复其声明的服务？',
   stopConfirmTitle: '停止沙箱',
   restartConfirmTitle: '重启沙箱',
   lifecycleAcknowledge: '我了解这会中断终端与进行中的工作',

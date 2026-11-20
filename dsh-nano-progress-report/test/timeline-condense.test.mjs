@@ -1,13 +1,14 @@
 /** DNPR-T12/T13 — schedule prompt opens a turn group (shared open.js seam);
  *  prompt context-envelope folding (C7-02); zero-count menu hiding (C0-05);
- *  condensed wiring facts (C-layer strip fields removed from Row rendering). */
+ *  condensed wiring facts (C-layer strip fields removed from Row rendering);
+ *  todo_write tool-row fold (C0-01) and the pending glyph (C0-02). */
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openKind, openerRowType } from '../src/shared/open.js'
-import { groupRows } from '../src/client/group.js'
+import { denoise, groupRows } from '../src/client/group.js'
 import { rowFromNode } from '../src/client/rows.js'
 import { visibleMenuOptions } from '../src/client/filter-menu.js'
 
@@ -56,7 +57,7 @@ test('C0-05: zero-count types hide from the menu; selected tokens stay', () => {
   assert.deepEqual(visibleMenuOptions(all, counts, ['type:job'], 'type'), ['prompt', 'shell', 'job'])
 })
 
-test('src/client renders no args/result/reasoning detail fields (C0-02)', () => {
+test('src/client renders no args/result/reasoning detail fields (T12)', () => {
   const body = src('client/view/Row.jsx')
   assert.doesNotMatch(body, /data-field=['"](args|result|reasoning)['"]/)
   assert.doesNotMatch(body, /argsRaw|resultText|reasoningText/)
@@ -65,4 +66,19 @@ test('src/client renders no args/result/reasoning detail fields (C0-02)', () => 
   const pb = src('client/view/ProgressBody.jsx')
   assert.match(pb, /condensed: true/)
   assert.match(pb, /visibleMenuOptions/)
+})
+
+test('C0-01: a todo_write tool row folds into its todo/write row; a failed one stays', () => {
+  const base = { kind: 'progress-x', status: 'ok', summary: 's', role: 'exec', turn: 1, step: 0, detail: {} }
+  const event = { ...base, key: 'e', seq: 2, time: 2, type: 'todo' }
+  const ok = { ...base, key: 't', seq: 1, time: 1, type: 'tool', tool: 'todo_write' }
+  assert.deepEqual(denoise([ok, event]).map(r => r.key), ['e'])
+  const failed = { ...ok, key: 'f', status: 'failed' }
+  assert.deepEqual(denoise([failed, event]).map(r => r.key), ['f', 'e'])
+})
+
+test('C0-02: pending tasks use the host idle StateDot, not the outline check', () => {
+  const view = src('client/view/TasksView.jsx')
+  assert.doesNotMatch(view, /IconCheckCircleOutlineRegular/)
+  assert.match(view, /StateDot, \{ state: 'idle' \}/)
 })

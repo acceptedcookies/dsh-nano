@@ -1,7 +1,7 @@
 // src/host/routes.js
 import { watch } from "node:fs";
 
-// ../packages/dsh-interface/src/contracts/jsonOutcome.js
+// ../../../../packages/dsh-interface/src/contracts/jsonOutcome.js
 var FAILURE_KIND = Object.freeze({
   /** signal aborted; issued-before cancellation makes no server-side claim. */
   CANCELLED: "cancelled",
@@ -16,7 +16,7 @@ var FAILURE_KIND = Object.freeze({
 });
 var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
 
-// ../packages/dsh-interface/src/contracts/observeEvent.js
+// ../../../../packages/dsh-interface/src/contracts/observeEvent.js
 var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
 var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
 var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
@@ -75,7 +75,7 @@ function assertObserveEvent(event) {
   return event;
 }
 
-// ../packages/dsh-performance-review/src/state.js
+// ../../../../packages/dsh-performance-review/src/state.js
 var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
 var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
 var BUILD_STAMP = true ? "ff5694c57be1" : "dev";
@@ -147,7 +147,7 @@ function roundMs(value) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
-// ../packages/dsh-performance-review/src/host.js
+// ../../../../packages/dsh-performance-review/src/host.js
 var WINDOW_SAMPLE_CAP = 512;
 var EVENT_CAP = 32;
 var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
@@ -499,7 +499,7 @@ function ensurePerfReviewHost(env = {}) {
   return installSingleton(global, HOST_KEY, "__perfReviewHost", stamp, () => createPerfReviewHost(env));
 }
 
-// ../packages/dsh-host-route-guard/src/route-guard.js
+// ../../../../packages/dsh-host-route-guard/src/route-guard.js
 var RouteGuardError = class extends Error {
   constructor(reason, detail = "") {
     super(detail ? `route-guard: ${reason} \u2014 ${detail}` : `route-guard: ${reason}`);
@@ -687,7 +687,7 @@ function createGuard({ table, plugin, observe } = {}) {
   return { registerRoutes: registerRoutes3, inventory, lookup };
 }
 
-// ../packages/dsh-interface/src/contracts/webBinding.js
+// ../../../../packages/dsh-interface/src/contracts/webBinding.js
 var BindingError = class extends Error {
   constructor(reason, detail = "") {
     super(detail ? `web-binding: ${reason} \u2014 ${detail}` : `web-binding: ${reason}`);
@@ -775,7 +775,7 @@ function bindingRecord(binding) {
   });
 }
 
-// ../packages/dsh-interface/src/host/emitObserve.js
+// ../../../../packages/dsh-interface/src/host/emitObserve.js
 function observeStamp2(observe) {
   if (typeof observe !== "function") return null;
   return globalThis.performance.now();
@@ -791,7 +791,7 @@ function emitObserve2(observe, event) {
   }
 }
 
-// ../packages/dsh-interface/src/host/createWebRegistrar.js
+// ../../../../packages/dsh-interface/src/host/createWebRegistrar.js
 function createWebRegistrar({ plugin, bindings, observe } = {}) {
   const normalized = normalizeBindings(bindings ?? [], { plugin });
   const effective = [];
@@ -934,6 +934,7 @@ var BINDING_TABLE = Object.freeze([
   { "id": "dnee.ssh-key", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/ssh-key", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 writes  (local only) to .git/config: binds a repo-local SSH identity; key path is validated against quotes/newlines before being embedded; no process exec beyond the config setter itself." },
   { "id": "dnee.checkout", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/checkout", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:285 \u2014 `git checkout` as the host user; process exec that can rewrite workspace files and trigger smudge filters." },
   { "id": "dnee.create-file", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/create-file", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:297 + mutate.js \u2014 bounded write of a new file inside the session workspace after resolve+policy check; symlink-escape fence is the P2 harden item." },
+  { "id": "dnee.paste-image", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/paste-image", "methods": ["POST"], "bodyLimit": 12582912, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "Writes one sniffed image (png/jpeg/gif/webp, decoded at most 8MB) into the session workspace. Same realpath fence as create-file; refuses .git and symlink escape; exclusive create, never overwrite. bodyLimit is the base64 envelope (12MB), not the shared 64KB cap." },
   { "id": "dnee.create-folder", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/create-folder", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:310 + mutate.js \u2014 bounded mkdir inside the session workspace; same realpath-fence hardening as the other mutations." },
   { "id": "dnee.rename", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/rename", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:324 + mutate.js \u2014 rename/move inside the workspace; bounded write once realpath fencing is in place." },
   { "id": "dnee.move", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/move", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:340 + mutate.js \u2014 move entries inside the workspace; bounded write (symlink-escape fence pending)." },
@@ -1793,6 +1794,52 @@ function isLexicallyInside(root, candidate) {
   return target.startsWith(`${base}${separator}`);
 }
 
+// src/host/paste-image.js
+import { writeFile } from "node:fs/promises";
+var PASTE_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+var PASTE_IMAGE_BODY_BYTES = 12 * 1024 * 1024;
+var PASTE_NAME_TRIES = 100;
+var EXTENSION = { png: "png", jpeg: "jpg", gif: "gif", webp: "webp" };
+function sniffImage(bytes) {
+  if (bytes == null || bytes.length < 3) return null;
+  const b = bytes;
+  if (b.length >= 8 && b[0] === 137 && b[1] === 80 && b[2] === 78 && b[3] === 71 && b[4] === 13 && b[5] === 10 && b[6] === 26 && b[7] === 10) return "png";
+  if (b[0] === 255 && b[1] === 216 && b[2] === 255) return "jpeg";
+  if (b.length >= 6 && b[0] === 71 && b[1] === 73 && b[2] === 70 && b[3] === 56 && (b[4] === 55 || b[4] === 57) && b[5] === 97) return "gif";
+  if (b.length >= 12 && b[0] === 82 && b[1] === 73 && b[2] === 70 && b[3] === 70 && b[8] === 87 && b[9] === 69 && b[10] === 66 && b[11] === 80) return "webp";
+  return null;
+}
+function extensionFor(kind) {
+  return EXTENSION[kind];
+}
+var IMAGE_SUFFIX = /\.(png|jpe?g|gif|webp)$/iu;
+function candidateNames(preferred, ext) {
+  let stem = "image";
+  if (typeof preferred === "string") {
+    let base = preferred.trim().split(/[/\\]/u).pop() ?? "";
+    if (base !== "" && base !== "." && base !== ".." && !base.includes("\0")) {
+      base = base.replace(IMAGE_SUFFIX, "").trim().replace(/[. ]+$/u, "");
+      if (base !== "" && base !== "." && base !== ".." && !/[/\\\0]/u.test(base)) stem = base;
+    }
+  }
+  const names = [];
+  for (let n = 1; n <= PASTE_NAME_TRIES; n += 1) {
+    names.push(n === 1 ? `${stem}.${ext}` : `${stem}-${n}.${ext}`);
+  }
+  return names;
+}
+function decodeImageData(data) {
+  if (typeof data !== "string" || data.trim() === "") throw new Error("image data is required");
+  if (!/^[A-Za-z0-9+/=\s]+$/u.test(data)) throw new Error("image data is not base64");
+  const bytes = Buffer.from(data, "base64");
+  if (bytes.length === 0) throw new Error("image is empty");
+  if (bytes.length > PASTE_IMAGE_MAX_BYTES) throw new Error("image is larger than 8MB");
+  return bytes;
+}
+async function writeExclusiveFile(path, bytes) {
+  await writeFile(path, bytes, { flag: "wx" });
+}
+
 // src/host/mutate.js
 async function execMutation(spec) {
   const { runExternal: runExternal2, argv } = spec;
@@ -1850,6 +1897,40 @@ async function createFile(fs, request, signal) {
     throw translate(error, path);
   }
   return { path };
+}
+function isDirectory(info) {
+  if (info == null) return false;
+  if (info.type === "directory") return true;
+  if (typeof info.isDirectory === "function") return info.isDirectory();
+  return false;
+}
+async function pasteImage(fs, request, writeExclusive) {
+  const { workspaceRoot, directory, name: name2, bytes } = request;
+  if (typeof writeExclusive !== "function") throw new Error("image write is unavailable");
+  if (bytes == null || bytes.length === 0) throw new Error("image is empty");
+  if (bytes.length > PASTE_IMAGE_MAX_BYTES) throw new Error("image is larger than 8MB");
+  const kind = sniffImage(bytes);
+  if (kind == null) throw new Error("clipboard data is not a png, jpeg, gif, or webp");
+  const ext = extensionFor(kind);
+  const parent = absoluteOf(workspaceRoot, typeof directory === "string" ? directory : "");
+  await assertInside(fs, workspaceRoot, parent, void 0);
+  const parentInfo = await fs.lstat(parent).catch(() => void 0);
+  if (!isDirectory(parentInfo)) throw new Error("paste destination is not a folder");
+  for (const candidate of candidateNames(typeof name2 === "string" ? name2 : "", ext)) {
+    const finalName = validateName(candidate);
+    const path = `${parent}/${finalName}`;
+    await assertInside(fs, workspaceRoot, path, void 0);
+    const existing = await fs.lstat(path).catch(() => void 0);
+    if (existing !== void 0) continue;
+    try {
+      await writeExclusive(path, bytes);
+      return { path, name: finalName };
+    } catch (error) {
+      if (error?.code === "EEXIST" || error?.code === "FS_NOT_OBSERVED") continue;
+      throw translate(error, path);
+    }
+  }
+  throw new Error("too many pasted images in this folder");
 }
 async function rename(fs, ctx, config, request, signal) {
   const { workspaceRoot, path, name: name2, kind, sandboxPolicy, session, runExternal: runExternal2 } = request;
@@ -2107,12 +2188,26 @@ function assertBoundWorld(header, world) {
 // src/host/routes.js
 var PREFIX = "/nano-explorer-extra";
 var MAX_BODY_BYTES = 64 * 1024;
-async function jsonBody(req) {
+var PASTE_WRITER_SCRIPT = [
+  "const { writeFileSync } = require('node:fs')",
+  "const chunks = []",
+  "process.stdin.on('data', chunk => chunks.push(chunk))",
+  "process.stdin.on('end', () => {",
+  "  try {",
+  "    const raw = Buffer.concat(chunks).toString('utf8')",
+  "    writeFileSync(process.argv[1], Buffer.from(raw, 'base64'), { flag: 'wx' })",
+  "  } catch (error) {",
+  "    process.stderr.write(String(error && error.code || error))",
+  "    process.exit(1)",
+  "  }",
+  "})"
+].join("\n");
+async function jsonBody(req, limit = MAX_BODY_BYTES) {
   const chunks = [];
   let total = 0;
   for await (const chunk of req) {
     total += chunk.length;
-    if (total > MAX_BODY_BYTES) throw new Error("request body is too large");
+    if (total > limit) throw new Error("request body is too large");
     chunks.push(chunk);
   }
   if (total === 0) return {};
@@ -2179,6 +2274,50 @@ async function runExternal(ctx, config, request) {
       if (outcome.exitCode !== 0) {
         const line = stderr.split(/\r?\n/u).map((item) => item.trim()).find((item) => item.length > 0);
         throw new Error(line ?? `${argv[0]} failed (${outcome.signal ?? outcome.exitCode})`);
+      }
+    } finally {
+      child.terminate();
+      await child.waitForExit().catch(() => {
+      });
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function writePastedBytes(ctx, config, request) {
+  const { path, bytes, sandboxPolicy: policy, cwd } = request;
+  const sandbox = ctx.get("sandbox");
+  const direct = process.platform === "win32" || sandbox == null || policy == null || policy.mode === "danger-full-access";
+  if (direct) {
+    await writeExclusiveFile(path, bytes);
+    return;
+  }
+  const subprocess = ctx.get("subprocess");
+  if (subprocess == null) throw new Error("this deployment has no subprocess service");
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(new Error("image write timed out")), config.gitTimeoutMs);
+  timer.unref?.();
+  try {
+    const command = [process.execPath, "-e", PASTE_WRITER_SCRIPT, "--", path];
+    const confined = (await sandbox.confine(command, policy, stop.signal)).argv;
+    const child = subprocess.spawn({
+      argv: confined,
+      cwd,
+      signal: stop.signal,
+      graceMs: 5e3,
+      stdio: {
+        stdin: { data: Buffer.from(bytes).toString("base64") },
+        stdout: { maxBytes: 1024 },
+        stderr: { maxBytes: 8192 }
+      }
+    });
+    try {
+      const outcome = await child.done;
+      if (outcome.exitCode !== 0) {
+        const stderr = child.collected?.stderr?.readFrom(0)?.text ?? "";
+        const error = new Error(stderr.trim() || "image write failed");
+        if (stderr.includes("EEXIST")) error.code = "EEXIST";
+        throw error;
       }
     } finally {
       child.terminate();
@@ -2480,6 +2619,29 @@ function createRoutes(ctx, config) {
           name: body.name,
           sandboxPolicy: policy
         });
+      }
+    },
+    /* One clipboard bitmap. The body cap is PASTE_IMAGE_BODY_BYTES, not the
+       shared 64KB: a screenshot does not fit in the other routes' envelope.
+       Bytes are sniffed; the client media type is ignored. */
+    "/paste-image": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req, PASTE_IMAGE_BODY_BYTES);
+        const { root, policy } = await scopeOf(ctx, body.sessionId);
+        const bytes = decodeImageData(body.data);
+        const directory = typeof body.directory === "string" ? body.directory : "";
+        return pasteImage(fs(body.sessionId, root), {
+          workspaceRoot: root,
+          directory,
+          name: typeof body.name === "string" ? body.name : "",
+          bytes
+        }, (filePath, image) => writePastedBytes(ctx, config, {
+          path: filePath,
+          bytes: image,
+          sandboxPolicy: policy,
+          cwd: filePath.slice(0, filePath.lastIndexOf("/")) || "/"
+        }));
       }
     },
     "/create-folder": {

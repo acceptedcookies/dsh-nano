@@ -29,6 +29,7 @@
 | `/nano-explorer-extra/ssh-key` | — | `dnee.ssh-key` | http | exact |
 | `/nano-explorer-extra/checkout` | — | `dnee.checkout` | http | exact |
 | `/nano-explorer-extra/create-file` | — | `dnee.create-file` | http | exact |
+| `/nano-explorer-extra/paste-image` | — | `dnee.paste-image` | http | exact |
 | `/nano-explorer-extra/create-folder` | — | `dnee.create-folder` | http | exact |
 | `/nano-explorer-extra/rename` | — | `dnee.rename` | http | exact |
 | `/nano-explorer-extra/move` | — | `dnee.move` | http | exact |

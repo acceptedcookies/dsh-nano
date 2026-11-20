@@ -10,6 +10,7 @@ export const BROWSER_BINDINGS = Object.freeze([
   Object.freeze({ id: "dnee.ssh-key", path: "/nano-explorer-extra/ssh-key" }),
   Object.freeze({ id: "dnee.checkout", path: "/nano-explorer-extra/checkout" }),
   Object.freeze({ id: "dnee.create-file", path: "/nano-explorer-extra/create-file" }),
+  Object.freeze({ id: "dnee.paste-image", path: "/nano-explorer-extra/paste-image" }),
   Object.freeze({ id: "dnee.create-folder", path: "/nano-explorer-extra/create-folder" }),
   Object.freeze({ id: "dnee.rename", path: "/nano-explorer-extra/rename" }),
   Object.freeze({ id: "dnee.move", path: "/nano-explorer-extra/move" }),

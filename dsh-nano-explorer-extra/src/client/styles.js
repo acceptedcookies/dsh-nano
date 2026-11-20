@@ -51,6 +51,13 @@ export const STYLE = `${NANO_STYLES}
 .nxe-tool:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
 
 .nxe-tree { flex: 1; min-height: 0; overflow: auto; padding: 4px 8px 4px 16px; }
+.nxe-tree:focus,
+.nxe-tree:focus-visible { outline: none; }
+/* Focus confirmation sits on the host row, the same element as its rounded
+   selection fill, so the line follows that radius. Hairline, official primary. */
+.nxe-tree [data-nxe-paste-target="true"] > div {
+  box-shadow: 0 0 0 var(--dsh-hairline-width, 0.5px) var(--dsw-alias-brand-primary);
+}
 
 .nxe-row-note { padding: 8px 12px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 

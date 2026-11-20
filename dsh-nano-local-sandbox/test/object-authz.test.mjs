@@ -45,7 +45,9 @@ test('DNLS03-T22 the production shape trusts only kind=owner with a live signal'
   assert.equal(owner.key, 'owner')
   assert.equal(owner.operator, true)
   assert.equal(owner.canUse(row, 'read'), true)
-  assert.equal(owner.canUse(row, 'terminal.attach'), false)
+  // T-O-59: owner may hold its own terminal. The predicate is not the
+  // wildcard — the next test proves per-terminal ownership is still checked.
+  assert.equal(owner.canUse(row, 'terminal.attach'), true)
   assert.equal(resolveOwnerPrincipal({ peer: { principal: { kind: 'member' }, signal: liveSignal() } }), null)
   assert.equal(resolveOwnerPrincipal({ peer: { principal: { kind: 'owner' }, signal: dead.signal } }), null)
   assert.equal(resolveOwnerPrincipal({ peer: { principal: 'owner', signal: liveSignal() } }), null)

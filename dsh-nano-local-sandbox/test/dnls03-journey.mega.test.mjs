@@ -114,10 +114,27 @@ test('T80: shipped plugin registers a single managed control surface from discov
   assert.equal(u.search + u.username + u.password, '')
   assert.ok(upgrades.has(u.pathname))
   assert.equal(backend.calls.filter(([kind, verb]) => kind === 'terminalRpc' && verb === 'create').length, 1)
+  // T-O-59: the owner is this machine's stable principal. It may create and
+  // attach a terminal of its own generation, and it is still not a wildcard.
   current = { principal: { kind: 'owner' }, signal: new AbortController().signal }
+  const ownerRef = await tool('term.session.create', { sandboxId, paneId: 'owner-pane', openId: 'owner-gesture' })
+  assert.ok(ownerRef.terminalId)
+  assert.notEqual(ownerRef.terminalId, ref.terminalId)
+  const owned = await tool('term.session.attach', { sandboxId, terminalId: ownerRef.terminalId })
+  assert.equal(owned.attach.protocol, 'dnt-ws-v2')
+  assert.ok(owned.attach.url)
+  // Another principal's terminal stays out of reach for the same owner key.
+  const foreignBefore = backend.count('terminalRpc')
+  const foreign = await http('mcp', { jsonrpc: '2.0', id: ++serial, method: 'tools/call',
+    params: { name: 'term.session.attach', arguments: { sandboxId, terminalId: ref.terminalId }, _meta: { 'dnls/contract': version } } }, 403)
+  assert.equal(foreign.result.isError, true)
+  assert.doesNotMatch(JSON.stringify(foreign), /ws:\/\//)
+  assert.equal(backend.count('terminalRpc'), foreignBefore)
+  // Any other kind still resolves to no principal at all.
+  current = { principal: { kind: 'share-viewer' }, signal: new AbortController().signal }
   const before = backend.count('terminalRpc')
   const denied = await http('mcp', { jsonrpc: '2.0', id: ++serial, method: 'tools/call',
-    params: { name: 'term.session.attach', arguments: { sandboxId, terminalId: ref.terminalId }, _meta: { 'dnls/contract': version } } }, 403)
+    params: { name: 'term.session.attach', arguments: { sandboxId, terminalId: ownerRef.terminalId }, _meta: { 'dnls/contract': version } } }, 403)
   assert.equal(denied.result.isError, true)
   assert.doesNotMatch(JSON.stringify(denied), /ws:\/\//)
   assert.equal(backend.count('terminalRpc'), before)

@@ -52,9 +52,11 @@ export function resolveOwnerPrincipal({ peer } = {}) {
   let live = false
   try { live = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get.call(signal) === false } catch { /* no host signal */ }
   if (peer?.principal?.kind === 'owner' && live) {
-    // The signed browser owner is shared. It can manage its sandboxes but
-    // it cannot prove which end user owns a terminal.
-    return { key: 'owner', operator: true, canSee: true, canUse: (_row, action) => !action?.startsWith('terminal.') }
+    // The signed browser owner is the local user's stable principal: it may
+    // hold and attach its own generation-matched sandbox terminal (T-O-59).
+    // It is not a wildcard — `authorize` still checks this terminal's
+    // principal, sandbox and generation before any terminal read.
+    return { key: 'owner', operator: true, canSee: true, canUse: () => true }
   }
   return null
 }

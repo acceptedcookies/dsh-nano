@@ -1671,6 +1671,8 @@ ${LAYER_CSS}
         faceUnverified: "not yet verified",
         faceUnverifiedHint: "Observation pending \u2014 state unverified",
         revPending: "Saved revision {rev} awaits deployment verification.",
+        revisionPair: "Applied revision {applied} \xB7 Saved revision {saved}. Recreate to apply.",
+        reviewSettings: "Review settings",
         saveNoChange: "Saving does not change the running configuration.",
         profileSeats: "{count} visible / {limit} profile slots",
         guestProcesses: "Guest processes",
@@ -1863,6 +1865,8 @@ ${LAYER_CSS}
         faceUnverified: "\u5C1A\u672A\u9A8C\u8BC1",
         faceUnverifiedHint: "\u7B49\u5F85\u89C2\u6D4B\u2014\u2014\u72B6\u6001\u672A\u9A8C\u8BC1",
         revPending: "\u5DF2\u4FDD\u5B58\u4FEE\u8BA2 {rev} \u7B49\u5F85\u90E8\u7F72\u9A8C\u8BC1\u3002",
+        revisionPair: "\u5DF2\u5E94\u7528\u4FEE\u8BA2 {applied} \xB7 \u5DF2\u4FDD\u5B58\u4FEE\u8BA2 {saved}\u3002\u91CD\u5EFA\u540E\u751F\u6548\u3002",
+        reviewSettings: "\u67E5\u770B\u914D\u7F6E",
         saveNoChange: "\u4FDD\u5B58\u4E0D\u6539\u53D8\u5F53\u524D\u8FD0\u884C\u914D\u7F6E\u3002",
         profileSeats: "\u53EF\u89C1 {count} \u4E2A\uFF0C\u4E0A\u9650 {limit} \u4E2A",
         guestProcesses: "\u6765\u5BBE\u8FDB\u7A0B",
@@ -2100,11 +2104,10 @@ ${LAYER_CSS}
       ) : h8(
         React13.Fragment,
         null,
-        stopped ? h8(
-          React13.Fragment,
-          null,
-          h8("line", { x1: 126, y1: 40, x2: 126, y2: 66, stroke: "var(--dsw-alias-label-secondary)", strokeWidth: 4, strokeLinecap: "round" }),
-          h8("path", { d: "M108 48 a26 26 0 1 0 36 0", fill: "none", stroke: "var(--dsw-alias-label-secondary)", strokeWidth: 4, strokeLinecap: "round" })
+        stopped && primitives2.IconPauseOutlineRegular ? h8(
+          "g",
+          { transform: "translate(107 38)", color: "var(--dsw-alias-label-secondary)" },
+          h8(primitives2.IconPauseOutlineRegular, { size: 38 })
         ) : null,
         h8(
           "text",
@@ -2290,7 +2293,7 @@ ${LAYER_CSS}
     const [terms, setTerms] = React14.useState(null);
     const [termBusy, setTermBusy] = React14.useState(false);
     const [detailsOpen, setDetailsOpen] = React14.useState(false);
-    const [olderOpsOpen, setOlderOpsOpen] = React14.useState(false);
+    const [detailTab, setDetailTab] = React14.useState("overview");
     const [svcOpen, setSvcOpen] = React14.useState(null);
     const fmtTime = (iso) => {
       const ms = typeof iso === "number" ? iso : Date.parse(iso ?? "");
@@ -2404,6 +2407,8 @@ ${LAYER_CSS}
       if (!found) return;
       invalidate("detail", "process", "operation", "profiles", "engine", "term", "settings", "logs");
       setSelection({ sandboxId: found.sandboxId, name: found.name ?? found.sandboxId, envId: found.envId });
+      setDetailTab("overview");
+      setSvcOpen(null);
       setDetail(null);
       setDetailError(null);
       setProcs(null);
@@ -2807,7 +2812,7 @@ ${LAYER_CSS}
       const stats = {
         running: visibleRows.filter((e) => e.observedState === "running").length,
         stopped: visibleRows.filter((e) => e.observedState === "stopped").length,
-        attention: visibleRows.filter((e) => !["running", "stopped"].includes(e.observedState) || ["indeterminate", "failed"].includes(e.operation?.state)).length
+        attention: visibleRows.filter((e) => !["running", "stopped"].includes(e.observedState) || ["indeterminate", "failed"].includes(e.operation?.state) || Number.isInteger(e.appliedRevision) && Number.isInteger(e.desiredRevision) && e.appliedRevision !== e.desiredRevision).length
       };
       if (phase === "failed") {
         return h9(
@@ -2936,7 +2941,16 @@ ${LAYER_CSS}
         return h9(
           "p",
           { "data-dnls-pending": "1" },
-          lines.length > 0 ? lines.join(" \xB7 ") : fill2(copy.revPending, { rev: detail.desiredRevision })
+          lines.length > 0 ? lines.join(" \xB7 ") : fill2(copy.revPending, { rev: detail.desiredRevision }),
+          h9("br"),
+          h9("small", null, fill2(copy.revisionPair, { saved: detail.desiredRevision, applied: detail.appliedRevision })),
+          " ",
+          h9(Button5, {
+            variant: "outline",
+            size: "sm",
+            disabled: busy,
+            onClick: () => setDetailTab("settings")
+          }, copy.reviewSettings)
         );
       })() : null,
       usageDenied ? h9("p", null, copy.usageNotAuthorized) : null,
@@ -3340,6 +3354,8 @@ ${LAYER_CSS}
         receiptBlock,
         h9(NanoTabs2, {
           label: copy.control,
+          value: detailTab,
+          onChange: setDetailTab,
           items: [
             { value: "overview", label: copy.tabOverview, content: overviewTab() },
             { value: "services", label: copy.tabServices, content: servicesTab() },

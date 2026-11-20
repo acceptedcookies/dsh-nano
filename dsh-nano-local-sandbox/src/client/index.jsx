@@ -70,7 +70,7 @@ function DnlsPane({ sessionId, copy, host }) {
   const [terms, setTerms] = React.useState(null) // {list}|{denied}|{error}
   const [termBusy, setTermBusy] = React.useState(false)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
-  const [olderOpsOpen, setOlderOpsOpen] = React.useState(false)
+  const [detailTab, setDetailTab] = React.useState('overview')
   const [svcOpen, setSvcOpen] = React.useState(null)
   const fmtTime = (iso) => {
     const ms = typeof iso === 'number' ? iso : Date.parse(iso ?? '')
@@ -185,6 +185,8 @@ function DnlsPane({ sessionId, copy, host }) {
     if (!found) return
     invalidate('detail', 'process', 'operation', 'profiles', 'engine', 'term', 'settings', 'logs')
     setSelection({ sandboxId: found.sandboxId, name: found.name ?? found.sandboxId, envId: found.envId })
+    setDetailTab('overview')
+    setSvcOpen(null)
     setDetail(null)
     setDetailError(null)
     setProcs(null)
@@ -602,7 +604,8 @@ function DnlsPane({ sessionId, copy, host }) {
       running: visibleRows.filter((e) => e.observedState === 'running').length,
       stopped: visibleRows.filter((e) => e.observedState === 'stopped').length,
       attention: visibleRows.filter((e) => !['running', 'stopped'].includes(e.observedState) ||
-        ['indeterminate', 'failed'].includes(e.operation?.state)).length,
+        ['indeterminate', 'failed'].includes(e.operation?.state) ||
+        (Number.isInteger(e.appliedRevision) && Number.isInteger(e.desiredRevision) && e.appliedRevision !== e.desiredRevision)).length,
     }
     if (phase === 'failed') {
       return h(PanelLayout, { title: copy.fleetTitle, 'data-dnls-pane': '1' },
@@ -703,7 +706,10 @@ function DnlsPane({ sessionId, copy, host }) {
         return h('p', { 'data-dnls-pending': '1' },
           lines.length > 0
             ? lines.join(' · ')
-            : fill(copy.revPending, { rev: detail.desiredRevision }))
+            : fill(copy.revPending, { rev: detail.desiredRevision }),
+          h('br'), h('small', null, fill(copy.revisionPair, { saved: detail.desiredRevision, applied: detail.appliedRevision })), ' ',
+          h(Button, { variant: 'outline', size: 'sm', disabled: busy,
+            onClick: () => setDetailTab('settings') }, copy.reviewSettings))
       })() : null,
     usageDenied ? h('p', null, copy.usageNotAuthorized) : null,
     // Window picker + honest metric bands + one coverage sentence.
@@ -977,6 +983,8 @@ function DnlsPane({ sessionId, copy, host }) {
       receiptBlock,
       h(NanoTabs, {
         label: copy.control,
+        value: detailTab,
+        onChange: setDetailTab,
         items: [
           { value: 'overview', label: copy.tabOverview, content: overviewTab() },
           { value: 'services', label: copy.tabServices, content: servicesTab() },

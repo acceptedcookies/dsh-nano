@@ -56,10 +56,9 @@ function DeviceFace({ entry, copy, stateLabel: labelOf }) {
           h('text', { x: 14, y: 107, fontSize: 10, fill: 'var(--dsw-alias-label-secondary)' },
             entry.lastMinute?.at ? copy.lastMinute : copy.noSamples))
       : h(React.Fragment, null,
-          stopped
-            ? h(React.Fragment, null,
-                h('line', { x1: 126, y1: 40, x2: 126, y2: 66, stroke: 'var(--dsw-alias-label-secondary)', strokeWidth: 4, strokeLinecap: 'round' }),
-                h('path', { d: 'M108 48 a26 26 0 1 0 36 0', fill: 'none', stroke: 'var(--dsw-alias-label-secondary)', strokeWidth: 4, strokeLinecap: 'round' }))
+          stopped && primitives.IconPauseOutlineRegular
+            ? h('g', { transform: 'translate(107 38)', color: 'var(--dsw-alias-label-secondary)' },
+                h(primitives.IconPauseOutlineRegular, { size: 38 }))
             : null,
           h('text', { x: 126, y: 100, textAnchor: 'middle', fontSize: 12, fill: 'var(--dsw-alias-label-secondary)' },
             stopped ? copy.samplingStopped : copy.faceUnverifiedHint)),

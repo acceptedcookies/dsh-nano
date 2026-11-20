@@ -17,6 +17,7 @@
  */
 
 import { createHash } from 'node:crypto'
+import { supportsAction } from './backend.js'
 import { authorize, auditRecord, resolveTrusted } from './object-authz.js'
 
 const WRITE_ACTIONS = ['create', 'start', 'stop', 'restart', 'recreate', 'remove']
@@ -59,112 +60,18 @@ function normalizeParams(action, args) {
 }
 
 /**
- * Production observation normalization: Apple `inspect` raw output →
- * `{locator, generation, stateVolume, state}`.
- *
- * `backend.inspect` returns `null` only for a documented not-found of the
- * requested container (CLI missing, daemon errors and ambiguous output
- * surface as throws → unknown, never "missing"). `configuration.id` in the
- * raw JSON is the container NAME — the locator — not an identity; the
- * generation is a stable hash of `locator + creationDate`, so a container
- * recreated under the same name gets a different generation. Anything
- * ambiguous (partial config, ≠1 entries, wrong id, missing/epoch
- * creationDate) is unknown → `null`.
+ * Neutral observation seam: the backend owns provider decode and returns
+ * `{locator,generation,stateVolume,state,...}` evidence — `{state:'missing'}`
+ * only for a confirmed exact absence; malformed or ambiguous output fails
+ * closed to `null` inside the backend, never here. The trusted state target
+ * comes from the profile driver (`stateTarget`), never registry data.
  */
 export function createObservationSource({ backend, profileFor }) {
   return async function observe(locator, row) {
-    const result = await backend.inspect(locator)
-    if (result === null) return { locator, generation: null, stateVolume: null, state: 'missing' }
-    const text = typeof result === 'string' ? result : result?.raw
-    if (typeof text !== 'string' || text.trim() === '') return null
-    let parsed
-    try {
-      parsed = JSON.parse(text)
-    } catch {
-      return null
-    }
-    if (!Array.isArray(parsed) || parsed.length !== 1) return null
-    const configuration = parsed[0]?.configuration
-    if (!configuration || typeof configuration !== 'object') return null
-    if (configuration.id !== locator) return null
-    const created = configuration.creationDate
-    const seconds =
-      typeof created === 'number' ? created
-        : typeof created === 'string' ? Date.parse(created) / 1000
-        : NaN
-    if (!Number.isFinite(seconds) || seconds <= 0) return null // epoch/default sentinel is not an identity
-    const live = parsed[0]?.status?.state
-    const state = live === 'running' ? 'running' : live === 'stopped' || live === 'exited' ? 'stopped' : null
-    if (state === null) return null
     const profile = await profileFor({ profileId: row?.profileId })
-    const recipe = typeof profile?.inspectedRecipe === 'function' ? profile.inspectedRecipe(configuration) : null
-    return {
-      locator: configuration.id,
-      generation: createHash('sha256').update(`${configuration.id}\n${seconds}`).digest('hex').slice(0, 32),
-      stateVolume: boundedText(recipe?.stateSource) ? recipe.stateSource : null,
-      state,
-      creationDate: seconds,
-      publications: actualPublications(configuration),
-      resources: actualResources(configuration),
-      mounts: actualMounts(configuration),
-      imageDigest: typeof configuration.image?.descriptor?.digest === 'string'
-        && /^sha256:[0-9a-f]{64}$/.test(configuration.image.descriptor.digest)
-        ? configuration.image.descriptor.digest : null,
-      observedAt: new Date().toISOString(),
-    }
+    const obs = await backend.observe(locator, { stateTarget: profile.stateTarget })
+    return obs?.locator === locator ? obs : null
   }
-}
-
-const LOOPBACK_ADDRS = new Set(['127.0.0.1', '::1'])
-const PUB_PROTOS = new Set(['tcp', 'udp'])
-
-/**
- * Actual published tuples from inspect — the engine's own PublishPort
- * record `{hostAddress,hostPort,containerPort,proto,count}`. Ambiguous
- * (count>1), wildcard, non-loopback or unpublished entries are evidence
- * that proves nothing, so they are dropped rather than normalized.
- */
-function actualPublications(configuration) {
-  const ports = configuration?.publishedPorts
-  if (!Array.isArray(ports)) return null
-  const out = []
-  for (const port of ports) {
-    if (!port || typeof port !== 'object') return null
-    const containerPort = Number(port.containerPort)
-    const hostPort = Number(port.hostPort)
-    const protocol = String(port.proto ?? port.protocol ?? 'tcp').toLowerCase()
-    const hostAddress = String(port.hostAddress ?? '')
-    const count = port.count === undefined ? 1 : Number(port.count)
-    if (!LOOPBACK_ADDRS.has(hostAddress) || !PUB_PROTOS.has(protocol) || count !== 1 ||
-        !Number.isInteger(containerPort) || containerPort < 1 || containerPort > 65535 ||
-        !Number.isInteger(hostPort) || hostPort < 1 || hostPort > 65535) return null
-    out.push({ serviceId: null, containerPort, hostPort, protocol, hostAddress })
-  }
-  return out
-}
-
-function actualResources(configuration) {
-  const resources = configuration?.resources
-  if (!resources || typeof resources !== 'object') return {}
-  const out = {}
-  const cpus = Number(resources.cpus)
-  if (Number.isFinite(cpus) && cpus > 0) out.cpus = cpus
-  const memoryBytes = Number(resources.memoryInBytes ?? resources.memoryBytes)
-  if (Number.isInteger(memoryBytes) && memoryBytes > 0) out.memoryBytes = memoryBytes
-  return out
-}
-
-function actualMounts(configuration) {
-  const mounts = configuration?.mounts
-  if (!Array.isArray(mounts)) return []
-  return mounts
-    .filter((mount) => mount && typeof mount === 'object')
-    .map((mount) => ({
-      type: typeof mount.type === 'string' ? mount.type : Object.keys(mount.type ?? {})[0],
-      source: typeof mount.source === 'string' ? mount.source : null,
-      target: mount.destination ?? mount.target ?? null,
-      readOnly: mount.options?.includes?.('ro') === true || mount.readOnly === true,
-    }))
 }
 
 /**
@@ -262,6 +169,12 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
 
   /** One intent → one persisted accept → at most one dispatch, across transports. */
   async function submit({ peer, action, sandboxId, args }) {
+    // Provider gate BEFORE any ledger row exists: an action the backend
+    // honestly reports unsupported (flags or callable deps) gets no
+    // receipt, whether it arrives via generic lifecycle HTTP or a tool.
+    if (!supportsAction(backend, action, { observe: observeOne })) {
+      return refusal(503, 'provider does not support this action')
+    }
     const params = normalizeParams(action, args)
     const authz = action === 'create'
       ? authorized(peer, action, null)
@@ -427,14 +340,14 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
         const evidence = profile?.verifySpec && spec ? await backend.imageEvidence(spec.image) : null
         if (profile?.verifySpec && !/^sha256:[0-9a-f]{64}$/.test(evidence?.digest)) return done('failed', { step: 'image-precheck', removed: true })
         const mounts = Array.isArray(spec?.mounts) ? spec.mounts : []
-        if (spec?.containerName !== locator ||
+        if (spec?.locator !== locator ||
             typeof spec.image !== 'string' || spec.image.length === 0 ||
             !mounts.some((mount) => mount?.source === row.stateVolume)) {
           return done('failed', { step: 'precheck', removed: true })
         }
         if (!(await stillAuthorized())) return
         createDispatched = true
-        await backend.create(spec)
+        await backend.createManaged(spec)
         const obs = await observed(locator, row)
         // A fresh object proves itself: same locator+mount, running, with a
         // real generation to bind — never a trusted-by-name success. When
@@ -502,7 +415,7 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
         const absent = await observed(locator, row)
         if (!absent || absent.state !== 'missing' || absent.locator !== locator) return done('indeterminate', { step: 'remove-verify' })
         if (!(await stillAuthorized())) return
-        await backend.create(spec)
+        await backend.createManaged(spec)
         const post = await observed(locator, row)
         if (!post || post.state !== 'running' || post.locator !== locator ||
             post.stateVolume !== row.stateVolume || !boundedText(post.generation) ||

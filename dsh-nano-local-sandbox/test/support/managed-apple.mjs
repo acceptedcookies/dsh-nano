@@ -2,6 +2,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { KITESURF_RUNTIME_FILES } from '../../profiles/kitesurf/driver/runtime.js'
+import { decodeAppleObservation } from '../../src/host/apple-evidence.js'
+import { capabilityReport } from '../../src/host/backend.js'
 
 export const DIGEST = `sha256:${'ab'.repeat(32)}`
 
@@ -57,6 +59,23 @@ export function makeBackend() {
     workers,
     onCreate: null,
     count: (verb) => calls.filter((entry) => entry[0] === verb).length,
+    capabilities() {
+      return capabilityReport()
+    },
+    async observe(locator, { stateTarget } = {}) {
+      calls.push(['observe', locator])
+      const c = containers.get(locator)
+      return decodeAppleObservation(c ? managedContainer(locator, c).raw : null, locator, { missing: !c, stateTarget })
+    },
+    async sampleUsage(locator) {
+      calls.push(['sampleUsage', locator])
+      const c = containers.get(locator)
+      return c ? { locator, memoryBytes: 0, cpuUsec: 0 } : null
+    },
+    async createManaged(spec) {
+      calls.push(['createManaged', structuredClone(spec)])
+      return this.create({ ...spec, containerName: spec.locator })
+    },
     async create(spec) {
       calls.push(['create', structuredClone(spec)])
       serial += 1

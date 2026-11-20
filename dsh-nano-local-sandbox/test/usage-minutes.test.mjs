@@ -21,7 +21,7 @@ function fixture(t) {
     root, envId: 'test', clock: () => now,
     registry: { get: id => id === 'A' ? row : null, list: () => [row] },
     observe: async () => ({ ...observed }),
-    backend: { async stats() { calls++; if (raw === null) throw new Error('unavailable'); return raw } },
+    backend: { async sampleUsage() { calls++; if (raw === null) throw new Error('unavailable'); return raw } },
   }
   const open = () => openUsageMinutes(cfg)
   let db = open()
@@ -39,7 +39,7 @@ function fixture(t) {
     },
     async take(minute, offset, cpu, memory) {
       now = T + minute * M + offset
-      raw = cpu === 'fail' ? null : [{ id: 'loc-A', cpuUsageUsec: cpu, memoryUsageBytes: memory, argv: 'sensitive-command' }]
+      raw = cpu === 'fail' ? null : { locator: 'loc-A', cpuUsec: cpu, memoryBytes: memory }
       await db.tick()
     },
     time: (minute) => { now = T + minute * M },

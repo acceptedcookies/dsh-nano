@@ -1,5 +1,6 @@
 import { spawn, execFile } from 'node:child_process'
 import { assertPublicSpec, capabilityReport } from './backend.js'
+import { decodeAppleObservation } from './apple-evidence.js'
 import { errorCode } from './error-catalog.js'
 
 /**
@@ -301,6 +302,88 @@ export function createAppleBackend(spec = {}, io = {}) {
         if (isMissingContainer(error, name)) return null
         throw error
       }
+    },
+    /**
+     * Neutral observation for the managed control plane: strict decode of
+     * the raw inspect payload lives in apple-evidence.js — wrong locator,
+     * ≠1 entries, bad creation dates, non-loopback or ambiguous
+     * publications and malformed mounts all yield `null` (unknown), never
+     * "missing" and never a partial proof. `stateTarget` is the profile
+     * driver's trusted guest path for the state volume.
+     */
+    async observe(locator, { stateTarget } = {}) {
+      let raw = null
+      let missing = false
+      try {
+        const stdout = await runFile(bound, ['inspect', locator])
+        raw = stdout ?? ''
+      } catch (error) {
+        if (isMissingContainer(error, locator)) missing = true
+        else throw error
+      }
+      return decodeAppleObservation(raw, locator, { missing, stateTarget })
+    },
+    /**
+     * Neutral usage sample for one exact locator: `{locator,memoryBytes,
+     * cpuUsec}` preserving real zeros, or `null` when the row is absent or
+     * names a different object. Stats decode failures propagate as faults.
+     */
+    async sampleUsage(locator) {
+      const text = await runFile(bound, ['stats', '--no-stream', '--format', 'json', locator])
+      const rows = JSON.parse(text)
+      if (!Array.isArray(rows) || rows.length !== 1 || rows[0]?.id !== locator) return null
+      // No coercion: real 0 stays 0; null/''/false stay null — never a
+      // fabricated zero.
+      const counter = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null
+      return {
+        locator: rows[0].id,
+        memoryBytes: counter(rows[0].memoryUsageBytes),
+        cpuUsec: counter(rows[0].cpuUsageUsec),
+      }
+    },
+    /**
+     * Managed create from a neutral spec: this backend alone formats Apple
+     * CLI arguments (memory, publish tuples, virtiofs/tmpfs mount args) and
+     * then runs the same confined create path as `create`.
+     */
+    async createManaged(spec) {
+      const invalid = (what) => { throw new Error(`createManaged spec invalid: ${what}`) }
+      if (typeof spec?.locator !== 'string' || !spec.locator || /[,\0\r\n]/.test(spec.locator)) invalid('locator')
+      if (typeof spec?.image !== 'string' || !spec.image) invalid('image')
+      const safePath = (value) => typeof value === 'string' && value.length > 0 && !/[,\0\r\n]/.test(value)
+      const mounts = (spec?.mounts ?? []).map((mount) => {
+        if (mount?.type === 'tmpfs') {
+          if (!safePath(mount.target)) invalid('tmpfs target')
+          return { ...mount, arg: `type=tmpfs,target=${mount.target}` }
+        }
+        if (mount?.type === 'bind') {
+          if (!safePath(mount.source) || !safePath(mount.target)) invalid('bind source/target')
+          return { ...mount, arg: `type=virtiofs,source=${mount.source},target=${mount.target}${mount.readOnly ? ',readonly' : ''}` }
+        }
+        invalid(`mount type ${String(mount?.type)}`)
+      })
+      const ports = (spec?.ports ?? []).map((port) => {
+        if (!Number.isInteger(port?.containerPort) || port.containerPort < 1 || port.containerPort > 65535 ||
+            !Number.isInteger(port?.hostPort) || port.hostPort < 1 || port.hostPort > 65535 ||
+            !safePath(port.hostAddress)) invalid('port tuple')
+        const protocol = String(port.protocol ?? 'tcp')
+        if (protocol !== 'tcp' && protocol !== 'udp') invalid(`port protocol ${protocol}`)
+        return { ...port, publish: `${port.hostAddress === '::1' ? '[::1]' : port.hostAddress}:${port.hostPort}:${port.containerPort}/${protocol}` }
+      })
+      const gib = 1024 ** 3
+      const memoryBytes = spec?.resources?.memoryBytes
+      if (!Number.isSafeInteger(memoryBytes) || memoryBytes <= 0 || memoryBytes % (1024 ** 2) !== 0) invalid('memoryBytes')
+      return this.create({
+        containerName: spec.locator,
+        image: spec.image,
+        managedIdentity: spec.managedIdentity,
+        mounts,
+        ports,
+        resources: {
+          cpus: spec?.resources?.cpus,
+          memory: memoryBytes % gib === 0 ? `${memoryBytes / gib}G` : `${memoryBytes / (1024 ** 2)}M`,
+        },
+      })
     },
     /**
      * Read-only image proof: `container image inspect <tag>` must yield

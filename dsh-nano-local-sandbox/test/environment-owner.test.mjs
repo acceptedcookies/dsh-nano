@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import { openEnvironmentOwner } from '../src/host/environment-owner.js'
+import { capabilityReport } from '../src/host/backend.js'
 import { resolveOwnerPrincipal } from '../src/host/object-authz.js'
 import { createManagedRoutes } from '../src/host/managed-routes.js'
 import { loadProfileDriver } from '../src/host/profile-drivers.js'
@@ -29,7 +30,7 @@ function ownerPeer(controller = new AbortController()) {
   return { principal: { kind: 'owner' }, signal: controller.signal }
 }
 
-async function setup(t, scoped = false) {
+async function setup(t, scoped = false, backendOverride = null) {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'dnls-env-owner-')))
   const profilesRoot = join(home, 'profiles')
   cpSync(join(packageRoot, 'profiles', 'kitesurf'), join(profilesRoot, 'kitesurf'), { recursive: true })
@@ -43,7 +44,7 @@ async function setup(t, scoped = false) {
   assert.equal(ready.ready, true, ready.errors?.join(', '))
   materializeRuntime(runtimeRoot(ready.manifest, { env }), ready.manifest)
 
-  const backend = makeBackend()
+  const backend = backendOverride ?? makeBackend()
   const audits = []
   let peer = ownerPeer()
   const connection = { admit: async () => ({ peer }) }
@@ -109,17 +110,18 @@ test('environment-owner create: real registry row, bound generation, actual spec
   assert.equal(row.appliedRevision.imageDigest, DIGEST)
   assert.match(row.appliedRevision.verifiedAt, /^\d{4}-/)
 
-  const spec = backend.calls.find((entry) => entry[0] === 'create')[1]
-  assert.equal(spec.containerName, row.binding.locator)
+  const spec = backend.calls.find((entry) => entry[0] === 'createManaged')[1]
+  assert.equal(spec.locator, row.binding.locator)
   assert.equal(spec.image, manifest.build.image)
   assert.equal(spec.resources.cpus, 4)
   assert.equal(spec.resources.memoryBytes, 4 * 1024 ** 3)
-  // Structured mounts: volume source is the row's own state dir, args serialized.
+  // Neutral mounts: the volume source is the row's own state dir and no
+  // provider-specific CLI arg string crosses the domain boundary.
   const volumeMount = spec.mounts.find((m) => m.target === '/var/lib/kitesurf-state')
   assert.equal(volumeMount.source, row.stateVolume)
-  assert.equal(volumeMount.type, 'virtiofs')
+  assert.equal(volumeMount.type, 'bind')
   assert.equal(volumeMount.readOnly, false)
-  assert.ok(spec.mounts.every((m) => typeof m.arg === 'string' && m.arg.length > 0))
+  assert.ok(spec.mounts.every((m) => !('arg' in m)))
   // Volume is under the canonical state root and was created by the driver.
   assert.equal(row.stateVolume, join(realpathSync(env.DNLS_STATE_ROOT), 'kitesurf', row.sandboxId))
   assert.ok(existsSync(row.stateVolume))
@@ -282,7 +284,7 @@ test('environment-owner recreate: preflight failure performs no destructive acti
   assert.equal(op.state, 'failed')
   assert.equal(op.step, 'precheck')
   // Only inspect/imageEvidence may have run since the dispatch — nothing else.
-  for (const entry of backend.calls.slice(callsBefore)) assert.ok(['inspect', 'imageEvidence'].includes(entry[0]), entry[0])
+  for (const entry of backend.calls.slice(callsBefore)) assert.ok(['observe', 'inspect', 'imageEvidence'].includes(entry[0]), entry[0])
   assert.equal(backend.count('stop'), 0)
   assert.equal(backend.count('remove'), 0)
   assert.equal(backend.count('create'), 1)
@@ -349,4 +351,152 @@ test('environment-owner resolveCwd: declared service cwd only, never host paths'
     assert.equal(denied.result.isError, true, JSON.stringify({ args, body: denied.result.structuredContent }))
   }
   assert.equal(backend.count('terminalRpc'), rpcBefore, 'denied cwd still reached the broker')
+})
+
+/**
+ * A fully neutral provider: no Apple inspect JSON anywhere — observe emits
+ * neutral evidence with its own generation scheme, createManaged records the
+ * neutral spec verbatim. Proves the owner boundary never reaches raw
+ * provider payloads.
+ */
+function makeNeutralBackend() {
+  const calls = []
+  const objects = new Map()
+  let serial = 0
+  const stateVolumeOf = (locator) => objects.get(locator)?.spec.mounts
+    .filter((m) => m.type === 'bind' && m.readOnly === false && m.target === '/var/lib/kitesurf-state')[0]?.source ?? null
+  return {
+    calls,
+    objects,
+    count: (verb) => calls.filter((entry) => entry[0] === verb).length,
+    capabilities() { return capabilityReport() },
+    async observe(locator, { stateTarget } = {}) {
+      calls.push(['observe', locator])
+      const obj = objects.get(locator)
+      if (!obj) return { locator, state: 'missing', generation: null, stateVolume: null }
+      const volume = obj.spec.mounts
+        .filter((m) => m.type === 'bind' && m.target === stateTarget && m.readOnly === false)[0]?.source ?? null
+      return {
+        locator,
+        generation: obj.generation,
+        stateVolume: volume,
+        state: obj.state,
+        creationDate: obj.creationDate,
+        publications: obj.spec.ports.map((p) => ({
+          serviceId: null, containerPort: p.containerPort, hostPort: p.hostPort,
+          protocol: p.protocol, hostAddress: p.hostAddress,
+        })),
+        resources: { cpus: obj.spec.resources.cpus, memoryBytes: obj.spec.resources.memoryBytes },
+        mounts: obj.spec.mounts,
+        imageDigest: obj.digest,
+        observedAt: new Date(obj.creationDate * 1000).toISOString(),
+      }
+    },
+    async sampleUsage(locator) {
+      calls.push(['sampleUsage', locator])
+      return objects.has(locator) ? { locator, memoryBytes: 0, cpuUsec: 0 } : null
+    },
+    async createManaged(spec) {
+      calls.push(['createManaged', structuredClone(spec)])
+      serial += 1
+      objects.set(spec.locator, {
+        spec: structuredClone(spec), state: 'running',
+        creationDate: 1_700_000_000 + serial * 61,
+        generation: `neutral-gen-${serial}`,
+        digest: spec.imageDigest ?? DIGEST,
+      })
+    },
+    async start(locator) { calls.push(['start', locator]); const o = objects.get(locator); if (o) o.state = 'running' },
+    async stop(locator) { calls.push(['stop', locator]); const o = objects.get(locator); if (o) o.state = 'stopped' },
+    async remove(locator) { calls.push(['remove', locator]); objects.delete(locator) },
+    async imageEvidence(tag) { calls.push(['imageEvidence', tag]); return { tag, digest: DIGEST } },
+    async terminalRpc() { return { ok: true } },
+  }
+}
+
+test('environment-owner neutral provider: create/inspect/start/stop/recreate without Apple JSON', async (t) => {
+  const backend = makeNeutralBackend()
+  const { owner, call, create } = await setup(t, true, backend)
+  const row = await create('neutral')
+  assert.match(row.binding.generation, /^neutral-gen-/)
+  const spec = backend.calls.find((entry) => entry[0] === 'createManaged')[1]
+  assert.equal(spec.locator, row.binding.locator)
+  assert.ok(spec.mounts.every((m) => ['bind', 'tmpfs'].includes(m.type) && !('arg' in m)))
+  // Neutral observation serves managed reads — the fixture saw no raw
+  // inspect JSON because there is none.
+  const obs = await owner.observe(row)
+  assert.equal(obs.state, 'running')
+  assert.equal(obs.stateVolume, row.stateVolume)
+
+  const stop = await call('sandbox.instance.stop', { sandboxId: row.sandboxId, requestId: 'stop-n' })
+  assert.equal(stop.result.isError, false, JSON.stringify(stop.result))
+  await owner.drain()
+  const start = await call('sandbox.instance.start', { sandboxId: row.sandboxId, requestId: 'start-n' })
+  assert.equal(start.result.isError, false)
+  await owner.drain()
+
+  const save = await call('sandbox.revision.save', {
+    sandboxId: row.sandboxId, expectedRevision: 0,
+    overrides: { cpus: 2, memoryBytes: 512 * 1024 ** 2 },
+  })
+  assert.equal(save.result.isError, false)
+  const recreate = await call('sandbox.instance.recreate', {
+    sandboxId: row.sandboxId, requestId: 'recreate-n',
+    expectedRevision: 1, interruptTerminals: true, preserveVolume: true,
+  })
+  assert.equal(recreate.result.isError, false, JSON.stringify(recreate.result))
+  await owner.drain()
+  const fresh = owner.registry.get(row.sandboxId)
+  const op = fresh.operations.find((entry) => entry.action === 'recreate')
+  assert.equal(op.state, 'succeeded')
+  assert.notEqual(fresh.binding.generation, row.binding.generation)
+  assert.equal(backend.count('createManaged'), 2)
+})
+
+test('environment-owner unsupported provider: no lifecycle capabilities, submit refused before accept', async (t) => {
+  const backend = makeNeutralBackend()
+  backend.capabilities = () => capabilityReport(false)
+  const { owner, call } = await setup(t, true, backend)
+  assert.equal(owner.capabilities.has('sandbox.lifecycle'), false)
+  assert.equal(owner.capabilities.has('sandbox.instance.create'), false)
+  assert.equal(owner.capabilities.has('sandbox.instance.start'), false)
+  assert.equal(owner.capabilities.has('term.session.create'), false)
+  const res = await call('sandbox.instance.create', { name: 'nope', profileId: 'kitesurf', requestId: 'x' })
+  assert.equal(res.result.isError, true)
+  assert.equal(backend.count('createManaged'), 0)
+  // Direct execute of a gated capability also refuses before dispatch.
+  await assert.rejects(
+    owner.execute({ capability: 'sandbox.instance.create', args: { name: 'n', requestId: 'x' }, peer: ownerPeer() }),
+    (error) => error?.status === 503 || /support/i.test(String(error?.message)))
+})
+
+test('environment-owner partially capable provider: stop survives while unannounced writes refuse with no ledger row', async (t) => {
+  const backend = makeNeutralBackend()
+  const { owner, call, create } = await setup(t, true, backend)
+  const row = await create('partial')
+  // The provider re-announces honest flags: inspect/stop/start only —
+  // create, restart, recreate, exec.stdin are all false now.
+  const caps = capabilityReport(false)
+  caps.inspect = true
+  caps.stop = true
+  caps.start = true
+  backend.capabilities = () => caps
+
+  const before = owner.registry.list().length
+  const denied = await call('sandbox.instance.create', { name: 'denied', profileId: 'kitesurf', requestId: 'denied-1' })
+  assert.equal(denied.result.isError, true)
+  assert.equal(owner.registry.list().length, before) // refused before the ledger row
+  assert.equal(backend.count('createManaged'), 1)    // only the earlier full-capability create
+
+  const restart = await call('sandbox.instance.restart', { sandboxId: row.sandboxId, requestId: 'rst-1' })
+  assert.equal(restart.result.isError, true)
+  assert.equal(owner.registry.list().length, before)
+
+  // The supported action still dispatches through generic lifecycle.
+  const stop = await call('sandbox.instance.stop', { sandboxId: row.sandboxId, requestId: 'stop-p' })
+  assert.equal(stop.result.isError, false, JSON.stringify(stop.result))
+  await owner.drain()
+  const fresh = owner.registry.get(row.sandboxId)
+  assert.equal(fresh.operations.find((op) => op.action === 'stop').state, 'succeeded')
+  assert.equal((await owner.observe(fresh)).state, 'stopped')
 })

@@ -467,5 +467,17 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
     if (!row) throw new Error(`managed-routes: capability ${capabilityId} declares ${def.http.path} with no binding-table row`)
     specs.push({ path: row.path, methods: [...row.methods], bodyLimit: row.bodyLimit, handler: httpHandler(capabilityId, def, row) })
   }
+  // Every binding-table row must own a registered spec (route-guard). A
+  // row whose capability the provider filtered out gets a fail-closed
+  // handler — registered but never advertised or dispatched.
+  const covered = new Set(specs.map((spec) => spec.path))
+  const closed = async (req, res) => {
+    const failure = fail('sandbox.provider_unsupported')
+    return respond(res, failure.status, failure.body, { head: req.method === 'HEAD', contractHeader: true })
+  }
+  for (const row of table ?? []) {
+    if (covered.has(row.path)) continue
+    specs.push({ path: row.path, methods: [...row.methods], bodyLimit: row.bodyLimit, handler: closed })
+  }
   return specs
 }

@@ -436,7 +436,7 @@ async function observeOnce(session, deps) {
   let inspectFailed = null
   try {
     const inspected = await deps.backend?.inspect?.(name)
-    info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
+    info = deps.managed ? inspected : parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
   } catch (error) {
     info = null
     // A daemon-level inspect failure is NOT "container missing" — that used
@@ -655,7 +655,7 @@ async function prepareEnvironment(session, deps, ctx = null) {
   if (canInspect) {
     try {
       const inspected = await deps.backend.inspect(name)
-      info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort)
+      info = deps.managed ? inspected : parseInspect(inspected?.raw ?? inspected, host.engineContainerPort)
       // A running/real container that inspect can't parse is NOT "missing" —
       // routing it to create() would collide "already exists" the moment the
       // daemon recovers. Three-way: missing / inspectable / unknown.
@@ -1037,7 +1037,7 @@ async function ensureBase(session, deps) {
   try {
     const inspected = await deps.backend.inspect(containerNameFor(session, deps.env || process.env))
     const host = envHostPorts(deps.env || process.env, session.__profile?.profile)
-    const info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
+    const info = deps.managed ? inspected : parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
     trackBridge(session, bridgeControlBase(publicationFor(info, host.bridgeContainerPort)))
     const base = bridgeControlBase(publicationFor(info, host.engineContainerPort))
     if (!base) return null
@@ -1158,7 +1158,7 @@ async function bridgeFetch(session, deps, pathname, { method = 'GET', body = nul
   let info = null
   try {
     const inspected = await deps.backend?.inspect?.(name)
-    info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
+    info = deps.managed ? inspected : parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
   } catch {
     throw unavailable('bridge mapping could not be verified')
   }

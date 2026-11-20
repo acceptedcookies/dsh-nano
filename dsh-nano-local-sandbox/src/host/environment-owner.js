@@ -1,3 +1,4 @@
+import { supportsAction } from './backend.js'
 import { createBridgePublisher } from './bridge-projection.js'
 import { openControlRegistry } from './control-registry.js'
 import { createFleetProjection } from './fleet-projection.js'
@@ -63,7 +64,33 @@ export function openEnvironmentOwner(deps) {
         backend,
       }],
     })
-    const capabilities = new Map([...lifecycle.capabilities, ...terminal.capabilities, ...fleet.capabilities, ...pages.capabilities,
+    // Per-capability provider gate: supportsAction checks honest capability
+    // flags AND callable deps, so a partially-capable provider still
+    // advertises what it can fulfil. Registry-owned surfaces (operations,
+    // profiles, revision.save, idle) are persistent reads/writes of the
+    // ledger, not provider actions — they stay advertised.
+    const supports = (action) => supportsAction(backend, action)
+    const LIFECYCLE_ACTIONS = ['create', 'start', 'stop', 'restart', 'recreate', 'remove']
+    const advertisedLifecycle = (name) => {
+      if (name === 'sandbox.lifecycle') return LIFECYCLE_ACTIONS.some((action) => supports(action))
+      if (name === 'sandbox.operations') return true // durable ledger projection
+      const match = /^sandbox\.instance\.(.+)$/.exec(name)
+      return match ? supports(match[1]) : true
+    }
+    const advertisedFleet = (name) => {
+      if (name === 'sandbox.processes') return supports('processes')
+      return supports('read')
+    }
+    const lifecycleCaps = new Map([...lifecycle.capabilities].filter(([name]) => advertisedLifecycle(name)))
+    const terminalCaps = supports('terminal') ? terminal.capabilities : new Map()
+    const fleetCaps = new Map([...fleet.capabilities].filter(([name]) => advertisedFleet(name)))
+    const pagesCaps = supports('read') ? pages.capabilities : new Map()
+    const unsupported = new Set(
+      [...lifecycle.capabilities.keys(), ...terminal.capabilities.keys(), ...fleet.capabilities.keys(), ...pages.capabilities.keys()]
+        .filter((name) => !lifecycleCaps.has(name) && !terminalCaps.has(name) && !fleetCaps.has(name) && !pagesCaps.has(name)))
+    if (!supports('read')) unsupported.add('sandbox.services')
+    if (!supports('usage')) unsupported.add('sandbox.usage')
+    const capabilities = new Map([...lifecycleCaps, ...terminalCaps, ...fleetCaps, ...pagesCaps,
       ['sandbox.profile.list', { target: 'none', tool: { name: 'sandbox.profile.list', description: 'List available local sandbox profiles.', inputSchema: schema({}, []) } }],
       ['sandbox.profile.describe', { target: 'none', tool: { name: 'sandbox.profile.describe', description: 'Describe one local profile by its advertised id.', inputSchema: schema({ id }, ['id']) } }],
       objectTool('sandbox.services', 'List declared services and their observed loopback publications.'),
@@ -73,7 +100,7 @@ export function openEnvironmentOwner(deps) {
         overrides: schema({ cpus: { type: 'integer', minimum: 1 }, memoryBytes: { type: 'integer', minimum: 1 } }, []),
       }, ['expectedRevision', 'overrides']),
       objectTool('sandbox.usage', 'Read completed UTC minute statistics and coverage.', { window: { enum: ['24h', '7d', '30d'] } }, ['window']),
-    ])
+    ].filter(([name]) => !unsupported.has(name)))
     let closing = null
     const inflight = new Set()
     async function dispatch(call) {
@@ -90,10 +117,11 @@ export function openEnvironmentOwner(deps) {
         if (!profile) throw Object.assign(new Error('unknown profile'), { errorId: 'sandbox.profile.unknown' })
         return profile
       }
-      if (terminal.capabilities.has(call.capability)) return terminal.execute(call)
-      if (pages.capabilities.has(call.capability)) return pages.execute(call)
-      if (lifecycle.capabilities.has(call.capability)) return lifecycle.execute(call)
-      if (fleet.capabilities.has(call.capability)) return fleet.execute(call)
+      if (terminalCaps.has(call.capability)) return terminal.execute(call)
+      if (pagesCaps.has(call.capability)) return pages.execute(call)
+      if (lifecycleCaps.has(call.capability)) return lifecycle.execute(call)
+      if (fleetCaps.has(call.capability)) return fleet.execute(call)
+      if (unsupported.has(call.capability)) throw Object.assign(new Error('provider does not support this action'), { status: 503 })
       const row = registry.get(call.sandboxId)
       const check = () => {
         const verdict = authorize({ peer: call.peer, envId, row: registry.get(call.sandboxId), action: call.capability, resolvePrincipal })

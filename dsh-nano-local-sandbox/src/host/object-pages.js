@@ -1,7 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { BINDING_TABLE } from '../../lib/bindings.js'
 import { connectCdp, resetClient } from './cdp-elements.js'
-import { createObservationSource } from './lifecycle-operations.js'
 import { serviceMappings } from './managed-profile.js'
 import { authorize } from './object-authz.js'
 import { routeSpecs } from './routes.js'
@@ -53,15 +52,25 @@ export function createObjectPages({ registry, envId, resolvePrincipal, connectio
     const inspect = async locator => {
       if (locator !== initial.binding.locator) throw fail(409)
       await recheck()
-      const raw = await backend.inspect(locator)
-      const obs = await createObservationSource({ backend: { inspect: () => raw }, profileFor: () => profile })(locator, initial)
+      const obs = await backend.observe(locator, { stateTarget: profile.stateTarget })
       await recheck()
       if (obs?.generation !== initial.binding.generation || obs?.stateVolume !== initial.stateVolume ||
           obs.state !== 'running') throw fail(409)
       // Do not pass an unexpected current host mapping to the CDP/bridge transport.
       const mappings = serviceMappings(initial, obs, profile.services)
       if (mappings.some(s => !s.published)) throw fail(503)
-      return raw
+      // Neutral info for the managed route readers — only exactly
+      // validated publications, never raw provider JSON.
+      return {
+        state: obs.state,
+        ports: (obs.publications ?? []).map((port) => ({ ...port, count: 1 })),
+        resources: obs.resources ?? null,
+        networking: obs.networking ?? null,
+        stateSource: obs.stateVolume,
+        runtimeSource: profile.runtimeTarget
+          ? obs.mounts?.find(m => m.type === 'bind' && m.target === profile.runtimeTarget)?.source ?? null
+          : null,
+      }
     }
     if (route.id === 'dnls.recover') {
       if (!args.requestId || args.action !== 'restart') throw Object.assign(fail(400), { errorId: 'sandbox.params.action' })

@@ -186,6 +186,8 @@ export function createManagedProfileSource(deps = {}) {
       validateOverrides: values => checkOverrides(values, bounds),
       defaults: bounds.defaults,
       inspectedRecipe: typeof result.driver.inspectedRecipe === 'function' ? result.driver.inspectedRecipe.bind(result.driver) : null,
+      stateTarget: typeof result.driver.stateTarget === 'string' ? result.driver.stateTarget : null,
+      runtimeTarget: typeof result.driver.runtimeTarget === 'string' ? result.driver.runtimeTarget : null,
       /** The trusted port plan for `registry.accept` — never request input. */
       portPlan() {
         return services.map((service) => ({
@@ -196,7 +198,7 @@ export function createManagedProfileSource(deps = {}) {
           portRange: [...pool],
         }))
       },
-      /** Full backend.create descriptor — mounts serialized from driver args. */
+      /** Neutral createManaged spec — provider argument formatting is the backend's job. */
       createSpec(row, { overrides = {} } = {}) {
         const effective = checkOverrides(overrides, bounds)
         const volume = row.stateVolume
@@ -210,9 +212,12 @@ export function createManagedProfileSource(deps = {}) {
         const mountSpecs = result.driver.managedMounts?.(manifest, deps, row.stateVolume)
         if (!Array.isArray(mountSpecs)) throw configError('driver mounts is not an array')
         const mounts = mountSpecs.map((mount) => {
-          const arg = typeof mount?.arg === 'string' ? mount.arg : null
-          if (!arg || arg.includes('\0') || arg.includes('\n')) throw configError('driver mount arg is not a bounded string')
-          return { ...mount, arg }
+          const type = mount?.type === 'tmpfs' ? 'tmpfs' : mount?.type === 'bind' ? 'bind' : null
+          const source = typeof mount?.source === 'string' ? mount.source : null
+          const target = typeof mount?.target === 'string' ? mount.target : null
+          if (type === null || !target || /[,\0\r\n]/.test(target) ||
+              (type === 'bind' && (!source || /[,\0\r\n]/.test(source)))) throw configError('driver mount is not a bounded neutral tuple')
+          return { type, source, target, readOnly: mount.readOnly === true }
         })
         const cpus = effective.cpus ?? bounds.defaults.cpus
         const memoryBytes = effective.memoryBytes ?? parseMemory(bounds.defaults.memory)
@@ -220,14 +225,17 @@ export function createManagedProfileSource(deps = {}) {
         // owner's health channel (/proc/1/environ vs the published doc).
         if (typeof row.sandboxId !== 'string' || !row.sandboxId) throw configError('sandboxId required')
         return {
-          containerName: row.binding.locator,
+          locator: row.binding.locator,
           image: manifest.build.image,
           managedIdentity: { envId: tag, sandboxId: row.sandboxId },
           mounts,
-          resources: { cpus, memory: memoryArg(memoryBytes), memoryBytes },
+          resources: { cpus, memoryBytes },
           ports: (row.ports ?? []).map((port) => ({
-            publish: `${port.hostAddress === '::1' ? '[::1]' : port.hostAddress}:${port.hostPort}:${port.containerPort}/${port.protocol}`,
-            ...port,
+            serviceId: port.serviceId,
+            containerPort: port.containerPort,
+            hostPort: port.hostPort,
+            hostAddress: port.hostAddress,
+            protocol: port.protocol,
           })),
         }
       },

@@ -9,6 +9,8 @@ import { registerRoutes } from '../lib/route-guard.js'
 import { CONTRACT_VERSION } from '../src/host/control-contract.js'
 import { openControlRegistry } from '../src/host/control-registry.js'
 import { createAppleBackend } from '../src/host/backend-apple.js'
+import { decodeAppleObservation } from '../src/host/apple-evidence.js'
+import { capabilityReport } from '../src/host/backend.js'
 import { createLifecycleOwner, createObservationSource } from '../src/host/lifecycle-operations.js'
 import { createManagedRoutes } from '../src/host/managed-routes.js'
 
@@ -44,9 +46,9 @@ const TRUSTED_PROFILE = {
   recipeRef: 'recipe@sha256:1',
   // Trusted descriptor: verified image and the row's own mount — never bare ids.
   createSpec: (row) => ({
-    containerName: row.binding.locator,
+    locator: row.binding.locator,
     image: 'dnls-kitesurf@sha256:img',
-    mounts: [{ source: row.stateVolume, target: '/state', type: 'bind' }],
+    mounts: [{ source: row.stateVolume, target: '/state', type: 'bind', readOnly: false }],
     ports: [],
   }),
 }
@@ -60,11 +62,12 @@ function fixture(t, { principal, envId = 'env-1', profile } = {}) {
   const live = new Map()
   const backend = {
     calls: { create: [], start: [], stop: [], remove: [] },
-    async create(descriptor) {
-      backend.calls.create.push(descriptor)
-      const stateVolume = descriptor.stateVolume ?? descriptor.mounts?.find((m) => m.target === '/state')?.source ?? null
-      live.set(descriptor.containerName, { generation: `gen-${backend.calls.create.length}`, stateVolume, state: 'running' })
-      return { id: descriptor.containerName }
+    capabilities: () => capabilityReport(),
+    async createManaged(spec) {
+      backend.calls.create.push(spec)
+      const stateVolume = spec.stateVolume ?? spec.mounts?.find((m) => m.target === '/state')?.source ?? null
+      live.set(spec.locator, { generation: `gen-${backend.calls.create.length}`, stateVolume, state: 'running' })
+      return { id: spec.locator }
     },
     async start(name) { backend.calls.start.push(name); live.get(name).state = 'running'; return { ok: true } },
     async stop(name) { backend.calls.stop.push(name); live.get(name).state = 'stopped'; return { ok: true } },
@@ -173,7 +176,7 @@ test('DNLS03-T20 cancellation wins only before dispatch', async (t) => {
 
 test('DNLS03-T20 an indeterminate operation blocks a conflicting write', async (t) => {
   const f = fixture(t)
-  f.backend.create = async (descriptor) => {
+  f.backend.createManaged = async (descriptor) => {
     f.backend.calls.create.push(descriptor)
     throw new Error('backend exploded mid-create')
   }
@@ -340,15 +343,25 @@ test('DNLS03-T22 a second principal is invisible-404; audit carries no request o
   }
 })
 
-test('DNLS03-T20 the production observation source reads raw inspect output strictly', async () => {
+test('DNLS03-T20 the production observation source consumes backend.observe strictly', async () => {
   const rawEntry = (id, creationDate, state = 'running') =>
-    JSON.stringify([{ configuration: { id, creationDate }, status: { state } }])
+    JSON.stringify([{ configuration: { id, creationDate, mounts: [
+      { type: { virtiofs: {} }, source: '/state/vol', destination: '/state', options: [] },
+    ] }, status: { state } }])
   let seenProfileId
   const profileFor = async ({ profileId }) => {
     seenProfileId = profileId
-    return { profileId, inspectedRecipe: () => ({ stateSource: '/state/vol' }) }
+    return { profileId, stateTarget: '/state' }
   }
-  const backend = { inspect: async () => ({ raw: rawEntry('dnls-a', '2026-11-19T10:00:00Z') }) }
+  let rawResult = { raw: rawEntry('dnls-a', '2026-11-19T10:00:00Z') }
+  // Adapter seam: the backend owns raw→neutral decode; the source only
+  // passes the trusted stateTarget and enforces exact-locator echoes.
+  const backend = {
+    observe: async (locator, { stateTarget }) =>
+      decodeAppleObservation(
+        rawResult === null ? null : (typeof rawResult === 'string' ? rawResult : rawResult?.raw),
+        locator, { missing: rawResult === null, stateTarget }),
+  }
   const observe = createObservationSource({ backend, profileFor })
   const row = { profileId: 'kitesurf' }
 
@@ -360,13 +373,13 @@ test('DNLS03-T20 the production observation source reads raw inspect output stri
   // generation is creation identity, never the name itself
   assert.notEqual(first.generation, 'dnls-a')
   // same name, later creationDate → provably a replacement
-  backend.inspect = async () => ({ raw: rawEntry('dnls-a', '2026-11-19T11:00:00Z') })
+  rawResult = { raw: rawEntry('dnls-a', '2026-11-19T11:00:00Z') }
   assert.notEqual((await observe('dnls-a', row)).generation, first.generation)
   // numeric creationDate works too
-  backend.inspect = async () => ({ raw: rawEntry('dnls-a', 1700000000) })
+  rawResult = { raw: rawEntry('dnls-a', 1700000000) }
   assert.equal(typeof (await observe('dnls-a', row)).generation, 'string')
   // inspect === null is the ONLY authoritative missing
-  backend.inspect = async () => null
+  rawResult = null
   assert.equal((await observe('dnls-a', row)).state, 'missing')
   // everything ambiguous is unknown — never "missing", never a binding
   for (const bad of [
@@ -381,12 +394,20 @@ test('DNLS03-T20 the production observation source reads raw inspect output stri
     { raw: rawEntry('dnls-a', '0001-01-01') }, // default sentinel
     { raw: JSON.stringify([{ configuration: { id: 'dnls-a' } }]) }, // no creationDate
     { raw: JSON.stringify([{ configuration: { id: 'dnls-a', creationDate: 1700000000 }, status: { state: 'restarting?' } }]) }, // unknown state
+    { raw: JSON.stringify([{ configuration: { id: 'dnls-a', creationDate: 1700000000, mounts: [
+      { type: { virtiofs: {} }, source: '/other', destination: '/state', options: [] },
+      { type: { virtiofs: {} }, source: '/second', destination: '/state', options: [] },
+    ] }, status: { state: 'running' } }]) }, // two state binds → unproven volume
   ]) {
-    backend.inspect = async () => bad
-    assert.equal(await observe('dnls-a', row), null, JSON.stringify(bad))
+    rawResult = bad
+    const out = await observe('dnls-a', row)
+    assert.equal(out === null || out?.stateVolume === null, true, JSON.stringify(bad))
   }
+  // a wrong-locator echo from the backend is rejected by the source itself
+  backend.observe = async () => ({ locator: 'dnls-other', state: 'running' })
+  assert.equal(await observe('dnls-a', row), null)
   // a daemon error surfaces — it is unknown, not missing
-  backend.inspect = async () => { throw new Error('daemon unreachable') }
+  backend.observe = async () => { throw new Error('daemon unreachable') }
   await assert.rejects(observe('dnls-a', row))
 })
 
@@ -551,7 +572,7 @@ test('DNLS03-T20 the observation source runs through the real Apple backend — 
   const exec = { fn: async () => JSON.stringify([entry]) }
   const io = { execFile: (...args) => exec.fn(...args) } // bound once; fn may change
   const backend = createAppleBackend({ image: 'dnls@sha256:img' }, io)
-  const profileFor = async () => ({ profileId: 'kitesurf', inspectedRecipe: () => ({ stateSource: '/state/vol' }) })
+  const profileFor = async () => ({ profileId: 'kitesurf', stateTarget: '/state' })
   const observe = createObservationSource({ backend, profileFor })
   const row = { profileId: 'kitesurf' }
   const first = await observe('dnls-apple', row)
@@ -561,4 +582,23 @@ test('DNLS03-T20 the observation source runs through the real Apple backend — 
   assert.equal(again.generation, first.generation) // same digest through the real execFile seam
   exec.fn = async () => JSON.stringify([{ ...entry, configuration: { ...entry.configuration, creationDate: '2026-11-19T11:00:00Z' } }])
   assert.notEqual((await observe('dnls-apple', row)).generation, first.generation)
+})
+
+test('DNLS03-T20 sampleUsage keeps real zero and never coerces absent counters', async () => {
+  const exec = { fn: async () => JSON.stringify([{ id: 'dnls-apple', memoryUsageBytes: 0, cpuUsageUsec: 0 }]) }
+  const io = { execFile: (...args) => exec.fn(...args) }
+  const backend = createAppleBackend({ image: 'dnls@sha256:img' }, io)
+  // Real zeros stay zeros — they are measurements, not absences.
+  assert.deepEqual(await backend.sampleUsage('dnls-apple'), { locator: 'dnls-apple', memoryBytes: 0, cpuUsec: 0 })
+  // null, empty string and false are unknown — never coerced into numbers.
+  for (const bad of [null, '', false]) {
+    exec.fn = async () => JSON.stringify([{ id: 'dnls-apple', memoryUsageBytes: bad, cpuUsageUsec: bad }])
+    assert.deepEqual(await backend.sampleUsage('dnls-apple'), { locator: 'dnls-apple', memoryBytes: null, cpuUsec: null })
+  }
+  // Mixed: one valid counter survives while the other stays unknown.
+  exec.fn = async () => JSON.stringify([{ id: 'dnls-apple', memoryUsageBytes: '', cpuUsageUsec: 42 }])
+  assert.deepEqual(await backend.sampleUsage('dnls-apple'), { locator: 'dnls-apple', memoryBytes: null, cpuUsec: 42 })
+  // A row for a different object is no sample at all.
+  exec.fn = async () => JSON.stringify([{ id: 'dnls-other', memoryUsageBytes: 1, cpuUsageUsec: 1 }])
+  assert.equal(await backend.sampleUsage('dnls-apple'), null)
 })

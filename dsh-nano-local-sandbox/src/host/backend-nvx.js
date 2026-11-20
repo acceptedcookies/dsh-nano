@@ -11,7 +11,7 @@ export function createNvxBackend(spec = {}) {
   assertPublicSpec(spec)
   const api = {
     capabilities() {
-      return capabilityReport()
+      return capabilityReport(false)
     },
   }
   for (const method of BACKEND_METHODS) {

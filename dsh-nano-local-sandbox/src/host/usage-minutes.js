@@ -79,8 +79,8 @@ export function openUsageMinutes({ root, envId, registry, observe, backend, cloc
       if (obs.state === 'stopped') report = [at, obs.generation, segment, 'stopped', null, null]
       else {
         if (obs.state !== 'running') return
-        const raw = await backend.stats(obs.locator)
-        if (!Array.isArray(raw) || raw.length !== 1 || raw[0]?.id !== obs.locator) return
+        const sample = await backend.sampleUsage(obs.locator)
+        if (sample?.locator !== obs.locator) return
         const measuredAt = clock()
         if (slot(measuredAt) !== minute) return
         const after = await observe(row)
@@ -88,8 +88,8 @@ export function openUsageMinutes({ root, envId, registry, observe, backend, cloc
         if (!verified(row, after) || after.state !== 'running' ||
             current?.binding.generation !== obs.generation || segmentOf(current) !== segment) return
         report = [measuredAt, obs.generation, segment, 'running',
-          uint(raw[0].memoryUsageBytes) ? raw[0].memoryUsageBytes : null,
-          uint(raw[0].cpuUsageUsec) ? raw[0].cpuUsageUsec : null]
+          uint(sample.memoryBytes) ? sample.memoryBytes : null,
+          uint(sample.cpuUsec) ? sample.cpuUsec : null]
       }
     } catch {
       return // The persisted attempt remains failed; never substitute a zero.

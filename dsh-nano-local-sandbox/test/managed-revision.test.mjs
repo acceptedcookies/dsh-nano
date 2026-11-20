@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { capabilityReport } from '../src/host/backend.js'
 import { openControlRegistry } from '../src/host/control-registry.js'
 import { createLifecycleOwner } from '../src/host/lifecycle-operations.js'
 
@@ -23,14 +24,15 @@ function fixture(t, { backend } = {}) {
   const live = new Map()
   const calls = { create: [], stop: [], remove: [], image: [] }
   const realBackend = backend ?? {
-    async create(spec) {
+    capabilities: () => capabilityReport(),
+    async createManaged(spec) {
       calls.create.push(spec)
-      live.set(spec.containerName, {
+      live.set(spec.locator, {
         generation: `gen-${calls.create.length}`, stateVolume: spec.mounts.find((m) => m.target === '/state').source,
         state: 'running', publications: spec.ports.map((p) => ({ containerPort: p.containerPort, hostPort: p.hostPort, protocol: p.protocol, hostAddress: p.hostAddress })),
         imageDigest: DIGEST,
       })
-      return { id: spec.containerName }
+      return { id: spec.locator }
     },
     async stop(name) { calls.stop.push(name); live.get(name).state = 'stopped' },
     async remove(name) { calls.remove.push(name); live.delete(name) },
@@ -43,10 +45,10 @@ function fixture(t, { backend } = {}) {
     recipeRef: 'recipe@sha256:1',
     portPlan: () => [{ serviceId: 'engine', containerPort: 8787, protocol: 'tcp', hostAddress: '127.0.0.1', portRange: [8900, 8903] }],
     createSpec: (row, { overrides = {} } = {}) => ({
-      containerName: row.binding.locator,
+      locator: row.binding.locator,
       image: 'dnls-kitesurf@sha256:img',
-      mounts: [{ source: row.stateVolume, target: '/state', type: 'bind' }],
-      ports: (row.ports ?? []).map((p) => ({ ...p, publish: `${p.hostAddress}:${p.hostPort}:${p.containerPort}/${p.protocol}` })),
+      mounts: [{ source: row.stateVolume, target: '/state', type: 'bind', readOnly: false }],
+      ports: (row.ports ?? []).map((p) => ({ serviceId: p.serviceId, containerPort: p.containerPort, hostPort: p.hostPort, hostAddress: p.hostAddress, protocol: p.protocol })),
       resources: { cpus: overrides.cpus ?? 4 },
     }),
     preflight(row, { expectedRevision, overrides, evidence }) {
@@ -123,7 +125,8 @@ async function flushOps(f, op, created, tries = 20) {
 test('unknown image digest fails preflight negatively — no destructive step', async (t) => {
   const f = fixture(t, {
     backend: {
-      async create() { throw new Error('unused') },
+      capabilities: () => capabilityReport(),
+      async createManaged() { throw new Error('unused') },
       async stop() { throw new Error('stop must not run') },
       async remove() { throw new Error('remove must not run') },
       async imageEvidence() { return null },

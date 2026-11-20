@@ -64,6 +64,12 @@ export default function createDriver(api) {
   history.configure(api)
   return {
     id: 'kitesurf',
+    // Trusted guest target of the writable state bind; the backend proves
+    // the state volume only from a mount at exactly this path.
+    stateTarget: '/var/lib/kitesurf-state',
+    // Trusted guest target of the read-only runtime bind — the only mount
+    // whose source may be reported as runtime evidence.
+    runtimeTarget: '/opt/kitesurf',
     validateManifest: runtime.validateManifest,
     buildArgs: runtime.buildArgs,
     build: runtime.build,

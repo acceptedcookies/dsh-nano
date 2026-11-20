@@ -1,11 +1,39 @@
 const ENV = /^[a-z][a-z0-9-]{0,15}$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+const ENV_SRC = ENV.source.slice(1, -1)
+const UUID_SRC = UUID.source.slice(1, -1)
 const prefix = 'dsh-resource://sandbox-terminal/'
+const sandboxPrefix = 'dsh-resource://sandbox/'
+const SANDBOX_ADDRESS = new RegExp(`^dsh-resource://sandbox/(${ENV_SRC})/(${UUID_SRC})$`)
 
 export function terminalAddress({ envId, sandboxId, terminalId }) {
   if (![envId, sandboxId, terminalId].every(v => typeof v === 'string') ||
       !ENV.test(envId) || !UUID.test(sandboxId) || !UUID.test(terminalId)) throw new TypeError('invalid sandbox terminal reference')
   return `${prefix}${envId}/${sandboxId}/${terminalId}`
+}
+
+/** Public object reference for one already-managed sandbox (T-O-61). It
+ *  carries only envId + sandboxId — never a host URL, session or token. */
+export function sandboxAddress({ envId, sandboxId }) {
+  if (typeof envId !== 'string' || typeof sandboxId !== 'string' ||
+      !ENV.test(envId) || !UUID.test(sandboxId)) throw new TypeError('invalid sandbox reference')
+  return `${sandboxPrefix}${envId}/${sandboxId}`
+}
+
+/** Canonical grammar only — no URL normalization, so encoded or extra
+ *  segments, query, fragment and credentials can never parse. */
+export function parseSandboxAddress(address) {
+  if (typeof address !== 'string') return null
+  const match = SANDBOX_ADDRESS.exec(address)
+  return match ? { envId: match[1], sandboxId: match[2] } : null
+}
+
+/** The one handoff: `candidates(address)` lists available handlers, then
+ *  `openResource(address)` lets the host pick. No kind is chosen here. */
+export function openResourceAddress({ candidates, openResource, address }) {
+  if (typeof candidates !== 'function' || typeof openResource !== 'function') return false
+  if ((candidates(address) ?? []).length === 0) return false
+  return openResource(address) !== false
 }
 
 /** One explicit gesture owns its create promise, including an uncertain or failed result. */

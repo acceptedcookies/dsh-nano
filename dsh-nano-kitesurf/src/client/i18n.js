@@ -230,6 +230,8 @@ const COPY = {
     sandboxEmpty: '没有可见的托管沙箱',
     sandboxLoading: '正在发现托管沙箱…',
     sandboxFailed: '沙箱发现失败',
+    referenceVerifying: '正在核实引用的沙箱…',
+    referenceFailed: '无法打开引用的沙箱',
   },
   en: {
     typeLabel: 'Kitesurf',
@@ -460,6 +462,8 @@ const COPY = {
     sandboxEmpty: 'No managed sandboxes are visible',
     sandboxLoading: 'Discovering managed sandboxes…',
     sandboxFailed: 'Sandbox discovery failed',
+    referenceVerifying: 'Verifying the referenced sandbox…',
+    referenceFailed: 'The referenced sandbox could not be opened',
   },
 }
 

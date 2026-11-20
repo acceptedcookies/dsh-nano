@@ -3014,7 +3014,9 @@ ${LAYER_CSS}
           sandboxPick: "\u9009\u62E9\u4E00\u4E2A\u6258\u7BA1\u6C99\u7BB1",
           sandboxEmpty: "\u6CA1\u6709\u53EF\u89C1\u7684\u6258\u7BA1\u6C99\u7BB1",
           sandboxLoading: "\u6B63\u5728\u53D1\u73B0\u6258\u7BA1\u6C99\u7BB1\u2026",
-          sandboxFailed: "\u6C99\u7BB1\u53D1\u73B0\u5931\u8D25"
+          sandboxFailed: "\u6C99\u7BB1\u53D1\u73B0\u5931\u8D25",
+          referenceVerifying: "\u6B63\u5728\u6838\u5B9E\u5F15\u7528\u7684\u6C99\u7BB1\u2026",
+          referenceFailed: "\u65E0\u6CD5\u6253\u5F00\u5F15\u7528\u7684\u6C99\u7BB1"
         },
         en: {
           typeLabel: "Kitesurf",
@@ -3244,7 +3246,9 @@ ${LAYER_CSS}
           sandboxPick: "Choose a managed sandbox",
           sandboxEmpty: "No managed sandboxes are visible",
           sandboxLoading: "Discovering managed sandboxes\u2026",
-          sandboxFailed: "Sandbox discovery failed"
+          sandboxFailed: "Sandbox discovery failed",
+          referenceVerifying: "Verifying the referenced sandbox\u2026",
+          referenceFailed: "The referenced sandbox could not be opened"
         }
       };
     }
@@ -3589,6 +3593,52 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }
   });
 
+  // src/shared/sandbox-reference.js
+  var sandbox_reference_exports = {};
+  __export(sandbox_reference_exports, {
+    parseSandboxReference: () => parseSandboxReference,
+    verifySandboxReference: () => verifySandboxReference
+  });
+  function refuse2(code, message) {
+    const error = new Error(message);
+    error.errorId = `kitesurf.sandbox.${code}`;
+    error.restricted = true;
+    throw error;
+  }
+  function parseSandboxReference(address) {
+    if (typeof address !== "string") return null;
+    const match = ADDRESS.exec(address);
+    return match ? { envId: match[1], sandboxId: match[2] } : null;
+  }
+  async function verifySandboxReference(address, impl, origin, { createManagedDesignClient: createManagedDesignClient3 }) {
+    const parsed = parseSandboxReference(address);
+    if (!parsed) refuse2("address", "not a canonical sandbox resource");
+    if (typeof impl !== "function") refuse2("fetch", "a fetch implementation is required");
+    const managed = createManagedDesignClient3({ fetch: impl, origin });
+    await managed.discover();
+    const bound = managed.bind(parsed.sandboxId);
+    const res = await bound("/nano-local-sandbox/inspect");
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      const error = new Error(body?.error ?? `inspect failed (${res.status})`);
+      error.errorId = body?.errorId ?? "kitesurf.sandbox.object";
+      error.status = res.status;
+      throw error;
+    }
+    const detail = await res.json().catch(() => null);
+    if (detail?.sandboxId !== parsed.sandboxId) refuse2("object", "inspect names a different sandbox");
+    if (detail?.envId !== parsed.envId) refuse2("env", "sandbox lives in a different environment");
+    return { client: managed, envId: parsed.envId, sandboxId: parsed.sandboxId, name: detail.name };
+  }
+  var ENV_ID, UUID, ADDRESS;
+  var init_sandbox_reference = __esm({
+    "src/shared/sandbox-reference.js"() {
+      ENV_ID = "[a-z][a-z0-9-]{0,15}";
+      UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+      ADDRESS = new RegExp(`^dsh-resource://sandbox/(${ENV_ID})/(${UUID})$`);
+    }
+  });
+
   // src/client/index.js
   var index_exports = {};
   __export(index_exports, {
@@ -3605,6 +3655,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
   var { captureNavigation: captureNavigation2, requestTimeout: requestTimeout2 } = (init_navigation(), __toCommonJS(navigation_exports));
   var { createManagedDesignClient: createManagedDesignClient2, listSandboxRows: listSandboxRows2 } = (init_managed_client(), __toCommonJS(managed_client_exports));
+  var { parseSandboxReference: parseSandboxReference2, verifySandboxReference: verifySandboxReference2 } = (init_sandbox_reference(), __toCommonJS(sandbox_reference_exports));
   var h9 = React14.createElement;
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
@@ -6635,17 +6686,38 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }, pick.elements.length > 1 ? multiNote2(pick.elements, { url: pageUrl, comment }) : designNote2(pick.elements[0], { url: pageUrl, comment })) : null
     );
   }
-  function SandboxPicker({ copy, languageOf, theme, onThemeChange }) {
+  function SandboxPicker({ copy, languageOf, theme, onThemeChange, address }) {
     const [client, setClient] = React14.useState(null);
     const [rows, setRows] = React14.useState(null);
     const [error, setError] = React14.useState(null);
     const [selection, setSelection] = React14.useState(null);
     const [retrySeq, setRetrySeq] = React14.useState(0);
+    const [reference, setReference] = React14.useState(address ? { state: "verify" } : null);
     const selAbortRef = React14.useRef(null);
     React14.useEffect(() => {
       const abort = new AbortController();
       let alive = true;
       const impl = (url, init = {}) => fetch(url, { ...init, signal: init.signal ?? abort.signal });
+      if (address) {
+        setReference({ state: "verify" });
+        (async () => {
+          try {
+            const verified = await verifySandboxReference2(address, impl, location.origin, { createManagedDesignClient: createManagedDesignClient2 });
+            if (!alive) return;
+            setClient(verified.client);
+            setError(null);
+            setReference({ state: "ok" });
+            selectWith(verified.client, verified.sandboxId);
+          } catch (cause) {
+            if (alive) setReference({ state: "error", cause });
+          }
+        })();
+        return () => {
+          alive = false;
+          abort.abort();
+          selAbortRef.current?.abort();
+        };
+      }
       const managed = createManagedDesignClient2({ fetch: impl, origin: location.origin });
       (async () => {
         try {
@@ -6669,19 +6741,22 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         abort.abort();
         selAbortRef.current?.abort();
       };
-    }, [retrySeq]);
-    function choose(sandboxId) {
-      if (!client || !sandboxId) return;
+    }, [retrySeq, address]);
+    function selectWith(managed, sandboxId) {
+      if (!managed || !sandboxId) return;
       selAbortRef.current?.abort();
       const abort = new AbortController();
       selAbortRef.current = abort;
-      const bound = client.bind(sandboxId);
+      const bound = managed.bind(sandboxId);
       const boundFetch = (path, init = {}) => {
         const signals = [init?.signal, abort.signal].filter(Boolean);
         const signal = signals.length > 1 && typeof AbortSignal.any === "function" ? AbortSignal.any(signals) : signals[0];
         return bound(path, { ...init, signal });
       };
       setSelection({ sandboxId, fetch: boundFetch });
+    }
+    function choose(sandboxId) {
+      selectWith(client, sandboxId);
     }
     const picker = h9(
       "div",
@@ -6704,6 +6779,25 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         ))
       )
     );
+    if (address) {
+      if (reference?.state === "error") {
+        return h9(
+          "div",
+          { className: "nks-empty", "data-nks-reference-error": "1" },
+          h9("div", { className: "nks-empty-title" }, copy.referenceFailed),
+          h9("div", { className: "nks-empty-body" }, String(reference.cause?.message || reference.cause)),
+          h9(
+            "div",
+            { className: "nks-empty-actions" },
+            h9(primitives2.Button, { variant: "ghost", size: "sm", onClick: () => setRetrySeq((n) => n + 1) }, copy.refresh)
+          )
+        );
+      }
+      if (!selection) {
+        return h9("div", { className: "nks-empty", "data-nks-reference-verify": "1" }, copy.referenceVerifying);
+      }
+      return h9(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId });
+    }
     if (error) {
       return h9(
         "div",
@@ -6736,11 +6830,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     ctx.effect(() => () => style.remove());
     const languageOf = () => ctx.locale?.getSnapshot?.().active ?? "zh";
     const copy = () => copyFor2(languageOf());
-    const Pane = () => h9(SandboxPicker, {
+    const Pane = (props) => h9(SandboxPicker, {
       copy: copy(),
       languageOf,
       theme: ctx.theme,
-      onThemeChange: (listener) => ctx.on("theme/change", listener)
+      onThemeChange: (listener) => ctx.on("theme/change", listener),
+      address: props?.useTabInfo?.().tab?.navigation?.address
     });
     ctx.effect(() => ctx.sidebarRightTabs.register({
       id: OWN_ID,
@@ -6756,6 +6851,28 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         description: () => copy().typeDescription
       }]
     }));
+    ctx.effect(() => ctx.sidebarRightTabs.register({
+      id: "dnk-sandbox",
+      kind: "dnk-sandbox",
+      patterns: ["dsh-resource://sandbox/**"],
+      canOpen: (address) => parseSandboxReference2(address) !== null,
+      multiple: true,
+      keepMounted: true,
+      title: (address) => {
+        const ref = parseSandboxReference2(address);
+        return ref ? `sandbox ${ref.sandboxId.slice(0, 8)}` : copy().typeLabel;
+      }
+    }));
+    ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register(
+      { name: "sidebar.right.pane.tab", key: "dnk-sandbox" },
+      Pane
+    )));
+    ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register(
+      { name: "sidebar.right.pane.tab.title", key: "dnk-sandbox" },
+      function DnkSandboxTitle() {
+        return copy().typeLabel;
+      }
+    )));
     ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
       name: "sidebar.right.pane.tab",
       key: OWN_ID

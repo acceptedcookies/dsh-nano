@@ -15,7 +15,7 @@ const {
 const { createDnlsClient, createTicket } = require('./managed.js')
 const { copyFor, fill } = require('./i18n.js')
 const { formatBytes, serviceAddress } = require('./format.js')
-const { terminalAddress } = require('../host/terminal-resource.js')
+const { terminalAddress, sandboxAddress, openResourceAddress } = require('../host/terminal-resource.js')
 const { HistoryLine } = require('./history.jsx')
 
 const h = React.createElement
@@ -389,9 +389,16 @@ function DnlsPane({ sessionId, copy, host }) {
     }
   }
 
-  function openDesign() {
-    if (host.kitesurf() !== true) { setError(new Error(copy.workspaceMissing)); return }
-    host.openKitesurf()
+  function openDesign(row) {
+    const target = row ?? current
+    let address
+    try {
+      address = sandboxAddress({ envId: target?.envId, sandboxId: target?.sandboxId })
+    } catch {
+      setError(new Error(copy.workspaceUnavailable))
+      return
+    }
+    if (host.openResource(address) !== true) setError(new Error(copy.workspaceUnavailable))
   }
 
   function openTerm(term) {
@@ -465,7 +472,7 @@ function DnlsPane({ sessionId, copy, host }) {
         { id: 'stop', label: copy.stop, disabled: busy || !supports('sandbox.instance.stop'), run: () => { choose(row); ask('stop') } },
         { id: 'restart', label: copy.restart, disabled: busy || !supports('sandbox.instance.restart'), run: () => { choose(row); ask('restart') } },
         { id: 'break', separator: true },
-        { id: 'design', label: copy.openWorkspace, run: () => { choose(row); openDesign() } },
+        { id: 'design', label: copy.openWorkspace, run: () => { choose(row); openDesign(row) } },
         { id: 'danger', separator: true },
         { id: 'remove', label: copy.remove, tone: 'danger', disabled: busy || !supports('sandbox.instance.remove'), run: () => { choose(row); ask('remove') } },
       ],
@@ -831,14 +838,16 @@ export function apply(ctx) {
   const zh = () => ctx.locale?.getSnapshot?.().active?.startsWith('zh') === true
   const copy = () => copyFor(zh() ? 'zh' : 'en')
   const host = {
-    kitesurf: () => ctx.sidebarRightTabs?.get?.('kitesurf') !== undefined,
-    openKitesurf: () => ctx.sidebarRight?.openTab?.('kitesurf'),
-    openTerminal: (address) => {
-      const candidates = ctx.sidebarRightTabs?.candidates?.(address) ?? []
-      if (candidates[0]?.kind !== 'dnt-sandbox-terminal' || typeof ctx.sidebarRight?.openResource !== 'function') return false
-      ctx.sidebarRight.openResource(address)
-      return true
-    },
+    openTerminal: (address) => openResourceAddress({
+      candidates: (value) => ctx.sidebarRightTabs?.candidates?.(value),
+      openResource: (value) => ctx.sidebarRight?.openResource?.(value),
+      address,
+    }),
+    openResource: (address) => openResourceAddress({
+      candidates: (value) => ctx.sidebarRightTabs?.candidates?.(value),
+      openResource: (value) => ctx.sidebarRight?.openResource?.(value),
+      address,
+    }),
   }
   const Pane = (props) => h(DnlsPane, { sessionId: props.sessionId, copy: copy(), host })
   ctx.effect(() => ctx.sidebarRightTabs.register({

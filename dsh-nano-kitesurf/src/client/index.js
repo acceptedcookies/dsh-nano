@@ -10,6 +10,7 @@ const { batchNote, designNote, multiNote } = require('../shared/note.js')
 const { contentFrame, shotPoint } = require('../shared/shot-point.js')
 const { captureNavigation, requestTimeout } = require('../shared/navigation.js')
 const { createManagedDesignClient, listSandboxRows } = require('../shared/managed-client.js')
+const { parseSandboxReference, verifySandboxReference } = require('../shared/sandbox-reference.js')
 const h = React.createElement
 
 const STATUS = '/nano-local-sandbox/status'
@@ -2946,18 +2947,38 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
  * per-object state (notes, endpoints, URLs) cannot leak between sandboxes.
  * There is no default and no auto-pick of the first row.
  */
-function SandboxPicker({ copy, languageOf, theme, onThemeChange }) {
+function SandboxPicker({ copy, languageOf, theme, onThemeChange, address }) {
   const [client, setClient] = React.useState(null)
   const [rows, setRows] = React.useState(null)
   const [error, setError] = React.useState(null)
   const [selection, setSelection] = React.useState(null)
   const [retrySeq, setRetrySeq] = React.useState(0)
+  const [reference, setReference] = React.useState(address ? { state: 'verify' } : null)
   const selAbortRef = React.useRef(null)
 
   React.useEffect(() => {
     const abort = new AbortController()
     let alive = true
     const impl = (url, init = {}) => fetch(url, { ...init, signal: init.signal ?? abort.signal })
+    if (address) {
+      // A host-delivered reference is an explicit selection: verify the
+      // contract first, then inspect exactly that object. A failure shows
+      // its own reason — it never lists and never selects another sandbox.
+      setReference({ state: 'verify' })
+      ;(async () => {
+        try {
+          const verified = await verifySandboxReference(address, impl, location.origin, { createManagedDesignClient })
+          if (!alive) return
+          setClient(verified.client)
+          setError(null)
+          setReference({ state: 'ok' })
+          selectWith(verified.client, verified.sandboxId)
+        } catch (cause) {
+          if (alive) setReference({ state: 'error', cause })
+        }
+      })()
+      return () => { alive = false; abort.abort(); selAbortRef.current?.abort() }
+    }
     const managed = createManagedDesignClient({ fetch: impl, origin: location.origin })
     ;(async () => {
       try {
@@ -2977,14 +2998,14 @@ function SandboxPicker({ copy, languageOf, theme, onThemeChange }) {
       }
     })()
     return () => { alive = false; abort.abort(); selAbortRef.current?.abort() }
-  }, [retrySeq])
+  }, [retrySeq, address])
 
-  function choose(sandboxId) {
-    if (!client || !sandboxId) return
+  function selectWith(managed, sandboxId) {
+    if (!managed || !sandboxId) return
     selAbortRef.current?.abort()
     const abort = new AbortController()
     selAbortRef.current = abort
-    const bound = client.bind(sandboxId)
+    const bound = managed.bind(sandboxId)
     const boundFetch = (path, init = {}) => {
       const signals = [init?.signal, abort.signal].filter(Boolean)
       const signal = signals.length > 1 && typeof AbortSignal.any === 'function'
@@ -2993,6 +3014,10 @@ function SandboxPicker({ copy, languageOf, theme, onThemeChange }) {
     }
     // A withdrawn or changed authorization never selects a replacement.
     setSelection({ sandboxId, fetch: boundFetch })
+  }
+
+  function choose(sandboxId) {
+    selectWith(client, sandboxId)
   }
 
   const picker = h('div', { className: 'nks-sandbox-bar', 'data-nks-sandbox-bar': '1' },
@@ -3005,6 +3030,22 @@ function SandboxPicker({ copy, languageOf, theme, onThemeChange }) {
       h('option', { value: '', disabled: true }, copy.sandboxPick),
       (rows ?? []).map((row) => h('option', { key: row.sandboxId, value: row.sandboxId },
         `${row.name || row.sandboxId.slice(0, 8)} · ${row.envId ?? ''} · ${row.observedState ?? 'unknown'}`))))
+
+  // Reference tabs never fall back to the selector: a failed verification is
+  // shown as its own reason, and a pending one only ever shows "verifying".
+  if (address) {
+    if (reference?.state === 'error') {
+      return h('div', { className: 'nks-empty', 'data-nks-reference-error': '1' },
+        h('div', { className: 'nks-empty-title' }, copy.referenceFailed),
+        h('div', { className: 'nks-empty-body' }, String(reference.cause?.message || reference.cause)),
+        h('div', { className: 'nks-empty-actions' },
+          h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: () => setRetrySeq((n) => n + 1) }, copy.refresh)))
+    }
+    if (!selection) {
+      return h('div', { className: 'nks-empty', 'data-nks-reference-verify': '1' }, copy.referenceVerifying)
+    }
+    return h(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId })
+  }
 
   if (error) {
     return h('div', { className: 'nks-empty', 'data-nks-sandbox-error': '1' },
@@ -3033,11 +3074,12 @@ export function apply(ctx) {
   const copy = () => copyFor(languageOf())
   // The host theme service and its change event; the pane hands both to
   // nano-ui's ThemeScope instead of resolving a local scheme.
-  const Pane = () => h(SandboxPicker, {
+  const Pane = (props) => h(SandboxPicker, {
     copy: copy(),
     languageOf,
     theme: ctx.theme,
     onThemeChange: (listener) => ctx.on('theme/change', listener),
+    address: props?.useTabInfo?.().tab?.navigation?.address,
   })
 
   ctx.effect(() => ctx.sidebarRightTabs.register({
@@ -3054,6 +3096,29 @@ export function apply(ctx) {
       description: () => copy().typeDescription,
     }],
   }))
+
+  // dsh-resource://sandbox/<env>/<sandbox> consumer (T-O-61): the official
+  // resource claim. patterns narrow the candidates; canOpen vetoes anything
+  // off the canonical grammar. The body verifies contract → inspect and the
+  // pane never picks another object on its own.
+  ctx.effect(() => ctx.sidebarRightTabs.register({
+    id: 'dnk-sandbox',
+    kind: 'dnk-sandbox',
+    patterns: ['dsh-resource://sandbox/**'],
+    canOpen: (address) => parseSandboxReference(address) !== null,
+    multiple: true,
+    keepMounted: true,
+    title: (address) => {
+      const ref = parseSandboxReference(address)
+      return ref ? `sandbox ${ref.sandboxId.slice(0, 8)}` : copy().typeLabel
+    },
+  }))
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
+    { name: 'sidebar.right.pane.tab', key: 'dnk-sandbox' },
+    Pane)))
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
+    { name: 'sidebar.right.pane.tab.title', key: 'dnk-sandbox' },
+    function DnkSandboxTitle() { return copy().typeLabel })))
 
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab',

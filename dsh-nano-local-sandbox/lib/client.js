@@ -1922,8 +1922,7 @@ ${LAYER_CSS}
         bridgeState: "Bridge",
         engineUnavailable: "Engine status is not announced for this sandbox.",
         openWorkspace: "Open design workspace",
-        openWorkspaceHint: "Select the same sandbox inside Kitesurf.",
-        workspaceMissing: "The Kitesurf tab type is not installed.",
+        workspaceUnavailable: "No tab type is registered to open this sandbox.",
         humanHold: "Manual control",
         humanHoldActive: "held by an operator",
         humanHoldFree: "free for writers",
@@ -2138,8 +2137,7 @@ ${LAYER_CSS}
         bridgeState: "\u6865\u63A5",
         engineUnavailable: "\u6B64\u6C99\u7BB1\u672A\u5BA3\u544A\u5F15\u64CE\u72B6\u6001\u9762\u3002",
         openWorkspace: "\u6253\u5F00\u8BBE\u8BA1\u5DE5\u4F5C\u533A",
-        openWorkspaceHint: "\u5728 Kitesurf \u4E2D\u663E\u5F0F\u9009\u62E9\u540C\u4E00\u4E2A\u6C99\u7BB1\u3002",
-        workspaceMissing: "\u672A\u5B89\u88C5 Kitesurf \u9875\u7B7E\u7C7B\u578B\u3002",
+        workspaceUnavailable: "\u6CA1\u6709\u53EF\u6253\u5F00\u8FD9\u4E2A\u6C99\u7BB1\u7684\u9875\u7B7E\u7C7B\u578B\u3002",
         humanHold: "\u4EBA\u5DE5\u63A5\u7BA1",
         humanHoldActive: "\u5DF2\u7531\u64CD\u4F5C\u8005\u63A5\u7BA1",
         humanHoldFree: "\u5BF9\u5199\u5165\u65B9\u5F00\u653E",
@@ -2307,12 +2305,29 @@ ${LAYER_CSS}
   var terminal_resource_exports = {};
   __export(terminal_resource_exports, {
     managementAvailability: () => managementAvailability,
+    openResourceAddress: () => openResourceAddress,
+    parseSandboxAddress: () => parseSandboxAddress,
+    sandboxAddress: () => sandboxAddress,
     terminalAddress: () => terminalAddress,
     terminalGesture: () => terminalGesture
   });
   function terminalAddress({ envId, sandboxId, terminalId }) {
     if (![envId, sandboxId, terminalId].every((v) => typeof v === "string") || !ENV.test(envId) || !UUID.test(sandboxId) || !UUID.test(terminalId)) throw new TypeError("invalid sandbox terminal reference");
     return `${prefix}${envId}/${sandboxId}/${terminalId}`;
+  }
+  function sandboxAddress({ envId, sandboxId }) {
+    if (typeof envId !== "string" || typeof sandboxId !== "string" || !ENV.test(envId) || !UUID.test(sandboxId)) throw new TypeError("invalid sandbox reference");
+    return `${sandboxPrefix}${envId}/${sandboxId}`;
+  }
+  function parseSandboxAddress(address) {
+    if (typeof address !== "string") return null;
+    const match = SANDBOX_ADDRESS.exec(address);
+    return match ? { envId: match[1], sandboxId: match[2] } : null;
+  }
+  function openResourceAddress({ candidates, openResource, address }) {
+    if (typeof candidates !== "function" || typeof openResource !== "function") return false;
+    if ((candidates(address) ?? []).length === 0) return false;
+    return openResource(address) !== false;
   }
   function terminalGesture({ envId, sandboxId, paneId, openId, service }, { create, canOpen, navigate }) {
     if (!ENV.test(envId) || !UUID.test(sandboxId) || !paneId || !openId) throw new TypeError("invalid create intent");
@@ -2336,12 +2351,16 @@ ${LAYER_CSS}
       }
     };
   }
-  var ENV, UUID, prefix, managementAvailability;
+  var ENV, UUID, ENV_SRC, UUID_SRC, prefix, sandboxPrefix, SANDBOX_ADDRESS, managementAvailability;
   var init_terminal_resource = __esm({
     "src/host/terminal-resource.js"() {
       ENV = /^[a-z][a-z0-9-]{0,15}$/;
       UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+      ENV_SRC = ENV.source.slice(1, -1);
+      UUID_SRC = UUID.source.slice(1, -1);
       prefix = "dsh-resource://sandbox-terminal/";
+      sandboxPrefix = "dsh-resource://sandbox/";
+      SANDBOX_ADDRESS = new RegExp(`^dsh-resource://sandbox/(${ENV_SRC})/(${UUID_SRC})$`);
       managementAvailability = () => ({
         available: false,
         managementApi: true,
@@ -2442,7 +2461,7 @@ ${LAYER_CSS}
   var { createDnlsClient: createDnlsClient2, createTicket: createTicket2 } = (init_managed(), __toCommonJS(managed_exports));
   var { copyFor: copyFor2, fill: fill2 } = (init_i18n(), __toCommonJS(i18n_exports));
   var { formatBytes: formatBytes2, serviceAddress: serviceAddress2 } = (init_format(), __toCommonJS(format_exports));
-  var { terminalAddress: terminalAddress2 } = (init_terminal_resource(), __toCommonJS(terminal_resource_exports));
+  var { terminalAddress: terminalAddress2, sandboxAddress: sandboxAddress2, openResourceAddress: openResourceAddress2 } = (init_terminal_resource(), __toCommonJS(terminal_resource_exports));
   var { HistoryLine: HistoryLine2 } = (init_history(), __toCommonJS(history_exports));
   var h10 = React15.createElement;
   var KIND = "dnls-sandbox";
@@ -2802,12 +2821,16 @@ ${LAYER_CSS}
         setBusy(false);
       }
     }
-    function openDesign() {
-      if (host.kitesurf() !== true) {
-        setError(new Error(copy.workspaceMissing));
+    function openDesign(row) {
+      const target = row ?? current;
+      let address;
+      try {
+        address = sandboxAddress2({ envId: target?.envId, sandboxId: target?.sandboxId });
+      } catch {
+        setError(new Error(copy.workspaceUnavailable));
         return;
       }
-      host.openKitesurf();
+      if (host.openResource(address) !== true) setError(new Error(copy.workspaceUnavailable));
     }
     function openTerm(term) {
       let address;
@@ -2889,7 +2912,7 @@ ${LAYER_CSS}
           { id: "break", separator: true },
           { id: "design", label: copy.openWorkspace, run: () => {
             choose(row);
-            openDesign();
+            openDesign(row);
           } },
           { id: "danger", separator: true },
           { id: "remove", label: copy.remove, tone: "danger", disabled: busy || !supports("sandbox.instance.remove"), run: () => {
@@ -3353,14 +3376,16 @@ ${LAYER_CSS}
     const zh = () => ctx.locale?.getSnapshot?.().active?.startsWith("zh") === true;
     const copy = () => copyFor2(zh() ? "zh" : "en");
     const host = {
-      kitesurf: () => ctx.sidebarRightTabs?.get?.("kitesurf") !== void 0,
-      openKitesurf: () => ctx.sidebarRight?.openTab?.("kitesurf"),
-      openTerminal: (address) => {
-        const candidates = ctx.sidebarRightTabs?.candidates?.(address) ?? [];
-        if (candidates[0]?.kind !== "dnt-sandbox-terminal" || typeof ctx.sidebarRight?.openResource !== "function") return false;
-        ctx.sidebarRight.openResource(address);
-        return true;
-      }
+      openTerminal: (address) => openResourceAddress2({
+        candidates: (value) => ctx.sidebarRightTabs?.candidates?.(value),
+        openResource: (value) => ctx.sidebarRight?.openResource?.(value),
+        address
+      }),
+      openResource: (address) => openResourceAddress2({
+        candidates: (value) => ctx.sidebarRightTabs?.candidates?.(value),
+        openResource: (value) => ctx.sidebarRight?.openResource?.(value),
+        address
+      })
     };
     const Pane = (props) => h10(DnlsPane, { sessionId: props.sessionId, copy: copy(), host });
     ctx.effect(() => ctx.sidebarRightTabs.register({

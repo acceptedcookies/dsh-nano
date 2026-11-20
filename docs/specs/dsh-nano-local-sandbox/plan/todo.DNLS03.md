@@ -107,8 +107,15 @@ Phase 7 提交 `b33a2a8`。Phase 8 的真实入口只注册 managed 分派器。
 - [x] 真实 Apple backend 只读探针：观察到 `kitesurf-dev` 代次 `678873f64dfca11ef49aa25e48bc8c71`，旧镜像 digest `sha256:c97bfe17140afa82bd76c6c35b180801f5300c931ec207eb7629848ac9e26808`，端口 8800/8801 和三项实挂。已识别安装版 debug CLI 的固定首行提示导致严格缺失判据误报未知；修正后再次以独立随机不存在名访问实际 CLI，返回 `null`，未删除任何对象。
 - [x] 三包重建。[DNLS] 注册同包、已挂载 session 的正式右栏 `dnls-sandbox` 页签；总览列出可见对象，控制页按显式选择显示 inspect、服务、分钟覆盖、进程和生命周期回执。实现测试运行：[DNLS] 包 443/443（PTY 快照用例首次并发失败，单跑及复跑通过）；[DNK] 包 51/51；[DNT] 包 272/272。随后收紧响应合同、修复服务字段与读取竞态，[DNLS] 再构建且 `client-pane/identity/dnls03-docs` 定向 16/16；不是对最终版再次全量运行的声明。
 - [x] 使用开发站实际使用的 `~/.dsh-runtimes/0.2.2-rc.5/bin/dsh`，以独立临时 `DSH_HOME` 实际 `plugin --profile web add -w` 三个 tarball，再启动 web profile。回环站 `/contract`、`/sandboxes` 均返回正式版本、200，列表空。通过宿主 `session/create` 创建真实测试会话，不发送模型消息。从 [dsh工作台] 正式向导点击「沙箱」，看到总览、禁用的控制按钮和空态；点创建表单，经实际 MCP 加载可用 `kitesurf` profile，未提交写操作。最终打包 SHA-256 前缀：[DNLS] `146e87314fea`、[DNK] `8fc2672bf1f0`、[DNT] `5528ace1cab4`。不冒充运行中的开发站或非空对象的真实控制验收。
-- [ ] 核准维护窗口与保卷操作后，仅切换 `kitesurf-dev` 和开发 profile。旧根有实卷而无 `registry.json`，必须保全旧根，不能写空台账认领。禁止使用会从 main 重铺开发环境的 `dsh-dev restart`。
-- [ ] 在切换后的真实开发站逐项记录版本发现、选定对象、[DNK] 页面、[DNT] local 与 managed 的实际授权结果，以及新容器的镜像、卷、代次和服务证据。
+- [x] 重新锚定（基线 `a3f081f`）：[业主] 要求彻底删除旧开发实例及其数据，不备份、不迁移，不把保卷当作切换条件。复查中断现场：`kitesurf-dev` 已 stopped，仍在 Apple 容器清单里；原挂载目录仍在。其他实例不在范围内。
+- [x] 2026-11-20 UTC：复核旧容器 ID、镜像、创建时间、stopped 和实际挂载后，`container delete kitesurf-dev` 成功；再用全量 inspect 清单验证其他容器均不挂载旧卷，然后删除 `~/.dsh-dev/nano-local-sandbox/state/kitesurf/kitesurf-dev` 和空的 profile 父目录。复验旧容器与卷均不存在，state 根为空，未备份、未造台账。
+- [x] 三个候选 tarball 安装到 `~/.dsh-dev` 的 web profile（稳定制品位于 `artifacts/dnls03/a3f081f`）。核对实际解析出的三个浏览器包 SHA-256 与 worktree 一致、[DNLS] 生产依赖 `ws` 可解析；仅 kickstart `ai.deepseek.dsh.dev.web`。真实 HTTPS 开发站 `/contract`、空 `/sandboxes` 均为 200，响应头和正文均为 `dnls.control/1`。
+- [x] 正式 HTTPS 开发站：新 `sandboxId` 为 `7ef19658-39c7-43e7-8dc8-d387a45a9d83`（`dnls03-dev`），create 操作 `2b1dbf37-05fa-40db-b979-22b97dc8da52` 由 202 经精确查询得到 `succeeded/verify`。Apple 容器 `dnls-4e589664-34b9-468c-94a9-3e6089c9903b`，同名 UUID 状态目录按 sandboxId 而非容器 locator 创建，未复用旧卷。
+- [x] [dsh工作台] 显式选对象后，控制页显示真实代次 `2cff00ff01a4e813ea1d8eb39c2d1b93`、已发布 `127.0.0.1:8940/8941`、来宾进程。页面点击停止、确认、重查：操作 `781c06d4-6f0f-4d3a-bf81-2c13fc83ca9d` 成功且 inspect 变为 stopped；再启动操作 `126ea9ab-ca5b-4c83-baa9-7852727a36db` 成功，原对象及代次返回 running。`sandbox.services` 实测走声明的 MCP 工具，返回两个已发布项，不是虚构的 HTTP `/services`。
+- [x] [DNK] 的选择器初始为空，选择该对象后从页内示例入口实际打开 example.com。定向 `/dom` 回显相同 sandboxId、含 `Example Domain`；关闭 HTML 模式后页面实际解码截图为 653 x 959。未用裸端口或相邻端口回退。
+- [x] [DNT] local 通过实际 MCP 创建专用 `/bin/sh` PTY，写入 `731` 后读回 `DNLS-result-742`，关闭自己创建的终端后健康端点报告零会话。生产 shared owner 对受管 `term.session.list` 和 `term.session.create` 都得到 403，未返回 terminalId 或 locator。未将拒绝误记为可交互的 managed 终端。
+- [x] 实测调试并再部署：修复已确认操作后详情和进程表过期、失败的 inspect 无法手动重试，以及窄屏中刷新/重查按钮超出可视区。构建通过，`node --test dsh-nano-local-sandbox/test/client-pane.test.mjs` 15/15；部署的新 [DNLS] tarball SHA-256 `8544969be5c1131832aa662deabb8334fbc0436f00446f143894336c6e842e05`，三包实际加载的 client 字节与 worktree 再次核对一致。
+- [x] 重启开发 Web 后原对象仍在。新版页面加载进程表，stop `677f3273-e5f2-4503-a937-a14e87af04e3` 成功后仅点击重查，页面即变为 stopped 且旧进程区消失。390 CSS px 下页面宽度 390；刷新、重查、启停及重启按钮最右边界均不超过 188 px。start `fd431676-6dad-41fe-a728-3d78e67784da` 成功，页面回到 running；最后 `/status` 的 `engineAlive=true`，原 UUID 和代次未变。没有因修复而重新建卷或再创建沙箱。
 
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。

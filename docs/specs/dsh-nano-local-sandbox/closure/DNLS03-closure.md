@@ -2,7 +2,16 @@
 
 > Close-type：`close-with-known-issues`（本地交接记录，不是全量验收）。分支：`dnls03-managed-sandbox-control`。代码快照：`b3ad7e5`。日期：2026-11-19 UTC。
 
-**2026-11-20 补充验收**：下文是 `b3ad7e5` 的历史裁定。后续候选已提供已有 session 内的正式右栏「沙箱」页（总览/控制），并用开发 rc.5 的真实 Loader、三个 tarball 和独立临时 home 打开了页面。新 Apple 镜像已构建，**尚未证明运行中的 `dsh-dev.local` 完成切换**。现场基线、镜像 digest 和仍待确认的操作见 [todo §6](../plan/todo.DNLS03.md)。无 session 槽位和个人终端的可信授权依然是不同的宿主依赖。
+**2026-11-20，真实 `dsh-dev.local` 已切换。** [业主] 指定的旧 `kitesurf-dev` 容器及其旧数据目录均已删除，未备份、未迁入新对象。开发 Web profile 从三个正式 tarball 加载 [DNLS]、[DNK]、[DNT]；Chrome 同源访问 `/contract` 的头与正文均为 `dnls.control/1`。以下 §0–9 是 `b3ad7e5` 的历史裁定，不是当前部署状态。
+
+| 实机验收项 | 结果与边界 |
+|---|---|
+| 全新受管对象 | `dnls03-dev` 建立新 UUID 状态卷；Apple 镜像 digest `sha256:4421d6004e216665e20a8534deb711782d2595d21edbf8e90fcbb76312b8d2cc` 与应用回执相符。只动开发实例 |
+| 已有 session 的 [dsh工作台] | 正式向导进入总览，显式选择对象后，控制页能查进程、服务、分钟覆盖与原操作；页面确认 stop/start 后，实测 stopped → running，ID、代次、卷及发布端口不变 |
+| [DNK] | 选择器初始无目标；显式选择后成功打开网页。公开 `/dom` 返回该对象的网页正文；实际插件显示 653 × 959 的图像 |
+| [DNT] | 真实 local PTY 写入并读回独立算出的值；关闭测试终端成功。[DNLS] 的受管终端对当前共享 owner 实测拒绝创建/列举（403）；**不是**个人终端交接成功 |
+
+实机对象 ID、各操作回执、发布端口及后续 UI 修复在 [todo §6](../plan/todo.DNLS03.md)。开发站部署与上述路径已通过，不推广到生产、无 session 页签、个人终端归属或旧卷接管。
 
 ## 0. 判定
 

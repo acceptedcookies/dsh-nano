@@ -111,3 +111,22 @@ test('no CPU deltas across generations or counter reversal; aged-out readings ar
   assert.equal(s.memory.expected, 43200)
   assert.throws(() => f.db.fleetMinute([f.row], T / M))
 })
+
+test('the public interval starts at the earliest verified create, not the ledger mark', async t => {
+  const f = fixture(t)
+  for (let i = 0; i < 6; i++) await f.take(i, 5000, 0, 100)
+  f.time(10)
+  const open = f.db.summary(f.row, '24h')
+  assert.equal(open.memory.expected, 10, 'no verified create keeps the registry mark')
+  f.row.operations = [{ action: 'create', state: 'succeeded', step: 'verify', finishedAt: new Date(T + 5 * M).toISOString() }]
+  const bounded = f.db.summary(f.row, '24h')
+  assert.equal(bounded.memory.expected, 5, 'minutes before the first verified create drop out')
+  assert.equal(bounded.memory.valid, 1, 'only the post-create sample counts')
+  // A later recreation never moves the lower bound.
+  f.row.operations.push({ action: 'create', state: 'succeeded', step: 'verify', finishedAt: new Date(T + 8 * M).toISOString() })
+  assert.equal(f.db.summary(f.row, '24h').memory.expected, 5)
+  // A bound row whose generation was never verified contributes nothing.
+  const uncreated = { ...f.row, sandboxId: 'B', operations: [], binding: { locator: 'loc-B', generation: null } }
+  const empty = f.db.summary(uncreated, '24h')
+  assert.equal(empty.memory.expected, 0)
+})

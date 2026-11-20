@@ -50,6 +50,7 @@ const USERS = [
   'dsh-nano-cloud-session',
   'dsh-nano-notepad',
   'dsh-nano-progress-report',
+  'dsh-nano-local-sandbox',
 ]
 const SCAN_ROOTS = [...USERS.map(p => join(root, p, 'src', 'client')), join(root, 'packages', 'dsh-nano-ui', 'src')]
 const PRIMITIVES = '@deepseek-ai/dsh-client-ui-primitives'

@@ -46,7 +46,7 @@ const built = esbuild.buildSync({
   format: 'iife',
   globalName: '__dnlsClient',
   platform: 'browser',
-  external: ['react', '@deepseek-ai/dsh-client-ui-primitives'],
+  external: ['react', 'react-dom', 'react-dom/client', '@deepseek-ai/dsh-client-ui-primitives'],
   write: false,
   logLevel: 'warning',
 })

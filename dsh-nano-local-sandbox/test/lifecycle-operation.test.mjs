@@ -72,6 +72,13 @@ function fixture(t, { principal, envId = 'env-1', profile } = {}) {
     async start(name) { backend.calls.start.push(name); live.get(name).state = 'running'; return { ok: true } },
     async stop(name) { backend.calls.stop.push(name); live.get(name).state = 'stopped'; return { ok: true } },
     async remove(name) { backend.calls.remove.push(name); live.delete(name); return { ok: true } },
+    // The honest capability seam: observation and image evidence are real
+    // methods on the fixture backend, matching production providers.
+    observe: async (locator) => {
+      const entry = live.get(locator)
+      return entry ? { locator, ...entry } : { locator, generation: null, stateVolume: null, state: 'missing' }
+    },
+    async imageEvidence() { return { tag: 'image', digest: 'sha256:fixed' } },
   }
   const queue = []
   const audits = []

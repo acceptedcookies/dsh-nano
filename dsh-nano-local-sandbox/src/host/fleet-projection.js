@@ -228,8 +228,42 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
         entry.generation === fresh.binding?.generation).length,
     }
     if (!detail) return base
+    const resources = ok && obs?.resources && typeof obs.resources === 'object'
+      ? { cpus: obs.resources.cpus ?? null, memoryBytes: obs.resources.memoryBytes ?? null }
+      : null
+    // Operator-only plane: desired configuration and the applied receipt.
+    // A bare read grant never discloses overrides, idle policy or the
+    // verified digest — persisted values are cloned out of the ledger row,
+    // never re-derived from the request.
+    const operator = again.principal?.operator === true
+    const overrides = fresh.desiredRevision?.overrides
     return {
       ...base,
+      resources,
+      ...(operator ? {
+        configuration: {
+          overrides: overrides ? {
+            cpus: overrides.cpus ?? null,
+            memoryBytes: overrides.memoryBytes ?? null,
+          } : {},
+          idleTimeoutMs: fresh.idleTimeoutMs ?? null,
+        },
+        applied: fresh.appliedRevision
+          ? { imageDigest: fresh.appliedRevision.imageDigest, verifiedAt: fresh.appliedRevision.verifiedAt }
+          : null,
+        // This principal's own recent ledger operations — an allowlisted
+        // timeline, never args, ids, fingerprints or other principals.
+        operations: (fresh.operations ?? [])
+          .filter((entry) => entry.principal === again.principal?.key)
+          .slice(-8)
+          .map((entry) => ({
+            action: entry.action,
+            state: entry.state,
+            step: entry.step,
+            at: entry.at ?? null,
+            finishedAt: entry.finishedAt ?? null,
+          })),
+      } : {}),
       services: mappings.map((service) => ({
         serviceId: service.serviceId,
         containerPort: service.containerPort,
@@ -241,7 +275,18 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
         declaredVersion: service.declaredVersion ?? null,
         observedVersion: service.observedVersion ?? null,
         observedAt: service.observedAt ?? null,
+        guestCwd: service.cwd ?? null,
+        role: service.role ?? null,
       })),
+      // Verified guest mounts: target/type/readOnly only — host sources
+      // and arbitrary paths stay out of the public detail.
+      mounts: ok && Array.isArray(obs.mounts)
+        ? obs.mounts.map((mount) => ({
+            type: mount.type ?? null,
+            target: mount.target ?? null,
+            readOnly: mount.readOnly === true,
+          }))
+        : null,
     }
   }
 

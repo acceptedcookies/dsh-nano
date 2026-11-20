@@ -23,9 +23,20 @@ function rates(cur, prev) {
 }
 
 // Only entire minutes of the authorized managed lifetime enter the denominator.
-function lifetime({ managedAt, visibleFrom = managedAt, visibleUntil = Number.MAX_SAFE_INTEGER }) {
-  if (![managedAt, visibleFrom, visibleUntil].every(uint)) throw new TypeError('invalid usage history interval')
-  return [Math.ceil(Math.max(managedAt, visibleFrom) / MINUTE), slot(visibleUntil)]
+// The lower bound is the earliest VERIFIED create's finishedAt where the
+// ledger carries one — a registered-but-never-created row contributes no
+// samples before that mark, and a later recreation never moves it.
+function lifetime({ managedAt, operations, binding, visibleFrom = managedAt, visibleUntil = Number.MAX_SAFE_INTEGER }) {
+  // A bound-but-never-created row contributes no interval at all.
+  if (binding && !binding.generation) return [Number.MAX_SAFE_INTEGER, 0]
+  const verified = (Array.isArray(operations) ? operations : [])
+    .filter((op) => op.action === 'create' && op.state === 'succeeded' && op.step === 'verify' && typeof op.finishedAt === 'string')
+    .map((op) => Date.parse(op.finishedAt))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b)[0]
+  const born = verified ?? managedAt
+  if (![born, visibleFrom, visibleUntil].every(uint)) throw new TypeError('invalid usage history interval')
+  return [Math.ceil(Math.max(born, visibleFrom) / MINUTE), slot(visibleUntil)]
 }
 
 /** Opens one sampling writer on a trusted environment registry root. Callers scope history before querying. */
@@ -103,6 +114,8 @@ export function openUsageMinutes({ root, envId, registry, observe, backend, cloc
     const retained = new Set(known.all().map(r => r.id))
     for (const row of registry.list()) {
       if (stopping || slot(clock()) !== minute) break
+      // A bound row without a verified generation was never created — no claim.
+      if (row.binding && !row.binding.generation) continue
       if (!retained.has(row.sandboxId) && retained.size >= MAX_OBJECTS) continue
       retained.add(row.sandboxId)
       await sample(row, minute)

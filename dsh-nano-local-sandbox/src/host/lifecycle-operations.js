@@ -172,7 +172,7 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
     // Provider gate BEFORE any ledger row exists: an action the backend
     // honestly reports unsupported (flags or callable deps) gets no
     // receipt, whether it arrives via generic lifecycle HTTP or a tool.
-    if (!supportsAction(backend, action, { observe: observeOne })) {
+    if (!supportsAction(backend, action)) {
       return refusal(503, 'provider does not support this action')
     }
     const params = normalizeParams(action, args)

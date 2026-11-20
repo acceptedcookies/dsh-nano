@@ -89,7 +89,9 @@ dsh plugin --profile web add <spec>
 | 终端创建与连接 | `term.session.create` 返回 `sandboxId`、`terminalId`，不发 URL。只有 `term.session.attach` 核权后才发无 bearer 的 `dnt-ws-v2` locator。断开是 detach，不结束原执行 |
 | 资源导航 | 从当前 host 的 `envId`、`sandboxId`、`terminalId` 组成 `dsh-resource://sandbox-terminal/<envId>/<sandboxId>/<terminalId>`。它不是访问凭证；无处理器时不要为打开交互而预建终端 |
 | 性能读取 | 本包不拥有 `/perf-review/host`；只读视图在资源管理器、记事本和模型选择器入口 |
-| 沙箱页签 | 右栏单页签两视图：总览先 discovery 再 `sandbox.list`，只显式选取；控制视图对所选对象 GET inspect（`window=24h`）、按需 GET processes，start/stop/restart 先内联确认（点名沙箱）再各发一个随机 `requestId`，结果用 `sandbox.operations` 按 `operationId` 重查，绝不自动重发 |
+| 工作台总览 | 先 discovery 再 `sandbox.list`；只列主体可见的对象。搜索或刷新不会替用户选择对象 |
+| 对象控制 | 点选名称后查看观测状态、服务发布和用量覆盖；按需读取进程和服务探针。生命周期回执以 `sandbox.operations` 按原 `operationId` 重查，不自动重发 |
+| 设置与工具 | 资源修订的保存和应用是两个动作。终端须逐项获权；设计工作区和终端查看器从宿主正式入口打开，不在控制页复制交互引擎 |
 
 当前 [dsh] 的浏览器 owner 由多条连接共用，只能证明宿主管理身份，不能证明终端归属。没有独立的可信主体映射时，终端操作拒绝，不签发 locator；传 `sessionId`、重复打开页面或更换终端客户端不能解除这一限制。上限针对完整 MCP 请求，包括 JSON 信封；较大的交互数据走已获准的流，不拆分重发未确认的输入。
 

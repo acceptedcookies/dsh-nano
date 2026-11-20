@@ -84,7 +84,12 @@ export function openEnvironmentOwner(deps) {
     const lifecycleCaps = new Map([...lifecycle.capabilities].filter(([name]) => advertisedLifecycle(name)))
     const terminalCaps = supports('terminal') ? terminal.capabilities : new Map()
     const fleetCaps = new Map([...fleet.capabilities].filter(([name]) => advertisedFleet(name)))
-    const pagesCaps = supports('read') ? pages.capabilities : new Map()
+    const pagesCaps = new Map([...pages.capabilities].filter(([name]) => {
+      if (!supports('read')) return false
+      if (name === 'dnls.recover') return supports('restart')
+      if (name === 'dnls.logs') return supports('logs')
+      return true
+    }))
     const unsupported = new Set(
       [...lifecycle.capabilities.keys(), ...terminal.capabilities.keys(), ...fleet.capabilities.keys(), ...pages.capabilities.keys()]
         .filter((name) => !lifecycleCaps.has(name) && !terminalCaps.has(name) && !fleetCaps.has(name) && !pagesCaps.has(name)))
@@ -111,6 +116,8 @@ export function openEnvironmentOwner(deps) {
         }
         const profiles = listProfiles(profilesRootFor(deps)).map(p => ({
           id: p.id, version: p.manifest?.version, ready: p.ready, digest: p.digest,
+          ...(p.ready && Number.isSafeInteger(p.manifest?.lifecycle?.maxInstances)
+            ? { maxInstances: p.manifest.lifecycle.maxInstances } : {}),
         }))
         if (call.capability === 'sandbox.profile.list') return { profiles }
         const profile = profiles.find(p => p.id === call.args.id)

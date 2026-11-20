@@ -100,15 +100,22 @@ export function supportsAction(backend, action, { observe } = {}) {
   const callable = (name) => typeof backend?.[name] === 'function'
   switch (action) {
     case 'create':
-      return caps.create === true && callable('createManaged')
+      // A managed create needs the verified image evidence seam, not just
+      // a callable create path — real profiles refuse to verify without it.
+      return caps.create === true && callable('createManaged') && callable('imageEvidence')
     case 'start':
       return caps.start === true && callable('start')
     case 'stop':
       return caps.stop === true && callable('stop')
     case 'restart':
-      return caps.restart === true && callable('stop') && callable('start')
+      // restart is composite: the provider must honestly advertise stop
+      // AND start, not a restart flag alone.
+      return caps.restart === true && caps.stop === true && caps.start === true &&
+        callable('stop') && callable('start')
     case 'remove':
       return callable('remove')
+    case 'logs':
+      return callable('logs')
     case 'recreate':
       return supportsAction(backend, 'remove', { observe: observer }) &&
         supportsAction(backend, 'create', { observe: observer }) &&

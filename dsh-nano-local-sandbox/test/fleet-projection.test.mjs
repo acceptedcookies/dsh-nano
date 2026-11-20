@@ -325,12 +325,17 @@ test('T60 inspect: allowlisted detail, per-service tuples, scoped usage', async 
     serviceId: 'engine', containerPort: 8787, protocol: 'tcp',
     published: true, hostPort: 8940, hostAddress: '127.0.0.1',
     health: 'unknown', declaredVersion: null, observedVersion: null,
-    observedAt: '2026-11-19T18:00:00.000Z',
+    observedAt: '2026-11-19T18:00:00.000Z', guestCwd: '/opt/kitesurf',
+    role: 'engine',
   }])
   assert.equal(local.calls.usage, 1)
-  // The allowlist is total: no volume path, mounts, principal or argv leaks.
-  for (const banned of ['stateVolume', 'mounts', 'principal', 'env', 'argv', 'recipeRef']) {
+  // The allowlist is total: no volume path, mount sources, principal or argv leaks.
+  for (const banned of ['stateVolume', 'principal', 'env', 'argv', 'recipeRef']) {
     assert.equal(Object.hasOwn(detail, banned), false, `detail leaked ${banned}`)
+  }
+  // Guest mounts carry target/type/readOnly only — never a host source.
+  for (const mount of detail.mounts ?? []) {
+    assert.deepEqual(Object.keys(mount).sort(), ['readOnly', 'target', 'type'])
   }
   // Usage window on a non-operator is refused outright.
   const scoped = setup({ sources: [local], principal: { key: 'scoped', operator: false, canSee: true, canUse: true } })
@@ -349,6 +354,36 @@ test('T60 inspect: allowlisted detail, per-service tuples, scoped usage', async 
   assert.equal(invisible.result.isError, true)
   assert.equal(invisible.result.structuredContent.ok, false)
   assert.equal(local.calls.observe, obsBefore, 'hidden row was still probed')
+})
+
+test('T60 detail: resources allowlist; configuration and applied are operator-only', async () => {
+  const digest = 'sha256:' + 'cc'.repeat(32)
+  const row = makeRow({
+    desiredRevision: { revision: 3, overrides: { cpus: 2, memoryBytes: 2 * 1024 ** 3 } },
+    appliedRevision: { revision: 2, imageDigest: digest, verifiedAt: '2026-11-20T00:00:00.000Z' },
+    idleTimeoutMs: 1_800_000,
+  })
+  const local = makeSource('dev', [row], {
+    observe: async (entry) => liveObs(entry, { resources: { cpus: 4, memoryBytes: 4 * 1024 ** 3, pids: 99 } }),
+  })
+  const { tool } = setup({ sources: [local] })
+  const res = await tool('sandbox.inspect', { sandboxId: row.sandboxId })
+  assert.equal(res.result.isError, false, JSON.stringify(res.result))
+  const detail = res.result.structuredContent
+  assert.deepEqual(detail.resources, { cpus: 4, memoryBytes: 4 * 1024 ** 3 }, 'only cpus/memoryBytes survive the allowlist')
+  assert.deepEqual(detail.configuration, {
+    overrides: { cpus: 2, memoryBytes: 2 * 1024 ** 3 },
+    idleTimeoutMs: 1_800_000,
+  })
+  assert.deepEqual(detail.applied, { imageDigest: digest, verifiedAt: '2026-11-20T00:00:00.000Z' })
+
+  // A read grant alone never discloses the operator plane.
+  const scoped = setup({ sources: [local], principal: { key: 'scoped', operator: false, canSee: true, canUse: true } })
+  const plain = await scoped.tool('sandbox.inspect', { sandboxId: row.sandboxId })
+  assert.equal(plain.result.isError, false, JSON.stringify(plain.result))
+  const body = plain.result.structuredContent
+  assert.equal(Object.hasOwn(body, 'configuration'), false, 'non-operator detail leaked configuration')
+  assert.equal(Object.hasOwn(body, 'applied'), false, 'non-operator detail leaked applied receipt')
 })
 
 test('T60 read surface never samples usage or processes during list/fleet', async () => {

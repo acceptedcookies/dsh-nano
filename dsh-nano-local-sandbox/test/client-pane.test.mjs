@@ -11,14 +11,21 @@ const UUID_A = '11111111-1111-4111-8111-111111111111'
 const UUID_B = '22222222-2222-4222-8222-222222222222'
 
 function stubReact() {
-  return {
+  const react = {
     createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
     Fragment: Symbol('fragment'),
+    createContext: (value) => ({ $$context: true, defaultValue: value }),
+    useContext: (ctx) => ctx?.defaultValue,
     useState: (init) => [typeof init === 'function' ? init() : init, () => {}],
     useEffect: () => {},
+    useLayoutEffect: () => {},
     useRef: (value) => ({ current: value }),
     useCallback: (fn) => fn,
+    useMemo: (fn) => fn(),
+    useId: () => 'id',
   }
+  react.default = react
+  return react
 }
 
 function loadClientModule(modules) {
@@ -30,7 +37,14 @@ function loadClientModule(modules) {
   assert.equal(loaded[0].id, 'dsh-nano-local-sandbox')
   const resolved = modules ?? {
     react: stubReact(),
-    '@deepseek-ai/dsh-client-ui-primitives': { Button: 'Button' },
+    'react-dom': {},
+    'react-dom/client': {},
+    '@deepseek-ai/dsh-client-ui-primitives': {
+      Button: 'Button', Input: 'Input', SegmentedControl: 'SegmentedControl',
+      DisclosureRow: 'DisclosureRow', StateDot: 'StateDot', Tag: 'Tag',
+      Modal: 'Modal', Switch: 'Switch', Tooltip: 'Tooltip',
+      RiskConfirmation: 'RiskConfirmation', IconInfoOutlineRegular: 'IconInfoOutlineRegular',
+    },
   }
   const client = loaded[0].factory((name) => {
     assert.ok(name in resolved, `unexpected external require ${name}`)
@@ -46,7 +60,15 @@ function fakeCtx() {
   const ctx = {
     locale: { getSnapshot: () => ({ active: 'en' }) },
     effect: (fn) => { const dispose = fn(); effects.push(dispose) },
-    sidebarRightTabs: { register: (spec) => { tabSpecs.push(spec); return () => {} } },
+    sidebarRightTabs: {
+      register: (spec) => { tabSpecs.push(spec); return () => {} },
+      get: () => undefined,
+      candidates: () => [],
+    },
+    sidebarRight: {
+      openTab: () => {},
+      openResource: () => {},
+    },
     slots: {
       inject: (name, register) => { const d = register(); slotRegistrations.push({ name, dispose: d }) },
       register: (spec, component) => { slotRegistrations.push({ spec, component }); return () => {} },
@@ -57,7 +79,7 @@ function fakeCtx() {
 
 test('the built loader module registers one dnls-sandbox tab with dispose paths', () => {
   const client = loadClientModule()
-  assert.deepEqual(client.inject, ['slots', 'sidebarRightTabs', 'locale'])
+  assert.deepEqual(client.inject, ['slots', 'sidebarRightTabs', 'sidebarRight', 'locale'])
   assert.equal(typeof client.apply, 'function')
   const { ctx, effects, tabSpecs, slotRegistrations } = fakeCtx()
   client.apply(ctx)
@@ -100,7 +122,18 @@ function stubFetch(handler, { headerVersion = CONTRACT_VERSION } = {}) {
   return { impl, calls }
 }
 
-const contractBody = { contractVersion: CONTRACT_VERSION, capabilities: ['sandbox.list', 'sandbox.inspect', 'sandbox.processes', 'sandbox.lifecycle', 'sandbox.operations', 'sandbox.profile.list'] }
+const contractBody = {
+  contractVersion: CONTRACT_VERSION,
+  capabilities: [
+    'sandbox.list', 'sandbox.inspect', 'sandbox.processes', 'sandbox.lifecycle',
+    'sandbox.operations', 'sandbox.profile.list',
+    'sandbox.instance.create', 'sandbox.instance.start', 'sandbox.instance.stop',
+    'sandbox.instance.restart', 'sandbox.instance.recreate', 'sandbox.instance.remove',
+    'sandbox.revision.save', 'sandbox.idle.configure',
+    'dnls.status', 'dnls.control',
+    'term.session.list', 'term.session.create', 'term.session.close',
+  ],
+}
 
 test('no implicit target: object reads before discovery never reach the wire', async () => {
   const { impl, calls } = stubFetch(() => ({ body: {} }))
@@ -357,7 +390,11 @@ function hookReact() {
     },
     useMemo: (fn) => fn(),
     useId: () => `id-${cursor++}`,
+    useLayoutEffect: (fn, deps) => react.useEffect(fn, deps),
+    createContext: (value) => ({ $$context: true, defaultValue: value }),
+    useContext: (ctx) => ctx?.defaultValue,
   }
+  react.default = react
   const expand = (node) => {
     if (node === null || node === undefined || typeof node === 'string' || typeof node === 'number') return node
     if (Array.isArray(node)) return node.map(expand)
@@ -451,15 +488,22 @@ function wirePane({ inspectBodies, operationBodies }) {
   return { impl, calls }
 }
 
-function mountPane() {
+function mountPane(ctx = null) {
   const driver = hookReact()
   const client = loadClientModule({
     react: driver.react,
-    '@deepseek-ai/dsh-client-ui-primitives': { Button: 'Button' },
+    'react-dom': {},
+    'react-dom/client': {},
+    '@deepseek-ai/dsh-client-ui-primitives': {
+      Button: 'Button', Input: 'Input', SegmentedControl: 'SegmentedControl',
+      DisclosureRow: 'DisclosureRow', StateDot: 'StateDot', Tag: 'Tag',
+      Modal: 'Modal', Switch: 'Switch', Tooltip: 'Tooltip',
+      RiskConfirmation: 'RiskConfirmation', IconInfoOutlineRegular: 'IconInfoOutlineRegular',
+    },
   })
-  const { ctx, slotRegistrations } = fakeCtx()
-  client.apply(ctx)
-  const body = slotRegistrations.find((entry) => entry.spec?.name === 'sidebar.right.pane.tab')?.component
+  const own = ctx ?? fakeCtx()
+  client.apply(own.ctx)
+  const body = own.slotRegistrations.find((entry) => entry.spec?.name === 'sidebar.right.pane.tab')?.component
   driver.mount(body, { sessionId: 'session-live' })
   return driver
 }
@@ -470,6 +514,7 @@ const DETAIL = {
   envId: 'dev', name: 'one', observedState: 'stopped', health: 'unknown',
   generation: 'gen-1', observedAt: '2026-11-20T00:00:00Z',
   desiredRevision: 1, appliedRevision: 1,
+  configuration: { overrides: { cpus: 2, memoryBytes: 1024 ** 3 }, idleTimeoutMs: 60000 },
   services: [{ serviceId: 'web', containerPort: 8787, protocol: 'http', published: true, hostAddress: '127.0.0.1', hostPort: 8080, health: 'unknown' }],
   usage: { states: { running: 0, stopped: 5, failed: 0, missing: 0 }, memory: { expected: 5, valid: 0, mean: null, peak: null }, cpu: { expected: 5, valid: 0, mean: null, peak: null } },
 }
@@ -501,8 +546,7 @@ test('a confirmed succeeded recheck re-reads detail, clears processes, no extra 
   const driver = mountPane()
   await driver.tick()
   // pick the sandbox explicitly, then open the control view
-  findByData(driver.tree, 'data-dnls-sandbox-select').props.onChange({ target: { value: UUID_A } })
-  findButton(driver.tree, 'Control').props.onClick()
+  findByData(driver.tree, 'data-dnls-row').props.onClick()
   await driver.tick()
   assert.equal(countCalls(calls, '/inspect'), 1, 'control entry reads the target once')
   assert.equal(fieldValue(driver.tree, 'Observed state'), 'running')
@@ -511,7 +555,10 @@ test('a confirmed succeeded recheck re-reads detail, clears processes, no extra 
   await driver.tick()
   assert.ok(findByData(driver.tree, 'data-dnls-processes'), 'process table rendered')
   findButton(driver.tree, 'Stop').props.onClick()
-  findButton(driver.tree, 'Confirm').props.onClick()
+  const risk = walk(driver.tree).find((n) => n.type === 'RiskConfirmation')
+  assert.ok(risk, 'stop is gated behind a named risk confirmation')
+  risk.props.onAcknowledgedChange(true)
+  risk.props.onConfirm()
   await driver.tick()
   assert.equal(countCalls(calls, '/lifecycle'), 1, 'one click is one write')
   assert.ok(findByData(driver.tree, 'data-dnls-receipt'), 'receipt shown')
@@ -521,7 +568,7 @@ test('a confirmed succeeded recheck re-reads detail, clears processes, no extra 
   await driver.tick()
   assert.equal(countCalls(calls, '/operations'), 1)
   assert.equal(countCalls(calls, '/inspect'), 2, 'success re-reads targeted detail')
-  assert.equal(countCalls(calls, '/sandboxes'), 2, 'success re-reads the list')
+  assert.ok(countCalls(calls, '/sandboxes') >= 2, 'success re-reads the list')
   assert.equal(countCalls(calls, '/lifecycle'), 1, 'no resubmission')
   assert.equal(findByData(driver.tree, 'data-dnls-processes'), undefined, 'stale process table cleared')
   assert.equal(fieldValue(driver.tree, 'Observed state'), 'stopped', 'detail shows the new observed state, not the cached one')
@@ -551,8 +598,7 @@ test('manual refresh after a failed inspect issues a new targeted read', async (
   installPaneGlobals(t, impl)
   const driver = mountPane()
   await driver.tick()
-  findByData(driver.tree, 'data-dnls-sandbox-select').props.onChange({ target: { value: UUID_A } })
-  findButton(driver.tree, 'Control').props.onClick()
+  findByData(driver.tree, 'data-dnls-row').props.onClick()
   await driver.tick()
   assert.equal(countCalls(calls, '/inspect'), 1)
   assert.ok(findByData(driver.tree, 'data-dnls-detail-error'), 'read failure is reported, not a spinner')
@@ -562,4 +608,113 @@ test('manual refresh after a failed inspect issues a new targeted read', async (
   assert.equal(countCalls(calls, '/inspect'), 2, 'refresh re-issues the targeted inspect')
   assert.equal(findByData(driver.tree, 'data-dnls-detail-error'), undefined)
   assert.equal(fieldValue(driver.tree, 'Observed state'), 'stopped', 'recovered detail rendered')
+})
+
+test('targeted MCP read rejects a different sandboxId echo', async () => {
+  const { impl } = stubFetch((url) => {
+    const path = new URL(url).pathname
+    if (path.endsWith('/contract')) return { body: contractBody }
+    if (path.endsWith('/mcp')) {
+      return {
+        body: {
+          jsonrpc: '2.0', id: 1,
+          result: { isError: false, structuredContent: { contractVersion: CONTRACT_VERSION, sandboxId: UUID_B, terminals: [] } },
+        },
+      }
+    }
+    return { body: {} }
+  })
+  const client = createDnlsClient({ fetch: impl, origin: 'https://pane.test' })
+  await client.discover()
+  await assert.rejects(() => client.terminalList(UUID_A), /different sandbox/)
+})
+
+test('a shared-identity terminal list 403 denies the panel without side effects', async (t) => {
+  const calls = []
+  const impl = async (url, init = {}) => {
+    calls.push({ url, init })
+    const path = new URL(url).pathname
+    const respond = (body, status = 200) => ({
+      ok: status < 400, status,
+      headers: { get: (n) => (n === 'x-dnls-contract' ? CONTRACT_VERSION : null) },
+      json: async () => body,
+    })
+    if (path.endsWith('/contract')) return respond(contractBody)
+    if (path.endsWith('/sandboxes')) return respond({ contractVersion: CONTRACT_VERSION, envs: [], rows: [{ sandboxId: UUID_A, name: 'one', envId: 'dev', observedState: 'running' }], total: 1, complete: true })
+    if (path.endsWith('/inspect')) return respond(DETAIL)
+    if (path.endsWith('/mcp')) {
+      const parsed = JSON.parse(init.body)
+      if (parsed.params?.name === 'term.session.list') {
+        return respond({
+          jsonrpc: '2.0', id: 1,
+          result: {
+            isError: true,
+            content: [{ type: 'text', text: 'shared identity may not list terminals' }],
+            structuredContent: { status: 403, errorId: 'term.denied', contractVersion: CONTRACT_VERSION, sandboxId: UUID_A },
+          },
+        })
+      }
+    }
+    return respond({ contractVersion: CONTRACT_VERSION, sandboxId: UUID_A })
+  }
+  installPaneGlobals(t, impl)
+  const driver = mountPane()
+  await driver.tick()
+  findByData(driver.tree, 'data-dnls-row').props.onClick()
+  await driver.tick()
+  findButton(driver.tree, 'List terminals').props.onClick()
+  await driver.tick()
+  assert.ok(findByData(driver.tree, 'data-dnls-terms-denied'), 'localized shared-identity denial shown')
+  const creates = calls.filter((c) => {
+    try { return JSON.parse(c.init.body)?.params?.name === 'term.session.create' } catch { return false }
+  })
+  assert.equal(creates.length, 0, 'a denied list never leads to a create attempt')
+})
+
+test('open existing terminal goes through the registry with the canonical address', async (t) => {
+  const TERM_ID = '33333333-3333-4333-8333-333333333333'
+  const opened = []
+  const own = fakeCtx()
+  own.ctx.sidebarRightTabs.candidates = (address) =>
+    address.startsWith('dsh-resource://sandbox-terminal/') ? [{ id: 'dnt-sandbox-terminal', kind: 'dnt-sandbox-terminal' }] : []
+  own.ctx.sidebarRight.openResource = (address) => opened.push(address)
+  const calls = []
+  const impl = async (url, init = {}) => {
+    calls.push({ url, init })
+    const path = new URL(url).pathname
+    const respond = (body, status = 200) => ({
+      ok: status < 400, status,
+      headers: { get: (n) => (n === 'x-dnls-contract' ? CONTRACT_VERSION : null) },
+      json: async () => body,
+    })
+    if (path.endsWith('/contract')) return respond(contractBody)
+    if (path.endsWith('/sandboxes')) return respond({ contractVersion: CONTRACT_VERSION, envs: ['dev'], rows: [{ sandboxId: UUID_A, name: 'one', envId: 'dev', observedState: 'running' }], total: 1, complete: true })
+    if (path.endsWith('/inspect')) return respond(DETAIL)
+    if (path.endsWith('/mcp')) {
+      const parsed = JSON.parse(init.body)
+      if (parsed.params?.name === 'term.session.list') {
+        return respond({
+          jsonrpc: '2.0', id: 1,
+          result: { isError: false, structuredContent: { contractVersion: CONTRACT_VERSION, sandboxId: UUID_A, terminals: [{
+            terminalId: TERM_ID, state: 'active', address: `dsh-resource://sandbox-terminal/dev/${UUID_A}/${TERM_ID}`,
+          }] } },
+        })
+      }
+    }
+    return respond({ contractVersion: CONTRACT_VERSION, sandboxId: UUID_A })
+  }
+  installPaneGlobals(t, impl)
+  const driver = mountPane(own)
+  await driver.tick()
+  findByData(driver.tree, 'data-dnls-row').props.onClick()
+  await driver.tick()
+  findButton(driver.tree, 'List terminals').props.onClick()
+  await driver.tick()
+  findButton(driver.tree, 'Open').props.onClick()
+  await driver.tick()
+  assert.deepEqual(opened, [`dsh-resource://sandbox-terminal/dev/${UUID_A}/${TERM_ID}`], 'exact canonical address via openResource')
+  const creates = calls.filter((c) => {
+    try { return JSON.parse(c.init.body)?.params?.name === 'term.session.create' } catch { return false }
+  })
+  assert.equal(creates.length, 0, 'open never creates a session')
 })

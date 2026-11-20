@@ -149,6 +149,7 @@
 | `NANO_LAYER` 与间距刻度 | §4 |
 | `icon(name)` / `iconMarkup(glyph, weight)` | 图标门面，名称对 catalog 校验 |
 | `VERSION` | 产物里以 `dsh-nano-ui@<版本>` 注释出现，可检索 |
+| `PanelLayout` / `PanelSection` / `FactGrid` | 通用滚动面板骨架、分节标题与事实格；宿主没有语义化面板布局（[DNLS] 首个使用方） |
 
 ## 7. 宿主接口（解码结论）
 

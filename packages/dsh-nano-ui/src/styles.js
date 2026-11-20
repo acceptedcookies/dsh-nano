@@ -78,4 +78,25 @@ ${LAYER_CSS}
 .nano-window-floating { position: fixed; z-index: var(--nano-layer-window); }
 .nano-window-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .nano-window-body { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+/* Generic panel skeleton (§6.3): scrollable layout, sections, fact grid. */
+.nano-panel { box-sizing: border-box; block-size: 100%; min-block-size: 0; overflow: auto;
+  padding: var(--nano-space-3); color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+.nano-panel-header, .nano-panel-section { display: grid; gap: var(--nano-space-2); margin-block-end: var(--nano-space-3); }
+.nano-panel-header h2, .nano-panel-section h3 { margin: 0; }
+.nano-panel-header p { margin: 0; color: var(--dsw-alias-label-secondary); }
+.nano-panel-kicker { font-size: var(--nano-desc-size, inherit); }
+.nano-panel-section { padding-block: var(--nano-space-2); border-block-start: var(--dsh-hairline-width) solid var(--dsw-alias-border-l1); }
+.nano-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--nano-space-2); margin: 0; }
+.nano-facts dt { color: var(--dsw-alias-label-secondary); }
+.nano-facts dd { margin: 0; font-weight: 600; }
+.nano-panel .nano-toolbar { flex-wrap: wrap; }
+.nano-panel .nano-panes { height: auto; }
+.nano-panel .nano-pane { overflow: visible; }
+@media (pointer: coarse) {
+  .nano-panel input,
+  .nano-facts dt,
+  .nano-facts dd { font-size: max(1em, 16px); }
+  .nano-facts dd { font-weight: 500; }
+}
 `

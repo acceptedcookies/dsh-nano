@@ -22,7 +22,12 @@ const PATH_CAPS = new Map([
   [`${PREFIX}processes`, 'sandbox.processes'],
   [`${PREFIX}lifecycle`, 'sandbox.lifecycle'],
   [`${PREFIX}operations`, 'sandbox.operations'],
+  [`${PREFIX}status`, 'dnls.status'],
+  [`${PREFIX}control`, 'dnls.control'],
+  [`${PREFIX}logs`, 'dnls.logs'],
 ])
+
+const CONTROL_ACTIONS = new Set(['takeover', 'release'])
 
 function refuse(code, message) {
   const error = new Error(message)
@@ -117,8 +122,14 @@ export function createDnlsClient({ fetch: impl, origin } = {}) {
     return parsed
   }
 
-  async function mcpCall(name, args, { signal } = {}) {
-    announced('sandbox.profile.list')
+  /**
+   * Managed MCP `tools/call`: the tool must be announced, the envelope must
+   * echo jsonrpc 2.0 + request id, and structuredContent proves the
+   * contract. Targeted calls additionally require the exact sandboxId echo.
+   * A refused call (isError) surfaces its business status — 403 stays 403.
+   */
+  async function mcp(name, args, { signal, sandboxId } = {}) {
+    announced(name)
     const parsed = await request(`${PREFIX}mcp`, {
       method: 'POST',
       body: {
@@ -134,17 +145,23 @@ export function createDnlsClient({ fetch: impl, origin } = {}) {
       signal,
       envelope: 'jsonrpc',
     })
-    // The managed MCP envelope proves the contract inside structuredContent,
-    // not a header; the echo id must match the request that produced it.
     if (parsed?.jsonrpc !== '2.0' || parsed.id !== 1) refuse('mcp', 'invalid jsonrpc envelope')
     const result = parsed?.result
-    if (!result || typeof result !== 'object' || result.isError === true) {
-      refuse('mcp', 'profile list refused')
+    if (!result || typeof result !== 'object') refuse('mcp', 'missing mcp result')
+    const out = result.structuredContent
+    if (result.isError === true) {
+      const error = new Error(out?.error ?? out?.errorId ?? `${name} refused`)
+      error.errorId = out?.errorId ?? 'dnls.client.mcp'
+      error.status = Number.isInteger(out?.status) ? out.status : null
+      throw error
     }
-    if (result.structuredContent?.contractVersion !== CONTRACT_VERSION) {
+    if (out?.contractVersion !== CONTRACT_VERSION) {
       refuse('contract', 'response contract mismatch')
     }
-    return result.structuredContent ?? {}
+    if (sandboxId && out.sandboxId !== sandboxId) {
+      refuse('target', 'response names a different sandbox')
+    }
+    return out ?? {}
   }
 
   return {
@@ -169,6 +186,11 @@ export function createDnlsClient({ fetch: impl, origin } = {}) {
 
     capabilities: () => (contract ? [...contract.capabilities] : null),
 
+    /** Per-capability gate: `sandbox.instance.stop` is advertised
+     * independently of `sandbox.instance.create` — the pane enables only
+     * the actions the provider actually announced. */
+    supports: (capabilityId) => contract?.capabilities.includes(capabilityId) === true,
+
     /** Flat `sandbox.list` payload: `{envs, rows, total, complete}`. */
     async listSandboxes({ signal } = {}) {
       const cap = PATH_CAPS.get(`${PREFIX}sandboxes`)
@@ -181,9 +203,12 @@ export function createDnlsClient({ fetch: impl, origin } = {}) {
     async inspect(sandboxId, { window: usageWindow = '24h', signal } = {}) {
       assertSandboxId(sandboxId)
       announced(PATH_CAPS.get(`${PREFIX}inspect`))
-      if (!INSPECT_WINDOWS.has(usageWindow)) refuse('params', 'unknown usage window')
+      // `window: null` opts out of the usage read entirely — a scoped
+      // caller keeps the object detail instead of losing it to a
+      // usage-only 403.
+      if (usageWindow !== null && !INSPECT_WINDOWS.has(usageWindow)) refuse('params', 'unknown usage window')
       return request(`${PREFIX}inspect`, {
-        query: { sandboxId, window: usageWindow },
+        query: usageWindow === null ? { sandboxId } : { sandboxId, window: usageWindow },
         signal,
         sandboxId,
       })
@@ -200,10 +225,13 @@ export function createDnlsClient({ fetch: impl, origin } = {}) {
     },
 
     /** Object lifecycle POST. `create` is target-none: it must not carry a selector. */
-    async lifecycle({ action, sandboxId, name, profileId, requestId, signal } = {}) {
+    async lifecycle({ action, sandboxId, name, profileId, requestId, args: extra, signal } = {}) {
       announced(PATH_CAPS.get(`${PREFIX}lifecycle`))
+      // The write route gates transport; the action itself must also be
+      // announced — a partially capable provider advertises per action.
+      announced(`sandbox.instance.${action}`)
       if (typeof requestId !== 'string' || requestId.length === 0) refuse('params', 'requestId required')
-      const body = { action, requestId }
+      const body = { ...(extra ?? {}), action, requestId }
       const query = {}
       if (action === 'create') {
         if (sandboxId !== undefined) refuse('target', 'create never carries a selector')
@@ -243,9 +271,84 @@ export function createDnlsClient({ fetch: impl, origin } = {}) {
 
     /** Authorized profiles via the `sandbox.profile.list` MCP tool. */
     async listProfiles({ signal } = {}) {
-      const out = await mcpCall('sandbox.profile.list', {}, { signal })
+      const out = await mcp('sandbox.profile.list', {}, { signal })
       if (!Array.isArray(out.profiles)) refuse('shape', 'invalid profile list')
       return out.profiles
+    },
+
+    /** Targeted engine status page (kitesurf profile): the pane reads only
+     * whitelisted fields, never page/url/credential material. */
+    async logs(sandboxId, { tail = 20, signal } = {}) {
+      assertSandboxId(sandboxId)
+      announced(PATH_CAPS.get(`${PREFIX}logs`))
+      const bounded = Number.isInteger(tail) && tail >= 1 && tail <= 200 ? tail : 20
+      return request(`${PREFIX}logs`, { query: { sandboxId, tail: bounded }, signal, sandboxId })
+    },
+
+    async status(sandboxId, { signal } = {}) {
+      assertSandboxId(sandboxId)
+      announced(PATH_CAPS.get(`${PREFIX}status`))
+      return request(`${PREFIX}status`, { query: { sandboxId }, signal, sandboxId })
+    },
+
+    /** Shared-engine HITL control: GET reads writer/humanHold; POST is
+     * limited to takeover|release — there is no arbitrary action. */
+    async control(sandboxId, action, { signal } = {}) {
+      assertSandboxId(sandboxId)
+      announced(PATH_CAPS.get(`${PREFIX}control`))
+      if (action === undefined) {
+        return request(`${PREFIX}control`, { query: { sandboxId }, signal, sandboxId })
+      }
+      if (!CONTROL_ACTIONS.has(action)) refuse('params', `unknown control action ${action}`)
+      return request(`${PREFIX}control`, {
+        method: 'POST', query: { sandboxId }, body: { action }, signal, sandboxId,
+      })
+    },
+
+    /** This principal's terminals on one sandbox — `{sandboxId, terminals}`. */
+    async terminalList(sandboxId, { signal } = {}) {
+      assertSandboxId(sandboxId)
+      const out = await mcp('term.session.list', { sandboxId }, { signal, sandboxId })
+      if (!Array.isArray(out.terminals)) refuse('shape', 'invalid terminal list')
+      return out
+    },
+
+    /** Create-only terminal spawn: `{sandboxId, terminalId}` — never an
+     * attach, and the caller supplies the pane/open correlation ids. */
+    async terminalCreate(sandboxId, { service, paneId, openId } = {}, { signal } = {}) {
+      assertSandboxId(sandboxId)
+      if (typeof paneId !== 'string' || !paneId || typeof openId !== 'string' || !openId) {
+        refuse('params', 'paneId and openId are required')
+      }
+      const args = { sandboxId, paneId, openId }
+      if (service !== undefined) args.service = service
+      const out = await mcp('term.session.create', args, { signal, sandboxId })
+      if (typeof out.terminalId !== 'string' || !SANDBOX_ID.test(out.terminalId)) {
+        refuse('receipt', 'terminal create answered without a valid terminalId')
+      }
+      return out
+    },
+
+    /** Confirmed close of an owned terminal worker. */
+    async terminalClose(sandboxId, terminalId, { signal } = {}) {
+      assertSandboxId(sandboxId)
+      if (!SANDBOX_ID.test(terminalId ?? '')) refuse('params', 'terminalId required')
+      return mcp('term.session.close', { sandboxId, terminalId }, { signal, sandboxId })
+    },
+
+    /** Desired resources: `{expectedRevision, overrides:{cpus?,memoryBytes?}}`. */
+    async saveRevision(sandboxId, { expectedRevision, overrides } = {}, { signal } = {}) {
+      assertSandboxId(sandboxId)
+      if (!Number.isInteger(expectedRevision) || expectedRevision < 0) refuse('params', 'expectedRevision required')
+      if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) refuse('params', 'overrides required')
+      return mcp('sandbox.revision.save', { sandboxId, expectedRevision, overrides }, { signal, sandboxId })
+    },
+
+    /** Idle timeout in whole minutes on the wire as milliseconds. */
+    async configureIdle(sandboxId, idleTimeoutMs, { signal } = {}) {
+      assertSandboxId(sandboxId)
+      if (!Number.isSafeInteger(idleTimeoutMs) || idleTimeoutMs < 0) refuse('params', 'idleTimeoutMs out of range')
+      return mcp('sandbox.idle.configure', { sandboxId, idleTimeoutMs }, { signal, sandboxId })
     },
   }
 }

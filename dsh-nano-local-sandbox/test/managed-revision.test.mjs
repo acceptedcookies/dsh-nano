@@ -37,6 +37,10 @@ function fixture(t, { backend } = {}) {
     async stop(name) { calls.stop.push(name); live.get(name).state = 'stopped' },
     async remove(name) { calls.remove.push(name); live.delete(name) },
     async imageEvidence(tag) { calls.image.push(tag); return { tag, digest: DIGEST } },
+    async observe(locator) {
+      const entry = live.get(locator)
+      return entry ? { locator, ...entry, observedAt: 't' } : { locator, generation: null, stateVolume: null, state: 'missing' }
+    },
     async inspect() { return { raw: '' } },
   }
 
@@ -130,6 +134,10 @@ test('unknown image digest fails preflight negatively — no destructive step', 
       async stop() { throw new Error('stop must not run') },
       async remove() { throw new Error('remove must not run') },
       async imageEvidence() { return null },
+      async observe(locator) {
+        const entry = live.get(locator)
+        return entry ? { locator, ...entry, observedAt: 't' } : { locator, generation: null, stateVolume: null, state: 'missing' }
+      },
       async inspect() { return { raw: '' } },
     },
   })

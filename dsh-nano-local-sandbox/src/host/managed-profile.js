@@ -27,7 +27,7 @@ const ENV_PORT_POOLS = Object.freeze({
   desktop: [8980, 8999],
 })
 
-const SERVICE_KEYS = ['id', 'port', 'command', 'protocol', 'cwd', 'role']
+const SERVICE_KEYS = ['id', 'port', 'command', 'protocol', 'cwd', 'role', 'version']
 const PROTO = new Set(['tcp', 'udp'])
 const LOOPBACK = new Set(['127.0.0.1', '::1'])
 
@@ -51,6 +51,11 @@ function serviceDecl(manifest) {
       throw configError(`service cwd is not a bounded guest path: ${entry.id}`)
     }
     if (typeof entry.role !== 'string' || !entry.role) throw configError(`service evidence role missing: ${entry.id}`)
+    // version is optional provenance; absent stays null, never invented.
+    if (entry.version !== undefined &&
+        (typeof entry.version !== 'string' || entry.version.length === 0 || entry.version.length > 64)) {
+      throw configError(`service version invalid: ${entry.id}`)
+    }
     return {
       id: entry.id,
       port: entry.port,
@@ -58,6 +63,7 @@ function serviceDecl(manifest) {
       cwd: entry.cwd,
       role: entry.role,
       command: typeof entry.command === 'string' ? entry.command : null,
+      version: entry.version ?? null,
     }
   })
 }
@@ -140,6 +146,8 @@ export function serviceMappings(row, obs, services) {
       declaredVersion: service.version ?? null,
       observedVersion: null,
       observedAt: at,
+      cwd: typeof service.cwd === 'string' ? service.cwd : null,
+      role: typeof service.role === 'string' ? service.role : null,
     }
   })
 }

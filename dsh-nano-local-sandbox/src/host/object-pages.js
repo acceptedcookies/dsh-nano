@@ -4,6 +4,7 @@ import { connectCdp, resetClient } from './cdp-elements.js'
 import { serviceMappings } from './managed-profile.js'
 import { authorize } from './object-authz.js'
 import { routeSpecs } from './routes.js'
+import { supportsAction } from './backend.js'
 
 const otherOwners = new Set(['dnls.contract', 'dnls.mcp', 'dnls.lifecycle', 'dnls.operations', 'dnls.sandboxes',
   'dnls.fleet', 'dnls.inspect', 'dnls.processes'])
@@ -54,16 +55,17 @@ export function createObjectPages({ registry, envId, resolvePrincipal, connectio
       await recheck()
       const obs = await backend.observe(locator, { stateTarget: profile.stateTarget })
       await recheck()
-      if (obs?.generation !== initial.binding.generation || obs?.stateVolume !== initial.stateVolume ||
-          obs.state !== 'running') throw fail(409)
+      if (obs?.locator !== locator || obs?.generation !== initial.binding.generation ||
+          obs?.stateVolume !== initial.stateVolume || obs.state !== 'running') throw fail(409)
       // Do not pass an unexpected current host mapping to the CDP/bridge transport.
       const mappings = serviceMappings(initial, obs, profile.services)
       if (mappings.some(s => !s.published)) throw fail(503)
-      // Neutral info for the managed route readers — only exactly
-      // validated publications, never raw provider JSON.
+      // Neutral info for the managed route readers — only the joined
+      // verified mappings, never raw provider JSON.
       return {
         state: obs.state,
-        ports: (obs.publications ?? []).map((port) => ({ ...port, count: 1 })),
+        ports: mappings.map(({ containerPort, hostPort, protocol, hostAddress }) =>
+          ({ containerPort, hostPort, protocol, hostAddress, count: 1 })),
         resources: obs.resources ?? null,
         networking: obs.networking ?? null,
         stateSource: obs.stateVolume,
@@ -73,8 +75,17 @@ export function createObjectPages({ registry, envId, resolvePrincipal, connectio
       }
     }
     if (route.id === 'dnls.recover') {
+      // Composite provider gate before any ledger row — restart requires
+      // honest stop+start flags and callables, not a generic flag alone.
+      if (!supportsAction(backend, 'restart')) throw fail(503)
       if (!args.requestId || args.action !== 'restart') throw Object.assign(fail(400), { errorId: 'sandbox.params.action' })
       return lifecycle.submit({ peer, sandboxId, action: 'restart', args })
+    }
+    if (route.id === 'dnls.logs') {
+      // Operator-only diagnostic read; a provider without logs() gets
+      // fail-closed denial, never an advertised handler.
+      if (principal.operator !== true) throw fail(403)
+      if (typeof backend.logs !== 'function' || !supportsAction(backend, 'logs')) throw fail(503)
     }
     await inspect(initial.binding.locator)
     let session = contexts.get(sandboxId)

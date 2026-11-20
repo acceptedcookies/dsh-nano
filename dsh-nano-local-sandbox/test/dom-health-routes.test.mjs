@@ -47,14 +47,17 @@ function depsWith(overrides = {}) {
     session: { phase: 'running', history: [{ url: 'https://example.com/p' }], containerName: 'kitesurf-dev', httpBase: 'http://127.0.0.1:8800' },
     backend: {
       async inspect() {
+        // No bridge publication in the default fixture: wherever the bridge
+        // is not under test it must fail deterministically ("no bridge
+        // port"), never probe a possibly-live local port.
         return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [
           { containerPort: 8787, hostAddress: '127.0.0.1', hostPort: 8800 },
-          { containerPort: 8791, hostAddress: '127.0.0.1', hostPort: 8801 },
         ] } }]) }
       },
     },
     env: { DSH_HOME: '/tmp/.dsh-dev' },
     connect: async () => fakeClient(),
+    httpProbe: () => true,
     prepareTimeoutMs: 0,
     ...overrides,
   }

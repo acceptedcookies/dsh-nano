@@ -14,12 +14,12 @@
 
 const React = require('react')
 const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
-const { Toolbar, EmptyState, NanoTabs, NanoDialog, NANO_STYLES, PanelLayout, PanelSection, FactGrid } = require('dsh-nano-ui')
+const { Toolbar, IconButton, EmptyState, NanoTabs, NanoDialog, NANO_STYLES, PanelSection } = require('dsh-nano-ui')
 const { createDnlsClient, createTicket } = require('./managed.js')
 const { copyFor, fill } = require('./i18n.js')
 const { formatBytes, serviceAddress } = require('./format.js')
 const { terminalAddress } = require('../host/terminal-resource.js')
-const { DeviceFace, MetricChart, CardBody } = require('./instruments.jsx')
+const { MetricChart, SandboxRow } = require('./instruments.jsx')
 const h = React.createElement
 
 const KIND = 'dnls-sandbox'
@@ -39,6 +39,15 @@ const STATE_KEYS = {
 
 const stateLabel = (copy, state) => copy[STATE_KEYS[state]] ?? copy.stateUnknown
 
+function Facts({ items }) {
+  return h('table', null, h('tbody', null, items.map(({ label, value }) =>
+    h('tr', { key: label }, h('td', null, label), h('td', null, value ?? '—')))))
+}
+
+function tool(label, Icon, onClick, disabled = false) {
+  return h(IconButton, { icon: Icon ? h(Icon, { size: 16 }) : null, 'aria-label': label, onClick, disabled })
+}
+
 function DnlsPane({ sessionId, copy, host }) {
   const [view, setView] = React.useState('overview')
   const [phase, setPhase] = React.useState('loading') // loading | ready | failed
@@ -48,6 +57,7 @@ function DnlsPane({ sessionId, copy, host }) {
   const [complete, setComplete] = React.useState(true)
   const [envIds, setEnvIds] = React.useState(null)
   const [search, setSearch] = React.useState('')
+  const [fleetFilter, setFleetFilter] = React.useState('all')
   const [selection, setSelection] = React.useState(null)
   const [detail, setDetail] = React.useState(null)
   const [detailError, setDetailError] = React.useState(null)
@@ -70,7 +80,14 @@ function DnlsPane({ sessionId, copy, host }) {
   const [terms, setTerms] = React.useState(null) // {list}|{denied}|{error}
   const [termBusy, setTermBusy] = React.useState(false)
   const [detailsOpen, setDetailsOpen] = React.useState(false)
+  const [historyOpen, setHistoryOpen] = React.useState(false)
+  const [receiptOpen, setReceiptOpen] = React.useState(false)
   const [detailTab, setDetailTab] = React.useState('overview')
+  const [settingsOpen, setSettingsOpen] = React.useState(false)
+  const [dangerOpen, setDangerOpen] = React.useState(false)
+  const [processSort, setProcessSort] = React.useState({ field: 'rssBytes', descending: true })
+  const lastPick = React.useRef(null)
+  const root = React.useRef(null)
   const [svcOpen, setSvcOpen] = React.useState(null)
   const fmtTime = (iso) => {
     const ms = typeof iso === 'number' ? iso : Date.parse(iso ?? '')
@@ -140,6 +157,13 @@ function DnlsPane({ sessionId, copy, host }) {
     setRows(null)
     setTotal(null)
     setSelection(null)
+    setView('overview')
+    setSettingsOpen(false)
+    setCreateOpen(false)
+    setConfirm(null)
+    setSearch('')
+    setFleetFilter('all')
+    setProfileCaps(new Map())
     setDetail(null)
     setDetailError(null)
     setProcs(null)
@@ -183,9 +207,11 @@ function DnlsPane({ sessionId, copy, host }) {
     if (writeLock.current) return
     const found = (rows ?? []).find((entry) => entry.sandboxId === sandboxId)
     if (!found) return
+    lastPick.current = found.sandboxId
     invalidate('detail', 'process', 'operation', 'profiles', 'engine', 'term', 'settings', 'logs')
     setSelection({ sandboxId: found.sandboxId, name: found.name ?? found.sandboxId, envId: found.envId })
     setDetailTab('overview')
+    setSettingsOpen(false)
     setSvcOpen(null)
     setDetail(null)
     setDetailError(null)
@@ -203,13 +229,14 @@ function DnlsPane({ sessionId, copy, host }) {
     setLogs(null)
     setLogsBusy(false)
     setDetailsOpen(false)
+    setHistoryOpen(false)
     setSettingsMsg(null)
     setUsageDenied(false)
     setView('control')
   }
 
   function unchoose() {
-    if (writeLock.current) return
+    if (writeLock.current || opPending) return
     invalidate('detail', 'process', 'operation', 'engine', 'term', 'settings', 'logs')
     setSelection(null)
     setDetail(null)
@@ -226,6 +253,18 @@ function DnlsPane({ sessionId, copy, host }) {
     setUsageDenied(false)
     setView('overview')
   }
+
+  React.useEffect(() => {
+    if (view === 'control') {
+      root.current?.querySelector('[role=toolbar] button')?.focus()
+      return
+    }
+    if (view !== 'overview' || !lastPick.current) return
+    const button = Array.from(root.current?.querySelectorAll('[data-dnls-row]') ?? [])
+      .find(el => el.dataset.dnlsRow === lastPick.current)
+    button?.focus()
+    lastPick.current = null
+  }, [view])
 
   /** Targeted detail read: marks its own channel pending, clears obsolete
    * errors, and reports a read failure distinctly — never a spinner. A
@@ -300,9 +339,11 @@ function DnlsPane({ sessionId, copy, host }) {
       invalidate('operation')
       const record = { operationId: body.operationId, sandboxId: sandboxId ?? body.sandboxId, action }
       setReceipt(record)
+      setReceiptOpen(false)
       setConfirm(null)
       setAcknowledged(false)
       setCreateOpen(false)
+      setSettingsOpen(false)
       setOpBody(body)
       loadList()
     }, stale).finally(() => {
@@ -509,6 +550,32 @@ function DnlsPane({ sessionId, copy, host }) {
     }, stale)
   }
 
+  function openSettings() {
+    setDangerOpen(false)
+    setSettingsMsg(null)
+    setSettingsOpen(true)
+  }
+
+  function writeSettings(work) {
+    if (writeLock.current || opPending) return
+    writeLock.current = true
+    setBusy(true)
+    const current = ticket('settings')
+    setSettingsMsg(null)
+    setError(null)
+    run(async () => {
+      const message = await work()
+      if (!current()) return
+      setSettingsMsg(message)
+      loadDetail()
+      loadList()
+    }, current).finally(() => {
+      if (!current()) return
+      writeLock.current = false
+      setBusy(false)
+    })
+  }
+
   function saveResources() {
     if (!selection || !detail?.configuration) return
     // The registry replaces the whole overrides map: start from the
@@ -526,18 +593,13 @@ function DnlsPane({ sessionId, copy, host }) {
       overrides.memoryBytes = mem * 1024 * 1024
     }
     const target = selection.sandboxId
-    const stale = ticket('settings')
-    setSettingsMsg(null)
-    setError(null)
-    run(async () => {
+    writeSettings(async () => {
       const out = await client().saveRevision(target, {
         expectedRevision: detail.desiredRevision ?? 0,
         overrides,
       })
-      if (!stale()) return
-      setSettingsMsg(fill(copy.configSaved, { revision: out.desiredRevision?.revision ?? '?' }))
-      loadDetail()
-    }, stale)
+      return fill(copy.configSaved, { revision: out.desiredRevision?.revision ?? '?' })
+    })
   }
 
   function saveIdle() {
@@ -547,15 +609,10 @@ function DnlsPane({ sessionId, copy, host }) {
     const minutes = Number(idleMin)
     if (!Number.isInteger(minutes) || minutes < 0) { setError(new Error(copy.failed)); return }
     const target = selection.sandboxId
-    const stale = ticket('settings')
-    setSettingsMsg(null)
-    setError(null)
-    run(async () => {
+    writeSettings(async () => {
       await client().configureIdle(target, minutes * 60000)
-      if (!stale()) return
-      setSettingsMsg(copy.idleSaved)
-      loadDetail()
-    }, stale)
+      return copy.idleSaved
+    })
   }
 
   if (!sessionId) return null
@@ -579,15 +636,19 @@ function DnlsPane({ sessionId, copy, host }) {
     : null
 
   const receiptBlock = receipt
-    ? h(PanelSection, { title: copy.activity },
-        h('p', { 'data-dnls-receipt': '1' },
-          fill(copy.opLine, { action: copy[receipt.action] ?? receipt.action, state: opBody?.state ?? copy.opPending }),
-          h('br', null),
-          fill(copy.opIdLine, { operationId: receipt.operationId })),
-        h(Button, { variant: 'ghost', size: 'sm', onClick: recheck }, copy.opRecheck))
+    ? h('section', { 'data-dnls-receipt': '1' }, h(DisclosureRow, {
+        title: fill(copy.opLine, { action: copy[receipt.action] ?? receipt.action, state: copy.opStates?.[opBody?.state] ?? copy.opPending }),
+        icon: h(primitives.IconClockOutlineRegular), open: receiptOpen, expandOnRowClick: true, expandable: true,
+        onToggle: () => setReceiptOpen(open => !open),
+      }, fill(copy.opIdLine, { operationId: receipt.operationId })),
+      h(Button, { variant: 'ghost', size: 'sm', onClick: recheck }, copy.opRecheck))
     : null
 
+  const needsAttention = e => !['running', 'stopped'].includes(e.observedState) ||
+    ['indeterminate', 'failed'].includes(e.operation?.state) ||
+    (Number.isInteger(e.appliedRevision) && Number.isInteger(e.desiredRevision) && e.appliedRevision !== e.desiredRevision)
   const visibleRows = (rows ?? []).filter((entry) => {
+    if (fleetFilter === 'attention' ? !needsAttention(entry) : fleetFilter !== 'all' && fleetFilter !== entry.observedState) return false
     if (!search.trim()) return true
     const q = search.trim().toLowerCase()
     return [entry.name, entry.profileId, entry.envId, entry.observedState,
@@ -597,20 +658,16 @@ function DnlsPane({ sessionId, copy, host }) {
 
   const overview = () => {
     if (phase === 'loading' && rows === null) {
-      return h(PanelLayout, { title: copy.fleetTitle, 'data-dnls-pane': '1' },
-        h('p', { 'data-dnls-loading': '1' }, copy.loading))
+      return h('p', { 'data-dnls-loading': '1' }, copy.loading)
     }
     const stats = {
-      running: visibleRows.filter((e) => e.observedState === 'running').length,
-      stopped: visibleRows.filter((e) => e.observedState === 'stopped').length,
-      attention: visibleRows.filter((e) => !['running', 'stopped'].includes(e.observedState) ||
-        ['indeterminate', 'failed'].includes(e.operation?.state) ||
-        (Number.isInteger(e.appliedRevision) && Number.isInteger(e.desiredRevision) && e.appliedRevision !== e.desiredRevision)).length,
+      running: (rows ?? []).filter((e) => e.observedState === 'running').length,
+      stopped: (rows ?? []).filter((e) => e.observedState === 'stopped').length,
+      attention: (rows ?? []).filter(needsAttention).length,
     }
     if (phase === 'failed') {
-      return h(PanelLayout, { title: copy.fleetTitle, 'data-dnls-pane': '1' },
-        h(EmptyState, { title: copy.failed, description: error?.message ?? copy.failed,
-          action: h(Button, { variant: 'primary', size: 'sm', onClick: () => setBootSeq((n) => n + 1) }, copy.retry) }))
+      return h(EmptyState, { title: copy.failed, description: error?.message ?? copy.failed,
+        action: h(Button, { variant: 'primary', size: 'sm', onClick: () => setBootSeq((n) => n + 1) }, copy.retry) })
     }
     // Groups keep unfiltered status counts; only cards are filtered.
     const groups = []
@@ -620,36 +677,23 @@ function DnlsPane({ sessionId, copy, host }) {
       if (!group) { group = { key, envId: entry.envId, profileId: entry.profileId, rows: [] }; groups.push(group) }
       group.rows.push(entry)
     }
-    return h(PanelLayout, {
-      'data-dnls-pane': '1',
-      title: copy.workbenchTitle,
-      kicker: (envIds ?? []).length ? fill(copy.envKicker, { env: (envIds ?? []).join(' · ') }) : undefined,
-      description: total !== null
-        ? `${fill(copy.listShort, { shown: visibleRows.length, total })}${complete && rows?.length === total ? '' : ` · ${copy.listPartial}`}`
-        : undefined,
-      actions: h(React.Fragment, null,
-        h(Button, { variant: 'primary', size: 'sm', disabled: busy || !supports('sandbox.instance.create'), onClick: openCreate }, copy.create),
-        ' ',
-        h(Button, { variant: 'ghost', size: 'sm', disabled: phase === 'loading', onClick: refresh }, copy.refresh)),
-    },
-      h('div', null,
-        h(primitives.Tag, { tone: 'success' }, `${copy.stateRunning} ${stats.running}`), ' ',
-        h(primitives.Tag, { tone: 'neutral' }, `${copy.stateStopped} ${stats.stopped}`), ' ',
-        stats.attention > 0 ? h(primitives.Tag, { tone: 'warning' }, `${copy.fleetAttention} ${stats.attention}`) : null),
-      h(Toolbar, { label: copy.searchPlaceholder },
-        h(primitives.Input, {
+    return h(React.Fragment, null,
+      rows?.length ? h(primitives.SegmentedControl, { label: copy.fieldState, value: fleetFilter, onChange: setFleetFilter,
+        options: [['all', copy.allObjects], ['running', copy.stateRunning], ['stopped', copy.stateStopped], ['attention', copy.fleetAttention]]
+          .map(([value, title]) => ({ value, label: value === 'all' ? title : `${title} ${stats[value]}` })) }) : null,
+      h(primitives.Input, {
           type: 'search',
           'data-dnls-search': '1',
           value: search,
           placeholder: copy.searchPlaceholder,
           'aria-label': copy.searchPlaceholder,
           onChange: (event) => setSearch(event.target.value),
-        })),
+        }),
       rows !== null && rows.length > 0 && visibleRows.length === 0
         ? h(EmptyState, {
             'data-dnls-empty': '1',
             title: copy.searchMiss,
-            action: h(Button, { variant: 'ghost', size: 'sm', onClick: () => setSearch('') }, copy.clearFilter),
+            action: h(Button, { variant: 'ghost', size: 'sm', onClick: () => { setSearch(''); setFleetFilter('all') } }, copy.clearFilter),
           })
         : null,
       rows !== null && rows.length === 0
@@ -670,23 +714,19 @@ function DnlsPane({ sessionId, copy, host }) {
           key: group.key,
           title: `${group.profileId} · ${group.envId}${groupCap != null ? ` · ${fill(copy.profileSeats, { count: group.rows.length, limit: groupCap })}` : ''}`,
         },
-          h(Toolbar, { label: group.profileId }, cards.map(entry =>
-            h('article', { key: entry.sandboxId },
-              h(DeviceFace, { entry, copy, stateLabel: s => stateLabel(copy, s) }),
-              h('div', null, h(CardBody, { entry, copy, running: entry.observedState === 'running',
-                Tag: primitives.Tag, formatBytes, stateLabel: s => stateLabel(copy, s),
-                disabled: busy, onSelect: choose }))))))
+          h('table', { width: '100%', 'aria-label': copy.lastMinute },
+            h('thead', null, h('tr', null,
+              h('th', { scope: 'col', align: 'left' }, copy.typeLabel),
+              h('th', { scope: 'col', align: 'right' }, `${copy.usageCpu} (${copy.coresUnit})`),
+              h('th', { scope: 'col', align: 'right' }, copy.usageMemory))),
+            h('tbody', null, cards.map(entry => h(SandboxRow, { key: entry.sandboxId, entry, copy, formatBytes,
+              stateLabel: s => stateLabel(copy, s), disabled: writeBusy, onSelect: choose })))),
+          h('small', null, copy.lastMinuteHint))
       }),
       receiptBlock)
   }
 
   const overviewTab = () => h(React.Fragment, null,
-    h(FactGrid, { items: [
-      { label: copy.fieldState, value: detail ? stateLabel(copy, detail.observedState) : (detailError ? undefined : copy.loading) },
-      { label: copy.observedAt, value: fmtTime(detail?.observedAt) },
-      detail?.resources ? { label: copy.resCpus, value: `${copy.allocated} ${detail.resources.cpus ?? '—'}` } : null,
-      detail?.resources ? { label: copy.resMemory, value: `${copy.allocated} ${formatBytes(detail.resources.memoryBytes) ?? '—'}` } : null,
-    ].filter(Boolean) }),
     detailError ? h('div', { 'data-dnls-detail-error': '1', role: 'alert' },
       `${detailError?.errorId ? `${detailError.errorId} ` : ''}${detailError?.message ?? detailError}`) : null,
     // Candidate strip only on a genuine desired != applied revision, and
@@ -709,26 +749,27 @@ function DnlsPane({ sessionId, copy, host }) {
             : fill(copy.revPending, { rev: detail.desiredRevision }),
           h('br'), h('small', null, fill(copy.revisionPair, { saved: detail.desiredRevision, applied: detail.appliedRevision })), ' ',
           h(Button, { variant: 'outline', size: 'sm', disabled: busy,
-            onClick: () => setDetailTab('settings') }, copy.reviewSettings))
+            onClick: openSettings }, copy.reviewSettings))
       })() : null,
     usageDenied ? h('p', null, copy.usageNotAuthorized) : null,
     // Window picker + honest metric bands + one coverage sentence.
     detail?.usage ? h(PanelSection, { title: copy.resources },
-      h(primitives.SegmentedControl, {
+      h('div', null, h(primitives.SegmentedControl, {
         value: usageWindow,
         label: copy.resources,
         options: ['24h', '7d', '30d'].map((w) => ({ value: w, label: w })),
         onChange: (w) => { if (!busy) setUsageWindow(w) },
-      }),
+      }), ' ', detail.resources ? h(primitives.Tag, { tone: 'quiet' }, fill(copy.allocation, {
+        cpu: detail.resources.cpus ?? copy.unknown, memory: formatBytes(detail.resources.memoryBytes) ?? copy.unknown })) : null),
       Array.isArray(detail.usage.history) && detail.usage.history.length > 0
-        ? h(FactGrid, { items: [
-            { label: copy.usageCpu, value: h(MetricChart, {
+        ? h(React.Fragment, null,
+            h(MetricChart, {
               title: copy.usageCpu, unit: copy.coresUnit, range: usageWindow,
               tone: 'var(--dsw-alias-state-business-primary)',
-              summary: detail.usage.cpu ? { ...detail.usage.cpu, end: detail.usage.end } : { end: detail.usage.end }, copy, fmtTime,
+              summary: detail.usage.cpu ? { ...detail.usage.cpu, end: detail.usage.end } : { end: detail.usage.end }, copy,
               bins: detail.usage.history.map((b) => ({ at: b.at, minutes: b.minutes, value: b.cpuCores ?? null })),
-            }) },
-            { label: copy.usageMemory, value: h(MetricChart, {
+            }),
+            h(MetricChart, {
               title: copy.usageMemory, unit: 'MiB', range: usageWindow,
               tone: 'var(--dsw-alias-state-success-primary)',
               summary: detail.usage.memory
@@ -736,28 +777,28 @@ function DnlsPane({ sessionId, copy, host }) {
                     mean: detail.usage.memory.mean != null ? detail.usage.memory.mean / 1048576 : null,
                     peak: detail.usage.memory.peak != null ? detail.usage.memory.peak / 1048576 : null }
                 : null,
-              copy, fmtTime,
+              copy,
               bins: detail.usage.history.map((b) => ({
                 at: b.at, minutes: b.minutes,
                 value: b.memoryBytes != null ? b.memoryBytes / 1048576 : null })),
-            }) },
-          ] })
+            }))
         : h('div', null, copy.noSamples),
-      h('small', null,
+      h('small', null, detail.usage.history?.length ? `${fmtTime(detail.usage.history[0].at)} – ${fmtTime(detail.usage.end)} · ` : null,
         `${copy.usageStates} ${copy.stateRunning} ${detail.usage.states?.running ?? '—'} · ` +
         `${copy.stateStopped} ${detail.usage.states?.stopped ?? '—'} · ` +
         `${copy.stateFailed} ${detail.usage.states?.failed ?? '—'} · ` +
         `${copy.stateMissing} ${detail.usage.states?.missing ?? '—'}`)) : null,
     // Guest process read — running + authorized only.
-    supports('sandbox.processes') ? h(PanelSection, { title: copy.guestProcesses },
-      detail && canManage !== true ? h('p', null, copy.configNotAuthorized)
-        : detail && observedState !== 'running' ? h('p', null, stateLabel(copy, observedState))
-        : null,
-      h('p', null,
-        h(Button, { variant: 'ghost', size: 'sm',
-          disabled: procsBusy || busy || !canManage || observedState !== 'running',
-          onClick: () => (procs ? setProcs(null) : loadProcesses()) },
-          procs ? copy.processesHide : copy.processes)),
+    supports('sandbox.processes') ? h(DisclosureRow, {
+      title: copy.guestProcesses, icon: h(primitives.IconFlatListOutlineRegular),
+      expandable: canManage && observedState === 'running' && !busy,
+      expandOnRowClick: true, open: procs !== null || procsBusy, running: procsBusy,
+      onToggle: () => {
+        if (procs || procsBusy) { invalidate('process'); setProcs(null); setProcsBusy(false) }
+        else loadProcesses()
+      },
+    },
+      procsBusy ? copy.loading : null,
       procs
         ? h('section', { 'data-dnls-processes': '1', 'aria-label': copy.processes },
             (procs.processes ?? []).length === 0
@@ -765,12 +806,18 @@ function DnlsPane({ sessionId, copy, host }) {
               : h(React.Fragment, null,
                   h('table', { width: '100%' },
                     h('thead', null, h('tr', null,
-                      h('th', { scope: 'col', align: 'left' }, 'PID'),
-                      h('th', { scope: 'col', align: 'left' }, copy.fieldName),
-                      h('th', { scope: 'col', align: 'left' }, copy.fieldState),
-                      h('th', { scope: 'col', align: 'left' }, 'RSS'))),
+                      [['pid', 'PID'], ['name', copy.fieldName], ['state', copy.fieldState], ['rssBytes', 'RSS']].map(([field, label]) =>
+                        h('th', { key: field, scope: 'col', align: 'left',
+                          'aria-sort': processSort.field === field ? processSort.descending ? 'descending' : 'ascending' : 'none' },
+                          h(Button, { variant: 'ghost', size: 'sm', onClick: () => setProcessSort({
+                            field, descending: field === processSort.field ? !processSort.descending : field === 'rssBytes',
+                          }) }, `${label}${processSort.field === field ? processSort.descending ? ' ↓' : ' ↑' : ''}`))))),
                     h('tbody', null,
-                      (procs.processes ?? []).map((p) => h('tr', { key: p.pid },
+                      (procs.processes ?? []).slice().sort((a, b) => {
+                        const x = a[processSort.field], y = b[processSort.field]
+                        if (x == null || y == null) return Number(x == null) - Number(y == null)
+                        return (typeof x === 'string' ? x.localeCompare(y) : x - y) * (processSort.descending ? -1 : 1)
+                      }).map((p) => h('tr', { key: p.pid },
                         h('td', null, p.pid ?? '—'),
                         h('td', null, p.name ?? '—'),
                         h('td', null, p.state ?? '—'),
@@ -785,7 +832,10 @@ function DnlsPane({ sessionId, copy, host }) {
       expandOnRowClick: true,
       onToggle: () => setDetailsOpen((open) => !open),
     },
-      h(FactGrid, { items: [
+      h(Facts, { items: [
+        { label: copy.observedAt, value: fmtTime(detail.observedAt) },
+        { label: copy.resCpus, value: detail.resources?.cpus },
+        { label: copy.resMemory, value: formatBytes(detail.resources?.memoryBytes) },
         detail.applied ? { label: copy.appliedDigest, value: detail.applied.imageDigest } : null,
         detail.applied ? { label: copy.appliedVerified, value: fmtTime(detail.applied.verifiedAt) } : null,
         { label: copy.fieldGeneration, value: detail.generation },
@@ -794,7 +844,10 @@ function DnlsPane({ sessionId, copy, host }) {
           ? { label: copy.storage, value: detail.mounts.map((m) => `${m.type ?? '—'}:${m.target ?? '—'}${m.readOnly === true ? ` ${copy.readOnly}` : ''}`).join(' · ') }
           : null,
       ].filter(Boolean) })) : null,
-    detail?.operations?.length ? h(PanelSection, { title: copy.timeline },
+    detail?.operations?.length ? h(DisclosureRow, {
+      title: `${copy.timeline} (${detail.operations.length})`, icon: h(primitives.IconClockOutlineRegular),
+      open: historyOpen, expandable: true, expandOnRowClick: true, onToggle: () => setHistoryOpen(open => !open),
+    },
       [...detail.operations].reverse().map((op) => h('div', {
         key: op.operationId ?? `${op.at}-${op.action}`,
         'data-dnls-op': op.operationId ?? undefined,
@@ -825,25 +878,21 @@ function DnlsPane({ sessionId, copy, host }) {
                 h('th', { scope: 'col', align: 'left' }, copy.servicePublication),
                 h('th', { scope: 'col', align: 'left' }, copy.protocol))),
               h('tbody', null,
-                services.map((service) => h('tr', { key: service.serviceId },
-                  h('td', null, service.serviceId),
-                  h('td', null, serviceAddress(service) ?? copy.unpublished),
-                  h('td', null, `${service.protocol ?? '—'}:${service.containerPort ?? '—'}`))))),
-            services.map((service) => h(DisclosureRow, {
-              key: service.serviceId,
-              title: service.serviceId,
-              icon: InfoIcon ? h(InfoIcon) : null,
-              open: svcOpen === service.serviceId,
-              expandable: true,
-              expandOnRowClick: true,
-              onToggle: () => setSvcOpen((open) => open === service.serviceId ? null : service.serviceId),
-            },
-              h(FactGrid, { items: [
-                service.guestCwd ? { label: copy.guestCwd, value: service.guestCwd } : null,
-                { label: copy.observedAt, value: fmtTime(service.observedAt) },
-                { label: copy.declaredVersion, value: service.declaredVersion ?? '—' },
-                { label: copy.observedVersion, value: service.observedVersion ?? '—' },
-              ].filter(Boolean) }))))
+                services.map((service) => h(React.Fragment, { key: service.serviceId },
+                  h('tr', null,
+                    h('td', null, h(DisclosureRow, {
+                      title: service.serviceId, icon: h(InfoIcon), open: svcOpen === service.serviceId,
+                      expandable: true, expandOnRowClick: true,
+                      onToggle: () => setSvcOpen(open => open === service.serviceId ? null : service.serviceId),
+                    })),
+                    h('td', null, serviceAddress(service) ?? copy.unpublished),
+                    h('td', null, `${service.protocol ?? '—'}:${service.containerPort ?? '—'}`)),
+                  svcOpen === service.serviceId ? h('tr', null, h('td', { colSpan: 3 }, h(Facts, { items: [
+                    service.guestCwd ? { label: copy.guestCwd, value: service.guestCwd } : null,
+                    { label: copy.observedAt, value: fmtTime(service.observedAt) },
+                    { label: copy.declaredVersion, value: service.declaredVersion ?? '—' },
+                    { label: copy.observedVersion, value: service.observedVersion ?? '—' },
+                  ].filter(Boolean) }))) : null)))))
         : h('p', null, copy.none),
       // Engine probe — the announced dnls.status surface, rendered only
       // for the installed kitesurf profile and only whitelisted fields.
@@ -852,14 +901,14 @@ function DnlsPane({ sessionId, copy, host }) {
             supports('dnls.status')
               ? h(Button, { variant: 'ghost', size: 'sm', disabled: busy, onClick: probeEngine }, copy.engineProbe)
               : h('p', null, copy.engineUnavailable),
-            engine ? h(FactGrid, { items: [
+            engine ? h(Facts, { items: [
               { label: copy.engineState, value: engineState },
               { label: copy.bridgeState, value: bridgeState },
               { label: copy.observedAt, value: engine?.observedAt },
               typeof engine?.networking?.hostGateway === 'string'
                 ? { label: copy.netGateway, value: engine.networking.hostGateway } : null,
             ].filter(Boolean) }) : null,
-            holdActive === true || holdActive === false ? h(FactGrid, { items: [
+            holdActive === true || holdActive === false ? h(Facts, { items: [
               { label: copy.humanHold, value: holdActive === true ? copy.humanHoldActive : copy.humanHoldFree },
             ] }) : null,
             holdActive === true || holdActive === false ? h('p', null,
@@ -907,14 +956,21 @@ function DnlsPane({ sessionId, copy, host }) {
 
   const settingsTab = () => {
     const cfg = detail?.configuration
+    const invalidCpu = cfgCpus.trim() !== '' && (!Number.isInteger(Number(cfgCpus)) || Number(cfgCpus) < 1)
+    const invalidMem = cfgMem.trim() !== '' && (!Number.isInteger(Number(cfgMem)) || Number(cfgMem) < 1)
+    const invalidIdle = !Number.isInteger(Number(idleMin)) || Number(idleMin) < 0
+    const resourceChanged = (cfgCpus.trim() !== '' && Number(cfgCpus) !== cfg?.overrides?.cpus) ||
+      (cfgMem.trim() !== '' && Number(cfgMem) * 1048576 !== cfg?.overrides?.memoryBytes)
     return h(React.Fragment, null,
       h(PanelSection, { title: copy.config },
         cfg
           ? h(React.Fragment, null,
+              h('div', null, fill(copy.allocation, { cpu: detail.resources?.cpus ?? copy.unknown,
+                memory: formatBytes(detail.resources?.memoryBytes) ?? copy.unknown })),
               h(primitives.SettingsValueField, {
                 id: `${nameId}-cpus`, label: copy.configCpus,
                 text: cfgCpus, numeric: true, overridden: false,
-                invalid: cfgCpus.trim() !== '' && (!Number.isInteger(Number(cfgCpus)) || Number(cfgCpus) < 1),
+                invalid: invalidCpu,
                 invalidLabel: copy.draftInvalid,
                 disabled: busy || detail == null,
                 onEdit: setCfgCpus, placeholder: copy.configUnobserved,
@@ -923,7 +979,7 @@ function DnlsPane({ sessionId, copy, host }) {
               h(primitives.SettingsValueField, {
                 id: `${nameId}-mem`, label: copy.configMemory,
                 text: cfgMem, numeric: true, overridden: false,
-                invalid: cfgMem.trim() !== '' && (!Number.isInteger(Number(cfgMem)) || Number(cfgMem) < 1),
+                invalid: invalidMem,
                 invalidLabel: copy.draftInvalid,
                 disabled: busy || detail == null,
                 onEdit: setCfgMem, placeholder: copy.configUnobserved,
@@ -931,7 +987,7 @@ function DnlsPane({ sessionId, copy, host }) {
               }),
               (cfgCpus.trim() !== '' || cfgMem.trim() !== '') ? h('p', null, copy.saveNoChange) : null,
               h('p', null,
-                h(Button, { variant: 'primary', size: 'sm', disabled: busy || detail == null || !supports('sandbox.revision.save'), onClick: saveResources }, copy.configSave)))
+                h(Button, { variant: 'primary', size: 'sm', disabled: busy || !resourceChanged || invalidCpu || invalidMem || !supports('sandbox.revision.save'), onClick: saveResources }, copy.configSave)))
           : h('p', null, copy.configNotAuthorized)),
       h(PanelSection, { title: copy.idle },
         cfg
@@ -939,18 +995,19 @@ function DnlsPane({ sessionId, copy, host }) {
               h(primitives.SettingsValueField, {
                 id: `${nameId}-idle`, label: copy.idleMinutes,
                 text: idleMin, numeric: true, overridden: false,
-                invalid: idleMin.trim() !== '' && (!Number.isInteger(Number(idleMin)) || Number(idleMin) < 0),
+                invalid: idleMin.trim() !== '' && invalidIdle,
                 invalidLabel: copy.draftInvalid,
                 disabled: busy || detail == null,
                 onEdit: setIdleMin, placeholder: copy.idleHint,
                 'data-dnls-idle': '1',
               }),
               h('p', null,
-                h(Button, { variant: 'ghost', size: 'sm', disabled: busy || detail == null || idleMin.trim() === '' || !supports('sandbox.idle.configure'), onClick: saveIdle }, copy.idleSave)))
+                h(Button, { variant: 'outline', size: 'sm', disabled: busy || invalidIdle || idleMin.trim() === '' || Number(idleMin) * 60000 === cfg.idleTimeoutMs || !supports('sandbox.idle.configure'), onClick: saveIdle }, copy.idleSave)))
           : h('p', null, copy.configNotAuthorized)),
       settingsMsg ? h('p', { 'data-dnls-settings-msg': '1' }, settingsMsg) : null,
       canManage && detail != null && !opPending && (supports('sandbox.instance.recreate') || supports('sandbox.instance.remove'))
-        ? h(PanelSection, { title: copy.danger },
+        ? h(DisclosureRow, { title: copy.danger, icon: h(primitives.IconWarningTriangleOutlineRegular),
+            expandable: true, expandOnRowClick: true, open: dangerOpen, onToggle: () => setDangerOpen(open => !open) },
             h('p', null, copy.persistVolume),
             h('p', null,
               supports('sandbox.instance.recreate')
@@ -965,22 +1022,13 @@ function DnlsPane({ sessionId, copy, host }) {
 
   const control = () => {
     if (!selection) return h('p', null, copy.pick)
-    return h(PanelLayout, {
-      'data-dnls-pane': '1',
-      title: h(React.Fragment, null, sandboxName, ' ', h(primitives.Tag, null, detail ? stateLabel(copy, detail.observedState) : copy.stateUnknown)),
-      kicker: `${detail?.envId ?? selection.envId ?? '—'} · ${detail?.profileId ?? '—'}`,
-      description: detail?.health === 'unknown' ? copy.healthUnverified : undefined,
-      actions: h(React.Fragment, null,
-        h(Button, { variant: 'ghost', size: 'sm', disabled: busy, onClick: unchoose }, copy.back),
-        ' ',
-        h(Button, { variant: 'primary', size: 'sm', disabled: writeBusy || !(observedState === 'stopped' ? canStart : canStop), onClick: () => setConfirm({ kind: observedState === 'stopped' ? 'start' : 'stop' }) },
-          observedState === 'stopped' ? copy.start : copy.stop),
-        ' ',
-        h(Button, { variant: 'ghost', size: 'sm', disabled: writeBusy || !canRestart, onClick: () => setConfirm({ kind: 'restart' }) }, copy.restart),
-        ' ',
-        h(Button, { variant: 'ghost', size: 'sm', disabled: phase === 'loading', onClick: refresh }, copy.refresh)),
-    },
+    return h(React.Fragment, null,
       receiptBlock,
+      h('p', null,
+        h(Button, { variant: 'outline', size: 'sm', disabled: writeBusy || !(observedState === 'stopped' ? canStart : canStop), onClick: () => setConfirm({ kind: observedState === 'stopped' ? 'start' : 'stop' }) },
+          observedState === 'stopped' ? copy.start : copy.stop), ' ',
+        h(Button, { variant: 'ghost', size: 'sm', disabled: writeBusy || !canRestart, onClick: () => setConfirm({ kind: 'restart' }) }, copy.restart), ' ',
+        detail?.health === 'unknown' ? h(primitives.Tag, { tone: 'quiet' }, copy.healthUnverified) : null),
       h(NanoTabs, {
         label: copy.control,
         value: detailTab,
@@ -988,7 +1036,6 @@ function DnlsPane({ sessionId, copy, host }) {
         items: [
           { value: 'overview', label: copy.tabOverview, content: overviewTab() },
           { value: 'services', label: copy.tabServices, content: servicesTab() },
-          { value: 'settings', label: copy.tabSettings, content: settingsTab() },
         ],
       }))
   }
@@ -1009,7 +1056,6 @@ function DnlsPane({ sessionId, copy, host }) {
             id: nameId, 'data-dnls-create-name': '1', value: createName,
             disabled: busy, onChange: (event) => setCreateName(event.target.value),
           })),
-        h('p', null, h('label', null, copy.createProfile)),
         profiles === null
           ? h('p', null, copy.loading)
           : h(primitives.SegmentedControl, {
@@ -1079,10 +1125,33 @@ function DnlsPane({ sessionId, copy, host }) {
       })
     : null
 
-  return h(React.Fragment, null,
+  const onObject = view === 'control' && selection != null
+  const backLabel = detailTab === 'services' ? copy.backToMonitor : copy.back
+  return h('section', { ref: root, className: 'nano-panes', 'data-dnls-pane': '1' },
     h('style', null, NANO_STYLES),
-    errorBox,
-    view === 'overview' ? overview() : control(),
+    h(Toolbar, { label: copy.workbenchTitle },
+      onObject ? tool(backLabel, primitives.IconChevronLeftOutlineRegular,
+        () => detailTab === 'services' ? setDetailTab('overview') : unchoose(), writeBusy) : null,
+      h('span', null, onObject ? sandboxName : copy.fleetTitle),
+      onObject
+        ? h(primitives.Tag, { tone: observedState === 'running' ? 'success' : 'neutral', 'data-dnls-state': '1' },
+            stateLabel(copy, observedState))
+        : total !== null ? h(primitives.Tag, { tone: 'neutral' }, fill(copy.listShort, { shown: visibleRows.length, total })) : null,
+      h(primitives.Tag, { tone: 'quiet' }, onObject
+        ? [selection.envId, detail?.profileId].filter(Boolean).join(' / ')
+        : (envIds ?? []).join(' / ')),
+      !onObject && !complete ? h(primitives.Tag, { tone: 'warning' }, copy.listPartial) : null,
+      tool(copy.refresh, primitives.IconRefreshOutlineRegular, refresh, phase === 'loading' || busy),
+      onObject ? tool(copy.tabSettings, primitives.IconSettingsOutlineRegular,
+        openSettings, !detail || writeBusy)
+        : tool(copy.create, primitives.IconPlusOutlineRegular, openCreate, writeBusy || !supports('sandbox.instance.create'))),
+    h('div', { key: onObject ? selection.sandboxId : 'list', className: 'nano-pane nano-panel' },
+      !settingsOpen ? errorBox : null, onObject ? control() : overview()),
+    settingsOpen && onObject ? h(NanoDialog, {
+      copy, title: `${sandboxName} · ${copy.tabSettings}`, width: 480, maxHeight: 720,
+      onCancel: () => setSettingsOpen(false),
+      footer: h(Button, { variant: 'outline', onClick: () => setSettingsOpen(false) }, copy.close),
+    }, errorBox, settingsTab()) : null,
     createDialog,
     riskDialog,
     startDialog)

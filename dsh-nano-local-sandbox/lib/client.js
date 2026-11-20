@@ -160,12 +160,16 @@ ${LAYER_CSS}
 
 /* Generic panel skeleton (\xA76.3): scrollable layout, sections, fact grid. */
 .nano-panel { box-sizing: border-box; block-size: 100%; min-block-size: 0; overflow: auto;
-  padding: var(--nano-space-3); color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+  padding: var(--nano-space-3); color: var(--dsw-alias-label-primary); overflow-wrap: anywhere;
+  font: var(--dsw-font-s-14); }
+.nano-panes > .nano-toolbar { flex: none; flex-wrap: wrap; font: var(--dsw-font-xs-13); }
 .nano-panel-header, .nano-panel-section { display: grid; gap: var(--nano-space-2); margin-block-end: var(--nano-space-3); }
-.nano-panel-header h2, .nano-panel-section h3 { margin: 0; }
+.nano-panel-header h2, .nano-panel-section h3 { margin: 0; font: var(--dsw-font-s-14); font-weight: 500; }
 .nano-panel-header p { margin: 0; color: var(--dsw-alias-label-secondary); }
 .nano-panel-kicker { font-size: var(--nano-desc-size, inherit); }
-.nano-panel-section { padding-block: var(--nano-space-2); border-block-start: var(--dsh-hairline-width) solid var(--dsw-alias-border-l1); }
+.nano-panel-section { padding-block: var(--nano-space-2); font: var(--dsw-font-s-14); }
+.nano-panel-section > p { margin: 0; }
+.nano-panel th { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
 .nano-panel-section > pre { min-inline-size: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .nano-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--nano-space-2); margin: 0; }
 .nano-facts dt { color: var(--dsw-alias-label-secondary); }
@@ -1547,6 +1551,10 @@ ${LAYER_CSS}
         emptyHint: "Create one from an installed profile to get started.",
         pick: "Select a sandbox to control it",
         back: "Back to sandboxes",
+        backToMonitor: "Back to resource monitor",
+        allObjects: "All",
+        lastMinuteHint: "Last complete minute \xB7 Used / allocated. A dash means no reading.",
+        allocation: "Allocated: {cpu} cores \xB7 {memory}",
         searchPlaceholder: "Filter sandboxes",
         create: "Create sandbox",
         createTitle: "Create a sandbox",
@@ -1747,6 +1755,10 @@ ${LAYER_CSS}
         emptyHint: "\u4ECE\u5DF2\u5B89\u88C5\u7684 profile \u521B\u5EFA\u4E00\u4E2A\u5373\u53EF\u5F00\u59CB\u3002",
         pick: "\u9009\u62E9\u4E00\u4E2A\u6C99\u7BB1\u540E\u8FDB\u884C\u63A7\u5236",
         back: "\u8FD4\u56DE\u6C99\u7BB1\u5217\u8868",
+        backToMonitor: "\u8FD4\u56DE\u8D44\u6E90\u76D1\u63A7",
+        allObjects: "\u5168\u90E8",
+        lastMinuteHint: "\u6700\u8FD1\u4E00\u4E2A\u5B8C\u6574\u5206\u949F \xB7 \u5B9E\u6D4B\u7528\u91CF / \u5206\u914D\u91CF\uFF1B\u6A2A\u7EBF\u8868\u793A\u6CA1\u6709\u8BFB\u6570\u3002",
+        allocation: "\u5F53\u524D\u5206\u914D\uFF1A{cpu} \u6838 \xB7 {memory}",
         searchPlaceholder: "\u7B5B\u9009\u6C99\u7BB1",
         create: "\u521B\u5EFA\u6C99\u7BB1",
         createTitle: "\u521B\u5EFA\u6C99\u7BB1",
@@ -2022,107 +2034,10 @@ ${LAYER_CSS}
   // src/client/instruments.jsx
   var instruments_exports = {};
   __export(instruments_exports, {
-    CardBody: () => CardBody,
-    DeviceFace: () => DeviceFace,
-    MetricChart: () => MetricChart
+    MetricChart: () => MetricChart,
+    SandboxRow: () => SandboxRow
   });
-  function DeviceFace({ entry, copy, stateLabel: labelOf }) {
-    const state = entry.observedState;
-    const running = state === "running";
-    const stopped = state === "stopped";
-    const title = labelOf(state) ?? (running ? copy.faceRunning : stopped ? copy.faceStopped : copy.faceUnverified);
-    const mem = num(entry.lastMinute?.memoryBytes);
-    const cpu = num(entry.lastMinute?.cpuCores);
-    const alloc = entry.resources ?? {};
-    const memRatio = ratio(mem, alloc.memoryBytes);
-    const cpuRatio = ratio(cpu, alloc.cpus);
-    const bar = (y, label, r, used, cap, unit) => h8(
-      React13.Fragment,
-      { key: label },
-      h8("text", { x: 14, y, fontSize: 12, fill: "var(--dsw-alias-label-primary)" }, label),
-      used != null && cap != null ? h8(
-        "text",
-        { x: 238, y, fontSize: 12, textAnchor: "end", fill: "var(--dsw-alias-label-primary)" },
-        `${used} / ${cap} ${unit}`
-      ) : h8("text", { x: 238, y, fontSize: 12, textAnchor: "end", fill: "var(--dsw-alias-label-secondary)" }, copy.unknown),
-      h8("rect", {
-        x: 14,
-        y: y + 6,
-        width: 224,
-        height: 10,
-        rx: 3,
-        fill: "var(--dsw-alias-bg-layer-1)",
-        stroke: "var(--dsw-alias-border-l2)",
-        strokeWidth: 1
-      }),
-      r != null && r > 0 ? h8("rect", {
-        x: 14,
-        y: y + 6,
-        width: Math.max(2, Math.round(224 * r)),
-        height: 10,
-        rx: 3,
-        fill: "var(--dsw-alias-state-done-primary)"
-      }) : null
-    );
-    return h8(
-      "svg",
-      {
-        viewBox: "0 0 252 126",
-        width: 252,
-        height: 126,
-        role: "img",
-        focusable: "false",
-        "aria-label": running ? `${title} \xB7 ${copy.lastMinute} \xB7 CPU ${cpu ?? "\u2014"} / ${alloc.cpus ?? "\u2014"} ${copy.coresUnit} \xB7 RAM ${mib(mem) ?? "\u2014"} / ${mib(alloc.memoryBytes) ?? "\u2014"} MiB` : title
-      },
-      h8("title", null, title),
-      h8("rect", {
-        x: 3,
-        y: 3,
-        width: 246,
-        height: 113,
-        rx: 10,
-        fill: running ? "var(--dsw-alias-bg-layer-2)" : "var(--dsw-alias-bg-layer-1)",
-        stroke: "var(--dsw-alias-border-l2)"
-      }),
-      h8("circle", {
-        cx: 18,
-        cy: 18,
-        r: 4,
-        fill: running ? "var(--dsw-alias-state-success-primary)" : "var(--dsw-alias-border-l2)"
-      }),
-      h8("text", { x: 30, y: 22, fontSize: 12, fill: "var(--dsw-alias-label-primary)" }, title),
-      running ? h8(
-        React13.Fragment,
-        null,
-        bar(48, "CPU", cpuRatio, cpu != null ? Number(cpu.toFixed(2)) : null, num(alloc.cpus), copy.coresUnit),
-        bar(78, "RAM", memRatio, mib(mem), mib(alloc.memoryBytes), "MiB"),
-        h8(
-          "text",
-          { x: 14, y: 107, fontSize: 10, fill: "var(--dsw-alias-label-secondary)" },
-          entry.lastMinute?.at ? copy.lastMinute : copy.noSamples
-        )
-      ) : h8(
-        React13.Fragment,
-        null,
-        stopped && primitives2.IconPauseOutlineRegular ? h8(
-          "g",
-          { transform: "translate(107 38)", color: "var(--dsw-alias-label-secondary)" },
-          h8(primitives2.IconPauseOutlineRegular, { size: 38 })
-        ) : null,
-        h8(
-          "text",
-          { x: 126, y: 100, textAnchor: "middle", fontSize: 12, fill: "var(--dsw-alias-label-secondary)" },
-          stopped ? copy.samplingStopped : copy.faceUnverifiedHint
-        )
-      ),
-      h8("path", {
-        d: "M96 116 L156 116 L168 125 L84 125 Z",
-        fill: "var(--dsw-alias-bg-layer-1)",
-        stroke: "var(--dsw-alias-border-l2)"
-      })
-    );
-  }
-  function MetricChart({ title, bins, unit, range, summary, tone, copy, fmtTime }) {
+  function MetricChart({ title, bins, unit, range, summary, tone, copy }) {
     const W = 320;
     const H = 64;
     const start = bins.length ? num(bins[0].at) ?? Date.parse(bins[0]?.at ?? "") : null;
@@ -2141,22 +2056,20 @@ ${LAYER_CSS}
       h8(
         "div",
         null,
-        h8("strong", null, title),
-        " ",
+        title,
+        " \xB7 ",
         mean != null ? h8("span", null, `${copy.chartMean} ${fmt(mean)} ${unit}`) : null,
         peak != null ? h8("span", null, ` \xB7 ${copy.chartPeak} ${fmt(peak)} ${unit}`) : null,
-        " ",
-        h8("span", null, `${valid}/${expected} ${copy.samplesWord}`)
+        h8(primitives2.Tag, { tone: "quiet" }, `${valid}/${expected} ${copy.samplesWord}`)
       ),
       bins.length === 0 || span == null || !bins.some((b) => num(b.value) !== null) ? h8("p", null, copy.noSamples) : h8(
         React13.Fragment,
         null,
-        h8("small", null, `0 \u2013 ${fmt(scale)} ${unit}`),
         h8(
           "svg",
           {
             width: "100%",
-            height: H,
+            height: 32,
             viewBox: `0 0 ${W} ${H}`,
             preserveAspectRatio: "none",
             role: "img",
@@ -2182,54 +2095,65 @@ ${LAYER_CSS}
               fill: tone
             });
           })
-        ),
-        h8("small", null, `${fmtTime(start)} \u2013 ${fmtTime(end)}`)
+        )
       )
     );
   }
-  function CardBody({ entry, copy, running, onSelect, disabled, Tag, formatBytes: formatBytes3, stateLabel: stateLabel2 }) {
+  function SandboxRow({ entry, copy, onSelect, disabled, formatBytes: formatBytes3, stateLabel: stateLabel2 }) {
     const pending = Number.isInteger(entry.desiredRevision) && Number.isInteger(entry.appliedRevision) && entry.desiredRevision !== entry.appliedRevision;
-    const services = running ? (entry.services ?? []).filter((s) => s.published === true).length : 0;
+    const running = entry.observedState === "running";
+    const note = pending ? copy.pendingConfig : ["failed", "indeterminate"].includes(entry.operation?.state) ? copy.opStates[entry.operation.state] : null;
     const alloc = entry.resources ?? {};
-    const allocText = [
-      num(alloc.cpus) != null ? `${alloc.cpus} ${copy.coresUnit}` : null,
-      num(alloc.memoryBytes) != null ? formatBytes3?.(alloc.memoryBytes) ?? `${Math.round(alloc.memoryBytes / 1048576)} MiB` : null
-    ].filter(Boolean).join(" / ");
+    const cpu = num(entry.lastMinute?.cpuCores);
+    const meter = (label, used, max) => Number.isFinite(used) && Number.isFinite(max) && max > 0 && used <= max ? h8("div", null, h8("meter", { min: 0, max, value: used, "aria-label": label })) : null;
     return h8(
-      React13.Fragment,
+      "tr",
       null,
       h8(
-        Button4,
-        {
-          variant: "outline",
+        "td",
+        null,
+        h8(Button4, {
+          variant: "ghost",
+          size: "md",
           "data-dnls-row": entry.sandboxId,
-          "aria-label": entry.name ?? entry.sandboxId,
+          icon: h8(primitives2.StateDot, { state: running ? "done" : entry.observedState === "stopped" ? "idle" : "warning" }),
           disabled,
           onClick: () => onSelect(entry.sandboxId)
-        },
-        h8("strong", null, entry.name ?? entry.sandboxId)
+        }, entry.name ?? entry.sandboxId),
+        h8(
+          "div",
+          null,
+          h8(primitives2.Tag, { tone: "quiet" }, stateLabel2(entry.observedState)),
+          note ? h8(primitives2.Tag, { tone: "warning" }, note) : null,
+          running && entry.services?.some((s) => s.published === true) ? h8(
+            primitives2.Tag,
+            { tone: "quiet" },
+            `${copy.servicesVerified} ${entry.services.filter((s) => s.published === true).length}`
+          ) : null
+        )
       ),
-      " ",
-      h8(Tag, { tone: running ? "success" : entry.observedState === "stopped" ? "neutral" : "warning" }, stateLabel2(entry.observedState)),
       h8(
-        "div",
-        null,
-        pending ? h8(Tag, { tone: "warning" }, copy.pendingConfig) : null,
-        running && services > 0 ? h8("small", null, `${copy.servicesVerified} ${services}`) : null
+        "td",
+        { align: "right" },
+        `${cpu === null ? "\u2014" : Number(cpu.toFixed(2))} / ${alloc.cpus ?? "\u2014"}`,
+        meter(copy.usageCpu, cpu, alloc.cpus)
       ),
-      allocText ? h8("small", null, allocText) : null
+      h8(
+        "td",
+        { align: "right" },
+        `${formatBytes3(entry.lastMinute?.memoryBytes) ?? "\u2014"} / ${formatBytes3(alloc.memoryBytes) ?? "\u2014"}`,
+        meter(copy.usageMemory, entry.lastMinute?.memoryBytes, alloc.memoryBytes)
+      )
     );
   }
-  var React13, primitives2, h8, Button4, ratio, num, mib;
+  var React13, primitives2, h8, Button4, num;
   var init_instruments = __esm({
     "src/client/instruments.jsx"() {
       React13 = __require("react");
       primitives2 = __require("@deepseek-ai/dsh-client-ui-primitives");
       h8 = React13.createElement;
       Button4 = primitives2.Button;
-      ratio = (value, total) => Number.isFinite(value) && Number.isFinite(total) && total > 0 ? Math.min(value / total, 1) : null;
       num = (v) => typeof v === "number" && Number.isFinite(v) ? v : null;
-      mib = (v) => num(v) != null ? Math.round(v / 1048576) : null;
     }
   });
 
@@ -2241,12 +2165,12 @@ ${LAYER_CSS}
   });
   var React14 = __require("react");
   var primitives3 = __require("@deepseek-ai/dsh-client-ui-primitives");
-  var { Toolbar: Toolbar2, EmptyState: EmptyState2, NanoTabs: NanoTabs2, NanoDialog: NanoDialog2, NANO_STYLES: NANO_STYLES2, PanelLayout: PanelLayout2, PanelSection: PanelSection2, FactGrid: FactGrid2 } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
+  var { Toolbar: Toolbar2, IconButton: IconButton2, EmptyState: EmptyState2, NanoTabs: NanoTabs2, NanoDialog: NanoDialog2, NANO_STYLES: NANO_STYLES2, PanelSection: PanelSection2 } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
   var { createDnlsClient: createDnlsClient2, createTicket: createTicket2 } = (init_managed(), __toCommonJS(managed_exports));
   var { copyFor: copyFor2, fill: fill2 } = (init_i18n(), __toCommonJS(i18n_exports));
   var { formatBytes: formatBytes2, serviceAddress: serviceAddress2 } = (init_format(), __toCommonJS(format_exports));
   var { terminalAddress: terminalAddress2 } = (init_terminal_resource(), __toCommonJS(terminal_resource_exports));
-  var { DeviceFace: DeviceFace2, MetricChart: MetricChart2, CardBody: CardBody2 } = (init_instruments(), __toCommonJS(instruments_exports));
+  var { MetricChart: MetricChart2, SandboxRow: SandboxRow2 } = (init_instruments(), __toCommonJS(instruments_exports));
   var h9 = React14.createElement;
   var KIND = "dnls-sandbox";
   var Button5 = primitives3.Button;
@@ -2262,6 +2186,12 @@ ${LAYER_CSS}
     starting: "stateStarting"
   };
   var stateLabel = (copy, state) => copy[STATE_KEYS[state]] ?? copy.stateUnknown;
+  function Facts({ items }) {
+    return h9("table", null, h9("tbody", null, items.map(({ label, value }) => h9("tr", { key: label }, h9("td", null, label), h9("td", null, value ?? "\u2014")))));
+  }
+  function tool(label, Icon, onClick, disabled = false) {
+    return h9(IconButton2, { icon: Icon ? h9(Icon, { size: 16 }) : null, "aria-label": label, onClick, disabled });
+  }
   function DnlsPane({ sessionId, copy, host }) {
     const [view, setView] = React14.useState("overview");
     const [phase, setPhase] = React14.useState("loading");
@@ -2271,6 +2201,7 @@ ${LAYER_CSS}
     const [complete, setComplete] = React14.useState(true);
     const [envIds, setEnvIds] = React14.useState(null);
     const [search, setSearch] = React14.useState("");
+    const [fleetFilter, setFleetFilter] = React14.useState("all");
     const [selection, setSelection] = React14.useState(null);
     const [detail, setDetail] = React14.useState(null);
     const [detailError, setDetailError] = React14.useState(null);
@@ -2293,7 +2224,14 @@ ${LAYER_CSS}
     const [terms, setTerms] = React14.useState(null);
     const [termBusy, setTermBusy] = React14.useState(false);
     const [detailsOpen, setDetailsOpen] = React14.useState(false);
+    const [historyOpen, setHistoryOpen] = React14.useState(false);
+    const [receiptOpen, setReceiptOpen] = React14.useState(false);
     const [detailTab, setDetailTab] = React14.useState("overview");
+    const [settingsOpen, setSettingsOpen] = React14.useState(false);
+    const [dangerOpen, setDangerOpen] = React14.useState(false);
+    const [processSort, setProcessSort] = React14.useState({ field: "rssBytes", descending: true });
+    const lastPick = React14.useRef(null);
+    const root = React14.useRef(null);
     const [svcOpen, setSvcOpen] = React14.useState(null);
     const fmtTime = (iso) => {
       const ms = typeof iso === "number" ? iso : Date.parse(iso ?? "");
@@ -2359,6 +2297,13 @@ ${LAYER_CSS}
       setRows(null);
       setTotal(null);
       setSelection(null);
+      setView("overview");
+      setSettingsOpen(false);
+      setCreateOpen(false);
+      setConfirm(null);
+      setSearch("");
+      setFleetFilter("all");
+      setProfileCaps(/* @__PURE__ */ new Map());
       setDetail(null);
       setDetailError(null);
       setProcs(null);
@@ -2405,9 +2350,11 @@ ${LAYER_CSS}
       if (writeLock.current) return;
       const found = (rows ?? []).find((entry) => entry.sandboxId === sandboxId);
       if (!found) return;
+      lastPick.current = found.sandboxId;
       invalidate("detail", "process", "operation", "profiles", "engine", "term", "settings", "logs");
       setSelection({ sandboxId: found.sandboxId, name: found.name ?? found.sandboxId, envId: found.envId });
       setDetailTab("overview");
+      setSettingsOpen(false);
       setSvcOpen(null);
       setDetail(null);
       setDetailError(null);
@@ -2425,12 +2372,13 @@ ${LAYER_CSS}
       setLogs(null);
       setLogsBusy(false);
       setDetailsOpen(false);
+      setHistoryOpen(false);
       setSettingsMsg(null);
       setUsageDenied(false);
       setView("control");
     }
     function unchoose() {
-      if (writeLock.current) return;
+      if (writeLock.current || opPending) return;
       invalidate("detail", "process", "operation", "engine", "term", "settings", "logs");
       setSelection(null);
       setDetail(null);
@@ -2447,6 +2395,16 @@ ${LAYER_CSS}
       setUsageDenied(false);
       setView("overview");
     }
+    React14.useEffect(() => {
+      if (view === "control") {
+        root.current?.querySelector("[role=toolbar] button")?.focus();
+        return;
+      }
+      if (view !== "overview" || !lastPick.current) return;
+      const button = Array.from(root.current?.querySelectorAll("[data-dnls-row]") ?? []).find((el) => el.dataset.dnlsRow === lastPick.current);
+      button?.focus();
+      lastPick.current = null;
+    }, [view]);
     const loadDetail = React14.useCallback(() => {
       if (!selection || !client()) return;
       const target = selection.sandboxId;
@@ -2510,9 +2468,11 @@ ${LAYER_CSS}
         invalidate("operation");
         const record = { operationId: body.operationId, sandboxId: sandboxId ?? body.sandboxId, action };
         setReceipt(record);
+        setReceiptOpen(false);
         setConfirm(null);
         setAcknowledged(false);
         setCreateOpen(false);
+        setSettingsOpen(false);
         setOpBody(body);
         loadList();
       }, stale).finally(() => {
@@ -2710,6 +2670,30 @@ ${LAYER_CSS}
         }
       }, stale);
     }
+    function openSettings() {
+      setDangerOpen(false);
+      setSettingsMsg(null);
+      setSettingsOpen(true);
+    }
+    function writeSettings(work) {
+      if (writeLock.current || opPending) return;
+      writeLock.current = true;
+      setBusy(true);
+      const current = ticket("settings");
+      setSettingsMsg(null);
+      setError(null);
+      run(async () => {
+        const message = await work();
+        if (!current()) return;
+        setSettingsMsg(message);
+        loadDetail();
+        loadList();
+      }, current).finally(() => {
+        if (!current()) return;
+        writeLock.current = false;
+        setBusy(false);
+      });
+    }
     function saveResources() {
       if (!selection || !detail?.configuration) return;
       const overrides = Object.fromEntries(Object.entries(detail.configuration.overrides ?? {}).filter(([, v]) => v != null));
@@ -2730,18 +2714,13 @@ ${LAYER_CSS}
         overrides.memoryBytes = mem * 1024 * 1024;
       }
       const target = selection.sandboxId;
-      const stale = ticket("settings");
-      setSettingsMsg(null);
-      setError(null);
-      run(async () => {
+      writeSettings(async () => {
         const out = await client().saveRevision(target, {
           expectedRevision: detail.desiredRevision ?? 0,
           overrides
         });
-        if (!stale()) return;
-        setSettingsMsg(fill2(copy.configSaved, { revision: out.desiredRevision?.revision ?? "?" }));
-        loadDetail();
-      }, stale);
+        return fill2(copy.configSaved, { revision: out.desiredRevision?.revision ?? "?" });
+      });
     }
     function saveIdle() {
       if (!selection || !detail?.configuration) return;
@@ -2752,15 +2731,10 @@ ${LAYER_CSS}
         return;
       }
       const target = selection.sandboxId;
-      const stale = ticket("settings");
-      setSettingsMsg(null);
-      setError(null);
-      run(async () => {
+      writeSettings(async () => {
         await client().configureIdle(target, minutes * 6e4);
-        if (!stale()) return;
-        setSettingsMsg(copy.idleSaved);
-        loadDetail();
-      }, stale);
+        return copy.idleSaved;
+      });
     }
     if (!sessionId) return null;
     const sandboxName = selection?.name ?? selection?.sandboxId ?? "";
@@ -2779,18 +2753,21 @@ ${LAYER_CSS}
       `${error?.errorId ? `${error.errorId} ` : ""}${error?.message ?? error}`
     ) : null;
     const receiptBlock = receipt ? h9(
-      PanelSection2,
-      { title: copy.activity },
-      h9(
-        "p",
-        { "data-dnls-receipt": "1" },
-        fill2(copy.opLine, { action: copy[receipt.action] ?? receipt.action, state: opBody?.state ?? copy.opPending }),
-        h9("br", null),
-        fill2(copy.opIdLine, { operationId: receipt.operationId })
-      ),
+      "section",
+      { "data-dnls-receipt": "1" },
+      h9(DisclosureRow, {
+        title: fill2(copy.opLine, { action: copy[receipt.action] ?? receipt.action, state: copy.opStates?.[opBody?.state] ?? copy.opPending }),
+        icon: h9(primitives3.IconClockOutlineRegular),
+        open: receiptOpen,
+        expandOnRowClick: true,
+        expandable: true,
+        onToggle: () => setReceiptOpen((open) => !open)
+      }, fill2(copy.opIdLine, { operationId: receipt.operationId })),
       h9(Button5, { variant: "ghost", size: "sm", onClick: recheck }, copy.opRecheck)
     ) : null;
+    const needsAttention = (e) => !["running", "stopped"].includes(e.observedState) || ["indeterminate", "failed"].includes(e.operation?.state) || Number.isInteger(e.appliedRevision) && Number.isInteger(e.desiredRevision) && e.appliedRevision !== e.desiredRevision;
     const visibleRows = (rows ?? []).filter((entry) => {
+      if (fleetFilter === "attention" ? !needsAttention(entry) : fleetFilter !== "all" && fleetFilter !== entry.observedState) return false;
       if (!search.trim()) return true;
       const q = search.trim().toLowerCase();
       return [
@@ -2803,27 +2780,19 @@ ${LAYER_CSS}
     });
     const overview = () => {
       if (phase === "loading" && rows === null) {
-        return h9(
-          PanelLayout2,
-          { title: copy.fleetTitle, "data-dnls-pane": "1" },
-          h9("p", { "data-dnls-loading": "1" }, copy.loading)
-        );
+        return h9("p", { "data-dnls-loading": "1" }, copy.loading);
       }
       const stats = {
-        running: visibleRows.filter((e) => e.observedState === "running").length,
-        stopped: visibleRows.filter((e) => e.observedState === "stopped").length,
-        attention: visibleRows.filter((e) => !["running", "stopped"].includes(e.observedState) || ["indeterminate", "failed"].includes(e.operation?.state) || Number.isInteger(e.appliedRevision) && Number.isInteger(e.desiredRevision) && e.appliedRevision !== e.desiredRevision).length
+        running: (rows ?? []).filter((e) => e.observedState === "running").length,
+        stopped: (rows ?? []).filter((e) => e.observedState === "stopped").length,
+        attention: (rows ?? []).filter(needsAttention).length
       };
       if (phase === "failed") {
-        return h9(
-          PanelLayout2,
-          { title: copy.fleetTitle, "data-dnls-pane": "1" },
-          h9(EmptyState2, {
-            title: copy.failed,
-            description: error?.message ?? copy.failed,
-            action: h9(Button5, { variant: "primary", size: "sm", onClick: () => setBootSeq((n) => n + 1) }, copy.retry)
-          })
-        );
+        return h9(EmptyState2, {
+          title: copy.failed,
+          description: error?.message ?? copy.failed,
+          action: h9(Button5, { variant: "primary", size: "sm", onClick: () => setBootSeq((n) => n + 1) }, copy.retry)
+        });
       }
       const groups = [];
       for (const entry of rows ?? []) {
@@ -2836,45 +2805,29 @@ ${LAYER_CSS}
         group.rows.push(entry);
       }
       return h9(
-        PanelLayout2,
-        {
-          "data-dnls-pane": "1",
-          title: copy.workbenchTitle,
-          kicker: (envIds ?? []).length ? fill2(copy.envKicker, { env: (envIds ?? []).join(" \xB7 ") }) : void 0,
-          description: total !== null ? `${fill2(copy.listShort, { shown: visibleRows.length, total })}${complete && rows?.length === total ? "" : ` \xB7 ${copy.listPartial}`}` : void 0,
-          actions: h9(
-            React14.Fragment,
-            null,
-            h9(Button5, { variant: "primary", size: "sm", disabled: busy || !supports("sandbox.instance.create"), onClick: openCreate }, copy.create),
-            " ",
-            h9(Button5, { variant: "ghost", size: "sm", disabled: phase === "loading", onClick: refresh }, copy.refresh)
-          )
-        },
-        h9(
-          "div",
-          null,
-          h9(primitives3.Tag, { tone: "success" }, `${copy.stateRunning} ${stats.running}`),
-          " ",
-          h9(primitives3.Tag, { tone: "neutral" }, `${copy.stateStopped} ${stats.stopped}`),
-          " ",
-          stats.attention > 0 ? h9(primitives3.Tag, { tone: "warning" }, `${copy.fleetAttention} ${stats.attention}`) : null
-        ),
-        h9(
-          Toolbar2,
-          { label: copy.searchPlaceholder },
-          h9(primitives3.Input, {
-            type: "search",
-            "data-dnls-search": "1",
-            value: search,
-            placeholder: copy.searchPlaceholder,
-            "aria-label": copy.searchPlaceholder,
-            onChange: (event) => setSearch(event.target.value)
-          })
-        ),
+        React14.Fragment,
+        null,
+        rows?.length ? h9(primitives3.SegmentedControl, {
+          label: copy.fieldState,
+          value: fleetFilter,
+          onChange: setFleetFilter,
+          options: [["all", copy.allObjects], ["running", copy.stateRunning], ["stopped", copy.stateStopped], ["attention", copy.fleetAttention]].map(([value, title]) => ({ value, label: value === "all" ? title : `${title} ${stats[value]}` }))
+        }) : null,
+        h9(primitives3.Input, {
+          type: "search",
+          "data-dnls-search": "1",
+          value: search,
+          placeholder: copy.searchPlaceholder,
+          "aria-label": copy.searchPlaceholder,
+          onChange: (event) => setSearch(event.target.value)
+        }),
         rows !== null && rows.length > 0 && visibleRows.length === 0 ? h9(EmptyState2, {
           "data-dnls-empty": "1",
           title: copy.searchMiss,
-          action: h9(Button5, { variant: "ghost", size: "sm", onClick: () => setSearch("") }, copy.clearFilter)
+          action: h9(Button5, { variant: "ghost", size: "sm", onClick: () => {
+            setSearch("");
+            setFleetFilter("all");
+          } }, copy.clearFilter)
         }) : null,
         rows !== null && rows.length === 0 ? h9(EmptyState2, {
           "data-dnls-empty": "1",
@@ -2892,21 +2845,27 @@ ${LAYER_CSS}
               key: group.key,
               title: `${group.profileId} \xB7 ${group.envId}${groupCap != null ? ` \xB7 ${fill2(copy.profileSeats, { count: group.rows.length, limit: groupCap })}` : ""}`
             },
-            h9(Toolbar2, { label: group.profileId }, cards.map((entry) => h9(
-              "article",
-              { key: entry.sandboxId },
-              h9(DeviceFace2, { entry, copy, stateLabel: (s) => stateLabel(copy, s) }),
-              h9("div", null, h9(CardBody2, {
+            h9(
+              "table",
+              { width: "100%", "aria-label": copy.lastMinute },
+              h9("thead", null, h9(
+                "tr",
+                null,
+                h9("th", { scope: "col", align: "left" }, copy.typeLabel),
+                h9("th", { scope: "col", align: "right" }, `${copy.usageCpu} (${copy.coresUnit})`),
+                h9("th", { scope: "col", align: "right" }, copy.usageMemory)
+              )),
+              h9("tbody", null, cards.map((entry) => h9(SandboxRow2, {
+                key: entry.sandboxId,
                 entry,
                 copy,
-                running: entry.observedState === "running",
-                Tag: primitives3.Tag,
                 formatBytes: formatBytes2,
                 stateLabel: (s) => stateLabel(copy, s),
-                disabled: busy,
+                disabled: writeBusy,
                 onSelect: choose
-              }))
-            )))
+              })))
+            ),
+            h9("small", null, copy.lastMinuteHint)
           );
         }),
         receiptBlock
@@ -2915,12 +2874,6 @@ ${LAYER_CSS}
     const overviewTab = () => h9(
       React14.Fragment,
       null,
-      h9(FactGrid2, { items: [
-        { label: copy.fieldState, value: detail ? stateLabel(copy, detail.observedState) : detailError ? void 0 : copy.loading },
-        { label: copy.observedAt, value: fmtTime(detail?.observedAt) },
-        detail?.resources ? { label: copy.resCpus, value: `${copy.allocated} ${detail.resources.cpus ?? "\u2014"}` } : null,
-        detail?.resources ? { label: copy.resMemory, value: `${copy.allocated} ${formatBytes2(detail.resources.memoryBytes) ?? "\u2014"}` } : null
-      ].filter(Boolean) }),
       detailError ? h9(
         "div",
         { "data-dnls-detail-error": "1", role: "alert" },
@@ -2949,7 +2902,7 @@ ${LAYER_CSS}
             variant: "outline",
             size: "sm",
             disabled: busy,
-            onClick: () => setDetailTab("settings")
+            onClick: openSettings
           }, copy.reviewSettings)
         );
       })() : null,
@@ -2958,26 +2911,30 @@ ${LAYER_CSS}
       detail?.usage ? h9(
         PanelSection2,
         { title: copy.resources },
-        h9(primitives3.SegmentedControl, {
+        h9("div", null, h9(primitives3.SegmentedControl, {
           value: usageWindow,
           label: copy.resources,
           options: ["24h", "7d", "30d"].map((w) => ({ value: w, label: w })),
           onChange: (w) => {
             if (!busy) setUsageWindow(w);
           }
-        }),
-        Array.isArray(detail.usage.history) && detail.usage.history.length > 0 ? h9(FactGrid2, { items: [
-          { label: copy.usageCpu, value: h9(MetricChart2, {
+        }), " ", detail.resources ? h9(primitives3.Tag, { tone: "quiet" }, fill2(copy.allocation, {
+          cpu: detail.resources.cpus ?? copy.unknown,
+          memory: formatBytes2(detail.resources.memoryBytes) ?? copy.unknown
+        })) : null),
+        Array.isArray(detail.usage.history) && detail.usage.history.length > 0 ? h9(
+          React14.Fragment,
+          null,
+          h9(MetricChart2, {
             title: copy.usageCpu,
             unit: copy.coresUnit,
             range: usageWindow,
             tone: "var(--dsw-alias-state-business-primary)",
             summary: detail.usage.cpu ? { ...detail.usage.cpu, end: detail.usage.end } : { end: detail.usage.end },
             copy,
-            fmtTime,
             bins: detail.usage.history.map((b) => ({ at: b.at, minutes: b.minutes, value: b.cpuCores ?? null }))
-          }) },
-          { label: copy.usageMemory, value: h9(MetricChart2, {
+          }),
+          h9(MetricChart2, {
             title: copy.usageMemory,
             unit: "MiB",
             range: usageWindow,
@@ -2989,39 +2946,39 @@ ${LAYER_CSS}
               peak: detail.usage.memory.peak != null ? detail.usage.memory.peak / 1048576 : null
             } : null,
             copy,
-            fmtTime,
             bins: detail.usage.history.map((b) => ({
               at: b.at,
               minutes: b.minutes,
               value: b.memoryBytes != null ? b.memoryBytes / 1048576 : null
             }))
-          }) }
-        ] }) : h9("div", null, copy.noSamples),
+          })
+        ) : h9("div", null, copy.noSamples),
         h9(
           "small",
           null,
+          detail.usage.history?.length ? `${fmtTime(detail.usage.history[0].at)} \u2013 ${fmtTime(detail.usage.end)} \xB7 ` : null,
           `${copy.usageStates} ${copy.stateRunning} ${detail.usage.states?.running ?? "\u2014"} \xB7 ${copy.stateStopped} ${detail.usage.states?.stopped ?? "\u2014"} \xB7 ${copy.stateFailed} ${detail.usage.states?.failed ?? "\u2014"} \xB7 ${copy.stateMissing} ${detail.usage.states?.missing ?? "\u2014"}`
         )
       ) : null,
       // Guest process read — running + authorized only.
       supports("sandbox.processes") ? h9(
-        PanelSection2,
-        { title: copy.guestProcesses },
-        detail && canManage !== true ? h9("p", null, copy.configNotAuthorized) : detail && observedState !== "running" ? h9("p", null, stateLabel(copy, observedState)) : null,
-        h9(
-          "p",
-          null,
-          h9(
-            Button5,
-            {
-              variant: "ghost",
-              size: "sm",
-              disabled: procsBusy || busy || !canManage || observedState !== "running",
-              onClick: () => procs ? setProcs(null) : loadProcesses()
-            },
-            procs ? copy.processesHide : copy.processes
-          )
-        ),
+        DisclosureRow,
+        {
+          title: copy.guestProcesses,
+          icon: h9(primitives3.IconFlatListOutlineRegular),
+          expandable: canManage && observedState === "running" && !busy,
+          expandOnRowClick: true,
+          open: procs !== null || procsBusy,
+          running: procsBusy,
+          onToggle: () => {
+            if (procs || procsBusy) {
+              invalidate("process");
+              setProcs(null);
+              setProcsBusy(false);
+            } else loadProcesses();
+          }
+        },
+        procsBusy ? copy.loading : null,
         procs ? h9(
           "section",
           { "data-dnls-processes": "1", "aria-label": copy.processes },
@@ -3034,15 +2991,28 @@ ${LAYER_CSS}
               h9("thead", null, h9(
                 "tr",
                 null,
-                h9("th", { scope: "col", align: "left" }, "PID"),
-                h9("th", { scope: "col", align: "left" }, copy.fieldName),
-                h9("th", { scope: "col", align: "left" }, copy.fieldState),
-                h9("th", { scope: "col", align: "left" }, "RSS")
+                [["pid", "PID"], ["name", copy.fieldName], ["state", copy.fieldState], ["rssBytes", "RSS"]].map(([field, label]) => h9(
+                  "th",
+                  {
+                    key: field,
+                    scope: "col",
+                    align: "left",
+                    "aria-sort": processSort.field === field ? processSort.descending ? "descending" : "ascending" : "none"
+                  },
+                  h9(Button5, { variant: "ghost", size: "sm", onClick: () => setProcessSort({
+                    field,
+                    descending: field === processSort.field ? !processSort.descending : field === "rssBytes"
+                  }) }, `${label}${processSort.field === field ? processSort.descending ? " \u2193" : " \u2191" : ""}`)
+                ))
               )),
               h9(
                 "tbody",
                 null,
-                (procs.processes ?? []).map((p) => h9(
+                (procs.processes ?? []).slice().sort((a, b) => {
+                  const x = a[processSort.field], y = b[processSort.field];
+                  if (x == null || y == null) return Number(x == null) - Number(y == null);
+                  return (typeof x === "string" ? x.localeCompare(y) : x - y) * (processSort.descending ? -1 : 1);
+                }).map((p) => h9(
                   "tr",
                   { key: p.pid },
                   h9("td", null, p.pid ?? "\u2014"),
@@ -3066,7 +3036,10 @@ ${LAYER_CSS}
           expandOnRowClick: true,
           onToggle: () => setDetailsOpen((open) => !open)
         },
-        h9(FactGrid2, { items: [
+        h9(Facts, { items: [
+          { label: copy.observedAt, value: fmtTime(detail.observedAt) },
+          { label: copy.resCpus, value: detail.resources?.cpus },
+          { label: copy.resMemory, value: formatBytes2(detail.resources?.memoryBytes) },
           detail.applied ? { label: copy.appliedDigest, value: detail.applied.imageDigest } : null,
           detail.applied ? { label: copy.appliedVerified, value: fmtTime(detail.applied.verifiedAt) } : null,
           { label: copy.fieldGeneration, value: detail.generation },
@@ -3075,8 +3048,15 @@ ${LAYER_CSS}
         ].filter(Boolean) })
       ) : null,
       detail?.operations?.length ? h9(
-        PanelSection2,
-        { title: copy.timeline },
+        DisclosureRow,
+        {
+          title: `${copy.timeline} (${detail.operations.length})`,
+          icon: h9(primitives3.IconClockOutlineRegular),
+          open: historyOpen,
+          expandable: true,
+          expandOnRowClick: true,
+          onToggle: () => setHistoryOpen((open) => !open)
+        },
         [...detail.operations].reverse().map((op) => h9(
           "div",
           {
@@ -3118,32 +3098,31 @@ ${LAYER_CSS}
               "tbody",
               null,
               services.map((service) => h9(
-                "tr",
+                React14.Fragment,
                 { key: service.serviceId },
-                h9("td", null, service.serviceId),
-                h9("td", null, serviceAddress2(service) ?? copy.unpublished),
-                h9("td", null, `${service.protocol ?? "\u2014"}:${service.containerPort ?? "\u2014"}`)
+                h9(
+                  "tr",
+                  null,
+                  h9("td", null, h9(DisclosureRow, {
+                    title: service.serviceId,
+                    icon: h9(InfoIcon),
+                    open: svcOpen === service.serviceId,
+                    expandable: true,
+                    expandOnRowClick: true,
+                    onToggle: () => setSvcOpen((open) => open === service.serviceId ? null : service.serviceId)
+                  })),
+                  h9("td", null, serviceAddress2(service) ?? copy.unpublished),
+                  h9("td", null, `${service.protocol ?? "\u2014"}:${service.containerPort ?? "\u2014"}`)
+                ),
+                svcOpen === service.serviceId ? h9("tr", null, h9("td", { colSpan: 3 }, h9(Facts, { items: [
+                  service.guestCwd ? { label: copy.guestCwd, value: service.guestCwd } : null,
+                  { label: copy.observedAt, value: fmtTime(service.observedAt) },
+                  { label: copy.declaredVersion, value: service.declaredVersion ?? "\u2014" },
+                  { label: copy.observedVersion, value: service.observedVersion ?? "\u2014" }
+                ].filter(Boolean) }))) : null
               ))
             )
-          ),
-          services.map((service) => h9(
-            DisclosureRow,
-            {
-              key: service.serviceId,
-              title: service.serviceId,
-              icon: InfoIcon ? h9(InfoIcon) : null,
-              open: svcOpen === service.serviceId,
-              expandable: true,
-              expandOnRowClick: true,
-              onToggle: () => setSvcOpen((open) => open === service.serviceId ? null : service.serviceId)
-            },
-            h9(FactGrid2, { items: [
-              service.guestCwd ? { label: copy.guestCwd, value: service.guestCwd } : null,
-              { label: copy.observedAt, value: fmtTime(service.observedAt) },
-              { label: copy.declaredVersion, value: service.declaredVersion ?? "\u2014" },
-              { label: copy.observedVersion, value: service.observedVersion ?? "\u2014" }
-            ].filter(Boolean) })
-          ))
+          )
         ) : h9("p", null, copy.none),
         // Engine probe — the announced dnls.status surface, rendered only
         // for the installed kitesurf profile and only whitelisted fields.
@@ -3151,13 +3130,13 @@ ${LAYER_CSS}
           PanelSection2,
           { title: copy.engineProbe },
           supports("dnls.status") ? h9(Button5, { variant: "ghost", size: "sm", disabled: busy, onClick: probeEngine }, copy.engineProbe) : h9("p", null, copy.engineUnavailable),
-          engine ? h9(FactGrid2, { items: [
+          engine ? h9(Facts, { items: [
             { label: copy.engineState, value: engineState },
             { label: copy.bridgeState, value: bridgeState },
             { label: copy.observedAt, value: engine?.observedAt },
             typeof engine?.networking?.hostGateway === "string" ? { label: copy.netGateway, value: engine.networking.hostGateway } : null
           ].filter(Boolean) }) : null,
-          holdActive === true || holdActive === false ? h9(FactGrid2, { items: [
+          holdActive === true || holdActive === false ? h9(Facts, { items: [
             { label: copy.humanHold, value: holdActive === true ? copy.humanHoldActive : copy.humanHoldFree }
           ] }) : null,
           holdActive === true || holdActive === false ? h9(
@@ -3236,6 +3215,10 @@ ${LAYER_CSS}
     };
     const settingsTab = () => {
       const cfg = detail?.configuration;
+      const invalidCpu = cfgCpus.trim() !== "" && (!Number.isInteger(Number(cfgCpus)) || Number(cfgCpus) < 1);
+      const invalidMem = cfgMem.trim() !== "" && (!Number.isInteger(Number(cfgMem)) || Number(cfgMem) < 1);
+      const invalidIdle = !Number.isInteger(Number(idleMin)) || Number(idleMin) < 0;
+      const resourceChanged = cfgCpus.trim() !== "" && Number(cfgCpus) !== cfg?.overrides?.cpus || cfgMem.trim() !== "" && Number(cfgMem) * 1048576 !== cfg?.overrides?.memoryBytes;
       return h9(
         React14.Fragment,
         null,
@@ -3245,13 +3228,17 @@ ${LAYER_CSS}
           cfg ? h9(
             React14.Fragment,
             null,
+            h9("div", null, fill2(copy.allocation, {
+              cpu: detail.resources?.cpus ?? copy.unknown,
+              memory: formatBytes2(detail.resources?.memoryBytes) ?? copy.unknown
+            })),
             h9(primitives3.SettingsValueField, {
               id: `${nameId}-cpus`,
               label: copy.configCpus,
               text: cfgCpus,
               numeric: true,
               overridden: false,
-              invalid: cfgCpus.trim() !== "" && (!Number.isInteger(Number(cfgCpus)) || Number(cfgCpus) < 1),
+              invalid: invalidCpu,
               invalidLabel: copy.draftInvalid,
               disabled: busy || detail == null,
               onEdit: setCfgCpus,
@@ -3264,7 +3251,7 @@ ${LAYER_CSS}
               text: cfgMem,
               numeric: true,
               overridden: false,
-              invalid: cfgMem.trim() !== "" && (!Number.isInteger(Number(cfgMem)) || Number(cfgMem) < 1),
+              invalid: invalidMem,
               invalidLabel: copy.draftInvalid,
               disabled: busy || detail == null,
               onEdit: setCfgMem,
@@ -3275,7 +3262,7 @@ ${LAYER_CSS}
             h9(
               "p",
               null,
-              h9(Button5, { variant: "primary", size: "sm", disabled: busy || detail == null || !supports("sandbox.revision.save"), onClick: saveResources }, copy.configSave)
+              h9(Button5, { variant: "primary", size: "sm", disabled: busy || !resourceChanged || invalidCpu || invalidMem || !supports("sandbox.revision.save"), onClick: saveResources }, copy.configSave)
             )
           ) : h9("p", null, copy.configNotAuthorized)
         ),
@@ -3291,7 +3278,7 @@ ${LAYER_CSS}
               text: idleMin,
               numeric: true,
               overridden: false,
-              invalid: idleMin.trim() !== "" && (!Number.isInteger(Number(idleMin)) || Number(idleMin) < 0),
+              invalid: idleMin.trim() !== "" && invalidIdle,
               invalidLabel: copy.draftInvalid,
               disabled: busy || detail == null,
               onEdit: setIdleMin,
@@ -3301,14 +3288,21 @@ ${LAYER_CSS}
             h9(
               "p",
               null,
-              h9(Button5, { variant: "ghost", size: "sm", disabled: busy || detail == null || idleMin.trim() === "" || !supports("sandbox.idle.configure"), onClick: saveIdle }, copy.idleSave)
+              h9(Button5, { variant: "outline", size: "sm", disabled: busy || invalidIdle || idleMin.trim() === "" || Number(idleMin) * 6e4 === cfg.idleTimeoutMs || !supports("sandbox.idle.configure"), onClick: saveIdle }, copy.idleSave)
             )
           ) : h9("p", null, copy.configNotAuthorized)
         ),
         settingsMsg ? h9("p", { "data-dnls-settings-msg": "1" }, settingsMsg) : null,
         canManage && detail != null && !opPending && (supports("sandbox.instance.recreate") || supports("sandbox.instance.remove")) ? h9(
-          PanelSection2,
-          { title: copy.danger },
+          DisclosureRow,
+          {
+            title: copy.danger,
+            icon: h9(primitives3.IconWarningTriangleOutlineRegular),
+            expandable: true,
+            expandOnRowClick: true,
+            open: dangerOpen,
+            onToggle: () => setDangerOpen((open) => !open)
+          },
           h9("p", null, copy.persistVolume),
           h9(
             "p",
@@ -3329,37 +3323,29 @@ ${LAYER_CSS}
     const control = () => {
       if (!selection) return h9("p", null, copy.pick);
       return h9(
-        PanelLayout2,
-        {
-          "data-dnls-pane": "1",
-          title: h9(React14.Fragment, null, sandboxName, " ", h9(primitives3.Tag, null, detail ? stateLabel(copy, detail.observedState) : copy.stateUnknown)),
-          kicker: `${detail?.envId ?? selection.envId ?? "\u2014"} \xB7 ${detail?.profileId ?? "\u2014"}`,
-          description: detail?.health === "unknown" ? copy.healthUnverified : void 0,
-          actions: h9(
-            React14.Fragment,
-            null,
-            h9(Button5, { variant: "ghost", size: "sm", disabled: busy, onClick: unchoose }, copy.back),
-            " ",
-            h9(
-              Button5,
-              { variant: "primary", size: "sm", disabled: writeBusy || !(observedState === "stopped" ? canStart : canStop), onClick: () => setConfirm({ kind: observedState === "stopped" ? "start" : "stop" }) },
-              observedState === "stopped" ? copy.start : copy.stop
-            ),
-            " ",
-            h9(Button5, { variant: "ghost", size: "sm", disabled: writeBusy || !canRestart, onClick: () => setConfirm({ kind: "restart" }) }, copy.restart),
-            " ",
-            h9(Button5, { variant: "ghost", size: "sm", disabled: phase === "loading", onClick: refresh }, copy.refresh)
-          )
-        },
+        React14.Fragment,
+        null,
         receiptBlock,
+        h9(
+          "p",
+          null,
+          h9(
+            Button5,
+            { variant: "outline", size: "sm", disabled: writeBusy || !(observedState === "stopped" ? canStart : canStop), onClick: () => setConfirm({ kind: observedState === "stopped" ? "start" : "stop" }) },
+            observedState === "stopped" ? copy.start : copy.stop
+          ),
+          " ",
+          h9(Button5, { variant: "ghost", size: "sm", disabled: writeBusy || !canRestart, onClick: () => setConfirm({ kind: "restart" }) }, copy.restart),
+          " ",
+          detail?.health === "unknown" ? h9(primitives3.Tag, { tone: "quiet" }, copy.healthUnverified) : null
+        ),
         h9(NanoTabs2, {
           label: copy.control,
           value: detailTab,
           onChange: setDetailTab,
           items: [
             { value: "overview", label: copy.tabOverview, content: overviewTab() },
-            { value: "services", label: copy.tabServices, content: servicesTab() },
-            { value: "settings", label: copy.tabSettings, content: settingsTab() }
+            { value: "services", label: copy.tabServices, content: servicesTab() }
           ]
         })
       );
@@ -3388,7 +3374,6 @@ ${LAYER_CSS}
           onChange: (event) => setCreateName(event.target.value)
         })
       ),
-      h9("p", null, h9("label", null, copy.createProfile)),
       profiles === null ? h9("p", null, copy.loading) : h9(primitives3.SegmentedControl, {
         "data-dnls-create-profile": "1",
         label: copy.createProfile,
@@ -3439,12 +3424,51 @@ ${LAYER_CSS}
       onConfirm: () => submitLifecycle("start", { sandboxId: selection.sandboxId }),
       onCancel: () => setConfirm(null)
     }) : null;
+    const onObject = view === "control" && selection != null;
+    const backLabel = detailTab === "services" ? copy.backToMonitor : copy.back;
     return h9(
-      React14.Fragment,
-      null,
+      "section",
+      { ref: root, className: "nano-panes", "data-dnls-pane": "1" },
       h9("style", null, NANO_STYLES2),
-      errorBox,
-      view === "overview" ? overview() : control(),
+      h9(
+        Toolbar2,
+        { label: copy.workbenchTitle },
+        onObject ? tool(
+          backLabel,
+          primitives3.IconChevronLeftOutlineRegular,
+          () => detailTab === "services" ? setDetailTab("overview") : unchoose(),
+          writeBusy
+        ) : null,
+        h9("span", null, onObject ? sandboxName : copy.fleetTitle),
+        onObject ? h9(
+          primitives3.Tag,
+          { tone: observedState === "running" ? "success" : "neutral", "data-dnls-state": "1" },
+          stateLabel(copy, observedState)
+        ) : total !== null ? h9(primitives3.Tag, { tone: "neutral" }, fill2(copy.listShort, { shown: visibleRows.length, total })) : null,
+        h9(primitives3.Tag, { tone: "quiet" }, onObject ? [selection.envId, detail?.profileId].filter(Boolean).join(" / ") : (envIds ?? []).join(" / ")),
+        !onObject && !complete ? h9(primitives3.Tag, { tone: "warning" }, copy.listPartial) : null,
+        tool(copy.refresh, primitives3.IconRefreshOutlineRegular, refresh, phase === "loading" || busy),
+        onObject ? tool(
+          copy.tabSettings,
+          primitives3.IconSettingsOutlineRegular,
+          openSettings,
+          !detail || writeBusy
+        ) : tool(copy.create, primitives3.IconPlusOutlineRegular, openCreate, writeBusy || !supports("sandbox.instance.create"))
+      ),
+      h9(
+        "div",
+        { key: onObject ? selection.sandboxId : "list", className: "nano-pane nano-panel" },
+        !settingsOpen ? errorBox : null,
+        onObject ? control() : overview()
+      ),
+      settingsOpen && onObject ? h9(NanoDialog2, {
+        copy,
+        title: `${sandboxName} \xB7 ${copy.tabSettings}`,
+        width: 480,
+        maxHeight: 720,
+        onCancel: () => setSettingsOpen(false),
+        footer: h9(Button5, { variant: "outline", onClick: () => setSettingsOpen(false) }, copy.close)
+      }, errorBox, settingsTab()) : null,
       createDialog,
       riskDialog,
       startDialog

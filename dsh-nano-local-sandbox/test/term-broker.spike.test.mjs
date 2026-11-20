@@ -137,7 +137,8 @@ test('broker: snapshot is the real pyte screen — overwritten cells and cursor,
   // escape bytes; the snapshot must hold the FINAL cells.
   const put = await callWorker(ptyRoot, {
     terminalId: 'term-snap', verb: 'input',
-    data: "printf 'AAAA\\rBB\\nlast\\033[H\\n'\n",
+    // The ready marker must not occur in the PTY's echo of the input line.
+    data: "printf 'AAAA\\rBB\\nla%s\\033[H\\n' st\n",
   })
   assert.equal(put.ok, true)
   let snap = null

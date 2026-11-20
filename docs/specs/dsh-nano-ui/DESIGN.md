@@ -215,6 +215,7 @@ U5 只覆盖上面三种模式。宿主 `data-*` 属性被当作样式钩子或�
 
 | 位置 | 缺口说明 |
 |---|---|
+| `dsh-nano-local-sandbox/src/client/instruments.jsx`（`MetricChart`） | 宿主及 nano-ui 没有可表达分钟缺样、有效零值及独立量纲的历史图。仅数据条和基线使用 SVG，以语义令牌着色；状态、文字和控制不在 SVG 内绘制。 |
 | `dsh-nano-model-selector/src/client/styles.js`（`.nms-trigger-label` / `.nms-trigger-effort` / `.nms-trigger-icon`） | 读 `--dsh-composer-model-text-display` / `--dsh-composer-model-icon-display`：宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts`），不是 `--dsw` 令牌，catalog 不收录，U1 照报（`T20`） |
 | `dsh-nano-explorer-extra/src/client/format.js`（`formatBytes`） | 宿主 `fileSizeText` 输出不等价：不加空格、1024 进制套十进制单位名（`1.0KB`）、最高 GB、对 0/NaN 无兜底；本包状态栏读 `1 KiB`，替换会改掉全部体积文案 |
 | `dsh-nano-explorer-extra/src/client/styles.js`（`.nxe-git-alert`） | 宿主 `Toast` 到 `holdMs` 自动结束，没有「常驻到用户关闭」的形态；Git 读取失败提示必须常驻，故由本包自绘 |

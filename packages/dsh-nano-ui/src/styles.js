@@ -81,12 +81,16 @@ ${LAYER_CSS}
 
 /* Generic panel skeleton (§6.3): scrollable layout, sections, fact grid. */
 .nano-panel { box-sizing: border-box; block-size: 100%; min-block-size: 0; overflow: auto;
-  padding: var(--nano-space-3); color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+  padding: var(--nano-space-3); color: var(--dsw-alias-label-primary); overflow-wrap: anywhere;
+  font: var(--dsw-font-s-14); }
+.nano-panes > .nano-toolbar { flex: none; flex-wrap: wrap; font: var(--dsw-font-xs-13); }
 .nano-panel-header, .nano-panel-section { display: grid; gap: var(--nano-space-2); margin-block-end: var(--nano-space-3); }
-.nano-panel-header h2, .nano-panel-section h3 { margin: 0; }
+.nano-panel-header h2, .nano-panel-section h3 { margin: 0; font: var(--dsw-font-s-14); font-weight: 500; }
 .nano-panel-header p { margin: 0; color: var(--dsw-alias-label-secondary); }
 .nano-panel-kicker { font-size: var(--nano-desc-size, inherit); }
-.nano-panel-section { padding-block: var(--nano-space-2); border-block-start: var(--dsh-hairline-width) solid var(--dsw-alias-border-l1); }
+.nano-panel-section { padding-block: var(--nano-space-2); font: var(--dsw-font-s-14); }
+.nano-panel-section > p { margin: 0; }
+.nano-panel th { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
 .nano-panel-section > pre { min-inline-size: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .nano-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--nano-space-2); margin: 0; }
 .nano-facts dt { color: var(--dsw-alias-label-secondary); }

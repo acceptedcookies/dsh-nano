@@ -452,7 +452,7 @@ const walk = (node, out = []) => {
   return out
 }
 const findButton = (tree, label) =>
-  walk(tree).find((n) => n.type === 'Button' && textOf(n).trim() === label && typeof n.props?.onClick === 'function')
+  walk(tree).find((n) => n.type === 'Button' && (n.props['aria-label'] ?? textOf(n).trim()) === label && typeof n.props?.onClick === 'function')
 const findByData = (tree, key) => walk(tree).find((n) => n.props?.[key] !== undefined)
 
 function wirePane({ inspectBodies, operationBodies }) {
@@ -533,13 +533,6 @@ function installPaneGlobals(t, impl) {
   globalThis.location = { origin: 'https://pane.test' }
 }
 
-/** Value rendered next to a Field label — the exact text, not a substring. */
-const fieldValue = (tree, label) => {
-  const node = walk(tree).find((n) =>
-    Array.isArray(n.children) && n.children.length === 2 && textOf(n.children[0]) === label)
-  return node ? textOf(node.children[1]) : null
-}
-
 test('a confirmed succeeded recheck re-reads detail, clears processes, no extra write', async (t) => {
   const { impl, calls } = wirePane({ inspectBodies: [{ ...DETAIL, observedState: 'running' }, DETAIL], operationBodies: [{ contractVersion: CONTRACT_VERSION, sandboxId: UUID_A, operationId: 'op-1', state: 'succeeded' }] })
   installPaneGlobals(t, impl)
@@ -549,9 +542,9 @@ test('a confirmed succeeded recheck re-reads detail, clears processes, no extra 
   findByData(driver.tree, 'data-dnls-row').props.onClick()
   await driver.tick()
   assert.equal(countCalls(calls, '/inspect'), 1, 'control entry reads the target once')
-  assert.equal(fieldValue(driver.tree, 'Observed state'), 'running')
+  assert.equal(textOf(findByData(driver.tree, 'data-dnls-state')), 'running')
   // explicit process read, then a confirmed stop → one lifecycle POST
-  findButton(driver.tree, 'Show processes').props.onClick()
+  walk(driver.tree).find(n => n.type === 'DisclosureRow' && n.props.title === 'Guest processes').props.onToggle()
   await driver.tick()
   assert.ok(findByData(driver.tree, 'data-dnls-processes'), 'process table rendered')
   findButton(driver.tree, 'Stop').props.onClick()
@@ -571,7 +564,7 @@ test('a confirmed succeeded recheck re-reads detail, clears processes, no extra 
   assert.ok(countCalls(calls, '/sandboxes') >= 2, 'success re-reads the list')
   assert.equal(countCalls(calls, '/lifecycle'), 1, 'no resubmission')
   assert.equal(findByData(driver.tree, 'data-dnls-processes'), undefined, 'stale process table cleared')
-  assert.equal(fieldValue(driver.tree, 'Observed state'), 'stopped', 'detail shows the new observed state, not the cached one')
+  assert.equal(textOf(findByData(driver.tree, 'data-dnls-state')), 'stopped', 'status bar shows the new observed state')
 })
 
 test('manual refresh after a failed inspect issues a new targeted read', async (t) => {
@@ -607,7 +600,7 @@ test('manual refresh after a failed inspect issues a new targeted read', async (
   await driver.tick()
   assert.equal(countCalls(calls, '/inspect'), 2, 'refresh re-issues the targeted inspect')
   assert.equal(findByData(driver.tree, 'data-dnls-detail-error'), undefined)
-  assert.equal(fieldValue(driver.tree, 'Observed state'), 'stopped', 'recovered detail rendered')
+  assert.equal(textOf(findByData(driver.tree, 'data-dnls-state')), 'stopped', 'recovered detail rendered')
 })
 
 test('targeted MCP read rejects a different sandboxId echo', async () => {
@@ -719,7 +712,7 @@ test('open existing terminal goes through the registry with the canonical addres
   assert.equal(creates.length, 0, 'open never creates a session')
 })
 
-test('workbench renders pending-config diff, chart holes, and distinct cards', async (t) => {
+test('fleet rows target explicitly; settings return to the same pending revision and history', async (t) => {
   const T0 = Date.UTC(2026, 10, 20)
   const history = [
     { at: T0, minutes: 1, cpuCores: 1.5, memoryBytes: 512 * 1048576 },
@@ -783,4 +776,12 @@ test('workbench renders pending-config diff, chart holes, and distinct cards', a
   assert.ok(cpu, 'cpu band svg with aria-label')
   assert.equal(walk({ type: 'x', children: [cpu] }).filter((n) => n.type === 'rect').length, 2,
     'null bin draws nothing; zero still draws')
+  findButton(driver.tree, 'Review settings').props.onClick()
+  const dialog = walk(driver.tree).find(n => n.type === 'Modal')
+  assert.ok(dialog, 'targeted settings open in the host dialog')
+  dialog.props.onClose()
+  assert.equal(countCalls(calls, '/inspect'), 1, 'closing settings retains the selected target')
+  findButton(driver.tree, 'Back to sandboxes').props.onClick()
+  assert.equal(walk(driver.tree).filter(n => n.props?.['data-dnls-row']).length, 2)
+  assert.equal(countCalls(calls, '/lifecycle'), 0)
 })

@@ -1,6 +1,8 @@
 # DNLS03 Action Todo — 受管 sandbox 控制面
 [执行计划](DNLS03-managed-sandbox-control.md) · [真相层](../qna/DNLS03-qna-truth.md) · [决策来源](../qna/DNLS03-qna.md)
 
+当前追踪：[`DNLS03/control-redesign` — 中性控制、原生工作台、内部工具与开发站验收](todo.DNLS03-control-redesign.md)。本轮验收以该清单逐项记录；前次开发站启停成功不代表新版设计通过。原发车附件不变。
+
 ## 1. 目标与边界
 [业主] 本次 directive 是实现、测试及分组提交的授权，不是重新裁决 T-O-33 至 T-O-54。只交付计划 §2 的 Case 1/3 和点名的消费面；不改官方 pin、第三方与 local 协议，不做 Case 2/4、远端 provider、版本、tag 或发布。计划不依赖 workers 上线。
 

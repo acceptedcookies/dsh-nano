@@ -718,3 +718,69 @@ test('open existing terminal goes through the registry with the canonical addres
   })
   assert.equal(creates.length, 0, 'open never creates a session')
 })
+
+test('workbench renders pending-config diff, chart holes, and distinct cards', async (t) => {
+  const T0 = Date.UTC(2026, 10, 20)
+  const history = [
+    { at: T0, minutes: 1, cpuCores: 1.5, memoryBytes: 512 * 1048576 },
+    { at: T0 + 60000, minutes: 1, cpuCores: null, memoryBytes: null },
+    { at: T0 + 120000, minutes: 1, cpuCores: 0, memoryBytes: 0 },
+  ]
+  const detail = {
+    ...DETAIL,
+    observedState: 'running',
+    desiredRevision: 2, appliedRevision: 1,
+    resources: { cpus: 4, memoryBytes: 2 * 1024 ** 3 },
+    configuration: { overrides: { cpus: 2, memoryBytes: null }, idleTimeoutMs: 60000 },
+    usage: { ...DETAIL.usage, end: T0 + 180000, history },
+  }
+  const calls = []
+  const ok = (body) => ({ ok: true, status: 200,
+    headers: { get: (n) => (n === 'x-dnls-contract' ? CONTRACT_VERSION : null) },
+    json: async () => body })
+  const impl = async (url, init = {}) => {
+    calls.push({ url, init })
+    const path = new URL(url).pathname
+    if (path.endsWith('/contract')) return ok(contractBody)
+    if (path.endsWith('/sandboxes')) {
+      return ok({
+        contractVersion: CONTRACT_VERSION,
+        envs: [{ envId: 'dev' }],
+        rows: [
+          { sandboxId: UUID_A, name: 'one', envId: 'dev', profileId: 'kitesurf', observedState: 'running',
+            services: [{ serviceId: 'web', published: true }],
+            resources: { cpus: 4, memoryBytes: 2 * 1024 ** 3 },
+            lastMinute: { at: T0 + 120000, memoryBytes: 512 * 1048576, cpuCores: 1.5 } },
+          { sandboxId: UUID_B, name: 'two', envId: 'dev', profileId: 'kitesurf', observedState: 'stopped' },
+        ],
+        total: 2, complete: true,
+      })
+    }
+    if (path.endsWith('/inspect')) return ok(detail)
+    return ok({ contractVersion: CONTRACT_VERSION, sandboxId: UUID_A })
+  }
+  installPaneGlobals(t, impl)
+  const driver = mountPane()
+  await driver.tick()
+  // Two distinct cards with their own data.
+  const rowButtons = walk(driver.tree).filter((n) => n.props?.['data-dnls-row'])
+  assert.equal(rowButtons.length, 2)
+  assert.deepEqual(rowButtons.map((n) => n.props['data-dnls-row']).sort(), [UUID_A, UUID_B].sort())
+  // No pre-selection detail read.
+  assert.equal(countCalls(calls, '/inspect'), 0)
+  // Select the running card.
+  rowButtons.find((n) => n.props['data-dnls-row'] === UUID_A).props.onClick()
+  await driver.tick()
+  const text = textOf(driver.tree)
+  assert.ok(text.includes('allocated 4 cores, saved 2 cores'), 'exact pending CPU diff')
+  assert.ok(!text.includes('saved 0'), 'null memory override stays absent, never zeroed')
+  // Equal revisions never claim pending work.
+  const even = walk(driver.tree).filter((n) => n.props?.['data-dnls-pending'])
+  assert.equal(even.length, 1, 'pending strip only on desired!=applied')
+  // Chart: zero is a real sample, null is a hole — 2 rects per band, not 3.
+  const svgs = walk(driver.tree).filter((n) => n.type === 'svg')
+  const cpu = svgs.find((n) => (n.props['aria-label'] ?? '').startsWith('CPU'))
+  assert.ok(cpu, 'cpu band svg with aria-label')
+  assert.equal(walk({ type: 'x', children: [cpu] }).filter((n) => n.type === 'rect').length, 2,
+    'null bin draws nothing; zero still draws')
+})

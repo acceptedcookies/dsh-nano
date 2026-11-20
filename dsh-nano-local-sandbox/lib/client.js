@@ -1573,8 +1573,8 @@ ${LAYER_CSS}
         opLatest: "Latest operation",
         none: "\u2014",
         // detail tabs
-        tabOverview: "Overview",
-        tabServices: "Services",
+        tabOverview: "Resource monitor",
+        tabServices: "Services & tools",
         tabSettings: "Settings",
         // overview tab
         resources: "Resources",
@@ -1668,6 +1668,36 @@ ${LAYER_CSS}
         // dashboard
         fleetTitle: "Sandbox overview",
         fleetStats: "{running} running \xB7 {stopped} stopped \xB7 {attention} need attention",
+        faceUnverified: "not yet verified",
+        faceUnverifiedHint: "Observation pending \u2014 state unverified",
+        revPending: "Saved revision {rev} awaits deployment verification.",
+        saveNoChange: "Saving does not change the running configuration.",
+        servicePublication: "Publication",
+        draftInvalid: "Enter a whole number",
+        serviceColumn: "Service",
+        workbenchTitle: "Sandbox workbench",
+        envKicker: "Environment / {env}",
+        visibleWord: "visible",
+        faceRunning: "Operating \u2014 live sampling",
+        faceStopped: "Stopped",
+        samplingStopped: "Sampling stopped",
+        lastMinute: "last completed minute",
+        unknown: "\u2014",
+        coresUnit: "cores",
+        pendingConfig: "Saved configuration pending apply",
+        servicesVerified: "verified services",
+        chartMean: "mean",
+        chartPeak: "peak",
+        samplesWord: "samples",
+        noSamples: "No samples in this window.",
+        chartFrom: "from",
+        chartTo: "to",
+        unpublished: "unpublished",
+        cfgPendingCpu: "CPU: allocated {cur} cores, saved {saved} cores \u2014 not yet applied",
+        cfgPendingMem: "Memory: allocated {cur}, saved {saved} \u2014 not yet applied",
+        allocated: "allocated",
+        measured: "measured",
+        opStates: { accepted: "accepted", running: "running", succeeded: "succeeded", failed: "failed", indeterminate: "indeterminate", cancelled: "cancelled" },
         fleetAttention: "Needs attention",
         healthUnverified: "Service health not yet verified",
         opLine: "{action} \xB7 {state}",
@@ -1739,8 +1769,8 @@ ${LAYER_CSS}
         observedAt: "\u89C2\u6D4B\u65F6\u95F4",
         opLatest: "\u6700\u8FD1\u64CD\u4F5C",
         none: "\u2014",
-        tabOverview: "\u6982\u89C8",
-        tabServices: "\u670D\u52A1",
+        tabOverview: "\u8D44\u6E90\u76D1\u63A7",
+        tabServices: "\u670D\u52A1\u4E0E\u5DE5\u5177",
         tabSettings: "\u8BBE\u7F6E",
         resources: "\u8D44\u6E90",
         resCpus: "CPU \u6838\u6570",
@@ -1829,6 +1859,36 @@ ${LAYER_CSS}
         // dashboard
         fleetTitle: "\u6C99\u7BB1\u603B\u89C8",
         fleetStats: "{running} \u8FD0\u884C \xB7 {stopped} \u505C\u6B62 \xB7 {attention} \u9700\u8981\u6CE8\u610F",
+        faceUnverified: "\u5C1A\u672A\u9A8C\u8BC1",
+        faceUnverifiedHint: "\u7B49\u5F85\u89C2\u6D4B\u2014\u2014\u72B6\u6001\u672A\u9A8C\u8BC1",
+        revPending: "\u5DF2\u4FDD\u5B58\u4FEE\u8BA2 {rev} \u7B49\u5F85\u90E8\u7F72\u9A8C\u8BC1\u3002",
+        saveNoChange: "\u4FDD\u5B58\u4E0D\u6539\u53D8\u5F53\u524D\u8FD0\u884C\u914D\u7F6E\u3002",
+        servicePublication: "\u53D1\u5E03",
+        draftInvalid: "\u8BF7\u8F93\u5165\u6574\u6570",
+        serviceColumn: "\u670D\u52A1",
+        workbenchTitle: "\u6C99\u7BB1\u5DE5\u4F5C\u53F0",
+        envKicker: "\u8FD0\u884C\u73AF\u5883 / {env}",
+        visibleWord: "\u53EF\u89C1",
+        faceRunning: "\u8FD0\u884C\u4E2D\u2014\u2014\u5B9E\u65F6\u91C7\u6837",
+        faceStopped: "\u5DF2\u505C\u6B62",
+        samplingStopped: "\u5DF2\u505C\u6B62\u91C7\u6837",
+        lastMinute: "\u6700\u8FD1\u4E00\u4E2A\u5B8C\u6574\u5206\u949F",
+        unknown: "\u2014",
+        coresUnit: "\u6838",
+        pendingConfig: "\u6709\u5F85\u5E94\u7528\u7684\u914D\u7F6E",
+        servicesVerified: "\u5DF2\u9A8C\u8BC1\u670D\u52A1",
+        chartMean: "\u5747\u503C",
+        chartPeak: "\u5CF0\u503C",
+        samplesWord: "\u4E2A\u91C7\u6837",
+        noSamples: "\u6B64\u7A97\u53E3\u6CA1\u6709\u91C7\u6837\u3002",
+        chartFrom: "\u4ECE",
+        chartTo: "\u5230",
+        unpublished: "\u672A\u53D1\u5E03",
+        cfgPendingCpu: "CPU\uFF1A\u5F53\u524D {cur} \u6838\uFF0C\u5DF2\u4FDD\u5B58 {saved} \u6838\uFF0C\u5C1A\u672A\u5E94\u7528",
+        cfgPendingMem: "\u5185\u5B58\uFF1A\u5F53\u524D {cur}\uFF0C\u5DF2\u4FDD\u5B58 {saved}\uFF0C\u5C1A\u672A\u5E94\u7528",
+        allocated: "\u5206\u914D",
+        measured: "\u5B9E\u6D4B",
+        opStates: { accepted: "\u5DF2\u63A5\u53D7", running: "\u6267\u884C\u4E2D", succeeded: "\u6210\u529F", failed: "\u5931\u8D25", indeterminate: "\u7ED3\u679C\u672A\u77E5", cancelled: "\u5DF2\u53D6\u6D88" },
         fleetAttention: "\u9700\u8981\u5173\u6CE8",
         healthUnverified: "\u670D\u52A1\u5065\u5EB7\u5C1A\u672A\u9A8C\u8BC1",
         opLine: "{action} \xB7 {state}",
@@ -1953,25 +2013,236 @@ ${LAYER_CSS}
     }
   });
 
+  // src/client/instruments.jsx
+  var instruments_exports = {};
+  __export(instruments_exports, {
+    CardBody: () => CardBody,
+    DeviceFace: () => DeviceFace,
+    MetricChart: () => MetricChart
+  });
+  function DeviceFace({ entry, copy, stateLabel: labelOf }) {
+    const state = entry.observedState;
+    const running = state === "running";
+    const stopped = state === "stopped";
+    const title = labelOf(state) ?? (running ? copy.faceRunning : stopped ? copy.faceStopped : copy.faceUnverified);
+    const mem = num(entry.lastMinute?.memoryBytes);
+    const cpu = num(entry.lastMinute?.cpuCores);
+    const alloc = entry.resources ?? {};
+    const memRatio = ratio(mem, alloc.memoryBytes);
+    const cpuRatio = ratio(cpu, alloc.cpus);
+    const bar = (y, label, r, used, cap, unit) => h8(
+      React13.Fragment,
+      { key: label },
+      h8("text", { x: 14, y, fontSize: 12, fill: "var(--dsw-alias-label-primary)" }, label),
+      used != null && cap != null ? h8(
+        "text",
+        { x: 238, y, fontSize: 12, textAnchor: "end", fill: "var(--dsw-alias-label-primary)" },
+        `${used} / ${cap} ${unit}`
+      ) : h8("text", { x: 238, y, fontSize: 12, textAnchor: "end", fill: "var(--dsw-alias-label-secondary)" }, copy.unknown),
+      h8("rect", {
+        x: 14,
+        y: y + 6,
+        width: 224,
+        height: 10,
+        rx: 3,
+        fill: "var(--dsw-alias-bg-layer-1)",
+        stroke: "var(--dsw-alias-border-l2)",
+        strokeWidth: 1
+      }),
+      r != null && r > 0 ? h8("rect", {
+        x: 14,
+        y: y + 6,
+        width: Math.max(2, Math.round(224 * r)),
+        height: 10,
+        rx: 3,
+        fill: "var(--dsw-alias-state-done-primary)"
+      }) : null
+    );
+    return h8(
+      "svg",
+      {
+        viewBox: "0 0 252 126",
+        width: "100%",
+        role: "img",
+        focusable: "false",
+        "aria-label": running ? `${title} \xB7 ${copy.lastMinute} \xB7 CPU ${cpu ?? "\u2014"} / ${alloc.cpus ?? "\u2014"} ${copy.coresUnit} \xB7 RAM ${mib(mem) ?? "\u2014"} / ${mib(alloc.memoryBytes) ?? "\u2014"} MiB` : title
+      },
+      h8("title", null, title),
+      h8("rect", {
+        x: 3,
+        y: 3,
+        width: 246,
+        height: 113,
+        rx: 10,
+        fill: running ? "var(--dsw-alias-bg-layer-2)" : "var(--dsw-alias-bg-layer-1)",
+        stroke: "var(--dsw-alias-border-l2)"
+      }),
+      h8("circle", {
+        cx: 18,
+        cy: 18,
+        r: 4,
+        fill: running ? "var(--dsw-alias-state-success-primary)" : "var(--dsw-alias-border-l2)"
+      }),
+      h8("text", { x: 30, y: 22, fontSize: 12, fill: "var(--dsw-alias-label-primary)" }, title),
+      running ? h8(
+        React13.Fragment,
+        null,
+        bar(48, "CPU", cpuRatio, cpu != null ? Number(cpu.toFixed(2)) : null, num(alloc.cpus), copy.coresUnit),
+        bar(78, "RAM", memRatio, mib(mem), mib(alloc.memoryBytes), "MiB"),
+        h8(
+          "text",
+          { x: 14, y: 107, fontSize: 10, fill: "var(--dsw-alias-label-secondary)" },
+          entry.lastMinute?.at ? copy.lastMinute : copy.noSamples
+        )
+      ) : h8(
+        React13.Fragment,
+        null,
+        stopped ? h8(
+          React13.Fragment,
+          null,
+          h8("line", { x1: 126, y1: 40, x2: 126, y2: 66, stroke: "var(--dsw-alias-label-secondary)", strokeWidth: 4, strokeLinecap: "round" }),
+          h8("path", { d: "M108 48 a26 26 0 1 0 36 0", fill: "none", stroke: "var(--dsw-alias-label-secondary)", strokeWidth: 4, strokeLinecap: "round" })
+        ) : null,
+        h8(
+          "text",
+          { x: 126, y: 100, textAnchor: "middle", fontSize: 12, fill: "var(--dsw-alias-label-secondary)" },
+          stopped ? copy.samplingStopped : copy.faceUnverifiedHint
+        )
+      ),
+      h8("path", {
+        d: "M96 116 L156 116 L168 125 L84 125 Z",
+        fill: "var(--dsw-alias-bg-layer-1)",
+        stroke: "var(--dsw-alias-border-l2)"
+      })
+    );
+  }
+  function MetricChart({ title, bins, unit, range, summary, tone, copy, fmtTime }) {
+    const W = 320;
+    const H = 64;
+    const start = bins.length ? num(bins[0].at) ?? Date.parse(bins[0]?.at ?? "") : null;
+    const end = num(summary?.end) ?? null;
+    const peak = num(summary?.peak);
+    const mean = num(summary?.mean);
+    const valid = num(summary?.valid) ?? bins.filter((b) => num(b.value) != null).length;
+    const expected = num(summary?.expected) ?? bins.length;
+    const span = start != null && end != null && end > start ? end - start : null;
+    const scale = peak != null && peak > 0 ? peak : 1;
+    const fmt = (v) => unit === "MiB" ? `${Math.round(v)}` : Number(v).toFixed(2);
+    const aria = `${title} ${range}: ${valid}/${expected} ${copy.samplesWord}`;
+    return h8(
+      React13.Fragment,
+      null,
+      h8(
+        "p",
+        null,
+        h8("strong", null, title),
+        " ",
+        mean != null ? h8("span", null, `${copy.chartMean} ${fmt(mean)} ${unit}`) : null,
+        peak != null ? h8("span", null, ` \xB7 ${copy.chartPeak} ${fmt(peak)} ${unit}`) : null,
+        " ",
+        h8("span", null, `${valid}/${expected} ${copy.samplesWord}`)
+      ),
+      bins.length === 0 || span == null || !bins.some((b) => num(b.value) !== null) ? h8("p", null, copy.noSamples) : h8(
+        React13.Fragment,
+        null,
+        h8("p", null, `0 \u2013 ${fmt(scale)} ${unit}`),
+        h8(
+          "svg",
+          {
+            width: "100%",
+            height: H,
+            viewBox: `0 0 ${W} ${H}`,
+            preserveAspectRatio: "none",
+            role: "img",
+            "aria-label": aria
+          },
+          h8("line", { x1: 0, y1: H - 1, x2: W, y2: H - 1, stroke: "var(--dsw-alias-border-l2)" }),
+          bins.map((bin, i) => {
+            const at = num(bin.at) ?? Date.parse(bin.at ?? "");
+            const minutes = num(bin.minutes) ?? 1;
+            if (!Number.isFinite(at)) return null;
+            const x = (at - start) / span * W;
+            const w = Math.max(1, minutes * 6e4 / span * W);
+            const v = num(bin.value);
+            if (v == null) return null;
+            const height = Math.max(2, Math.round(v / scale * (H - 14)));
+            return h8("rect", {
+              key: at ?? i,
+              x,
+              y: v === 0 ? H - 2 : H - 1 - height,
+              width: w,
+              height: v === 0 ? 1 : height,
+              // a real zero is a baseline hairline
+              fill: tone
+            });
+          })
+        ),
+        h8("p", null, `${copy.chartFrom} ${fmtTime(start)} \xB7 ${copy.chartTo} ${fmtTime(end)}`)
+      )
+    );
+  }
+  function CardBody({ entry, copy, running, onSelect, disabled, Tag, formatBytes: formatBytes3, stateLabel: stateLabel2 }) {
+    const pending = Number.isInteger(entry.desiredRevision) && Number.isInteger(entry.appliedRevision) && entry.desiredRevision !== entry.appliedRevision;
+    const services = running ? (entry.services ?? []).filter((s) => s.published === true).length : 0;
+    const alloc = entry.resources ?? {};
+    const allocText = [
+      num(alloc.cpus) != null ? `${alloc.cpus} ${copy.coresUnit}` : null,
+      num(alloc.memoryBytes) != null ? formatBytes3?.(alloc.memoryBytes) ?? `${Math.round(alloc.memoryBytes / 1048576)} MiB` : null
+    ].filter(Boolean).join(" / ");
+    return h8(
+      React13.Fragment,
+      null,
+      h8(
+        Button4,
+        {
+          variant: "outline",
+          "data-dnls-row": entry.sandboxId,
+          "aria-label": entry.name ?? entry.sandboxId,
+          disabled,
+          onClick: () => onSelect(entry.sandboxId)
+        },
+        h8("strong", null, entry.name ?? entry.sandboxId)
+      ),
+      " ",
+      h8(Tag, { tone: running ? "success" : entry.observedState === "stopped" ? "neutral" : "warning" }, stateLabel2(entry.observedState)),
+      pending ? h8("p", null, copy.pendingConfig) : null,
+      running && services > 0 ? h8("p", null, `${copy.servicesVerified} ${services}`) : null,
+      allocText ? h8("p", null, allocText) : null
+    );
+  }
+  var React13, primitives2, h8, Button4, ratio, num, mib;
+  var init_instruments = __esm({
+    "src/client/instruments.jsx"() {
+      React13 = __require("react");
+      primitives2 = __require("@deepseek-ai/dsh-client-ui-primitives");
+      h8 = React13.createElement;
+      Button4 = primitives2.Button;
+      ratio = (value, total) => Number.isFinite(value) && Number.isFinite(total) && total > 0 ? Math.min(value / total, 1) : null;
+      num = (v) => typeof v === "number" && Number.isFinite(v) ? v : null;
+      mib = (v) => num(v) != null ? Math.round(v / 1048576) : null;
+    }
+  });
+
   // src/client/index.jsx
   var index_exports = {};
   __export(index_exports, {
     apply: () => apply,
     inject: () => inject
   });
-  var React13 = __require("react");
-  var primitives2 = __require("@deepseek-ai/dsh-client-ui-primitives");
+  var React14 = __require("react");
+  var primitives3 = __require("@deepseek-ai/dsh-client-ui-primitives");
   var { Toolbar: Toolbar2, EmptyState: EmptyState2, NanoTabs: NanoTabs2, NanoDialog: NanoDialog2, NANO_STYLES: NANO_STYLES2, PanelLayout: PanelLayout2, PanelSection: PanelSection2, FactGrid: FactGrid2 } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
   var { createDnlsClient: createDnlsClient2, createTicket: createTicket2 } = (init_managed(), __toCommonJS(managed_exports));
   var { copyFor: copyFor2, fill: fill2 } = (init_i18n(), __toCommonJS(i18n_exports));
   var { formatBytes: formatBytes2, formatCores: formatCores2, serviceLine: serviceLine2, serviceSummary: serviceSummary2 } = (init_format(), __toCommonJS(format_exports));
   var { terminalAddress: terminalAddress2 } = (init_terminal_resource(), __toCommonJS(terminal_resource_exports));
-  var h8 = React13.createElement;
+  var { DeviceFace: DeviceFace2, MetricChart: MetricChart2, CardBody: CardBody2 } = (init_instruments(), __toCommonJS(instruments_exports));
+  var h9 = React14.createElement;
   var KIND = "dnls-sandbox";
-  var Button4 = primitives2.Button;
-  var RiskConfirmation = primitives2.RiskConfirmation;
-  var DisclosureRow = primitives2.DisclosureRow;
-  var InfoIcon = primitives2.IconInfoOutlineRegular;
+  var Button5 = primitives3.Button;
+  var RiskConfirmation = primitives3.RiskConfirmation;
+  var DisclosureRow = primitives3.DisclosureRow;
+  var InfoIcon = primitives3.IconInfoOutlineRegular;
   var STATE_KEYS = {
     running: "stateRunning",
     stopped: "stateStopped",
@@ -1981,43 +2252,42 @@ ${LAYER_CSS}
     starting: "stateStarting"
   };
   var stateLabel = (copy, state) => copy[STATE_KEYS[state]] ?? copy.stateUnknown;
-  function ServiceLine({ service }) {
-    return h8("p", null, serviceLine2(service) ?? service.serviceId);
-  }
+  var serviceAddress2 = (service, copy) => service.published === true ? `${service.hostAddress ?? "\u2014"}:${service.hostPort ?? "\u2014"}` : copy.unpublished;
   function DnlsPane({ sessionId, copy, host }) {
-    const [view, setView] = React13.useState("overview");
-    const [phase, setPhase] = React13.useState("loading");
-    const [error, setError] = React13.useState(null);
-    const [rows, setRows] = React13.useState(null);
-    const [total, setTotal] = React13.useState(null);
-    const [complete, setComplete] = React13.useState(true);
-    const [envIds, setEnvIds] = React13.useState(null);
-    const [search, setSearch] = React13.useState("");
-    const [selection, setSelection] = React13.useState(null);
-    const [detail, setDetail] = React13.useState(null);
-    const [detailError, setDetailError] = React13.useState(null);
-    const [usageWindow, setUsageWindow] = React13.useState("24h");
-    const [usageDenied, setUsageDenied] = React13.useState(false);
-    const [procs, setProcs] = React13.useState(null);
-    const [procsBusy, setProcsBusy] = React13.useState(false);
-    const [confirm, setConfirm] = React13.useState(null);
-    const [acknowledged, setAcknowledged] = React13.useState(false);
-    const [receipt, setReceipt] = React13.useState(null);
-    const [opBody, setOpBody] = React13.useState(null);
-    const [busy, setBusy] = React13.useState(false);
-    const [createOpen, setCreateOpen] = React13.useState(false);
-    const [profiles, setProfiles] = React13.useState(null);
-    const [profilesFailed, setProfilesFailed] = React13.useState(false);
-    const [createName, setCreateName] = React13.useState("");
-    const [createProfile, setCreateProfile] = React13.useState("");
-    const [engine, setEngine] = React13.useState(null);
-    const [hold, setHold] = React13.useState(null);
-    const [terms, setTerms] = React13.useState(null);
-    const [termBusy, setTermBusy] = React13.useState(false);
-    const [detailsOpen, setDetailsOpen] = React13.useState(false);
-    const [olderOpsOpen, setOlderOpsOpen] = React13.useState(false);
+    const [view, setView] = React14.useState("overview");
+    const [phase, setPhase] = React14.useState("loading");
+    const [error, setError] = React14.useState(null);
+    const [rows, setRows] = React14.useState(null);
+    const [total, setTotal] = React14.useState(null);
+    const [complete, setComplete] = React14.useState(true);
+    const [envIds, setEnvIds] = React14.useState(null);
+    const [search, setSearch] = React14.useState("");
+    const [selection, setSelection] = React14.useState(null);
+    const [detail, setDetail] = React14.useState(null);
+    const [detailError, setDetailError] = React14.useState(null);
+    const [usageWindow, setUsageWindow] = React14.useState("24h");
+    const [usageDenied, setUsageDenied] = React14.useState(false);
+    const [procs, setProcs] = React14.useState(null);
+    const [procsBusy, setProcsBusy] = React14.useState(false);
+    const [confirm, setConfirm] = React14.useState(null);
+    const [acknowledged, setAcknowledged] = React14.useState(false);
+    const [receipt, setReceipt] = React14.useState(null);
+    const [opBody, setOpBody] = React14.useState(null);
+    const [busy, setBusy] = React14.useState(false);
+    const [createOpen, setCreateOpen] = React14.useState(false);
+    const [profiles, setProfiles] = React14.useState(null);
+    const [profilesFailed, setProfilesFailed] = React14.useState(false);
+    const [createName, setCreateName] = React14.useState("");
+    const [createProfile, setCreateProfile] = React14.useState("");
+    const [engine, setEngine] = React14.useState(null);
+    const [hold, setHold] = React14.useState(null);
+    const [terms, setTerms] = React14.useState(null);
+    const [termBusy, setTermBusy] = React14.useState(false);
+    const [detailsOpen, setDetailsOpen] = React14.useState(false);
+    const [olderOpsOpen, setOlderOpsOpen] = React14.useState(false);
+    const [svcOpen, setSvcOpen] = React14.useState(null);
     const fmtTime = (iso) => {
-      const ms = Date.parse(iso ?? "");
+      const ms = typeof iso === "number" ? iso : Date.parse(iso ?? "");
       if (!Number.isFinite(ms)) return "\u2014";
       try {
         return new Intl.DateTimeFormat(copy.localeTag ?? "en", { dateStyle: "short", timeStyle: "short" }).format(ms);
@@ -2025,19 +2295,19 @@ ${LAYER_CSS}
         return iso;
       }
     };
-    const [cfgCpus, setCfgCpus] = React13.useState("");
-    const [cfgMem, setCfgMem] = React13.useState("");
-    const [idleMin, setIdleMin] = React13.useState("");
-    const [settingsMsg, setSettingsMsg] = React13.useState(null);
-    const [bootSeq, setBootSeq] = React13.useState(0);
-    const [profileCaps, setProfileCaps] = React13.useState(/* @__PURE__ */ new Map());
-    const [logs, setLogs] = React13.useState(null);
-    const [logsBusy, setLogsBusy] = React13.useState(false);
-    const channels = React13.useRef({});
-    const clientRef = React13.useRef(null);
-    const writeLock = React13.useRef(false);
-    const nameId = React13.useId();
-    const paneId = React13.useId();
+    const [cfgCpus, setCfgCpus] = React14.useState("");
+    const [cfgMem, setCfgMem] = React14.useState("");
+    const [idleMin, setIdleMin] = React14.useState("");
+    const [settingsMsg, setSettingsMsg] = React14.useState(null);
+    const [bootSeq, setBootSeq] = React14.useState(0);
+    const [profileCaps, setProfileCaps] = React14.useState(/* @__PURE__ */ new Map());
+    const [logs, setLogs] = React14.useState(null);
+    const [logsBusy, setLogsBusy] = React14.useState(false);
+    const channels = React14.useRef({});
+    const clientRef = React14.useRef(null);
+    const writeLock = React14.useRef(false);
+    const nameId = React14.useId();
+    const paneId = React14.useId();
     const ticket = (key) => {
       const map = channels.current;
       if (!map[key]) map[key] = createTicket2();
@@ -2052,14 +2322,14 @@ ${LAYER_CSS}
     };
     const client = () => clientRef.current;
     const supports = (cap) => client()?.supports?.(cap) === true;
-    const run = React13.useCallback(async (work, stale) => {
+    const run = React14.useCallback(async (work, stale) => {
       try {
         await work();
       } catch (cause) {
         if (!stale || stale()) setError(cause);
       }
     }, []);
-    const loadList = React13.useCallback(() => {
+    const loadList = React14.useCallback(() => {
       const stale = ticket("list");
       setError(null);
       run(async () => {
@@ -2071,7 +2341,7 @@ ${LAYER_CSS}
         setEnvIds((list.envs ?? []).map((e) => typeof e === "string" ? e : e?.envId).filter(Boolean));
       }, stale);
     }, [run]);
-    React13.useEffect(() => {
+    React14.useEffect(() => {
       if (!sessionId) return void 0;
       channels.current = {};
       writeLock.current = false;
@@ -2166,7 +2436,7 @@ ${LAYER_CSS}
       setUsageDenied(false);
       setView("overview");
     }
-    const loadDetail = React13.useCallback(() => {
+    const loadDetail = React14.useCallback(() => {
       if (!selection || !client()) return;
       const target = selection.sandboxId;
       const stale = ticket("detail");
@@ -2191,11 +2461,11 @@ ${LAYER_CSS}
         }
       })();
     }, [selection?.sandboxId, usageWindow]);
-    React13.useEffect(() => {
+    React14.useEffect(() => {
       if (selection && view === "control") loadDetail();
       return void 0;
     }, [selection?.sandboxId, view, usageWindow, loadDetail]);
-    React13.useEffect(() => {
+    React14.useEffect(() => {
       const cfg = detail?.configuration;
       if (!cfg) return;
       setCfgCpus(cfg.overrides?.cpus != null ? String(cfg.overrides.cpus) : "");
@@ -2492,34 +2762,40 @@ ${LAYER_CSS}
     const canRestart = canManage && observedState === "running" && supports("sandbox.instance.restart");
     const selectedProfile = (profiles ?? []).find((p) => p.id === createProfile);
     const createBlocked = busy || !createName || !createProfile || selectedProfile?.ready === false;
-    const errorBox = error ? h8(
+    const errorBox = error ? h9(
       "div",
       { "data-dnls-error": "1", role: "alert" },
       `${error?.errorId ? `${error.errorId} ` : ""}${error?.message ?? error}`
     ) : null;
-    const receiptBlock = receipt ? h8(
+    const receiptBlock = receipt ? h9(
       PanelSection2,
       { title: copy.activity },
-      h8(
+      h9(
         "p",
         { "data-dnls-receipt": "1" },
         fill2(copy.opLine, { action: copy[receipt.action] ?? receipt.action, state: opBody?.state ?? copy.opPending }),
-        h8("br", null),
+        h9("br", null),
         fill2(copy.opIdLine, { operationId: receipt.operationId })
       ),
-      h8(Button4, { variant: "ghost", size: "sm", onClick: recheck }, copy.opRecheck)
+      h9(Button5, { variant: "ghost", size: "sm", onClick: recheck }, copy.opRecheck)
     ) : null;
     const visibleRows = (rows ?? []).filter((entry) => {
       if (!search.trim()) return true;
       const q = search.trim().toLowerCase();
-      return [entry.name, entry.profileId, entry.envId, entry.observedState].some((v) => typeof v === "string" && v.toLowerCase().includes(q));
+      return [
+        entry.name,
+        entry.profileId,
+        entry.envId,
+        entry.observedState,
+        ...(entry.services ?? []).map((s) => s.serviceId)
+      ].some((v) => typeof v === "string" && v.toLowerCase().includes(q));
     });
     const overview = () => {
       if (phase === "loading" && rows === null) {
-        return h8(
+        return h9(
           PanelLayout2,
           { title: copy.fleetTitle, "data-dnls-pane": "1" },
-          h8("p", { "data-dnls-loading": "1" }, copy.loading)
+          h9("p", { "data-dnls-loading": "1" }, copy.loading)
         );
       }
       const stats = {
@@ -2528,41 +2804,51 @@ ${LAYER_CSS}
         attention: visibleRows.filter((e) => !["running", "stopped"].includes(e.observedState) || ["indeterminate", "failed"].includes(e.operation?.state)).length
       };
       if (phase === "failed") {
-        return h8(
+        return h9(
           PanelLayout2,
           { title: copy.fleetTitle, "data-dnls-pane": "1" },
-          h8(EmptyState2, {
+          h9(EmptyState2, {
             title: copy.failed,
             description: error?.message ?? copy.failed,
-            action: h8(Button4, { variant: "primary", size: "sm", onClick: () => setBootSeq((n) => n + 1) }, copy.retry)
+            action: h9(Button5, { variant: "primary", size: "sm", onClick: () => setBootSeq((n) => n + 1) }, copy.retry)
           })
         );
       }
       const capacity = (entry) => profileCaps.get(entry.profileId);
-      return h8(
+      const groups = [];
+      for (const entry of rows ?? []) {
+        const key = `${entry.envId}\xB7${entry.profileId}`;
+        let group = groups.find((g) => g.key === key);
+        if (!group) {
+          group = { key, envId: entry.envId, profileId: entry.profileId, rows: [] };
+          groups.push(group);
+        }
+        group.rows.push(entry);
+      }
+      return h9(
         PanelLayout2,
         {
           "data-dnls-pane": "1",
-          title: copy.fleetTitle,
-          kicker: (envIds ?? []).length ? (envIds ?? []).join(" \xB7 ") : void 0,
+          title: copy.workbenchTitle,
+          kicker: (envIds ?? []).length ? fill2(copy.envKicker, { env: (envIds ?? []).join(" \xB7 ") }) : void 0,
           description: total !== null ? `${fill2(copy.listShort, { shown: visibleRows.length, total })}${complete && rows?.length === total ? "" : ` \xB7 ${copy.listPartial}`}` : void 0,
-          actions: h8(
-            React13.Fragment,
+          actions: h9(
+            React14.Fragment,
             null,
-            h8(Button4, { variant: "primary", size: "sm", disabled: busy || !supports("sandbox.instance.create"), onClick: openCreate }, copy.create),
+            h9(Button5, { variant: "primary", size: "sm", disabled: busy || !supports("sandbox.instance.create"), onClick: openCreate }, copy.create),
             " ",
-            h8(Button4, { variant: "ghost", size: "sm", disabled: phase === "loading", onClick: refresh }, copy.refresh)
+            h9(Button5, { variant: "ghost", size: "sm", disabled: phase === "loading", onClick: refresh }, copy.refresh)
           )
         },
-        h8(FactGrid2, { items: [
+        h9(FactGrid2, { items: [
           { label: copy.stateRunning, value: stats.running },
           { label: copy.stateStopped, value: stats.stopped },
           { label: copy.fleetAttention, value: stats.attention }
         ] }),
-        h8(
+        h9(
           Toolbar2,
           { label: copy.searchPlaceholder },
-          h8(primitives2.Input, {
+          h9(primitives3.Input, {
             type: "search",
             "data-dnls-search": "1",
             value: search,
@@ -2571,141 +2857,221 @@ ${LAYER_CSS}
             onChange: (event) => setSearch(event.target.value)
           })
         ),
-        rows !== null && rows.length > 0 && visibleRows.length === 0 ? h8(EmptyState2, {
+        rows !== null && rows.length > 0 && visibleRows.length === 0 ? h9(EmptyState2, {
           "data-dnls-empty": "1",
           title: copy.searchMiss,
-          action: h8(Button4, { variant: "ghost", size: "sm", onClick: () => setSearch("") }, copy.clearFilter)
+          action: h9(Button5, { variant: "ghost", size: "sm", onClick: () => setSearch("") }, copy.clearFilter)
         }) : null,
-        rows !== null && rows.length === 0 ? h8(EmptyState2, {
+        rows !== null && rows.length === 0 ? h9(EmptyState2, {
           "data-dnls-empty": "1",
           title: copy.emptyTitle,
           description: copy.empty,
-          action: supports("sandbox.instance.create") ? h8(Button4, { variant: "primary", size: "sm", onClick: openCreate }, copy.create) : void 0
+          action: supports("sandbox.instance.create") ? h9(Button5, { variant: "primary", size: "sm", onClick: openCreate }, copy.create) : void 0
         }) : null,
-        visibleRows.map((entry) => h8(
-          PanelSection2,
-          { key: entry.sandboxId },
-          h8(Button4, {
-            variant: "outline",
-            "data-dnls-row": entry.sandboxId,
-            "aria-label": entry.name ?? entry.sandboxId,
-            disabled: busy,
-            onClick: () => choose(entry.sandboxId)
-          }, h8("strong", null, entry.name ?? entry.sandboxId)),
-          h8(FactGrid2, { items: [
-            { label: copy.fieldState, value: stateLabel(copy, entry.observedState) },
-            { label: copy.fieldProfile, value: entry.profileId },
-            { label: copy.fieldEnv, value: entry.envId },
-            capacity(entry) !== void 0 ? { label: copy.capacity, value: capacity(entry) } : null,
-            { label: copy.fieldServices, value: serviceSummary2(entry.services) || void 0 },
-            entry.operation ? { label: copy.opLatest, value: `${entry.operation.state}${entry.operation.step ? `/${entry.operation.step}` : ""}` } : null,
-            entry.health === "unknown" ? { label: copy.health, value: copy.healthUnverified } : null
-          ].filter(Boolean) })
-        )),
+        groups.map((group) => {
+          const cards = group.rows.filter((entry) => visibleRows.includes(entry));
+          if (cards.length === 0) return null;
+          const groupCap = (envIds ?? []).length === 1 ? profileCaps.get(group.profileId) : void 0;
+          return h9(
+            PanelSection2,
+            {
+              key: group.key,
+              title: `${group.envId} \xB7 ${group.profileId}${groupCap != null ? ` \xB7 ${copy.capacity} ${groupCap}` : ""}`
+            },
+            h9(FactGrid2, { items: cards.map((entry) => {
+              const running = entry.observedState === "running";
+              return {
+                label: " ",
+                value: h9(
+                  React14.Fragment,
+                  null,
+                  h9(DeviceFace2, { entry, copy, stateLabel: (s) => stateLabel(copy, s) }),
+                  h9(CardBody2, {
+                    entry,
+                    copy,
+                    running,
+                    Tag: primitives3.Tag,
+                    formatBytes: formatBytes2,
+                    stateLabel: (s) => stateLabel(copy, s),
+                    disabled: busy,
+                    onSelect: choose
+                  })
+                )
+              };
+            }) })
+          );
+        }),
         receiptBlock
       );
     };
-    const usageSection = (usage) => usage && h8(
-      PanelSection2,
-      { title: copy.resources },
-      h8(primitives2.SegmentedControl, {
-        value: usageWindow,
-        label: copy.resources,
-        options: ["24h", "7d", "30d"].map((w) => ({ value: w, label: w })),
-        onChange: (w) => {
-          if (!busy) setUsageWindow(w);
-        }
-      }),
-      h8(FactGrid2, { items: [
-        { label: copy.usageStates, value: `${copy.stateRunning} ${usage.states?.running ?? "\u2014"} \xB7 ${copy.stateStopped} ${usage.states?.stopped ?? "\u2014"} \xB7 ${copy.stateFailed} ${usage.states?.failed ?? "\u2014"} \xB7 ${copy.stateMissing} ${usage.states?.missing ?? "\u2014"}` },
-        { label: copy.usageMemory, value: `${copy.expected} ${usage.memory?.expected ?? "\u2014"} \xB7 ${copy.valid} ${usage.memory?.valid ?? "\u2014"} \xB7 ${copy.mean} ${formatBytes2(usage.memory?.mean) ?? "\u2014"} \xB7 ${copy.peak} ${formatBytes2(usage.memory?.peak) ?? "\u2014"}` },
-        { label: copy.usageCpu, value: `${copy.expected} ${usage.cpu?.expected ?? "\u2014"} \xB7 ${copy.valid} ${usage.cpu?.valid ?? "\u2014"} \xB7 ${copy.mean} ${formatCores2(usage.cpu?.mean) ?? "\u2014"} \xB7 ${copy.peak} ${formatCores2(usage.cpu?.peak) ?? "\u2014"}` }
-      ] })
-    );
-    const overviewTab = () => h8(
-      React13.Fragment,
+    const overviewTab = () => h9(
+      React14.Fragment,
       null,
-      h8(FactGrid2, { items: [
+      h9(FactGrid2, { items: [
         { label: copy.fieldState, value: detail ? stateLabel(copy, detail.observedState) : detailError ? void 0 : copy.loading },
-        { label: copy.health, value: detail?.health === "unknown" ? copy.healthUnverified : detail?.health },
-        { label: copy.fieldRevision, value: detail ? `${copy.desiredRev} ${detail.desiredRevision ?? "\u2014"} \xB7 ${copy.appliedRev} ${detail.appliedRevision ?? "\u2014"}` : void 0 },
-        detail?.resources ? { label: copy.resCpus, value: detail.resources.cpus ?? "\u2014" } : null,
-        detail?.resources ? { label: copy.resMemory, value: formatBytes2(detail.resources.memoryBytes) ?? "\u2014" } : null,
-        { label: copy.observedAt, value: fmtTime(detail?.observedAt) }
+        { label: copy.observedAt, value: fmtTime(detail?.observedAt) },
+        detail?.resources ? { label: copy.resCpus, value: `${copy.allocated} ${detail.resources.cpus ?? "\u2014"}` } : null,
+        detail?.resources ? { label: copy.resMemory, value: `${copy.allocated} ${formatBytes2(detail.resources.memoryBytes) ?? "\u2014"}` } : null
       ].filter(Boolean) }),
-      detailError ? h8(
+      detailError ? h9(
         "div",
         { "data-dnls-detail-error": "1", role: "alert" },
         `${detailError?.errorId ? `${detailError.errorId} ` : ""}${detailError?.message ?? detailError}`
       ) : null,
-      usageDenied ? h8("p", null, copy.usageNotAuthorized) : null,
-      usageSection(detail?.usage),
-      detail ? h8(
+      // Candidate strip only on a genuine desired != applied revision, and
+      // each line only where the saved override actually differs from the
+      // observed allocation.
+      canManage && Number.isInteger(detail?.desiredRevision) && Number.isInteger(detail?.appliedRevision) && detail.desiredRevision !== detail.appliedRevision ? (() => {
+        const ov = detail.configuration?.overrides ?? {};
+        const lines = [
+          ov.cpus != null && ov.cpus !== detail.resources?.cpus ? fill2(copy.cfgPendingCpu, { cur: detail.resources?.cpus ?? copy.unknown, saved: ov.cpus }) : null,
+          ov.memoryBytes != null && ov.memoryBytes !== detail.resources?.memoryBytes ? fill2(copy.cfgPendingMem, {
+            cur: formatBytes2(detail.resources?.memoryBytes) ?? copy.unknown,
+            saved: formatBytes2(ov.memoryBytes)
+          }) : null
+        ].filter(Boolean);
+        return h9(
+          "p",
+          { "data-dnls-pending": "1" },
+          lines.length > 0 ? lines.join(" \xB7 ") : fill2(copy.revPending, { rev: detail.desiredRevision })
+        );
+      })() : null,
+      usageDenied ? h9("p", null, copy.usageNotAuthorized) : null,
+      // Window picker + honest metric bands + one coverage sentence.
+      detail?.usage ? h9(
+        PanelSection2,
+        { title: copy.resources },
+        h9(primitives3.SegmentedControl, {
+          value: usageWindow,
+          label: copy.resources,
+          options: ["24h", "7d", "30d"].map((w) => ({ value: w, label: w })),
+          onChange: (w) => {
+            if (!busy) setUsageWindow(w);
+          }
+        }),
+        Array.isArray(detail.usage.history) && detail.usage.history.length > 0 ? h9(
+          React14.Fragment,
+          null,
+          h9(MetricChart2, {
+            title: copy.usageCpu,
+            unit: copy.coresUnit,
+            range: usageWindow,
+            tone: "var(--dsw-alias-state-business-primary)",
+            summary: detail.usage.cpu ? { ...detail.usage.cpu, end: detail.usage.end } : { end: detail.usage.end },
+            copy,
+            fmtTime,
+            bins: detail.usage.history.map((b) => ({ at: b.at, minutes: b.minutes, value: b.cpuCores ?? null }))
+          }),
+          h9(MetricChart2, {
+            title: copy.usageMemory,
+            unit: "MiB",
+            range: usageWindow,
+            tone: "var(--dsw-alias-state-success-primary)",
+            summary: detail.usage.memory ? {
+              ...detail.usage.memory,
+              end: detail.usage.end,
+              mean: detail.usage.memory.mean != null ? detail.usage.memory.mean / 1048576 : null,
+              peak: detail.usage.memory.peak != null ? detail.usage.memory.peak / 1048576 : null
+            } : null,
+            copy,
+            fmtTime,
+            bins: detail.usage.history.map((b) => ({
+              at: b.at,
+              minutes: b.minutes,
+              value: b.memoryBytes != null ? b.memoryBytes / 1048576 : null
+            }))
+          })
+        ) : null,
+        h9(
+          "p",
+          null,
+          `${copy.usageStates} ${copy.stateRunning} ${detail.usage.states?.running ?? "\u2014"} \xB7 ${copy.stateStopped} ${detail.usage.states?.stopped ?? "\u2014"} \xB7 ${copy.stateFailed} ${detail.usage.states?.failed ?? "\u2014"} \xB7 ${copy.stateMissing} ${detail.usage.states?.missing ?? "\u2014"} \u2014 ${copy.usageCpu} ${detail.usage.cpu?.valid ?? "\u2014"}/${detail.usage.cpu?.expected ?? "\u2014"} \xB7 ${copy.usageMemory} ${detail.usage.memory?.valid ?? "\u2014"}/${detail.usage.memory?.expected ?? "\u2014"}`
+        )
+      ) : null,
+      // Guest process read — running + authorized only.
+      supports("sandbox.processes") ? h9(
+        PanelSection2,
+        { title: copy.processes },
+        detail && canManage !== true ? h9("p", null, copy.configNotAuthorized) : detail && observedState !== "running" ? h9("p", null, stateLabel(copy, observedState)) : null,
+        h9(
+          "p",
+          null,
+          h9(
+            Button5,
+            {
+              variant: "ghost",
+              size: "sm",
+              disabled: procsBusy || busy || !canManage || observedState !== "running",
+              onClick: () => procs ? setProcs(null) : loadProcesses()
+            },
+            procs ? copy.processesHide : copy.processes
+          )
+        ),
+        procs ? h9(
+          "section",
+          { "data-dnls-processes": "1", "aria-label": copy.processes },
+          (procs.processes ?? []).length === 0 ? h9("p", null, copy.processesEmpty) : h9(
+            React14.Fragment,
+            null,
+            h9(
+              "table",
+              { width: "100%" },
+              h9("thead", null, h9(
+                "tr",
+                null,
+                h9("th", { scope: "col", align: "left" }, "PID"),
+                h9("th", { scope: "col", align: "left" }, copy.fieldName),
+                h9("th", { scope: "col", align: "left" }, copy.fieldState),
+                h9("th", { scope: "col", align: "left" }, "RSS")
+              )),
+              h9(
+                "tbody",
+                null,
+                (procs.processes ?? []).map((p) => h9(
+                  "tr",
+                  { key: p.pid },
+                  h9("td", null, p.pid ?? "\u2014"),
+                  h9("td", null, p.name ?? "\u2014"),
+                  h9("td", null, p.state ?? "\u2014"),
+                  h9("td", null, p.rssBytes != null ? formatBytes2(p.rssBytes) ?? `${p.rssBytes}B` : "\u2014")
+                ))
+              )
+            ),
+            procs.truncated === true ? h9("p", null, copy.procsTruncated) : null
+          )
+        ) : null
+      ) : null,
+      detail ? h9(
         DisclosureRow,
         {
           title: copy.details,
-          icon: InfoIcon ? h8(InfoIcon) : null,
+          icon: InfoIcon ? h9(InfoIcon) : null,
           open: detailsOpen,
           expandable: true,
           expandOnRowClick: true,
           onToggle: () => setDetailsOpen((open) => !open)
         },
-        h8(FactGrid2, { items: [
+        h9(FactGrid2, { items: [
           detail.applied ? { label: copy.appliedDigest, value: detail.applied.imageDigest } : null,
-          detail.applied ? { label: copy.appliedVerified, value: detail.applied.verifiedAt } : null,
+          detail.applied ? { label: copy.appliedVerified, value: fmtTime(detail.applied.verifiedAt) } : null,
           { label: copy.fieldGeneration, value: detail.generation },
           { label: copy.fieldSandboxId, value: detail.sandboxId },
-          Array.isArray(detail.mounts) && detail.mounts.length > 0 ? { label: copy.storage, value: detail.mounts.map((m) => `${m.type ?? "\u2014"}:${m.target ?? "\u2014"}${m.readOnly === true ? ` ${copy.readOnly}` : ""}`).join(" \xB7 ") } : null,
-          detail.operation ? { label: copy.opLatest, value: `${detail.operation.state}${detail.operation.step ? `/${detail.operation.step}` : ""}` } : null
+          Array.isArray(detail.mounts) && detail.mounts.length > 0 ? { label: copy.storage, value: detail.mounts.map((m) => `${m.type ?? "\u2014"}:${m.target ?? "\u2014"}${m.readOnly === true ? ` ${copy.readOnly}` : ""}`).join(" \xB7 ") } : null
         ].filter(Boolean) })
       ) : null,
-      detail?.operations?.length ? h8(
+      detail?.operations?.length ? h9(
         PanelSection2,
         { title: copy.timeline },
-        [...detail.operations].reverse().slice(0, 3).map((op, index) => h8(
-          "p",
-          { key: index },
-          `${copy[op.action] ?? op.action} \xB7 ${op.state}${op.step ? `/${op.step}` : ""} \xB7 ${fmtTime(op.at)}`
-        )),
-        detail.operations.length > 3 ? h8(
-          DisclosureRow,
+        [...detail.operations].reverse().map((op) => h9(
+          "div",
           {
-            title: copy.opsOlder,
-            icon: InfoIcon ? h8(InfoIcon) : null,
-            open: olderOpsOpen,
-            expandable: true,
-            expandOnRowClick: true,
-            onToggle: () => setOlderOpsOpen((open) => !open)
+            key: op.operationId ?? `${op.at}-${op.action}`,
+            "data-dnls-op": op.operationId ?? void 0
           },
-          [...detail.operations].reverse().slice(3).map((op, index) => h8(
-            "p",
-            { key: index },
-            `${copy[op.action] ?? op.action} \xB7 ${op.state}${op.step ? `/${op.step}` : ""} \xB7 ${fmtTime(op.at)}`
-          ))
-        ) : null
-      ) : null,
-      supports("sandbox.processes") ? h8(
-        "p",
-        null,
-        h8(
-          Button4,
-          { variant: "ghost", size: "sm", disabled: procsBusy || busy, onClick: () => procs ? setProcs(null) : loadProcesses() },
-          procs ? copy.processesHide : copy.processes
-        )
-      ) : null,
-      procs ? h8(
-        "section",
-        { "data-dnls-processes": "1", "aria-label": copy.processes },
-        (procs.processes ?? []).length === 0 ? h8("p", null, copy.processesEmpty) : h8(
-          React13.Fragment,
-          null,
-          (procs.processes ?? []).map((p) => h8(
-            "p",
-            { key: p.pid },
-            `${p.pid} ${p.name ?? ""} ${p.state ?? ""} ${p.rssBytes != null ? formatBytes2(p.rssBytes) ?? `${p.rssBytes}B` : ""}`
-          )),
-          procs.truncated === true ? h8("p", null, copy.procsTruncated) : null
-        )
+          h9(primitives3.StateDot, { state: { succeeded: "done", failed: "error", indeterminate: "warning", running: "ongoing" }[op.state] ?? "idle" }),
+          " ",
+          `${copy[op.action] ?? op.action} \xB7 ${copy.opStates?.[op.state] ?? op.state}${op.step && op.step !== "verify" ? `/${op.step}` : ""} \xB7 ${fmtTime(op.at)}`
+        ))
       ) : null
     );
     const engineState = engine?.planes?.engine?.state ?? null;
@@ -2716,89 +3082,119 @@ ${LAYER_CSS}
       const termList = terms?.list ?? null;
       const declared = services.map((s) => s.serviceId).filter((id) => typeof id === "string");
       const healthUnknown = services.length > 0 && services.every((s) => (s.health ?? "unknown") === "unknown");
-      return h8(
-        React13.Fragment,
+      return h9(
+        React14.Fragment,
         null,
-        services.length > 0 ? h8(
+        services.length > 0 ? h9(
           PanelSection2,
           { title: copy.fieldServices },
-          healthUnknown ? h8("p", null, copy.healthUnverified) : null,
-          services.map((service) => h8(
-            "div",
-            { key: service.serviceId },
-            h8(ServiceLine, { service }),
-            h8(FactGrid2, { items: [
-              { label: copy.protocol, value: service.protocol },
+          healthUnknown ? h9("p", null, copy.healthUnverified) : null,
+          h9(
+            "table",
+            { width: "100%" },
+            h9("thead", null, h9(
+              "tr",
+              null,
+              h9("th", { scope: "col", align: "left" }, copy.fieldServices),
+              h9("th", { scope: "col", align: "left" }, copy.servicePublication),
+              h9("th", { scope: "col", align: "left" }, copy.protocol)
+            )),
+            h9(
+              "tbody",
+              null,
+              services.map((service) => h9(
+                "tr",
+                { key: service.serviceId },
+                h9("td", null, service.serviceId),
+                h9("td", null, serviceAddress2(service, copy)),
+                h9("td", null, `${service.protocol ?? "\u2014"}:${service.containerPort ?? "\u2014"}`)
+              ))
+            )
+          ),
+          services.map((service) => h9(
+            DisclosureRow,
+            {
+              key: service.serviceId,
+              title: service.serviceId,
+              icon: InfoIcon ? h9(InfoIcon) : null,
+              open: svcOpen === service.serviceId,
+              expandable: true,
+              expandOnRowClick: true,
+              onToggle: () => setSvcOpen((open) => open === service.serviceId ? null : service.serviceId)
+            },
+            h9(FactGrid2, { items: [
               service.guestCwd ? { label: copy.guestCwd, value: service.guestCwd } : null,
-              { label: copy.observedAt, value: service.observedAt }
+              { label: copy.observedAt, value: fmtTime(service.observedAt) },
+              { label: copy.declaredVersion, value: service.declaredVersion ?? "\u2014" },
+              { label: copy.observedVersion, value: service.observedVersion ?? "\u2014" }
             ].filter(Boolean) })
           ))
-        ) : h8("p", null, copy.none),
+        ) : h9("p", null, copy.none),
         // Engine probe — the announced dnls.status surface, rendered only
         // for the installed kitesurf profile and only whitelisted fields.
-        (detail?.services ?? []).some((s) => s.role === "engine" || s.role === "bridge") ? h8(
+        (detail?.services ?? []).some((s) => s.role === "engine" || s.role === "bridge") ? h9(
           PanelSection2,
           { title: copy.engineProbe },
-          supports("dnls.status") ? h8(Button4, { variant: "ghost", size: "sm", disabled: busy, onClick: probeEngine }, copy.engineProbe) : h8("p", null, copy.engineUnavailable),
-          engine ? h8(FactGrid2, { items: [
+          supports("dnls.status") ? h9(Button5, { variant: "ghost", size: "sm", disabled: busy, onClick: probeEngine }, copy.engineProbe) : h9("p", null, copy.engineUnavailable),
+          engine ? h9(FactGrid2, { items: [
             { label: copy.engineState, value: engineState },
             { label: copy.bridgeState, value: bridgeState },
             { label: copy.observedAt, value: engine?.observedAt },
             typeof engine?.networking?.hostGateway === "string" ? { label: copy.netGateway, value: engine.networking.hostGateway } : null
           ].filter(Boolean) }) : null,
-          holdActive === true || holdActive === false ? h8(FactGrid2, { items: [
+          holdActive === true || holdActive === false ? h9(FactGrid2, { items: [
             { label: copy.humanHold, value: holdActive === true ? copy.humanHoldActive : copy.humanHoldFree }
           ] }) : null,
-          holdActive === true || holdActive === false ? h8(
+          holdActive === true || holdActive === false ? h9(
             "p",
             null,
-            h8(Button4, { variant: "ghost", size: "sm", disabled: busy || holdActive === true, onClick: () => setHumanHold(true) }, copy.takeover),
+            h9(Button5, { variant: "ghost", size: "sm", disabled: busy || holdActive === true, onClick: () => setHumanHold(true) }, copy.takeover),
             " ",
-            h8(Button4, { variant: "ghost", size: "sm", disabled: busy || holdActive === false, onClick: () => setHumanHold(false) }, copy.release)
+            h9(Button5, { variant: "ghost", size: "sm", disabled: busy || holdActive === false, onClick: () => setHumanHold(false) }, copy.release)
           ) : null,
-          h8(
+          h9(
             "p",
             null,
-            h8(Button4, { variant: "ghost", size: "sm", disabled: busy || host?.kitesurf?.() !== true, onClick: openKitesurf }, copy.openWorkspace),
+            h9(Button5, { variant: "ghost", size: "sm", disabled: busy || host?.kitesurf?.() !== true, onClick: openKitesurf }, copy.openWorkspace),
             " ",
-            h8("span", null, copy.openWorkspaceHint)
+            h9("span", null, copy.openWorkspaceHint)
           )
         ) : null,
         // Operator-only engine log read — bounded text, gated by the
         // announced dnls.logs surface and the operator configuration plane.
-        canManage && supports("dnls.logs") ? h8(
+        canManage && supports("dnls.logs") ? h9(
           PanelSection2,
           { title: copy.logsTitle },
-          h8(
+          h9(
             "p",
             null,
-            h8(Button4, { variant: "ghost", size: "sm", disabled: logsBusy || busy, onClick: loadLogs }, copy.readLogs)
+            h9(Button5, { variant: "ghost", size: "sm", disabled: logsBusy || busy, onClick: loadLogs }, copy.readLogs)
           ),
-          logs?.error ? h8("p", { role: "alert" }, `${logs.error?.errorId ? `${logs.error.errorId} ` : ""}${logs.error?.message ?? logs.error}`) : null,
-          typeof logs?.text === "string" ? h8("pre", { "data-dnls-logs": "1" }, logs.text) : null
+          logs?.error ? h9("p", { role: "alert" }, `${logs.error?.errorId ? `${logs.error.errorId} ` : ""}${logs.error?.message ?? logs.error}`) : null,
+          typeof logs?.text === "string" ? h9("pre", { "data-dnls-logs": "1" }, logs.text) : null
         ) : null,
         // Terminals — explicit list first; create appears only after it.
-        supports("term.session.list") ? h8(
+        supports("term.session.list") ? h9(
           PanelSection2,
           { title: copy.terminals },
-          h8(
+          h9(
             "p",
             null,
-            h8(Button4, { variant: "ghost", size: "sm", disabled: termBusy || busy, onClick: loadTerminals }, copy.terminalsList)
+            h9(Button5, { variant: "ghost", size: "sm", disabled: termBusy || busy, onClick: loadTerminals }, copy.terminalsList)
           ),
-          terms?.denied ? h8("p", { "data-dnls-terms-denied": "1", role: "alert" }, copy.terminalsDenied) : null,
-          terms?.error ? h8("p", { role: "alert" }, `${terms.error?.errorId ? `${terms.error.errorId} ` : ""}${terms.error?.message ?? terms.error}`) : null,
-          termList && termList.length === 0 ? h8("p", null, copy.terminalsEmpty) : null,
+          terms?.denied ? h9("p", { "data-dnls-terms-denied": "1", role: "alert" }, copy.terminalsDenied) : null,
+          terms?.error ? h9("p", { role: "alert" }, `${terms.error?.errorId ? `${terms.error.errorId} ` : ""}${terms.error?.message ?? terms.error}`) : null,
+          termList && termList.length === 0 ? h9("p", null, copy.terminalsEmpty) : null,
           termList ? termList.map((term) => {
             const live = term.state !== "ended";
             const active = term.state === "active";
-            return h8(
+            return h9(
               "p",
               { key: term.terminalId },
               `${term.terminalId.slice(0, 8)} ${term.state ?? ""} `,
-              active && typeof term.address === "string" ? h8(Button4, { variant: "ghost", size: "sm", disabled: termBusy, onClick: () => openTerminal(term) }, copy.terminalOpen) : null,
+              active && typeof term.address === "string" ? h9(Button5, { variant: "ghost", size: "sm", disabled: termBusy, onClick: () => openTerminal(term) }, copy.terminalOpen) : null,
               " ",
-              live && supports("term.session.close") ? h8(Button4, { variant: "ghost", size: "sm", disabled: termBusy, onClick: () => {
+              live && supports("term.session.close") ? h9(Button5, { variant: "ghost", size: "sm", disabled: termBusy, onClick: () => {
                 setConfirm({ kind: "closeTerminal", terminalId: term.terminalId });
                 setAcknowledged(false);
               } }, copy.terminalClose) : null
@@ -2806,14 +3202,14 @@ ${LAYER_CSS}
           }) : null,
           // Create-only is separate from connect/attach and appears only
           // after a successful list — never on a denied or failed read.
-          termList && supports("term.session.create") ? h8(
+          termList && supports("term.session.create") ? h9(
             "p",
             null,
-            declared.map((serviceId) => h8(
-              React13.Fragment,
+            declared.map((serviceId) => h9(
+              React14.Fragment,
               { key: serviceId },
-              h8(
-                Button4,
+              h9(
+                Button5,
                 { variant: "ghost", size: "sm", disabled: termBusy || busy, onClick: () => createTerminal(serviceId) },
                 fill2(copy.terminalCreateFor, { service: serviceId })
               ),
@@ -2825,84 +3221,89 @@ ${LAYER_CSS}
     };
     const settingsTab = () => {
       const cfg = detail?.configuration;
-      return h8(
-        React13.Fragment,
+      return h9(
+        React14.Fragment,
         null,
-        h8(
+        h9(
           PanelSection2,
           { title: copy.config },
-          cfg ? h8(
-            React13.Fragment,
+          cfg ? h9(
+            React14.Fragment,
             null,
-            h8(
+            h9(primitives3.SettingsValueField, {
+              id: `${nameId}-cpus`,
+              label: copy.configCpus,
+              text: cfgCpus,
+              numeric: true,
+              overridden: false,
+              invalid: cfgCpus.trim() !== "" && (!Number.isInteger(Number(cfgCpus)) || Number(cfgCpus) < 1),
+              invalidLabel: copy.draftInvalid,
+              disabled: busy || detail == null,
+              onEdit: setCfgCpus,
+              placeholder: copy.configUnobserved,
+              "data-dnls-cfg-cpus": "1"
+            }),
+            h9(primitives3.SettingsValueField, {
+              id: `${nameId}-mem`,
+              label: copy.configMemory,
+              text: cfgMem,
+              numeric: true,
+              overridden: false,
+              invalid: cfgMem.trim() !== "" && (!Number.isInteger(Number(cfgMem)) || Number(cfgMem) < 1),
+              invalidLabel: copy.draftInvalid,
+              disabled: busy || detail == null,
+              onEdit: setCfgMem,
+              placeholder: copy.configUnobserved,
+              "data-dnls-cfg-mem": "1"
+            }),
+            cfgCpus.trim() !== "" || cfgMem.trim() !== "" ? h9("p", null, copy.saveNoChange) : null,
+            h9(
               "p",
               null,
-              h8("label", { htmlFor: `${nameId}-cpus` }, copy.configCpus),
-              " ",
-              h8(primitives2.Input, {
-                id: `${nameId}-cpus`,
-                "data-dnls-cfg-cpus": "1",
-                value: cfgCpus,
-                placeholder: copy.configUnobserved,
-                disabled: busy,
-                onChange: (e) => setCfgCpus(e.target.value)
-              })
-            ),
-            h8(
-              "p",
-              null,
-              h8("label", { htmlFor: `${nameId}-mem` }, copy.configMemory),
-              " ",
-              h8(primitives2.Input, {
-                id: `${nameId}-mem`,
-                "data-dnls-cfg-mem": "1",
-                value: cfgMem,
-                placeholder: copy.configUnobserved,
-                disabled: busy,
-                onChange: (e) => setCfgMem(e.target.value)
-              })
-            ),
-            h8(
-              "p",
-              null,
-              h8(Button4, { variant: "primary", size: "sm", disabled: busy || !supports("sandbox.revision.save"), onClick: saveResources }, copy.configSave)
+              h9(Button5, { variant: "primary", size: "sm", disabled: busy || detail == null || !supports("sandbox.revision.save"), onClick: saveResources }, copy.configSave)
             )
-          ) : h8("p", null, copy.configNotAuthorized)
+          ) : h9("p", null, copy.configNotAuthorized)
         ),
-        h8(
+        h9(
           PanelSection2,
           { title: copy.idle },
-          cfg ? h8(
-            "p",
+          cfg ? h9(
+            React14.Fragment,
             null,
-            h8("label", { htmlFor: `${nameId}-idle` }, copy.idleMinutes),
-            " ",
-            h8(primitives2.Input, {
+            h9(primitives3.SettingsValueField, {
               id: `${nameId}-idle`,
-              "data-dnls-idle": "1",
-              value: idleMin,
+              label: copy.idleMinutes,
+              text: idleMin,
+              numeric: true,
+              overridden: false,
+              invalid: idleMin.trim() !== "" && (!Number.isInteger(Number(idleMin)) || Number(idleMin) < 0),
+              invalidLabel: copy.draftInvalid,
+              disabled: busy || detail == null,
+              onEdit: setIdleMin,
               placeholder: copy.idleHint,
-              disabled: busy,
-              onChange: (e) => setIdleMin(e.target.value)
+              "data-dnls-idle": "1"
             }),
-            " ",
-            h8(Button4, { variant: "ghost", size: "sm", disabled: busy || idleMin.trim() === "" || !supports("sandbox.idle.configure"), onClick: saveIdle }, copy.idleSave)
-          ) : h8("p", null, copy.configNotAuthorized)
+            h9(
+              "p",
+              null,
+              h9(Button5, { variant: "ghost", size: "sm", disabled: busy || detail == null || idleMin.trim() === "" || !supports("sandbox.idle.configure"), onClick: saveIdle }, copy.idleSave)
+            )
+          ) : h9("p", null, copy.configNotAuthorized)
         ),
-        settingsMsg ? h8("p", { "data-dnls-settings-msg": "1" }, settingsMsg) : null,
-        canManage && detail != null && !opPending && (supports("sandbox.instance.recreate") || supports("sandbox.instance.remove")) ? h8(
+        settingsMsg ? h9("p", { "data-dnls-settings-msg": "1" }, settingsMsg) : null,
+        canManage && detail != null && !opPending && (supports("sandbox.instance.recreate") || supports("sandbox.instance.remove")) ? h9(
           PanelSection2,
           { title: copy.danger },
-          h8("p", null, copy.persistVolume),
-          h8(
+          h9("p", null, copy.persistVolume),
+          h9(
             "p",
             null,
-            supports("sandbox.instance.recreate") ? h8(Button4, { variant: "ghost", size: "sm", disabled: busy, onClick: () => {
+            supports("sandbox.instance.recreate") ? h9(Button5, { variant: "ghost", size: "sm", disabled: busy, onClick: () => {
               setConfirm({ kind: "recreate" });
               setAcknowledged(false);
             } }, copy.recreate) : null,
             " ",
-            supports("sandbox.instance.remove") ? h8(Button4, { variant: "ghost", size: "sm", disabled: busy, onClick: () => {
+            supports("sandbox.instance.remove") ? h9(Button5, { variant: "ghost", size: "sm", disabled: busy, onClick: () => {
               setConfirm({ kind: "remove" });
               setAcknowledged(false);
             } }, copy.remove) : null
@@ -2911,32 +3312,32 @@ ${LAYER_CSS}
       );
     };
     const control = () => {
-      if (!selection) return h8("p", null, copy.pick);
-      return h8(
+      if (!selection) return h9("p", null, copy.pick);
+      return h9(
         PanelLayout2,
         {
           "data-dnls-pane": "1",
-          title: h8(React13.Fragment, null, sandboxName, " ", h8(primitives2.Tag, null, detail ? stateLabel(copy, detail.observedState) : copy.stateUnknown)),
+          title: h9(React14.Fragment, null, sandboxName, " ", h9(primitives3.Tag, null, detail ? stateLabel(copy, detail.observedState) : copy.stateUnknown)),
           kicker: `${detail?.envId ?? selection.envId ?? "\u2014"} \xB7 ${detail?.profileId ?? "\u2014"}`,
           description: detail?.health === "unknown" ? copy.healthUnverified : void 0,
-          actions: h8(
-            React13.Fragment,
+          actions: h9(
+            React14.Fragment,
             null,
-            h8(Button4, { variant: "ghost", size: "sm", disabled: busy, onClick: unchoose }, copy.back),
+            h9(Button5, { variant: "ghost", size: "sm", disabled: busy, onClick: unchoose }, copy.back),
             " ",
-            h8(
-              Button4,
+            h9(
+              Button5,
               { variant: "primary", size: "sm", disabled: writeBusy || !(observedState === "stopped" ? canStart : canStop), onClick: () => setConfirm({ kind: observedState === "stopped" ? "start" : "stop" }) },
               observedState === "stopped" ? copy.start : copy.stop
             ),
             " ",
-            h8(Button4, { variant: "ghost", size: "sm", disabled: writeBusy || !canRestart, onClick: () => setConfirm({ kind: "restart" }) }, copy.restart),
+            h9(Button5, { variant: "ghost", size: "sm", disabled: writeBusy || !canRestart, onClick: () => setConfirm({ kind: "restart" }) }, copy.restart),
             " ",
-            h8(Button4, { variant: "ghost", size: "sm", disabled: phase === "loading", onClick: refresh }, copy.refresh)
+            h9(Button5, { variant: "ghost", size: "sm", disabled: phase === "loading", onClick: refresh }, copy.refresh)
           )
         },
         receiptBlock,
-        h8(NanoTabs2, {
+        h9(NanoTabs2, {
           label: copy.control,
           items: [
             { value: "overview", label: copy.tabOverview, content: overviewTab() },
@@ -2946,7 +3347,7 @@ ${LAYER_CSS}
         })
       );
     };
-    const createDialog = createOpen ? h8(
+    const createDialog = createOpen ? h9(
       NanoDialog2,
       {
         copy,
@@ -2957,12 +3358,12 @@ ${LAYER_CSS}
         onConfirm: () => submitLifecycle("create", { name: createName, profileId: createProfile }),
         onCancel: () => setCreateOpen(false)
       },
-      h8(
+      h9(
         "p",
         null,
-        h8("label", { htmlFor: nameId }, copy.createName),
+        h9("label", { htmlFor: nameId }, copy.createName),
         " ",
-        h8(primitives2.Input, {
+        h9(primitives3.Input, {
           id: nameId,
           "data-dnls-create-name": "1",
           value: createName,
@@ -2970,8 +3371,8 @@ ${LAYER_CSS}
           onChange: (event) => setCreateName(event.target.value)
         })
       ),
-      h8("p", null, h8("label", null, copy.createProfile)),
-      profiles === null ? h8("p", null, copy.loading) : h8(primitives2.SegmentedControl, {
+      h9("p", null, h9("label", null, copy.createProfile)),
+      profiles === null ? h9("p", null, copy.loading) : h9(primitives3.SegmentedControl, {
         "data-dnls-create-profile": "1",
         label: copy.createProfile,
         value: createProfile,
@@ -2984,10 +3385,10 @@ ${LAYER_CSS}
           if (!busy) setCreateProfile(value);
         }
       }),
-      profiles !== null && profiles.length === 0 ? h8("p", null, copy.noProfiles) : null,
-      profilesFailed ? h8("p", { role: "alert" }, copy.failed) : null
+      profiles !== null && profiles.length === 0 ? h9("p", null, copy.noProfiles) : null,
+      profilesFailed ? h9("p", { role: "alert" }, copy.failed) : null
     ) : null;
-    const riskDialog = confirm && confirm.kind !== "start" ? h8(RiskConfirmation, {
+    const riskDialog = confirm && confirm.kind !== "start" ? h9(RiskConfirmation, {
       open: true,
       title: confirm.kind === "closeTerminal" ? copy.closeConfirmTitle : copy[`${confirm.kind}ConfirmTitle`] ?? copy[`${confirm.kind}`],
       description: confirm.kind === "closeTerminal" ? fill2(copy.terminalCloseConfirm, { id: confirm.terminalId?.slice(0, 8) }) : confirm.kind === "remove" ? fill2(copy.removeConfirmBody, { name: sandboxName }) : confirm.kind === "recreate" ? fill2(copy.recreateConfirmBody, { name: sandboxName }) : fill2(copy.confirmBody, { action: copy[confirm.kind] ?? confirm.kind, name: sandboxName }),
@@ -3011,7 +3412,7 @@ ${LAYER_CSS}
         submitLifecycle(confirm.kind, { sandboxId: selection.sandboxId, args });
       }
     }) : null;
-    const startDialog = confirm?.kind === "start" ? h8(NanoDialog2, {
+    const startDialog = confirm?.kind === "start" ? h9(NanoDialog2, {
       copy,
       title: copy.startConfirmTitle,
       description: fill2(copy.startConfirmBody, { name: sandboxName }),
@@ -3021,10 +3422,10 @@ ${LAYER_CSS}
       onConfirm: () => submitLifecycle("start", { sandboxId: selection.sandboxId }),
       onCancel: () => setConfirm(null)
     }) : null;
-    return h8(
-      React13.Fragment,
+    return h9(
+      React14.Fragment,
       null,
-      h8("style", null, NANO_STYLES2),
+      h9("style", null, NANO_STYLES2),
       errorBox,
       view === "overview" ? overview() : control(),
       createDialog,
@@ -3046,7 +3447,7 @@ ${LAYER_CSS}
         return true;
       }
     };
-    const Pane = (props) => h8(DnlsPane, { sessionId: props.sessionId, copy: copy(), host });
+    const Pane = (props) => h9(DnlsPane, { sessionId: props.sessionId, copy: copy(), host });
     ctx.effect(() => ctx.sidebarRightTabs.register({
       id: KIND,
       kind: KIND,

@@ -38,7 +38,7 @@
 | POST | `/nano-local-sandbox/wait` | `{selector|text|url|fn}+load+timeoutMs` 阻塞条件等待；超时不是取消 |
 | POST | `/nano-local-sandbox/history` | `{delta:-1|+1}` 真浏览器进退 |
 | POST | `/nano-local-sandbox/settings` | 8 键事务：`{userAgent?,viewport?,media?,extraHeaders?,locale?,geolocation?,colorScheme?,cookies?}`；viewport `deviceScaleFactor` 只接 1、`mobile` 只接 false；`cookies` 是 `name=value` 换行文本（非数组），按当前页 origin 种入 |
-| POST | `/nano-local-sandbox/lifecycle` | `{action:start|stop|restart|recreate}` 生命周期（dnls.control/1；旧 suspend/resume 动词已退役）；端点由实例 registry 返回，pane 只读 |
+| POST | `/nano-local-sandbox/lifecycle` | `{action:start|stop|restart|recreate}` 生命周期（dnls.control/1）；端点由实例 registry 返回，pane 只读——agent 无生命周期写工具，动作指引用户在工作台沙箱控件执行 |
 | GET | `/nano-local-sandbox/operations` | `?sandboxId=<id>&operationId=<op>` 读单个 operation 文档；lifecycle 只回 accepted/running，终态以该轮询为准，不得重发未结算的操作 |
 | POST | `/nano-local-sandbox/control` | `{action:takeover|release,owner?}` HITL 人接管写锁（只约束 MCP 写者） |
 | POST | `/nano-local-sandbox/mcp` | JSON-RPC 2.0 宿主 MCP（tools/list、tools/call `sandbox.*`/`term.*`） |

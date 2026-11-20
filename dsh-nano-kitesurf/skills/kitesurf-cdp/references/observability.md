@@ -23,7 +23,7 @@ console 采集走 DNLS 自己那条 CDP socket 的 `Runtime.consoleAPICalled` / 
 
 面板、`GET /status`、`/diagnostics`、`lifecycle.phase` 都读的是**同一个宿主进程状态**，不是各自独立的副本。宿主重启清空 console/操作环形缓冲与 perf 样本，并把引擎共享页打回 `about:blank`。`/status` 在引擎 down 时 HTTP 仍是 **200**，必须读 body 的 `ok`；`buildId`/`engineAlive` 确认「我到底在跟哪份代码说话」。`lifecycle` 的 `start`/`stop`/`restart`/`recreate` 与阶段必须匹配；阶段错是 409，不是引擎故障。
 
-**实例按 session 记录**：`sandbox.instance.ensure` 返回 per-session `instanceId` 与 `policyFingerprint`；物理容器是 env 容器，页面、CDP socket 与 history 在同一 env 容器内共享。`profile.list` 的 `scope: session` 只指记录与策略指纹隔离。
+**共享 env 容器**：页面、CDP socket 与 history 在同一 env 容器内共享——同一对象上人的 pane 与你 attach 的页面是同一页，写前确认在预期页。
 
 **双宿主 push**：desktop 与 dev profile 可指向同一容器 bridge。桥做 writer 选举——引擎 owner 的诊断独占，peer 的 push 不覆盖。`GET http://<host>:<lifecycle.mcpPort>/diagnostics` 是桥侧最后落地的 payload。
 

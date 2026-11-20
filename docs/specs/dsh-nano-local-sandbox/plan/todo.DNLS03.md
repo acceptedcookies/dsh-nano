@@ -263,11 +263,11 @@ S1-01 并入 main
   - **完成判据**：`WorkbenchShell`、`StatusDock` 移回 [DNLS] client；nano-ui 入口不再导出；DESIGN §6 删该行、§10 为自绘控件登记 `nano-ui-exempt`；U10 计数等于 §10 行数；不去凑第二个使用方
   - **验证映射**：`DNLS03X-T10` · **依赖**：`S1-01`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `S1-11` — 旧验收脚本整批删除
+- [x] `S1-11` — 旧验收脚本整批删除
   - **落点 / 对象**：[DNK] `scripts/e2e-ego.mjs`、`eval-design-mode.mjs`、`eval-ego-vs-dnk.mjs`、`eval-proto-mcp.mjs`、`test/e2e-script.test.mjs`、仓根 `scripts/gui-smoke-kitesurf.sh`、`package.json:11`、`RELEASE.md:97`
   - **完成判据**：六条路径都不存在；`test:e2e` 消失；`RELEASE.md:97` 改写且不新增必跑项；不留别名；历史文档里的脚本名不回改
   - **验证映射**：`DNLS03X-T11` · **依赖**：`S1-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-20T15:52Z` · **证据 / 备注**：删六条路径（四份 `scripts/*.mjs`、`test/e2e-script.test.mjs`、仓根 `gui-smoke-kitesurf.sh`）；`package.json` 删 `test:e2e`；`RELEASE.md` 删该句且未新增必跑项；[DNK] 51/51；两条 check 0 漂移
 - [ ] `S1-12` — 收口台账终态初值
   - **落点 / 对象**：本节下方的终态表；`plan/todo.DNLS03.md:126` 的旧 `/res` 句不改，由新节取代
   - **完成判据**：点名行（含 `K-02`）都有终态且属于四种允许值；普查行逐行复核后不留「开放」；可见行的证据栏写「待 S4」或「待 S6」

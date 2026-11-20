@@ -533,6 +533,17 @@ test('DNLS03-T20 the real Apple backend proves missing only on the exact documen
   await assert.rejects(backend.inspect('dnls-apple'))
   exec.fn = async () => { throw cliFailure('container not found: dnls-apple\nsecond diagnostic') }
   await assert.rejects(backend.inspect('dnls-apple'))
+  // the installed debug CLI prepends exactly one fixed informational banner;
+  // banner + the exact documented diagnostic still proves absence…
+  const banner = 'Warning! Running debug build. Performance may be degraded.\n'
+  exec.fn = async () => { throw cliFailure(`${banner}Error: container not found: dnls-apple\n`) }
+  assert.equal(await backend.inspect('dnls-apple'), null)
+  // …but an extra line under the pair, or the banner with a wrong name, is
+  // an unknown fault — never an absence
+  exec.fn = async () => { throw cliFailure(`${banner}Error: container not found: dnls-apple\nextra output`) }
+  await assert.rejects(backend.inspect('dnls-apple'))
+  exec.fn = async () => { throw cliFailure(`${banner}Error: container not found: dnls-other`) }
+  await assert.rejects(backend.inspect('dnls-apple'))
 })
 
 test('DNLS03-T20 the observation source runs through the real Apple backend — same digest, provable replacement', async () => {

@@ -51,13 +51,19 @@ test('web surfaces declared in BINDING_TABLE register through createWebRegistrar
   const { ctx, calls } = makeCtx()
   const dispose = registerWebRoutes(ctx, DEPS)
 
-  // Real registration: 5 http bindings (4 exact + 1 prefix) + 1 upgrade binding.
+  // Real registration: 6 http bindings (5 exact + 1 prefix) + 1 upgrade binding.
   const httpRows = BINDING_TABLE.filter(b => b.channel === 'http')
   const upRows = BINDING_TABLE.filter(b => b.channel === 'upgrade')
   assert.equal(calls.register.length, httpRows.length, 'every http binding registered')
   assert.equal(calls.upgrade.length, upRows.length, 'every upgrade binding registered')
-  assert.equal(calls.register.length, 5)
+  assert.equal(calls.register.length, 6)
   assert.equal(calls.upgrade.length, 1)
+  // The perf-review host binding is a real HTTP surface since 9a64581.
+  assert.ok(BINDING_TABLE.some(b => b.id === 'dnt.perf-review.host'))
+  const perf = calls.register.find(s => s.path === '/dsh-nano-terminal/perf-review/host')
+  assert.ok(perf, 'GET /dsh-nano-terminal/perf-review/host is mounted')
+  const ids = BINDING_TABLE.map(b => b.id).sort()
+  assert.ok(ids.includes('dnt.perf-review.host'))
   // The upgrade path is the WS data plane.
   assert.equal(calls.upgrade[0].path, '/dsh-nano-terminal/stream')
   // The prefix http binding is the session-close prefix.
@@ -77,10 +83,10 @@ test('requestRejection fence runs before handler; dispose tears down every bindi
   // Drive an http-exact handler → rejected before any side-effect.
   await calls.register.find(s => s.kind === 'exact').handler({ method: 'GET', url: '/dsh-nano-terminal/health', headers: {} }, res)
   assert.equal(res.statusCode, 403, 'rejection short-circuits the handler')
-  // Dispose removes all registrations (5 http + 1 upgrade) exactly once.
+  // Dispose removes all registrations (6 http + 1 upgrade) exactly once.
   dispose()
   const bindingDisposals = calls.disposals.filter(item => item.startsWith('http:') || item.startsWith('up:'))
-  assert.equal(bindingDisposals.length, 6, 'all six bindings disposed')
+  assert.equal(bindingDisposals.length, 7, 'all seven bindings disposed')
   const n = calls.disposals.length
   dispose()
   assert.equal(calls.disposals.length, n, 'dispose is idempotent')
@@ -96,6 +102,6 @@ test('index.js does not register routes directly — single registrar mechanism'
 
 test('BINDING_TABLE ids cover the full DNT surface set (external literal)', () => {
   assert.deepEqual(BINDING_TABLE.map(r => r.id).sort(), [
-    'dnt.events', 'dnt.health', 'dnt.mcp', 'dnt.session.close', 'dnt.sessions', 'dnt.stream',
+    'dnt.events', 'dnt.health', 'dnt.mcp', 'dnt.perf-review.host', 'dnt.session.close', 'dnt.sessions', 'dnt.stream',
   ])
 })

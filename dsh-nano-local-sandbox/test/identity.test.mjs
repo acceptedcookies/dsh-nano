@@ -18,7 +18,9 @@ test('package id, engine range, and file whitelist', () => {
   const patch = readFileSync(join(root, 'cordis.patch.yml'), 'utf8')
   assert.match(patch, /id: nano-local-sandbox/)
   assert.match(patch, /name: dsh-nano-local-sandbox/)
-  assert.deepEqual(Object.keys(pkg.exports).sort(), ['.', './icon', './locale/*.json', './package.json'])
+  assert.deepEqual(Object.keys(pkg.exports).sort(), ['.', './client', './icon', './locale/*.json', './package.json'])
+  assert.equal(pkg.exports['./client'], './lib/client.js')
+  assert.equal(pkg.dsh?.client?.platform, 'web')
 })
 
 test('inject is exactly the five host services', () => {

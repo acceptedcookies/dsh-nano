@@ -25,9 +25,11 @@ function cliError(args, { code, stderr = '', cause = null, timedOut = false } = 
   error.code = code
   error.cliKind = kind
   error.errorId = timedOut ? errorCode('backend.timeout') : errorCode('backend.cli')
-  // The sanitized native stderr is kept privately for missing-proof
-  // matching; it never goes into a public message or JSON payload.
-  Object.defineProperty(error, 'nativeStderr', { value: text, enumerable: false })
+  // The raw native stderr lines are kept privately for missing-proof
+  // matching; they never go into a public message or JSON payload. Only the
+  // real stderr stream counts — a wrapped "Command failed: …" message must
+  // never be mistaken for it.
+  Object.defineProperty(error, 'nativeStderr', { value: String(stderr || cause?.stderr || '').trim(), enumerable: false })
   if (cause) error.cause = cause
   return error
 }
@@ -43,12 +45,23 @@ const missingDiagnosticsFor = (name) => [
   `container with ID ${name} not found`,
 ]
 
+/** The debug-build banner the installed CLI prints on stderr before the
+ * real diagnostic. Only this exact fixed line at the very start is
+ * informational; anything else — extra lines, reordering, look-alikes —
+ * keeps the verdict fail-closed. */
+const DEBUG_BANNER = 'Warning! Running debug build. Performance may be degraded.'
+
 function isMissingContainer(error, name) {
   if (error?.code === 'ENOENT' || error?.cliKind === 'timeout') return false
-  const native = typeof error?.nativeStderr === 'string' && error.nativeStderr ? error.nativeStderr : (error?.stderr || error?.message || '')
-  const text = String(native).trim()
-  if (text === '' || text.includes('\n')) return false
-  const diagnostic = text.replace(/^(?:Error|error|notFound)(?::| )/, '').trim()
+  const source = typeof error?.nativeStderr === 'string' && error.nativeStderr !== ''
+    ? error.nativeStderr
+    : (typeof error?.stderr === 'string' ? error.stderr : '')
+  const native = source.trim()
+  if (native === '') return false
+  const lines = native.split('\n')
+  if (lines[0] === DEBUG_BANNER) lines.shift()
+  if (lines.length !== 1) return false
+  const diagnostic = lines[0].replace(/^(?:Error|error|notFound)(?::| )/, '').trim()
   return missingDiagnosticsFor(name).includes(diagnostic)
 }
 

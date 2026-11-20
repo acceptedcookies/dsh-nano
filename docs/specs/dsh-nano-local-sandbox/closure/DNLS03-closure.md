@@ -2,6 +2,8 @@
 
 > Close-type：`close-with-known-issues`（本地交接记录，不是全量验收）。分支：`dnls03-managed-sandbox-control`。代码快照：`b3ad7e5`。日期：2026-11-19 UTC。
 
+**2026-11-20 补充验收**：下文是 `b3ad7e5` 的历史裁定。后续候选已提供已有 session 内的正式右栏「沙箱」页（总览/控制），并用开发 rc.5 的真实 Loader、三个 tarball 和独立临时 home 打开了页面。新 Apple 镜像已构建，**尚未证明运行中的 `dsh-dev.local` 完成切换**。现场基线、镜像 digest 和仍待确认的操作见 [todo §6](../plan/todo.DNLS03.md)。无 session 槽位和个人终端的可信授权依然是不同的宿主依赖。
+
 ## 0. 判定
 
 **公开控制合同已切换；整体 `No-Go`。** 已验证独立对象身份、原 PTY 连续性和公开端点从发现到 attach 的夹具旅程。未验证无 session 的 [dsh工作台] 管理页；默认宿主不提供能区分个人终端归属的可信身份，因而不发 attach 地址。不把这两项写成已交付。

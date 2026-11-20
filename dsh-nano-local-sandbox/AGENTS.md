@@ -14,7 +14,7 @@
 | dsh 引擎 | 读 `package.json` 的 `engines.dsh` |
 | 平台 | 仅 web |
 | 宿主入口 | `index.js` |
-| 管理页 | 同包的「沙箱」页依赖 [dsh工作台] 提供无 session 的正式页签。当前宿主的右侧页签必须挂载 session，未交付该页或 `/sandbox`；不提供第二套设计界面 |
+| 管理页 | `lib/client.js` 注册的右栏 `dnls-sandbox` 页签（总览/控制），只在已挂载 session 的页签内渲染；无 session 的独立页是宿主依赖，本包不另做第二套设计界面 |
 | 宿主 inject | `webServer`、`connection`、`sandboxPolicy`、`sandbox`、`sessions` |
 
 ## 交付物
@@ -33,6 +33,7 @@
 | `profiles/kitesurf/` | 配方源文件（`Dockerfile`、`entrypoint.sh`、`mcp-bridge.mjs`）。`linux-prefix/` 不入库 |
 | `profiles/terminal/` | 终端 PTY 入口 |
 | `lib/route-guard.js`、`lib/bindings.js` | 路由注册。绑定表从仓根账本按 id 烘焙。运行时必需 |
+| `lib/client.js` | 浏览器包。运行时必需。右栏 `dnls-sandbox` 页签：总览/控制两视图，只走 `dnls.control/1` 公共合同 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 
 特权只写在这里和 `backend-apple.js`：容器 CLI，以及构建期的 `ctx.sandbox.confine`。不写消费者的路径。
@@ -71,7 +72,7 @@ dsh plugin --profile web add <spec>
 按顺序。前一步失败就停，不要换一个 profile 重试。失败时先看该 profile 目录下 `.plugin-manager/logs` 里这次 `dsh plugin` 的日志。
 
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
-2. 重启后从获准的当前宿主读取 `GET /nano-local-sandbox/contract`，核对响应头 `X-DNLS-Contract` 与正文 `contractVersion` 均为 `dnls.control/1`。当前无 session 的管理页属于宿主依赖，不用另一个插件的页签代替。
+2. 重启后从获准的当前宿主读取 `GET /nano-local-sandbox/contract`，核对响应头 `X-DNLS-Contract` 与正文 `contractVersion` 均为 `dnls.control/1`。已挂载会话的右栏出现「沙箱」页签（kind `dnls-sandbox`）；没有真实 `sessionId` 时页面不渲染（宿主依赖），也不用另一个插件的页签代替。
 3. `npm test`（`test/*.mjs` + `test/contracts/*.mjs`）退出码为 0。
 
 ## 初次运行
@@ -88,6 +89,7 @@ dsh plugin --profile web add <spec>
 | 终端创建与连接 | `term.session.create` 返回 `sandboxId`、`terminalId`，不发 URL。只有 `term.session.attach` 核权后才发无 bearer 的 `dnt-ws-v2` locator。断开是 detach，不结束原执行 |
 | 资源导航 | 从当前 host 的 `envId`、`sandboxId`、`terminalId` 组成 `dsh-resource://sandbox-terminal/<envId>/<sandboxId>/<terminalId>`。它不是访问凭证；无处理器时不要为打开交互而预建终端 |
 | 性能读取 | 本包不拥有 `/perf-review/host`；只读视图在资源管理器、记事本和模型选择器入口 |
+| 沙箱页签 | 右栏单页签两视图：总览先 discovery 再 `sandbox.list`，只显式选取；控制视图对所选对象 GET inspect（`window=24h`）、按需 GET processes，start/stop/restart 先内联确认（点名沙箱）再各发一个随机 `requestId`，结果用 `sandbox.operations` 按 `operationId` 重查，绝不自动重发 |
 
 当前 [dsh] 的浏览器 owner 由多条连接共用，只能证明宿主管理身份，不能证明终端归属。没有独立的可信主体映射时，终端操作拒绝，不签发 locator；传 `sessionId`、重复打开页面或更换终端客户端不能解除这一限制。上限针对完整 MCP 请求，包括 JSON 信封；较大的交互数据走已获准的流，不拆分重发未确认的输入。
 

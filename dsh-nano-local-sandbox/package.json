@@ -13,7 +13,8 @@
     ".": "./index.js",
     "./icon": "./icon.svg",
     "./locale/*.json": "./locale/*.json",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": "./lib/client.js"
   },
   "files": [
     "index.js",
@@ -24,6 +25,7 @@
     "src/host",
     "profiles/kitesurf",
     "profiles/terminal",
+    "lib/client.js",
     "lib/route-guard.js",
     "lib/bindings.js",
     "lib/perf-review-host.js"
@@ -34,6 +36,15 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-locale"
+      ]
     }
   },
   "devDependencies": {

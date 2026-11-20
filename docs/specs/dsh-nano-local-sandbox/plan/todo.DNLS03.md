@@ -97,6 +97,19 @@ Phase 6 提交 `3f87460`。Phase 7 内核测试（基线 `3f87460`，提交以�
 
 Phase 7 提交 `b33a2a8`。Phase 8 的真实入口只注册 managed 分派器。独立静态审查发现 inspect/processes 未配 HTTP、列表层级用错、WS 数据面关停太晚以及共享 owner 不足以证明终端归属；在当前切割提交修复。完整回归：2026-11-19T19:05:58Z [DNLS] `npm test` 433/433，19:07:17Z [DNK] `npm test` 51/51；19:07:37Z [DNT] T42 定向 33/33，19:07:46Z 沙箱 wire + local 威胁回归 20/20。四次均 0 fail、0 skip。无真实容器和部署。审查在 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`，最终裁定在 `../closure/DNLS03-closure.md`。
 
+## 6. [业主] 补充验收：开发实例
+
+2026-11-20 UTC，[业主] 要求在 `dsh-dev` 重新构建、部署并深测依赖 [DNLS] 的插件，同时交付已有 session 的 [dsh工作台] dashboard 和 control 页面。这不是无 session 页签授权，也不改变 sandbox 的物理身份。以 `085a858` 为补充工作的基线。
+
+- [x] 识别开发实例和消费端：开发 Web、mDNS 和 tokenbroker 正在运行；`~/.dsh-dev/profiles/web` 注册十个 nano 包。扫描已装插件公开 [DNLS] 路由和工具名，直接调用者为 [DNK] 和 [DNT]。未把其余七个插件的功能视为已验证。
+- [x] 已登录开发站基线：旧 `/status`、`/ports`、[DNT] `/health` 返回 200，`engineAlive=true`，terminal health 公告 local/mcp；旧 MCP 有 28 个工具、有 `sandbox.instance.ensure`，无 `sandbox.contract`，`GET /contract` 返回 404。三个已装文件的 SHA-256 都不同于候选版。仅此不能证明新版本兼容。
+- [x] 重建缺少的 Apple 镜像：原 pin `39feadfb9a3e6c14b40cf170a559ce417d0fce5d` 的开发 runtime 已就绪；`build-profile.mjs --check` 起初退出 3。使用新临时 build context、真实 rc.5 宿主 confinement 构建，复查 `ready: true`。`container image inspect` 实测新镜像 digest `sha256:4421d6004e216665e20a8534deb711782d2595d21edbf8e90fcbb76312b8d2cc`（不是配方摘要）。
+- [x] 真实 Apple backend 只读探针：观察到 `kitesurf-dev` 代次 `678873f64dfca11ef49aa25e48bc8c71`，旧镜像 digest `sha256:c97bfe17140afa82bd76c6c35b180801f5300c931ec207eb7629848ac9e26808`，端口 8800/8801 和三项实挂。已识别安装版 debug CLI 的固定首行提示导致严格缺失判据误报未知；修正后再次以独立随机不存在名访问实际 CLI，返回 `null`，未删除任何对象。
+- [x] 三包重建。[DNLS] 注册同包、已挂载 session 的正式右栏 `dnls-sandbox` 页签；总览列出可见对象，控制页按显式选择显示 inspect、服务、分钟覆盖、进程和生命周期回执。实现测试运行：[DNLS] 包 443/443（PTY 快照用例首次并发失败，单跑及复跑通过）；[DNK] 包 51/51；[DNT] 包 272/272。随后收紧响应合同、修复服务字段与读取竞态，[DNLS] 再构建且 `client-pane/identity/dnls03-docs` 定向 16/16；不是对最终版再次全量运行的声明。
+- [x] 使用开发站实际使用的 `~/.dsh-runtimes/0.2.2-rc.5/bin/dsh`，以独立临时 `DSH_HOME` 实际 `plugin --profile web add -w` 三个 tarball，再启动 web profile。回环站 `/contract`、`/sandboxes` 均返回正式版本、200，列表空。通过宿主 `session/create` 创建真实测试会话，不发送模型消息。从 [dsh工作台] 正式向导点击「沙箱」，看到总览、禁用的控制按钮和空态；点创建表单，经实际 MCP 加载可用 `kitesurf` profile，未提交写操作。最终打包 SHA-256 前缀：[DNLS] `146e87314fea`、[DNK] `8fc2672bf1f0`、[DNT] `5528ace1cab4`。不冒充运行中的开发站或非空对象的真实控制验收。
+- [ ] 核准维护窗口与保卷操作后，仅切换 `kitesurf-dev` 和开发 profile。旧根有实卷而无 `registry.json`，必须保全旧根，不能写空台账认领。禁止使用会从 main 重铺开发环境的 `dsh-dev restart`。
+- [ ] 在切换后的真实开发站逐项记录版本发现、选定对象、[DNK] 页面、[DNT] local 与 managed 的实际授权结果，以及新容器的镜像、卷、代次和服务证据。
+
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。
 

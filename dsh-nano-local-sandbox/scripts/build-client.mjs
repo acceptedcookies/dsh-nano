@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { dnprDefine } from '../../scripts/dnpr-define.mjs'
@@ -36,3 +36,27 @@ esbuild.buildSync({
   outfile: join(root, 'lib/perf-review-host.js'),
   logLevel: 'warning',
 })
+
+// Browser half: dashboard/control pane, IIFE inside the module-loader factory.
+mkdirSync(join(root, 'lib'), { recursive: true })
+const built = esbuild.buildSync({
+  absWorkingDir: root,
+  entryPoints: ['src/client/index.jsx'],
+  bundle: true,
+  format: 'iife',
+  globalName: '__dnlsClient',
+  platform: 'browser',
+  external: ['react', '@deepseek-ai/dsh-client-ui-primitives'],
+  write: false,
+  logLevel: 'warning',
+})
+const clientSource = built.outputFiles[0].text.trim()
+writeFileSync(join(root, 'lib/client.js'), `window.__ModuleLoader__.load({
+	id: "dsh-nano-local-sandbox",
+	factory: (require) => {
+${clientSource}
+		return __dnlsClient;
+	}
+});
+`)
+console.log('[build] lib/client.js written')

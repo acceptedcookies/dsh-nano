@@ -1465,6 +1465,13 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           capturedAt: data.capturedAt ?? null,
           domSeq: data.domSeq ?? null,
           generation: data.generation ?? null,
+          // `base` is the host's own statement that it rewrote the document
+          // onto a same-origin proxy. An older host omits it, and then whether
+          // a subresource survives is up to the browser's mixed-content policy
+          // — measured: a local http site still rendered styled in this
+          // browser, so the hint below must stay conditional. It reports the
+          // MISSING DECLARATION, never a guaranteed breakage.
+          proxied: typeof data.base === 'string' && data.base !== '',
         })
         if (data.url && data.url !== 'about:blank') setPageUrl(data.url)
         return true
@@ -2627,6 +2634,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       onWheel,
       style: { cursor: annotate ? 'crosshair' : 'default' },
     },
+      // Independent of pins/annotate: this one is about the RENDER SURFACE, so
+      // it must be visible the moment HTML mode is on and the host is old.
+      nativeHtml && domDoc && domDoc.proxied === false ? h('div', {
+        className: 'nks-hint nks-float-top',
+        'data-nks-hint-unproxied': '1',
+        role: 'status',
+        onPointerDown: (event) => event.stopPropagation(),
+        onClick: (event) => event.stopPropagation(),
+      }, h('span', { className: 'nks-hint-text' }, copy.hintUnproxiedHtml)) : null,
       (pins.length || (annotate && hasPage)) ? h('div', {
         className: 'nks-float-top',
         'data-nks-float-top': '1',

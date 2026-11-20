@@ -691,11 +691,11 @@ function DnlsPane({ sessionId, copy, host }) {
   const overviewTab = () => h(React.Fragment, null,
     h(FactGrid, { items: [
       { label: copy.fieldState, value: detail ? stateLabel(copy, detail.observedState) : (detailError ? undefined : copy.loading) },
-      { label: copy.health, value: detail?.health },
+      { label: copy.health, value: detail?.health === 'unknown' ? copy.healthUnverified : detail?.health },
       { label: copy.fieldRevision, value: detail ? `${copy.desiredRev} ${detail.desiredRevision ?? '—'} · ${copy.appliedRev} ${detail.appliedRevision ?? '—'}` : undefined },
       detail?.resources ? { label: copy.resCpus, value: detail.resources.cpus ?? '—' } : null,
       detail?.resources ? { label: copy.resMemory, value: formatBytes(detail.resources.memoryBytes) ?? '—' } : null,
-      { label: copy.observedAt, value: detail?.observedAt },
+      { label: copy.observedAt, value: fmtTime(detail?.observedAt) },
     ].filter(Boolean) }),
     detailError ? h('div', { 'data-dnls-detail-error': '1', role: 'alert' },
       `${detailError?.errorId ? `${detailError.errorId} ` : ''}${detailError?.message ?? detailError}`) : null,

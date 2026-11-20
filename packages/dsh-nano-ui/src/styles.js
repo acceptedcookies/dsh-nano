@@ -87,9 +87,10 @@ ${LAYER_CSS}
 .nano-panel-header p { margin: 0; color: var(--dsw-alias-label-secondary); }
 .nano-panel-kicker { font-size: var(--nano-desc-size, inherit); }
 .nano-panel-section { padding-block: var(--nano-space-2); border-block-start: var(--dsh-hairline-width) solid var(--dsw-alias-border-l1); }
+.nano-panel-section > pre { min-inline-size: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .nano-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--nano-space-2); margin: 0; }
 .nano-facts dt { color: var(--dsw-alias-label-secondary); }
-.nano-facts dd { margin: 0; font-weight: 600; }
+.nano-facts dd { margin: 0; font-weight: 500; }
 .nano-panel .nano-toolbar { flex-wrap: wrap; }
 .nano-panel .nano-panes { height: auto; }
 .nano-panel .nano-pane { overflow: visible; }

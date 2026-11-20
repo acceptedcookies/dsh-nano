@@ -166,9 +166,10 @@ ${LAYER_CSS}
 .nano-panel-header p { margin: 0; color: var(--dsw-alias-label-secondary); }
 .nano-panel-kicker { font-size: var(--nano-desc-size, inherit); }
 .nano-panel-section { padding-block: var(--nano-space-2); border-block-start: var(--dsh-hairline-width) solid var(--dsw-alias-border-l1); }
+.nano-panel-section > pre { min-inline-size: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .nano-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--nano-space-2); margin: 0; }
 .nano-facts dt { color: var(--dsw-alias-label-secondary); }
-.nano-facts dd { margin: 0; font-weight: 600; }
+.nano-facts dd { margin: 0; font-weight: 500; }
 .nano-panel .nano-toolbar { flex-wrap: wrap; }
 .nano-panel .nano-panes { height: auto; }
 .nano-panel .nano-pane { overflow: visible; }
@@ -1532,6 +1533,7 @@ ${LAYER_CSS}
   var init_i18n = __esm({
     "src/client/i18n.js"() {
       EN = {
+        localeTag: "en",
         typeLabel: "Sandboxes",
         typeDescription: "Managed local sandboxes: overview and lifecycle control.",
         overview: "Overview",
@@ -1698,6 +1700,7 @@ ${LAYER_CSS}
         sessionRequired: "This pane needs a mounted session."
       };
       ZH = {
+        localeTag: "zh-CN",
         typeLabel: "\u6C99\u7BB1",
         typeDescription: "\u6258\u7BA1\u672C\u5730\u6C99\u7BB1\uFF1A\u603B\u89C8\u4E0E\u751F\u547D\u5468\u671F\u63A7\u5236\u3002",
         overview: "\u603B\u89C8",
@@ -2624,11 +2627,11 @@ ${LAYER_CSS}
       null,
       h8(FactGrid2, { items: [
         { label: copy.fieldState, value: detail ? stateLabel(copy, detail.observedState) : detailError ? void 0 : copy.loading },
-        { label: copy.health, value: detail?.health },
+        { label: copy.health, value: detail?.health === "unknown" ? copy.healthUnverified : detail?.health },
         { label: copy.fieldRevision, value: detail ? `${copy.desiredRev} ${detail.desiredRevision ?? "\u2014"} \xB7 ${copy.appliedRev} ${detail.appliedRevision ?? "\u2014"}` : void 0 },
         detail?.resources ? { label: copy.resCpus, value: detail.resources.cpus ?? "\u2014" } : null,
         detail?.resources ? { label: copy.resMemory, value: formatBytes2(detail.resources.memoryBytes) ?? "\u2014" } : null,
-        { label: copy.observedAt, value: detail?.observedAt }
+        { label: copy.observedAt, value: fmtTime(detail?.observedAt) }
       ].filter(Boolean) }),
       detailError ? h8(
         "div",

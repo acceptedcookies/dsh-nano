@@ -1,4 +1,5 @@
 const EN = {
+  localeTag: 'en',
   typeLabel: 'Sandboxes',
   typeDescription: 'Managed local sandboxes: overview and lifecycle control.',
   overview: 'Overview',
@@ -166,6 +167,7 @@ const EN = {
 }
 
 const ZH = {
+  localeTag: 'zh-CN',
   typeLabel: '沙箱',
   typeDescription: '托管本地沙箱：总览与生命周期控制。',
   overview: '总览',

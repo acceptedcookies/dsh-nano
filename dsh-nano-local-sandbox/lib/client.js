@@ -455,7 +455,7 @@ var __dnlsClient = (() => {
     padding: 12,
     minWidth: 0,
     width: "100%",
-    maxWidth: "100%",
+    maxWidth: "min(100%, 100dvw)",
     boxSizing: "border-box",
     overflowWrap: "anywhere",
     color: "var(--dsw-alias-label-primary)",
@@ -498,6 +498,7 @@ var __dnlsClient = (() => {
     const [total, setTotal] = React.useState(null);
     const [selection, setSelection] = React.useState(null);
     const [detail, setDetail] = React.useState(null);
+    const [detailError, setDetailError] = React.useState(null);
     const [usageWindow, setUsageWindow] = React.useState("24h");
     const [procs, setProcs] = React.useState(null);
     const [procsBusy, setProcsBusy] = React.useState(false);
@@ -556,9 +557,12 @@ var __dnlsClient = (() => {
       setTotal(null);
       setSelection(null);
       setDetail(null);
+      setDetailError(null);
       setProcs(null);
+      setProcsBusy(false);
       setReceipt(null);
       setOpBody(null);
+      setBusy(false);
       const instance = createDnlsClient2({});
       clientRef.current = instance;
       const stale = ticket("list");
@@ -590,6 +594,7 @@ var __dnlsClient = (() => {
       invalidate("detail", "process", "operation", "profiles");
       setSelection({ sandboxId: found.sandboxId, name: found.name ?? found.sandboxId });
       setDetail(null);
+      setDetailError(null);
       setProcs(null);
       setPendingAction(null);
       setOpBody(null);
@@ -599,27 +604,33 @@ var __dnlsClient = (() => {
       setCreateOpen(false);
     }
     const loadDetail = React.useCallback(() => {
-      if (!selection) return;
+      if (!selection || !client()) return;
       const target = selection.sandboxId;
       const stale = ticket("detail");
-      run(async () => {
-        const answer = await client().inspect(target, { window: usageWindow });
-        if (!stale()) return;
-        setDetail(answer);
-      }, stale);
-    }, [selection?.sandboxId, usageWindow, run]);
+      setDetail(null);
+      setDetailError(null);
+      setError(null);
+      (async () => {
+        try {
+          const answer = await client().inspect(target, { window: usageWindow });
+          if (!stale()) return;
+          setDetail(answer);
+        } catch (cause) {
+          if (stale()) setDetailError(cause);
+        }
+      })();
+    }, [selection?.sandboxId, usageWindow]);
     React.useEffect(() => {
-      if (!selection || view !== "control" || detail) return void 0;
-      loadDetail();
+      if (selection && view === "control") loadDetail();
       return void 0;
-    }, [selection?.sandboxId, view, usageWindow, detail, loadDetail]);
+    }, [selection?.sandboxId, view, usageWindow, loadDetail]);
     function refresh() {
       if (phase === "failed") {
         setBootSeq((n) => n + 1);
         return;
       }
       if (view === "control" && selection) {
-        setDetail(null);
+        loadDetail();
       } else {
         loadList();
       }
@@ -637,6 +648,7 @@ var __dnlsClient = (() => {
           ...extra
         });
         if (!stale()) return;
+        invalidate("operation");
         const record = {
           operationId: body.operationId,
           sandboxId: extra.sandboxId ?? body.sandboxId,
@@ -658,11 +670,20 @@ var __dnlsClient = (() => {
     }
     function recheck() {
       if (!receipt?.operationId || !receipt.sandboxId || !client()) return;
+      const record = receipt;
       const stale = ticket("operation");
       run(async () => {
-        const body = await client().readOperation(receipt.sandboxId, receipt.operationId);
+        const body = await client().readOperation(record.sandboxId, record.operationId);
         if (!stale()) return;
         setOpBody(body);
+        if (body.state !== "succeeded") return;
+        loadList();
+        if (selection?.sandboxId === record.sandboxId && view === "control") {
+          invalidate("process");
+          setProcs(null);
+          setProcsBusy(false);
+          loadDetail();
+        }
       }, stale);
     }
     function loadProcesses() {
@@ -720,8 +741,7 @@ var __dnlsClient = (() => {
         disabled: !selection,
         onClick: () => setView("control")
       }, copy.control),
-      h("span", { style: { flex: 1 } }),
-      h(primitives.Button, { variant: "ghost", size: "sm", onClick: refresh }, copy.refresh)
+      h(primitives.Button, { variant: "ghost", size: "sm", disabled: phase === "loading", onClick: refresh }, copy.refresh)
     );
     const errorBox = error ? h(
       "div",
@@ -730,10 +750,13 @@ var __dnlsClient = (() => {
     ) : null;
     const receiptBox = receipt ? h(
       "div",
-      { "data-dnls-receipt": "1", style: { ...row, ...card } },
+      {
+        "data-dnls-receipt": "1",
+        style: { ...card, display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }
+      },
       h(
         "span",
-        { style: { flex: 1, minWidth: 0 } },
+        { style: { minWidth: 0, maxWidth: "100%", overflowWrap: "anywhere" } },
         fill2(copy.opState, {
           operationId: receipt.operationId,
           state: opBody?.state ?? copy.opPending
@@ -756,7 +779,7 @@ var __dnlsClient = (() => {
             onChange: (event) => {
               if (event.target.value) choose(event.target.value);
             },
-            style: { flex: 1, minWidth: 0 }
+            style: { flex: 1, minWidth: 0, maxWidth: "100%" }
           },
           h("option", { value: "", disabled: true }, copy.sandboxPick),
           (rows ?? []).map((entry) => h(
@@ -806,6 +829,7 @@ var __dnlsClient = (() => {
               "data-dnls-create-profile": "1",
               value: createProfile,
               disabled: busy,
+              style: { minWidth: 0, maxWidth: "100%" },
               onChange: (event) => setCreateProfile(event.target.value)
             },
             h("option", { value: "", disabled: true }, copy.sandboxPick),
@@ -853,15 +877,12 @@ var __dnlsClient = (() => {
           size: "sm",
           "aria-pressed": usageWindow === w,
           disabled: busy,
-          onClick: () => {
-            setDetail(null);
-            setUsageWindow(w);
-          }
+          onClick: () => setUsageWindow(w)
         }, w))
       ),
       h(Field, {
         label: copy.usageStates,
-        value: `${copy.stateRunning} ${usage.states?.running ?? 0} \xB7 ${copy.stateStopped} ${usage.states?.stopped ?? 0} \xB7 ${copy.stateFailed} ${usage.states?.failed ?? 0} \xB7 ${copy.stateMissing} ${usage.states?.missing ?? 0}`
+        value: `${copy.stateRunning} ${usage.states?.running ?? "\u2014"} \xB7 ${copy.stateStopped} ${usage.states?.stopped ?? "\u2014"} \xB7 ${copy.stateFailed} ${usage.states?.failed ?? "\u2014"} \xB7 ${copy.stateMissing} ${usage.states?.missing ?? "\u2014"}`
       }),
       h(Field, {
         label: copy.usageMemory,
@@ -881,7 +902,12 @@ var __dnlsClient = (() => {
         h("div", { style: { fontWeight: 600 } }, sandboxName),
         h(Field, { label: "sandboxId", value: detail?.sandboxId ?? selection.sandboxId }),
         h(Field, { label: copy.fieldEnv, value: detail?.envId }),
-        h(Field, { label: copy.fieldState, value: detail?.observedState ?? copy.loading }),
+        detailError ? h(
+          "div",
+          { "data-dnls-detail-error": "1", style: errorStyle, role: "alert" },
+          `${detailError?.errorId ? `${detailError.errorId} ` : ""}${detailError?.message ?? detailError}`
+        ) : null,
+        h(Field, { label: copy.fieldState, value: detail?.observedState ?? (detailError ? void 0 : copy.loading) }),
         h(Field, { label: copy.health, value: detail?.health }),
         h(Field, { label: copy.fieldGeneration, value: detail?.generation }),
         h(Field, { label: copy.fieldRevision, value: detail ? `${copy.desiredRev} ${detail.desiredRevision ?? "\u2014"} \xB7 ${copy.appliedRev} ${detail.appliedRevision ?? "\u2014"}` : void 0 }),

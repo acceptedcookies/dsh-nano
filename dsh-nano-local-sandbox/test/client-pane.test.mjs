@@ -21,20 +21,20 @@ function stubReact() {
   }
 }
 
-function loadClientModule() {
+function loadClientModule(modules) {
   const source = readFileSync(join(root, 'lib/client.js'), 'utf8')
   const loaded = []
   const window = { __ModuleLoader__: { load: (spec) => loaded.push(spec) } }
   new Function('window', source)(window)
   assert.equal(loaded.length, 1)
   assert.equal(loaded[0].id, 'dsh-nano-local-sandbox')
-  const modules = {
+  const resolved = modules ?? {
     react: stubReact(),
     '@deepseek-ai/dsh-client-ui-primitives': { Button: 'Button' },
   }
   const client = loaded[0].factory((name) => {
-    assert.ok(name in modules, `unexpected external require ${name}`)
-    return modules[name]
+    assert.ok(name in resolved, `unexpected external require ${name}`)
+    return resolved[name]
   })
   return client
 }
@@ -310,4 +310,256 @@ test('provider-shaped projections render ids, ports and null-safe stats', () => 
   assert.equal(formatBytes(734003200), '700.0 MiB')
   assert.equal(formatCores(0.5), '0.500 cores')
   assert.equal(formatCores(null), null)
+})
+
+/* ---- real component transitions through a stateful hook driver ---- */
+
+/**
+ * Minimal React stand-in: hook slots persist per mounted component, deps
+ * are compared by identity, setters re-render synchronously. Enough to
+ * drive the built DnlsPane's real transitions without a DOM.
+ */
+function hookReact() {
+  const hooks = []
+  let cursor = 0
+  const pending = []
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    Fragment: Symbol('fragment'),
+    useState: (init) => {
+      const i = cursor++
+      if (!(i in hooks)) hooks[i] = typeof init === 'function' ? init() : init
+      return [hooks[i], (value) => {
+        hooks[i] = typeof value === 'function' ? value(hooks[i]) : value
+        drive.render()
+      }]
+    },
+    useRef: (value) => {
+      const i = cursor++
+      if (!(i in hooks)) hooks[i] = { current: value }
+      return hooks[i]
+    },
+    useEffect: (fn, deps) => {
+      const i = cursor++
+      const prev = hooks[i]
+      const changed = !prev?.deps || !deps || deps.length !== prev.deps.length || deps.some((d, j) => d !== prev.deps[j])
+      if (changed) {
+        hooks[i] = { deps, fn, cleanup: prev?.cleanup }
+        if (!pending.includes(i)) pending.push(i)
+      }
+    },
+    useCallback: (fn, deps) => {
+      const i = cursor++
+      const prev = hooks[i]
+      if (prev && deps && prev.deps?.length === deps.length && deps.every((d, j) => d === prev.deps[j])) return prev.fn
+      hooks[i] = { deps, fn }
+      return fn
+    },
+    useMemo: (fn) => fn(),
+    useId: () => `id-${cursor++}`,
+  }
+  const expand = (node) => {
+    if (node === null || node === undefined || typeof node === 'string' || typeof node === 'number') return node
+    if (Array.isArray(node)) return node.map(expand)
+    if (typeof node === 'object' && node.type !== undefined) {
+      if (typeof node.type === 'function') return expand(node.type({ ...node.props, children: node.children }))
+      return { type: node.type, props: node.props, children: node.children.map(expand) }
+    }
+    return node
+  }
+  const drive = {
+    react,
+    mount(component, props) {
+      drive.component = component
+      drive.props = props
+      drive.render()
+      drive.flush()
+      return drive.tree
+    },
+    render() {
+      cursor = 0
+      drive.tree = expand(drive.component(drive.props))
+      return drive.tree
+    },
+    flush() {
+      while (pending.length) {
+        const i = pending.shift()
+        const slot = hooks[i]
+        if (typeof slot.cleanup === 'function') slot.cleanup()
+        slot.cleanup = slot.fn()
+      }
+    },
+    async tick(rounds = 4) {
+      for (let n = 0; n < rounds; n++) {
+        await new Promise((resolve) => setImmediate(resolve))
+        drive.flush()
+      }
+      return drive.tree
+    },
+  }
+  return drive
+}
+
+const textOf = (node) => {
+  if (node === null || node === undefined || node === false) return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(textOf).join('')
+  return node.children ? textOf(node.children) : ''
+}
+const walk = (node, out = []) => {
+  if (Array.isArray(node)) { node.forEach((n) => walk(n, out)); return out }
+  if (node && typeof node === 'object' && node.type !== undefined) {
+    out.push(node)
+    walk(node.children ?? [], out)
+  }
+  return out
+}
+const findButton = (tree, label) =>
+  walk(tree).find((n) => n.type === 'Button' && textOf(n).trim() === label && typeof n.props?.onClick === 'function')
+const findByData = (tree, key) => walk(tree).find((n) => n.props?.[key] !== undefined)
+
+function wirePane({ inspectBodies, operationBodies }) {
+  const calls = []
+  let inspectSeq = 0
+  let opSeq = 0
+  const impl = async (url, init = {}) => {
+    calls.push({ url, init })
+    const path = new URL(url).pathname
+    const respond = (body) => ({
+      ok: true, status: 200,
+      headers: { get: (name) => (name === 'x-dnls-contract' ? CONTRACT_VERSION : null) },
+      json: async () => body,
+    })
+    if (path.endsWith('/contract')) return respond(contractBody)
+    if (path.endsWith('/sandboxes')) {
+      return respond({ contractVersion: CONTRACT_VERSION, envs: [], rows: [{ sandboxId: UUID_A, name: 'one', envId: 'dev', observedState: 'running', services: [{ serviceId: 'web', published: true, health: 'unknown' }] }], total: 1, complete: true })
+    }
+    if (path.endsWith('/inspect')) {
+      inspectSeq += 1
+      return respond(inspectBodies[Math.min(inspectSeq - 1, inspectBodies.length - 1)])
+    }
+    if (path.endsWith('/processes')) return respond({ contractVersion: CONTRACT_VERSION, sandboxId: UUID_A, processes: [{ pid: 7, name: 'sh', state: 'R', rssBytes: 1024 }] })
+    if (path.endsWith('/lifecycle')) {
+      return respond({ contractVersion: CONTRACT_VERSION, sandboxId: UUID_A, operationId: 'op-1', state: 'accepted' })
+    }
+    if (path.endsWith('/operations')) {
+      opSeq += 1
+      return respond(operationBodies[Math.min(opSeq - 1, operationBodies.length - 1)])
+    }
+    return { ok: false, status: 404, headers: { get: () => null }, json: async () => ({ ok: false }) }
+  }
+  return { impl, calls }
+}
+
+function mountPane() {
+  const driver = hookReact()
+  const client = loadClientModule({
+    react: driver.react,
+    '@deepseek-ai/dsh-client-ui-primitives': { Button: 'Button' },
+  })
+  const { ctx, slotRegistrations } = fakeCtx()
+  client.apply(ctx)
+  const body = slotRegistrations.find((entry) => entry.spec?.name === 'sidebar.right.pane.tab')?.component
+  driver.mount(body, { sessionId: 'session-live' })
+  return driver
+}
+
+const DETAIL = {
+  contractVersion: CONTRACT_VERSION,
+  sandboxId: UUID_A,
+  envId: 'dev', name: 'one', observedState: 'stopped', health: 'unknown',
+  generation: 'gen-1', observedAt: '2026-11-20T00:00:00Z',
+  desiredRevision: 1, appliedRevision: 1,
+  services: [{ serviceId: 'web', containerPort: 8787, protocol: 'http', published: true, hostAddress: '127.0.0.1', hostPort: 8080, health: 'unknown' }],
+  usage: { states: { running: 0, stopped: 5, failed: 0, missing: 0 }, memory: { expected: 5, valid: 0, mean: null, peak: null }, cpu: { expected: 5, valid: 0, mean: null, peak: null } },
+}
+
+const countCalls = (calls, suffix) => calls.filter((c) => new URL(c.url).pathname.endsWith(suffix)).length
+
+function installPaneGlobals(t, impl) {
+  const saved = ['fetch', 'location'].map((k) => [k, Object.getOwnPropertyDescriptor(globalThis, k)])
+  t.after(() => {
+    for (const [k, d] of saved) {
+      if (d) Object.defineProperty(globalThis, k, d)
+      else delete globalThis[k]
+    }
+  })
+  globalThis.fetch = impl
+  globalThis.location = { origin: 'https://pane.test' }
+}
+
+/** Value rendered next to a Field label — the exact text, not a substring. */
+const fieldValue = (tree, label) => {
+  const node = walk(tree).find((n) =>
+    Array.isArray(n.children) && n.children.length === 2 && textOf(n.children[0]) === label)
+  return node ? textOf(node.children[1]) : null
+}
+
+test('a confirmed succeeded recheck re-reads detail, clears processes, no extra write', async (t) => {
+  const { impl, calls } = wirePane({ inspectBodies: [{ ...DETAIL, observedState: 'running' }, DETAIL], operationBodies: [{ contractVersion: CONTRACT_VERSION, sandboxId: UUID_A, operationId: 'op-1', state: 'succeeded' }] })
+  installPaneGlobals(t, impl)
+  const driver = mountPane()
+  await driver.tick()
+  // pick the sandbox explicitly, then open the control view
+  findByData(driver.tree, 'data-dnls-sandbox-select').props.onChange({ target: { value: UUID_A } })
+  findButton(driver.tree, 'Control').props.onClick()
+  await driver.tick()
+  assert.equal(countCalls(calls, '/inspect'), 1, 'control entry reads the target once')
+  assert.equal(fieldValue(driver.tree, 'Observed state'), 'running')
+  // explicit process read, then a confirmed stop → one lifecycle POST
+  findButton(driver.tree, 'Show processes').props.onClick()
+  await driver.tick()
+  assert.ok(findByData(driver.tree, 'data-dnls-processes'), 'process table rendered')
+  findButton(driver.tree, 'Stop').props.onClick()
+  findButton(driver.tree, 'Confirm').props.onClick()
+  await driver.tick()
+  assert.equal(countCalls(calls, '/lifecycle'), 1, 'one click is one write')
+  assert.ok(findByData(driver.tree, 'data-dnls-receipt'), 'receipt shown')
+  // manual recheck: succeeded re-reads the list + detail and drops the
+  // stale process table — without any additional write
+  findButton(driver.tree, 'Recheck operation').props.onClick()
+  await driver.tick()
+  assert.equal(countCalls(calls, '/operations'), 1)
+  assert.equal(countCalls(calls, '/inspect'), 2, 'success re-reads targeted detail')
+  assert.equal(countCalls(calls, '/sandboxes'), 2, 'success re-reads the list')
+  assert.equal(countCalls(calls, '/lifecycle'), 1, 'no resubmission')
+  assert.equal(findByData(driver.tree, 'data-dnls-processes'), undefined, 'stale process table cleared')
+  assert.equal(fieldValue(driver.tree, 'Observed state'), 'stopped', 'detail shows the new observed state, not the cached one')
+})
+
+test('manual refresh after a failed inspect issues a new targeted read', async (t) => {
+  const calls = []
+  // first inspect fails (res.ok false), later ones succeed
+  const impl = async (url, init = {}) => {
+    calls.push({ url, init })
+    const path = new URL(url).pathname
+    const respond = (body, status = 200) => ({
+      ok: status < 400, status,
+      headers: { get: (n) => (n === 'x-dnls-contract' ? CONTRACT_VERSION : null) },
+      json: async () => body,
+    })
+    if (path.endsWith('/contract')) return respond(contractBody)
+    if (path.endsWith('/sandboxes')) return respond({ contractVersion: CONTRACT_VERSION, envs: [], rows: [{ sandboxId: UUID_A, name: 'one', envId: 'dev', observedState: 'running' }], total: 1, complete: true })
+    if (path.endsWith('/inspect')) {
+      const inspectCalls = calls.filter((c) => new URL(c.url).pathname.endsWith('/inspect')).length
+      return inspectCalls === 1
+        ? respond({ ok: false, errorId: 'sandbox.denied', error: 'denied', contractVersion: CONTRACT_VERSION }, 500)
+        : respond(DETAIL)
+    }
+    return respond({ contractVersion: CONTRACT_VERSION, sandboxId: UUID_A })
+  }
+  installPaneGlobals(t, impl)
+  const driver = mountPane()
+  await driver.tick()
+  findByData(driver.tree, 'data-dnls-sandbox-select').props.onChange({ target: { value: UUID_A } })
+  findButton(driver.tree, 'Control').props.onClick()
+  await driver.tick()
+  assert.equal(countCalls(calls, '/inspect'), 1)
+  assert.ok(findByData(driver.tree, 'data-dnls-detail-error'), 'read failure is reported, not a spinner')
+  // refresh on the control view retries the exact same targeted read
+  findButton(driver.tree, 'Refresh').props.onClick()
+  await driver.tick()
+  assert.equal(countCalls(calls, '/inspect'), 2, 'refresh re-issues the targeted inspect')
+  assert.equal(findByData(driver.tree, 'data-dnls-detail-error'), undefined)
+  assert.equal(fieldValue(driver.tree, 'Observed state'), 'stopped', 'recovered detail rendered')
 })

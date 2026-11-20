@@ -4,10 +4,10 @@
 > 目标：按 `DNPR01-progress-ledger.md` 完成 [DNPR] 账本 + 模型通道硬切 + 人类视图精简 + 面板三列表 + 同次文档/版本收口
 > In-scope：计划 §2.1 S1–S5
 > Out-of-scope：计划 §2.2 O1–O4；C1-03 归属率（deferred）；live/deploy（[业主] 择时）
-> 上游依据：[`qna/DNPR01-qna-truth.md`](../qna/DNPR01-qna-truth.md)（FROZEN）、[`DNPR01-progress-ledger.md`](./DNPR01-progress-ledger.md)（draft，由 [业主] 2026-11-20 发车指令授权执行）
+> 上游依据：[`qna/DNPR01-qna-truth.md`](../qna/DNPR01-qna-truth.md)（FROZEN）、[`DNPR01-progress-ledger.md`](./DNPR01-progress-ledger.md)（`executed`；由 [业主] 2026-11-20 发车指令授权执行）
 > authority / owner：[业主] · 授权边界：本仓 worktree 内编码 + 一次合并回 `main`；deploy-local 不在授权内
 > 基线：worktree `dnpr01-progress-ledger` @ `0dd99ab`；锚复核已 PASS（全部 A-* 符号命中，2026-11-20）
-> 文档状态：`executing` · 执行状态：`in-progress`
+> 文档状态：`executed` · 执行状态：`complete`（交付侧；合并与删除 worktree 由 [业主] 自行判断）
 
 ## 1. 核心脊
 
@@ -60,25 +60,26 @@ PH0 ──▶ PH1 ──▶ PH2 ──▶ PH3 ──▶ PH6 ──▶ MERGE
   - 落点：`ProgressBody.jsx`、`Row.jsx`、`Turn.jsx`、`group.js`、`message.js`、`filter-menu` 菜单构造、`TasksView.jsx` pending glyph、`rows.js`
   - 完成判据：T12/T13；src/client 无 args/result/reasoning data-field；`schedule` 开组
 - [x] `PH5` — 面板三列表 + 删 task-times + C2-05
-  - 执行状态：complete · 2026-11-20T03:05+08:00 · 证据：commits `d7d9325`+`9b47…`(ui-rules fix)；npm test 171/171；check-ui-rules NPR 行 0 告警
+  - 执行状态：complete · 2026-11-20T03:05+08:00 · 证据：commits `d7d9325`+`4c04177`(ui-rules fix)；npm test 171/171；check-ui-rules NPR 行 0 告警
   - 落点：`TasksSection.jsx`、`TasksView.jsx`、`ProgressBody.jsx`、`Turn.jsx`；删 `src/client/task-times.js` + `test/task-times.test.mjs`
   - 完成判据：T14/T15；面板改读 ledger wire；56px 列有回合耗时/非 completed 原因
-- [x] `PH6` — 文档/版本/验证/一次合并
-  - 执行状态：complete（文档/版本/验证全部收口；**合并 → main + worktree 删除** 属 T-O-17 收口动作，待 [业主] 授权点）· 2026-11-20
-  - 落点：`AGENTS.md`、`spec-v1.1.md`、FUS §11.4 一行、`package.json` 0.2.0、本 todo、计划 §11 回填；R1/R2/R3 审查修复随 `f6aba5a` 落盘
-  - 完成判据：T16/T17/T18 已过——`npm test` 179/179、`check-ui-rules` NPR 0、`npm run build` ✅、`test/built-host.mjs` 1/1、`npm pack --dry-run` 10 文件 145.6kB、`prod-replay --limit=1000` 33 会话/138 请求四数达标；`f6aba5a` 为审查修复提交
+- [x] `PH6` — 文档/版本/验证
+  - 执行状态：complete · 2026-11-20T00:45:39Z · 交付侧完成；**合并 → main + worktree 删除** 由 [业主] 自行判断执行（[业主] 2026-11-20 指令：不属于交付项）
+  - 落点：`AGENTS.md`、`spec-v1.1.md`、FUS §11.4 一行、`package.json` 0.2.0、本 todo、计划 §11 回填；R1/R2/R3 审查修复随 `f6aba5a`；合并前扫尾随 `55fa2c0`、`cf49cb1`（计划 §11.7）
+  - 完成判据：T16/T17/T18 已过——`npm test` 193/193、`check-ui-rules` NPR 行 0 告警、`npm run build` + `test/built-host.mjs` 1/1、`npm pack --dry-run` 10 文件 52.2kB、`prod-replay --limit=1000` 33 会话/138 请求（只记录，数字见计划 §11.4）
 
 ## 4. Check/状态台账
 
 | Check-ID | 名称 | 覆盖 | 起跑线 | 状态 |
 |----------|------|------|--------|------|
-| DNPR-T00 | 锚复核 | A-1..A-25 | — | pass（2026-11-20，全符号命中） |
-| DNPR-T01–T19 | 见计划 §8.1 | — | — | not-run |
+| DNPR-T00 | 锚复核 | A-1..A-25 | — | pass（`6174f7d`，2026-11-19T18:20Z，全符号命中） |
+| DNPR-T01–T19 | 见计划 §8.1 | 计划 §10.2 逐行四元组 | — | pass（`cf49cb1`，`npm test` 193/193 + UI 规则 + built-host + pack，2026-11-20T00:45:39Z） |
+| C1-03 归属单测 | — | — | — | deferred（`T-O-15`） |
 
 ## 5. 交接 / handoff
 
-- 当前节点：全部 Phase 完成；剩 T-O-17 收口动作（merge → main 后删 worktree），待 [业主] 授权点。
-- 完成 handoff：合并提交含 `npm test` 数、check-ui-rules NPR 行、pack 输出与 [PROD] 回放原文（或「本机未复跑」）→ 写回计划 §11 与 closure。deploy-local 由 [业主] 择时。
+- 当前节点：交付侧全部完成。合并 `main`、删除 worktree 由 [业主] 自行判断执行；`deploy-local` 由 [业主] 择时。
+- 完成 handoff：`npm test` 数、check-ui-rules NPR 行、pack 输出与 [PROD] 回放原文已写回计划 §11（不另立收口文档）。
 
 ---
 
@@ -131,4 +132,4 @@ STEP.8 - 回收子代理的代码审查报告, 在汇聚, 分析, 整理, 核实
 基于我的上述要求, 请立刻按照工作方法, 完成 [执行计划] 中全部的编码, 并进行测试与文档撰写工作
 > Step.0 中的 todo 需要保留完整业主发车指令, 并注册本 directive
 
-> **登记说明**：本 directive 即 [业主] 开工授权（计划 `draft → executing` 的生效依据）。STEP.6 的 closure 文件按指令产出（`T-O-17`「不另立收口文档」在 [业主] 新指令下作记录性 closure 解释——它是执行账，不是第二真源台账）。
+> **登记说明**：本 directive 即 [业主] 开工授权（计划 `draft → executing` 的生效依据）。STEP.6 的 closure 文件按指令产出（`T-O-17`「不另立收口文档」在 [业主] 新指令下作记录性 closure 解释——它是执行账，不是第二真源台账）。其后 [业主] 2026-11-20 裁决删除该 closure 文件，必要信息并入计划 §11.7。

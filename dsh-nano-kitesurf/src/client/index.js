@@ -200,6 +200,8 @@ const STYLE = `
 @keyframes nks-spin{to{transform:rotate(360deg)}}
 .nks-open-error{margin:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);line-height:1.55;word-break:break-word}
 .nks-open-url{color:var(--dsw-alias-label-tertiary);unicode-bidi:plaintext}
+.nks-open-repair{margin-top:10px;height:28px;padding:0 12px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);cursor:pointer}
+.nks-open-repair:hover{background:var(--dsw-alias-bg-layer-3)}
 .nks-open-log{margin:6px 0 0;max-height:140px;overflow:auto;padding:6px 8px;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
 .nks-simulation-body{min-height:0}
@@ -1374,6 +1376,19 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     dialogOpenRef.current = true
     let dialog = null
     const finish = () => { dialogOpenRef.current = false }
+    // A refused connection to a loopback host is the single most common
+    // "nothing opens" report, and the raw `net::ERR_CONNECTION_REFUSED` in
+    // this dialog never said why: the URL is resolved INSIDE the container, so
+    // `localhost` is the container, not the machine the dev server runs on.
+    // Say that here instead of letting the message imply the pane is broken.
+    const loopback = (() => {
+      try {
+        const host = new URL(url || '').hostname.toLowerCase()
+        return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0'
+          || host === '::1' || host === '[::1]' || host.endsWith('.localhost')
+      } catch { return false }
+    })()
+    const canRepair = RECOVERABLE.test(errorId)
     dialog = openNanoDialog({
       copy: { cancel: copy.close, confirm: url ? copy.retry : copy.close, close: copy.close },
       title: copy.openFailed,
@@ -1389,10 +1404,25 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       },
       children: h('div', { 'data-nks-open-error': '1' },
         h('p', { className: 'nks-open-error' }, message),
+        loopback ? h('p', { className: 'nks-open-error', 'data-nks-open-loopback': '1' }, copy.openErrorLoopback) : null,
         url ? h('p', { className: 'nks-open-error nks-open-url' }, url) : null,
         cause?.detail?.engineLog
           ? h('pre', { className: 'nks-open-log', 'data-nks-open-log': '1' }, cause.detail.engineLog)
-          : null),
+          : null,
+        // The toast has had a repair shortcut all along; the dialog did not,
+        // so a navigation failure was a dead end with only "retry". The engine
+        // can die mid-navigate (workerd terminates the page script), and then
+        // every retry fails the same way until something restarts it.
+        canRepair ? h('button', {
+          type: 'button',
+          className: 'nks-open-repair',
+          'data-nks-open-repair': '1',
+          onClick: () => {
+            finish()
+            dialog?.close()
+            repairNow()
+          },
+        }, copy.openRepairRetry) : null),
     })
   }
 

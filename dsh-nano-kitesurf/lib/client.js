@@ -2586,6 +2586,8 @@ ${LAYER_CSS}
           hintBar: "\u70B9\u9009 \xB7 Shift+\u591A\u9009 \xB7 Alt+\u692D\u5706 \xB7 Shift+\u7BAD\u5934 \xB7 \u2191\u2193 \u7236/\u5B50 \xB7 \u53CC\u51FB\u6539\u6587\u5B57 \xB7 Esc \u5173\u95ED\u9009\u4E2D",
           clearSelection: "\u5173\u95ED\u9009\u4E2D",
           openFailed: "\u9875\u9762\u6CA1\u6709\u6253\u5F00",
+          openErrorLoopback: "\u8FD9\u4E2A\u5730\u5740\u5728\u5BB9\u5668\u5185\u89E3\u6790\uFF1A\u5BB9\u5668\u91CC\u7684 localhost/127.* \u6307\u5BB9\u5668\u81EA\u5DF1\uFF0C\u4E0D\u662F\u8DD1 dev server \u7684\u8FD9\u53F0\u673A\u5668\u3002\u7528 GET /status \u7684 networking.hostGateway \u6362\u6210\u672C\u673A\u7F51\u5173\u5730\u5740\uFF08\u5BBF\u4E3B\u65E7\u7248\u65E0\u8BE5\u5B57\u6BB5\u65F6\u53D6 container inspect \u7684 status.networks[].ipv4Gateway\uFF09\uFF0C\u6216\u8BA9 dev server \u7ED1 0.0.0.0 \u540E\u4ECE\u7F51\u5173\u8BBF\u95EE\u3002",
+          openRepairRetry: "\u4FEE\u590D\u5F15\u64CE\u5E76\u91CD\u8BD5",
           navigateUnconfirmed: "\u5F15\u64CE\u63A5\u53D7\u4E86\u5730\u5740\uFF0C\u4F46\u6CA1\u6709\u6E32\u67D3\u51FA\u9875\u9762\u3002\u4E0B\u9762\u662F\u5F15\u64CE\u81EA\u5DF1\u7684\u65E5\u5FD7\u3002",
           startEngine: "\u542F\u52A8\u5F15\u64CE",
           clearPins: "\u6E05\u7A7A\u5168\u90E8\u6807\u6CE8",
@@ -2809,6 +2811,8 @@ ${LAYER_CSS}
           hintBar: "Click \xB7 Shift+multi \xB7 Alt+ellipse \xB7 Shift+arrow \xB7 \u2191\u2193 parent/child \xB7 double-click edit \xB7 Esc clears the pick",
           clearSelection: "Clear selection",
           openFailed: "Page did not open",
+          openErrorLoopback: "This address is resolved INSIDE the container: localhost/127.* there means the container itself, not the machine running your dev server. Use the host gateway from GET /status \u2192 networking.hostGateway (or status.networks[].ipv4Gateway from container inspect on an older host), or bind the dev server to 0.0.0.0 and open it through the gateway.",
+          openRepairRetry: "Repair engine and retry",
           navigateUnconfirmed: "The engine accepted the address but never rendered it. Its own log is below.",
           startEngine: "Start engine",
           clearPins: "Clear all notes",
@@ -3278,6 +3282,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 @keyframes nks-spin{to{transform:rotate(360deg)}}
 .nks-open-error{margin:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);line-height:1.55;word-break:break-word}
 .nks-open-url{color:var(--dsw-alias-label-tertiary);unicode-bidi:plaintext}
+.nks-open-repair{margin-top:10px;height:28px;padding:0 12px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);cursor:pointer}
+.nks-open-repair:hover{background:var(--dsw-alias-bg-layer-3)}
 .nks-open-log{margin:6px 0 0;max-height:140px;overflow:auto;padding:6px 8px;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
 .nks-simulation-body{min-height:0}
@@ -4470,6 +4476,15 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const finish = () => {
         dialogOpenRef.current = false;
       };
+      const loopback = (() => {
+        try {
+          const host = new URL(url || "").hostname.toLowerCase();
+          return host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1" || host === "[::1]" || host.endsWith(".localhost");
+        } catch {
+          return false;
+        }
+      })();
+      const canRepair = RECOVERABLE.test(errorId);
       dialog = openNanoDialog2({
         copy: { cancel: copy.close, confirm: url ? copy.retry : copy.close, close: copy.close },
         title: copy.openFailed,
@@ -4487,8 +4502,23 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "div",
           { "data-nks-open-error": "1" },
           h7("p", { className: "nks-open-error" }, message),
+          loopback ? h7("p", { className: "nks-open-error", "data-nks-open-loopback": "1" }, copy.openErrorLoopback) : null,
           url ? h7("p", { className: "nks-open-error nks-open-url" }, url) : null,
-          cause?.detail?.engineLog ? h7("pre", { className: "nks-open-log", "data-nks-open-log": "1" }, cause.detail.engineLog) : null
+          cause?.detail?.engineLog ? h7("pre", { className: "nks-open-log", "data-nks-open-log": "1" }, cause.detail.engineLog) : null,
+          // The toast has had a repair shortcut all along; the dialog did not,
+          // so a navigation failure was a dead end with only "retry". The engine
+          // can die mid-navigate (workerd terminates the page script), and then
+          // every retry fails the same way until something restarts it.
+          canRepair ? h7("button", {
+            type: "button",
+            className: "nks-open-repair",
+            "data-nks-open-repair": "1",
+            onClick: () => {
+              finish();
+              dialog?.close();
+              repairNow();
+            }
+          }, copy.openRepairRetry) : null
         )
       });
     }

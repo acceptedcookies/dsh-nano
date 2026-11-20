@@ -228,11 +228,11 @@ S1-01 并入 main
   - **完成判据**：`principalKey` 为 `owner` 且代次匹配时可 create/attach；非 owner kind 仍 403；journey 断言改为同代次允许并另留一条非 owner 拒绝；AGENTS 写明两个浏览器标签不是跨用户证明
   - **验证映射**：`DNLS03X-T03` · **依赖**：`S1-01`
   - **执行状态**：`complete` · **执行时间**：`2026-11-20T15:26Z` · **证据 / 备注**：改 `object-authz.js` 的 `resolveOwnerPrincipal`：owner 的 `canUse` 放行 `terminal.*`，归属与代次仍由 `authorize` 逐条校验；journey T80 增「owner 自持终端可 attach」「他人终端仍拒」「非 owner kind 仍拒」；`object-authz.test` 断言同步；`AGENTS.md` 改口；DNLS 468/468
-- [ ] `S1-04` — 代次凭据、读白名单、relay 记账
+- [x] `S1-04` — 代次凭据、读白名单、relay 记账
   - **落点 / 对象**：`profiles/kitesurf/mcp-bridge.mjs:731-797,933,1045-1076`、`src/host/backend-apple.js:484-498`
   - **完成判据**：每代次随机凭据经 root/stdin/`env -i` 投放；宿主类接管中写成功；agent 类被拒且 `lastAt` 不变；无凭据 `POST /control` 403；换代后旧凭据失效；凭据不入任何响应；`relay.conns` 只计 agent 类；`:79` 的 `originAllowed` 不改
   - **验证映射**：`DNLS03X-T04` · **依赖**：`S1-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-20T16:05Z` · **证据 / 备注**：代次随机凭据：`src/host/bridge-credential.js` 生成、`backend-apple.js` 经 root+stdin+`env -i` 投放、桥 `isHostConnection` 逐次比对、guest helper `profiles/terminal/relay-credential.mjs` 经 `PACKAGE_RECIPE` 入镜像配方；agent 写被拒不动 `lastAt`；无凭据 `POST /control` 403；DNLS 469/469
 - [ ] `S1-05` — 四个模型工具与打开前拒绝
   - **落点 / 对象**：`index.js:19-35`（inject 增加 `tools`）、`src/host/routes.js:2`、`dsh-nano-kitesurf/lib/skill.js:38,82-83`、`src/skill/kitesurf-cdp/references/observability.md:26`
   - **完成判据**：四个工具经 `tools.register` 注册、主体走组合层适配器、缺 `sandboxId` 拒绝、结果经同一 `redact`；接管中模型工具与 `/mcp` 在 [DNLS] 分派器以 `kitesurf.control.held` 拒绝且只有 `errorId`；HTTP `/open` 不受此闸；卸载即注销；skill 改真源后经构建生成 `skills/`
@@ -248,11 +248,11 @@ S1-01 并入 main
   - **完成判据**：一引用一页签且同一引用复用；`drivers` 只读投影到 `sandbox.list`/`inspect` 与列表工具；不含 `cdp` 时显示原因且不发对象请求；`tab.visible` 为假时 `/status`、`/shot`、`/dom`、`/control` 全停，恢复可见刷新一次；`keepMounted` 保留；「两个引用两个页签」只作软件回归
   - **验证映射**：`DNLS03X-T07` · **依赖**：`S1-06`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `S1-08` — 退役 `/res` 与 HTML 代理改写
+- [x] `S1-08` — 退役 `/res` 与 HTML 代理改写
   - **落点 / 对象**：`src/host/res-proxy.js`、`test/res-proxy.test.mjs`、`src/host/routes.js:39,57,1081,1493`、`src/host/dom-srcdoc.js:23,76-117`、`src/host/object-pages.js:9-13`、`src/host/error-catalog.js:46-54`、账本五处、[DNK] `src/client/index.js:1533`、`src/client/i18n.js:106,338`、`src/skill/**/routes.md:19`、`recovery-playbook.md:18`
   - **完成判据**：路径与 `res.*` 九行消失且不留别名、开关或墓碑；srcdoc 只有真实地址；隧道域命中时 `/open` 成功体与失败体都带 hint 且状态码不变；账本少一行且 0 漂移；`proxied` 推断删除；HTML 提示改为静态投影说明；diagnostics 不再写「+ `/res`」
   - **验证映射**：`DNLS03X-T08` · **依赖**：`S1-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-20T16:05Z` · **证据 / 备注**：删 `res-proxy.js` 与单测、`RES_ROUTE`/`serveRes`/`proxy` 选项、`res.*` 九行、`dnls.res` 账本行；隧道 hint 常量在 `profiles/kitesurf/driver/index.js`，成功体与失败体同 hint 且不改状态码；[DNK] 删 `proxied`、改 `hintUnproxiedHtml` 与 skill refs；99 路由 0 漂移
 - [ ] `S1-09` — 失败投影收口
   - **落点 / 对象**：`src/host/object-pages.js:137`、`src/host/routes.js:1122-1128`、[DNK] `src/client/index.js:1436-1439`
   - **完成判据**：至少一例内核失败同时带 `error` 与 `hint`，键只有 `ok`/`errorId`/`error`/`hint`；`error` 按 240 字截断；另有一例派发前失败只有 `errorId` 且无 `hint`；失败体无 `incidentId`、操作行仍有；[DNK] 的 `engineLog` 死分支与 `openErrorLoopback` 删除

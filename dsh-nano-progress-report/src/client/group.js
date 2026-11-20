@@ -12,7 +12,7 @@
  *  the current group. Activity after a close without an opener (window opened
  *  mid-session, queued input) starts an opener-less group. */
 
-const OPENERS = new Set(['prompt', 'goal'])
+const OPENERS = new Set(['prompt', 'goal', 'schedule'])
 const ACTIVITY = new Set(['message', 'shell', 'file', 'web', 'tool', 'todo', 'subagent', 'wait'])
 
 const stepKey = row => `${row.turn}:${row.step}`
@@ -53,6 +53,12 @@ export function denoise(sorted) {
       const jobStatus = row.status
       next.job = { status: jobStatus, label: row.summary }
       if (jobStatus === 'running' || jobStatus === 'failed') next.status = jobStatus
+      dropped.add(row.key)
+      continue
+    }
+    // C0-01: a todo_write tool row folds into its todo/write event row —
+    // both carry the same snapshot; the event row keeps the counts.
+    if (row.type === 'tool' && row.tool === 'todo_write' && row.status !== 'failed') {
       dropped.add(row.key)
       continue
     }

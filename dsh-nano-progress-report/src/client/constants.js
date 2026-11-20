@@ -2,6 +2,8 @@
 
 export const TARGET = 'progress'
 export const TAB_KIND = 'progress'
+/** Ledger projection key — the footer's only data source. */
+export const LEDGER_FACE_KEY = 'nano-progress-report:ledger'
 export const TAB_ID = 'dsh-nano-progress-report.workbench'
 /** Conversation view tab id and session-header action id. */
 export const VIEW_ID = 'nano-progress'
@@ -9,7 +11,7 @@ export const ROOT_ATTR = 'nano-progress-report'
 
 /** Row type taxonomy (filter `type:` values). */
 export const TYPES = Object.freeze([
-  'prompt', 'goal', 'message', 'shell', 'file', 'web', 'tool',
+  'prompt', 'schedule', 'goal', 'message', 'shell', 'file', 'web', 'tool',
   'todo', 'subagent', 'wait', 'turn', 'job', 'lifecycle',
 ])
 

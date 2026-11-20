@@ -22,6 +22,21 @@ import { argString, blocksText, oneLine, parseArgs } from './args.js'
 
 const text = value => oneLine(value ?? '', 140)
 
+/** C7-02: strip leading `<tag>…</tag>` context envelopes from the prompt
+ *  summary; the human sentence survives, the raw text stays in detail. */
+function foldInjected(raw) {
+  let rest = String(raw)
+  let had = false
+  for (;;) {
+    const match = /^\s*<([a-zA-Z][\w-]*)[^>]*>[\s\S]*?<\/\1>\s*/.exec(rest)
+    if (match === null) break
+    had = true
+    rest = rest.slice(match[0].length)
+  }
+  rest = rest.trimStart()
+  return { display: rest !== '' ? rest : (had ? '(attached context)' : rest), stripped: had }
+}
+
 const TURN_FAILED = new Set(['error', 'aborted', 'max-tokens', 'interrupted'])
 
 function resultMissing(resultLike) {
@@ -108,9 +123,16 @@ export function rowFromNode(node) {
     expandable: false, detail: undefined, tool: '', role: 'exec',
   }
   switch (data.row) {
-    case 'prompt':
+    case 'prompt': {
+      const folded = foldInjected(data.text ?? '')
       return { ...base, type: 'prompt', status: 'ok', role: 'human',
-        summary: text(data.text), expandable: (data.text ?? '').length > 140,
+        summary: text(folded.display), expandable: (data.text ?? '').length > 140,
+        detail: { text: data.text } }
+    }
+    case 'schedule':
+      return { ...base, type: 'schedule', status: 'ok', role: 'human',
+        summary: text(foldInjected(data.text ?? '').display),
+        expandable: (data.text ?? '').length > 140,
         detail: { text: data.text } }
     case 'goal':
       return { ...base, type: 'goal', status: 'ok', role: 'goal',
@@ -185,7 +207,7 @@ export function rowFromNode(node) {
       const reason = data.reason
       const status = TURN_FAILED.has(reason) ? 'failed'
         : reason === 'blocked' ? 'awaiting' : 'ok'
-      return { ...base, type: 'turn', status, role: 'boundary',
+      return { ...base, type: 'turn', status, role: 'boundary', reason,
         summary: `Turn ${data.turn} ended${reason ? `: ${reason}` : ''}`,
         expandable: data.error !== undefined,
         detail: { error: typeof data.error === 'string' ? data.error : data.error?.message ?? (data.error === undefined ? undefined : String(data.error)) } }
@@ -198,7 +220,7 @@ export function rowFromNode(node) {
       const summary = pending
         ? `Approval requested${data.toolName ? `: ${data.toolName}` : ''}`
         : `Approval ${outcome}${data.toolName ? `: ${data.toolName}` : ''}`
-      return { ...base, type: 'wait', status,
+      return { ...base, type: 'wait', status, outcome,
         summary: text(summary),
         expandable: data.reason !== undefined && data.reason !== '',
         tool: data.toolName ?? '',
@@ -234,6 +256,7 @@ export function rowFromNode(node) {
     }
     case 'lifecycle':
       return { ...base, type: 'lifecycle', status: data.status === 'failed' ? 'failed' : 'ok', role: 'boundary',
+        eventType: data.eventType,
         summary: text(data.summary ?? data.eventType ?? 'event'),
         expandable: (data.detail ?? '').length > 0,
         detail: { text: data.detail } }

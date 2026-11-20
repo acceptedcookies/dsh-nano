@@ -2,7 +2,7 @@
 
 只处理这一个包。不要安装、不要修改、也不要假设旁边还有别的 nano 插件。
 周围仓库、`context/`、本机手册都不在这个包里。
-装好的标志：[dsh工作台] 出现「Progress」tab（会话头部动作也能把它打开到右侧工作台）。内容是按回合缩进的执行流、过滤条和底部 Tasks 区（可拖拽、可折叠）。Progress 不注册 `conversation.view`：chat interface 已有轨迹视图，不需要第二个 Progress tab。
+装好的标志：[dsh工作台] 出现「Progress」tab（会话头部动作也能把它打开到右侧工作台）。内容是按回合缩进的执行流（默认 A/B/C 精简）、过滤条和底部 Tasks 区（可拖拽、可折叠）。Progress 不注册 `conversation.view`：chat interface 已有轨迹视图，不需要第二个 Progress tab。
 
 ## 身份
 
@@ -13,9 +13,9 @@
 | 版本 | 读 `package.json` 的 `version`，不要写死 |
 | dsh 引擎 | 读 `package.json` 的 `engines.dsh` |
 | 平台 | 仅 web |
-| 宿主入口 | `index.js`（无宿主路由；加载宿主进度摘要与 PromptContext） |
+| 宿主入口 | `index.js`（无宿主路由；加载会话进度账本、read_progress 与 PromptContext） |
 | 浏览器入口 | `lib/client.js` |
-| 宿主 inject | `sessionProjections`、`systemPrompt`、`agents`；可选读取 goal、jobs |
+| 宿主 inject | `sessionProjections`、`systemPrompt`、`agents`、`tools`；可选读取 jobs |
 
 宿主必需服务缺失时，宿主贡献不会激活。
 
@@ -68,7 +68,7 @@ dsh plugin --profile web add <spec>
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
 2. 重启并刷新后，页面里能找到本包的 client 模块（包名）。找不到说明 client 没进页面。
 3. 打开右侧 [dsh工作台] 的「Progress」tab 得到 `[data-nano-progress-report]` 根节点；会话头部动作打开同一 tab。chat interface 的视图 tab 条里**不应**出现 Progress（已有轨迹）。右栏 guide 与 tab 菜单入口仍可用。
-4. 已运行过 tool 调用的会话在 Progress 里能看到按回合缩进的事件流（人类 prompt 在左缘，该轮步骤右移 18px 并在同一条 0.5px 引线内；提示、shell、文件、工具、todo、turn 按时间排序）：行高 28px、无底色、无 600 字重；glyph 统一三级色，失败行只有红字 + 告警 glyph；人类输入 `label-primary`、机器步骤 `label-secondary`、边界行 `label-tertiary`。底部 Tasks 区头部 30px，可拖拽（下限 88px、上限 60% 视口）、**整条头部**可点击折叠；Tasks 与 `session.projections.faceOf('todos')` 同步，`N/M done` 与进度条一致。
+4. 已运行过 tool 调用的会话在 Progress 里能看到按回合缩进的事件流（人类 prompt 在左缘，该轮步骤右移 18px 并在同一条 0.5px 引线内）：无过滤时走 A/B/C 精简视图——里程碑行保留、同类工具行合并为段、旁白/已决审批/已完成回合收尾收进 C 层；行高 28px、无底色、无 600 字重；glyph 统一三级色，失败行只有红字 + 告警 glyph。底部 Tasks 区头部 30px，可拖拽（下限 88px、上限 60% 视口）、**整条头部**可点击折叠；Tasks 与 `session.projections.faceOf('nano-progress-report:ledger')` 的当前工作项同步，`N/M done` 与进度条一致。
 
 ## 初次运行
 
@@ -85,39 +85,87 @@ dsh plugin --profile web add <spec>
 | `-status:failed` | 排除失败行；`status:failed` 只看失败 |
 | `tool:bash` | 只看 bash 的 tool/call 行（wire 名精确匹配；bash 的 approval 行也归 bash）；`-tool:bash` 排除 bash |
 | `type:subagent` | subagent 调用行，加上别的 agent 发来的消息（`Agent <name> sent a message:` 开头）与后台 subagent 结束通知；结束通知记录了非 `completed` 的结束原因时算失败 |
-| 点击行 | 就地展开 detail（args 原文、result、耗时、subagent 的 PTC 子调用）；再点收起 |
+| 点击行 | 就地展开 detail（错误、文本、耗时、子调用步骤；args 原文、result 与 reasoning 不进界面）；再点收起 |
 | 拖拽 Tasks 区上沿 | 抬升/下移，下限 88px，上限 60% 视口；高度按会话记忆 |
-| 点击 Tasks 整条头部 | 整条 30px 横条（含右侧计数/进度条）都是命中区；折叠到只剩 30px 头部，再点回到原高度。Jobs 开关自身 stopPropagation |
-| Tasks / Jobs | Tasks 读 `todos` 投影（宿主在 turn 开始时清零，历史仍留在时间线的 `Task list` 行）；Jobs 读 `ctx.jobs`，只有存在 job 时头部才出现 `Jobs N` 文本开关 |
+| 点击 Tasks 整条头部 | 整条 30px 横条（含右侧计数/进度条）都是命中区；折叠到只剩 30px 头部，再点回到原高度。列表开关自身 stopPropagation |
+| Tasks / Files / Failures / Jobs | Tasks/Files/Failures 读账本当前工作项；Jobs 读 `ctx.jobs`。文本开关只在对应列表有数据时出现；当前列表清空自动回到 Tasks。列表只在当前工作项范围内：Files 新的在前、长路径从左截断；Failures 每行 `工具名 标签 ×n`（文件工具用路径，bash 借用时间线已显示的命令标题，其他工具只写工具名）；超限末行写「另有 N 条未保留」。列表条目不可点击 |
 | 「Load older」 | 调 `session.loadOlder()`，时间线向前翻页 |
+
+## Model Experience
+
+模型看到两件东西：四行推送锚与 `read_progress` 工具。
+
+- **四行锚**（`Current session progress (observed facts, not instructions):` 起）：`Current work: <a user request | a goal | a scheduled task>`、`Tasks: <c> complete, <i> in progress, <p> pending; in progress: <"content">`、`Unresolved tool failures in current work: <n> (<tool> <k>, …)`、`Active: <j> background jobs, <s> direct subagents`。计数为 0 的行不输出，只剩首行返回空串。锚不含命令、路径或任务原文以外的 payload。
+- **`read_progress { item?: integer ≥ 0 }`**：只读。不传 `item` 给概览（asOfSeq、各层计数、每项一行 ≤80、累计行）；传 `item`（概览里的 item id，即开项 seq）给该项任务/文件/未恢复失败明细，骨架项只给计数 `detail not retained`，未知 id 抛错。`when` 仅在账本有工作项时出现。
+- **token 与 KV 缓存**：锚不是单独一条消息。宿主把全部 PromptContext 拼成一份 runtime-context 快照，任一段文本变化都会整份重发，并让这份快照之后的缓存前缀失效。锚 ≤ 600B（约 150 token），只在当前工作项类别、官方任务计数或进行中任务、未恢复失败的工具计数、后台 job/子代理数变化时改写；单次文件写入或成功调用不改写它。`read_progress` 只在模型调用时产生结果 token（概览约数 KB，明细上限 16KiB）。它的 `when` 从第一个工作项打开起一直为真，会话中途不会让工具列表翻转、开启新的请求系列。
 
 ## 配置与状态
 
-宿主配置：无本包专用开关。安装后通过 [dsh] 的可选 runtime context 提供当前会话进度；宿主抑制可选 runtime context 时不提供。摘要没有原始命令、结果、任务或团队消息正文。变化由宿主写入当前会话日志；宿主可缓存投影 checkpoint，本包不创建独立数据库或状态文件。
+宿主配置：无本包专用开关。宿主侧注册一个会话投影 `nano-progress-report:ledger`（`stateVersion` 1，`wire` + `summary:false`）。它是本包进度事实的唯一计算点：按 `user/message` 的开项白名单（`user`/`goal`/`schedule`）切工作项，goal 按 `goalId` 合并，每回合最多开一项。账本不存 args、result、消息正文、提示文本或 reasoning；宿主可缓存投影 checkpoint，恢复时 `stateSchema` 拒绝未知键与超限集合；本包不创建独立数据库或状态文件。官方 `todos`、goal、jobs、子代理不在账本里重算：推送锚的 `Tasks`/`Active` 行直接读官方。
+
+### `v1` 视图字段表
+
+公开只读合同是 wire 视图（`v: 1`），只经宿主读面获取：浏览器 `session.projections.faceOf('nano-progress-report:ledger')`、宿主插件 `ctx.sessionProjections.snapshot(session, ['nano-progress-report:ledger'])`、跨会话 `sessionQuery.observeSession`。本包未安装时 key 不存在，消费者自行降级。同一 `v` 内只追加可选字段；删除、改名、改语义或调整下表任一上限都是破坏性变化，升 `v` 并同次硬切。
+
+顶层：
+
+| 字段 | 类型 | 含义 | 上限 / 截断表示 |
+|---|---|---|---|
+| `v` | `1` | 视图版本 | — |
+| `asOfSeq` | integer | 最后一次改变账本事实的事件 seq；只改内部缓冲的事件（未配对调用、cwd、无工作项时的回合）不推进，视图对象不变 | — |
+| `inherited` | integer | fork 继承前缀长度；seq 小于它的事件不计入。非 fork 为 0 | — |
+| `coverage` | `{firstSeq: integer\|null, lastSeq: integer}` | 账本观察到的第一个与最后一个事实 seq | — |
+| `unattributed` | `{calls, failures}` | 首个工作项之前完成的工具调用数及其中失败数，不挂明细 | — |
+| `cumulative` | `{items, lastSeq, calls, failures, files, tasks, unresolved}` | 累计层：移出完整层与骨架层的早期工作项个数、它们覆盖到的最后 seq、各类计数之和 | 无明细 |
+| `items` | array | 工作项，新的在前：先完整层，后骨架层 | 完整层 ≤ 16，骨架层 ≤ 64；第 81 项起最旧的骨架并入 `cumulative` |
+
+完整层工作项（`tier: 'full'`）：
+
+| 字段 | 类型 | 含义 | 上限 / 截断表示 |
+|---|---|---|---|
+| `tier` | `'full'` | 层级 | — |
+| `kind` | `'user'\|'goal'\|'schedule'` | 开项来源 | — |
+| `goalId` | string，可选 | goal 项的 goal id | — |
+| `firstSeq` | integer | 开项 `user/message` 的 seq，也是工作项身份（`read_progress` 的 `item`） | — |
+| `lastSeq` | integer | 归入该项的最后事件 seq | — |
+| `status` | string | `waiting`（有未决审批）/ `in progress`（当前项且回合打开，或尚无结束原因）/ 最后一个 `turn/end` 的结束原因 | — |
+| `endReason` | string\|null | 最后一个 `turn/end` 的结束原因 | — |
+| `files` | `{path, firstSeq, lastSeq}[]` | 成功的 write/edit/apply_patch 改动路径（只存 seq，不存时间） | ≤ 32，超限保留最近改动的，`truncated.files` 记丢弃数；路径 > 192 字节不记录 |
+| `failures` | `{tool, key, path, count, firstSeq, lastSeq, callId}[]` | 未恢复失败，按工具 + 指纹 `key`（sha256 摘要，后台 bash 为 `null`）聚合；`path` 只对文件工具填写；`callId` 是最后一次失败的调用 id | ≤ 16，超限保留最近的，`truncated.failures` 记丢弃数 |
+| `tasks` | `{content, status, firstSeq, completedSeq?, completedAt?}[]` | 该项内 `todo/write` 列出过的任务，按首次列出顺序。`content` 为原样字段（≤ 200 字节，按码点截断）；`status` 取最近一次列出它的快照，未列出时保留上次状态；`completedSeq`/`completedAt` 是首次以 `completed` 出现的 `todo/write` seq 与事件时间，之后改回不清除、再次完成不覆盖，未完成时不出现 | ≤ 32，超限保留最近列出的，`truncated.tasks` 记丢弃数 |
+| `counts` | `{calls, failures, files, tasks, unresolved, recovered}` | 完成的调用数、失败调用数、文件数、任务数、未恢复失败次数、已恢复失败次数 | — |
+| `truncated` | `{files, failures, tasks}` | 各列表因上限丢弃的条目数 | — |
+
+骨架层工作项（`tier: 'skeleton'`）：`tier`、`kind`、`goalId?`、`firstSeq`、`lastSeq`、`status`、`endReason`，以及 `counts: {calls, failures, files, tasks, unresolved}`；不带明细列表，降级后不再更新。
+
+任务证据字段（任务级 seq 区间）不在 `v1`。追加时作为同 `v` 可选字段，递增 `stateVersion` 并冷重建，其上限作为新常量写进本表。
+
+### 模型出口与浏览器键
+
+PromptContext 是四行锚（`Current work` / `Tasks` / `Unresolved tool failures in current work` / `Active`，计数为 0 不输出，整段 ≤ 600B），`read_progress {item?}` 是模型的只读明细通道（概览 ≤ 80 行、纯文本 ≤ 16KiB）。这两者是模型合同，不属于上面的公开视图合同。
 
 浏览器键（都只是视图态，不进宿主）：
 
 | 键 | 内容 |
 |---|---|
 | `localStorage['dsh-nano-progress-report:filter:<sessionId>']` | 最近一次过滤条文本，按会话记忆 |
-| `localStorage['dsh-nano-progress-report:tasks']` | `{height, collapsed, view}`，Tasks 区高度/折叠/当前列表 |
-
+| `localStorage['dsh-nano-progress-report:tasks']` | `{height, collapsed, view}`：Tasks 区高度、折叠、当前列表。`view` 取 `tasks`/`jobs`/`files`/`failures`；对应列表为空时回到 `tasks` |
 ## 视觉体系
 
 宿主优先，不自造风格。三份参照：
 
-1. **宿主 primitive**：行用 `DisclosureRow`（28px 行、hover 换色、running shimmer、折叠 chevron），过滤按钮在工具条左端（左 inset 10px），搜索用 `Input`（38px 工具条里 26px 宿主字段，放大镜在字段内、紧跟过滤按钮，右缘 6px；边框/底色/焦点不重画），清空/加载更早/Jobs 切换用 `Button`（ghost），过滤按钮打开宿主 `Menu`（状态/类型多选，选中项打勾），回合结构用 `Turn`（prompt level 0 + 18px 缩进的 level 1 步骤，左引线），Tasks 状态用 `StateDot` + catalog 的 `IconCheckCircleFillRegular` / `IconCheckCircleOutlineRegular`，动态列表用 `AnimatedRows`，相对时间用 `relativeTime`，全部图标取 `Icon*` catalog。
+1. **宿主 primitive**：行用 `DisclosureRow`（28px 行、hover 换色、running shimmer、折叠 chevron），过滤按钮在工具条左端（左 inset 10px），搜索用 `Input`（38px 工具条里 26px 宿主字段，放大镜在字段内、紧跟过滤按钮，右缘 6px；边框/底色/焦点不重画），清空/加载更早/Jobs 切换用 `Button`（ghost），过滤按钮打开宿主 `Menu`（状态/类型多选，选中项打勾），回合结构用 `Turn`（prompt level 0 + 18px 缩进的 level 1 步骤，左引线），Tasks 状态用 `StateDot`（ongoing/idle）+ catalog 的 `IconCheckCircleFillRegular`，动态列表用 `AnimatedRows`，相对时间用 `relativeTime`，全部图标取 `Icon*` catalog。
 2. **devin Progress 的阅读顺序**：搜索行 → 回合（人类 prompt 在左缘，该轮步骤右移 18px 并带一条 0.5px 引线）→ Tasks 区（整条 30px 头部都是折叠命中区）。回合之间没有卡片/色块/计数头；没有 goal banner、状态带或抽屉分段控件。
 3. **右侧时间 gutter**：相对时间不是标题后缀——每行尾部预留 56px 固定列，右对齐、`tabular-nums`、`margin-left:auto` 推到面板右缘，形成一条时间轴；失败告警 glyph 放在时间左侧，不影响列的右缘。
 4. **安静的文字层级**：12px 常规字重，人类输入/agent 文本 `label-primary`，机器步骤 `label-secondary`，边界（turn/job/wait）`label-tertiary`，lifecycle `label-dimmed`；失败行只把标题和 glyph 换成 `state-error`，不加底色、不加左条。shell 命令与展开的 payload 用 `--dsh-font-family-code`，detail 11px、左侧 0.5px 引线，无卡片底色。
 
-Tasks 区是 devin 的 footer：`bg-layer-1` + 上边框，30px 头部（`DisclosureRow`：checklist 图标 + `Tasks` + 右侧 56×3px 进度条 + `N/M done`），任务行 26px（完成绿勾 / 进行中宿主 spinner / 待办空心圈 + `#n` + 12px 文本 + 右侧完成时间）。完成时间取自事件流中该任务首次以 `completed` 出现在 `todo/write` 快照的时间；窗口内没有就只写 `完成`，不伪造。进度条是唯一本地 primitive，已在 [DESIGN §10](../../docs/specs/dsh-nano-ui/DESIGN.md) 登记 `nano-ui-exempt`。
+Tasks 区是 devin 的 footer：`bg-layer-1` + 上边框，30px 头部（`DisclosureRow`：checklist 图标 + `Tasks` + 右侧 56×3px 进度条 + `N/M done`），任务行 26px（完成绿勾 / 进行中宿主 spinner / 待办宿主 idle `StateDot` + `#n` + 12px 文本 + 右侧完成时间）。完成时间读账本 `completedAt`（首次 `todo/write` 标记 `completed` 的事件时刻）；没有就什么都不写，不伪造。进度条是唯一本地 primitive，已在 [DESIGN §10](../../docs/specs/dsh-nano-ui/DESIGN.md) 登记 `nano-ui-exempt`。
 
 颜色只用 `--dsw-alias-*`，间距/层级用 `--nano-space-*`/`NANO_LAYER`（本包只用到 z-index 1）。禁止十六进制色值、`rgb()` 字面量和 unicode 图标；`.npr-row-content > span` 只做截断（宿主 `TextShimmer` 把字串放在两层 span 里），不改宿主结构。
 
 过滤下拉用宿主 `Menu`（`selection:'check'` + `selectedIds`），不做自绘弹层；option 的计数折进 label，不占用宿主 `shortcut`（那是键帽数组槽）。
 
-构建与静态检查：`node ../../scripts/check-ui-rules.mjs` 的 `NPR` 行应保持 0 警告；`test/view.test.mjs` 会在源码层拦下手绘 SVG／色值／手写状态栏。
+构建与静态检查：`node ../scripts/check-ui-rules.mjs` 的 `NPR` 行应保持 0 警告；`test/view.test.mjs` 会在源码层拦下手绘 SVG／色值／手写状态栏。
 
 ## 构建
 
@@ -148,7 +196,7 @@ npm run build
 - 不要把 `cordis.patch.yml` 的 `name` 改成绝对路径再分发。
 - 不要自己写状态/标题栏、图标或色值：标题归层主 tab，颜色归 token，图标归 catalog。
 - 不要给行加底色、左侧状态条、600 字重或 icon chip；不要恢复 goal banner、回合分组头、状态带或 `SegmentedControl`——低干扰是验收项。
-- 不要给 Tasks 伪造完成时间或 id：`TodoItem` 只有 `content` + `status`。完成时间只能取事件流里首次 `completed` 的 `todo/write` 时间（`task-times.js`）。
-- 不要手写协议：会话事件、`todos` 投影、`jobs` 状态、相对时间都走宿主接缝；非零退出码按宿主语义不算 tool 失败，展开的 payload 里保留原始输出。
+- 不要给 Tasks 伪造完成时间或 id：完成时间只取账本任务行的 `completedAt`（首次 `completed` 的 `todo/write` seq 对应时刻）。
+- 不要手写协议：会话事件、账本视图、`jobs` 状态、相对时间都走宿主接缝；非零退出码按宿主语义不算 tool 失败。
 - 不要在 ProgressBody 里嫁接宿主 DOM（`[class*=]`、`:has()`、hash-class 发现）；只用自己的 `npr-` 前缀类和 `--dsw-alias-*` token。
 - 不要把 `context/` 或本机手册当成安装步骤。它们不在这个包里。

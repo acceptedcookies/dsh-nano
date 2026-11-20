@@ -1,34 +1,59 @@
 /** Bottom task bar — the Devin Progress footer: one 30px header line
- *  (`Tasks` + done/total + a 3px progress bar + an optional Jobs switch) and the
- *  task list underneath. The header is the host `DisclosureRow`, so the
- *  chevron, keyboard toggle and aria-expanded come from the host; the bar
- *  itself is the only local primitive (host/nano-ui ship no meter).
+ *  (`Tasks` + done/total + a 3px progress bar + ghost text switches) and the
+ *  list underneath. Switches appear only when the ledger's current work item
+ *  actually has data for that list (C2-04): Files, Failures, Jobs. When the
+ *  visible list empties the panel snaps back to Tasks. The header is the host
+ *  `DisclosureRow`, so the chevron, keyboard toggle and aria-expanded come
+ *  from the host; the bar itself is the only local primitive.
  *
  *  The top edge stays draggable (pointer capture + clamped height) and the
  *  header collapses the body, matching the workspace tool panels. */
 import React from 'react'
 import { Button, DisclosureRow, IconChecklistOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { JobsView } from './JobsView.jsx'
-import { TasksView } from './TasksView.jsx'
+import { FailuresView, FilesView, TasksView } from './TasksView.jsx'
+import { activeView } from '../panel.js'
 
-const { createElement: h, useCallback } = React
+const { createElement: h, useCallback, useEffect } = React
 
 /** Smallest useful body: the header plus two task rows. */
 export const TASKS_MIN = 88
 /** Ceiling leaves the timeline most of the pane. */
 export const tasksMax = () => Math.max(TASKS_MIN, Math.round(window.innerHeight * 0.6))
 
+const VIEW_COUNTS = item => ({
+  tasks: item?.tasks?.length ?? 0,
+  files: item?.files?.length ?? 0,
+  failures: item?.failures?.length ?? 0,
+})
+
 /**
  * @param {{ t: Function, view: string, onView: (v: string) => void,
  *   collapsed: boolean, onCollapsed: (v: boolean) => void,
  *   height: number, onResize: (px: number) => void,
- *   todos: object[], taskTimes?: Map<string, number>, jobs: object[] }} props
+ *   item: object|null, jobs: object[],
+ *   failureTitleOf?: (callId: string) => string|null }} props
+ *   `item` is the ledger's current full-tier work item (or null).
  */
-export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, onResize, todos, taskTimes, jobs }) {
-  const active = view === 'jobs' && jobs.length > 0 ? 'jobs' : 'tasks'
-  const total = todos.length
-  const done = todos.filter(item => item?.status === 'completed').length
+export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, onResize, item, jobs, failureTitleOf }) {
+  const counts = VIEW_COUNTS(item)
+  const options = [
+    { id: 'tasks', count: counts.tasks },
+    { id: 'files', count: counts.files },
+    { id: 'failures', count: counts.failures },
+    { id: 'jobs', count: jobs.length },
+  ]
+  const active = activeView(view, { ...counts, jobs: jobs.length })
+  // C2-04: a list that empties snaps the panel (and the persisted view) back
+  // to Tasks — the switch itself is also removed by the same condition.
+  useEffect(() => {
+    if (view !== active) onView(active)
+  })
+  const tasks = item?.tasks ?? []
+  const done = tasks.filter(task => task?.status === 'completed').length
+  const total = tasks.length
   const ratio = total === 0 ? 0 : Math.round((done / total) * 100)
+  const truncated = item?.truncated ?? {}
 
   const startResize = useCallback((event) => {
     event.preventDefault()
@@ -67,23 +92,22 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
       ? h('span', { key: 'count', className: 'npr-taskbar-count', 'data-npr': 'tasks-count' },
         `${String(done)}/${String(total)} ${t('tasks.done')}`)
       : null,
-    jobs.length > 0
-      ? h(Button, {
-        key: 'jobs',
-        variant: 'ghost',
-        size: 'sm',
-        className: 'npr-taskbar-jobs',
-        'data-npr': 'tasks-view',
-        'aria-pressed': active === 'jobs',
-        onClick: (event) => {
-          // The whole header toggles; the Jobs switch is its own action.
-          event.stopPropagation()
-          onView(active === 'jobs' ? 'tasks' : 'jobs')
-        },
-      }, active === 'jobs'
-        ? t('drawer.tasks')
-        : `${t('drawer.jobs')} ${String(jobs.length)}`)
-      : null,
+    // C2-04: text switches, only while their list has data.
+    ...options.filter(option => option.id !== 'tasks' && option.count > 0).map(option => h(Button, {
+      key: option.id,
+      variant: 'ghost',
+      size: 'sm',
+      className: 'npr-taskbar-view',
+      'data-npr': `switch-${option.id}`,
+      'aria-pressed': active === option.id,
+      onClick: (event) => {
+        // The whole header toggles; a switch is its own action.
+        event.stopPropagation()
+        onView(active === option.id ? 'tasks' : option.id)
+      },
+    }, active === option.id
+      ? t('drawer.tasks')
+      : `${t(`drawer.${option.id}`)} ${String(option.count)}`)),
   ]
 
   return h('div', {
@@ -103,7 +127,7 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
   }),
   // The whole 30px strip is the hit target, not just the title text: the
   // wrapper handles pointer clicks, the host row's leading button keeps the
-  // keyboard path (and stops propagation), and the Jobs switch opts out.
+  // keyboard path (and stops propagation), and the switches opt out.
   h('div', {
     className: 'npr-taskbar-head-wrap',
     'data-npr': 'tasks-head',
@@ -112,7 +136,7 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
   h(DisclosureRow, {
     icon: h('span', { className: 'npr-icon npr-taskbar-icon', 'aria-hidden': 'true' },
       h(IconChecklistOutlineRegular, { size: 14 })),
-    title: active === 'jobs' ? t('drawer.jobs') : t('drawer.tasks'),
+    title: active === 'tasks' ? t('drawer.tasks') : t(`drawer.${active}`),
     open: !collapsed,
     expandable: true,
     onToggle: () => onCollapsed(!collapsed),
@@ -126,5 +150,10 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
   collapsed
     ? null
     : h('div', { className: 'npr-taskbar-body', 'data-npr': 'tasks-body' },
-      active === 'jobs' ? h(JobsView, { jobs, t }) : h(TasksView, { todos, taskTimes, t })))
+      active === 'files' ? h(FilesView, { files: item?.files ?? [], truncated: truncated.files ?? 0, t })
+        : active === 'failures' ? h(FailuresView, {
+          failures: item?.failures ?? [], truncated: truncated.failures ?? 0, titleOf: failureTitleOf ?? (() => null), t,
+        })
+          : active === 'jobs' ? h(JobsView, { jobs, t })
+            : h(TasksView, { tasks, truncated: truncated.tasks ?? 0, t })))
 }

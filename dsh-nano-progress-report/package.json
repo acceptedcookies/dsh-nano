@@ -1,6 +1,6 @@
 {
   "name": "dsh-nano-progress-report",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Per-session Progress workbench tab: execution timeline, type/status filter, tasks and jobs tracking.",
   "type": "module",
   "icon": "./icon.svg",

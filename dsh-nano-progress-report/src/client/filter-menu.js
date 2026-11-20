@@ -41,3 +41,15 @@ export function filterCounts(rows) {
   }
   return { types, statuses }
 }
+
+/**
+ * C0-05: menu offers only dimensions that currently exist. A token already in
+ * the query stays visible even at zero so the user can see and uncheck it.
+ * @param {readonly string[]} all - TYPES or STATUSES
+ * @param {Record<string, number>} counts - counts.types or counts.statuses
+ * @param {readonly string[]} selected - activeMenuTokens(query)
+ * @param {'type'|'status'} axis
+ */
+export function visibleMenuOptions(all, counts, selected, axis) {
+  return all.filter(value => (counts[value] ?? 0) > 0 || selected.includes(`${axis}:${value}`))
+}

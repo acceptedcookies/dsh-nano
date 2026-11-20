@@ -278,11 +278,11 @@ S1-01 并入 main
   - **完成判据**：三包全绿且 `check-*` 通过；开发站未被写、未被重启、未发模型消息；`S1-13 c)` 的文档提交已在分支上（见本节开头的偏差记录）
   - **验证映射**：`DNLS03X-T13` · **依赖**：`S1-01`–`S1-12`
   - **执行状态**：`complete` · **执行时间**：`2026-11-21T00:56Z` · **证据 / 备注**：三包 `npm test` 全绿：DNLS 487/487、DNK 73/73、DNT 272/272；`check-route-sensitivity` 99 路由 0 漂移、`check-feature-contract` 100 路由、`check-clean-lib` 104、`check-client-rules` 仅基线 1 warning；全程未跑 `dsh plugin`、未重启开发站、未发模型消息
-- [ ] `S2-01` — 一次镜像与三包构建
+- [x] `S2-01` — 一次镜像与三包构建
   - **落点 / 对象**：`scripts/build-profile.mjs`（经 `ctx.sandbox.confine`）、`profiles/kitesurf/profile.yaml:10-14`
   - **完成判据**：只在同一阶段内构建；记下镜像 digest 与三包 tarball SHA-256；不创建对象、不清场；无 `ctx.sandbox` 即失败关闭
   - **验证映射**：`DNLS03X-T20` · **依赖**：`S1-13`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-21T01:12Z` · **证据 / 备注**：镜像 `kitesurf-engine:39feadfb…-54e9326a17d8` 经宿主 confine 构建一次成功，实测 digest `sha256:5bab773211bf5a024ff29c6c59c55286288208630ab587f766b2cb42cf9ad568`，`--check` 返回 `ready:true`；三包 tarball SHA-256：[DNLS] `0f0935882d0a1e8673abba10f0dfa71b98ba8dd6d42221509032cb24a72ef5b8`、[DNK] `6d8deeb3f0e243a5330c1f5c5be5406486440d00ae2b887b3d26e05b9e99e844`、[DNT] `5528ace1cab4f3d285e041fb9aa8fe5e5c6c1d6388273326e1198d1b0c1165a3`（DNT 与旧记录一致）；未建对象、未清场
 - [ ] `S3-01` — 清场两个点名对象
   - **落点 / 对象**：`~/.dsh-dev/nano-local-sandbox/state/kitesurf/`、两个旧 UUID `7ef19658-39c7-43e7-8dc8-d387a45a9d83`、`75bfac14-8cd4-4978-a101-32cb7115d988`
   - **完成判据**：先核对绑定与挂载，容器证实不存在之后才删各自精确卷；台账与 `term.audit` 不删；半截即写「未清场」
@@ -364,8 +364,8 @@ S1-01 并入 main
 
 ### 8.5 当前状态与交接
 
-- **当前节点 / 已完成**：`S2-01` 待开工 / S1 全 13 项完成（`S1-01`–`S1-13`）
-- **下一动作**：S2-01，经宿主 `ctx.sandbox.confine` 用 `build-profile.mjs` 构建一次镜像与三包候选，并记录镜像 digest 与三个 tarball 的 SHA-256
+- **当前节点 / 已完成**：`S3-01` 待开工 / S1 全 13 项与 `S2-01` 完成
+- **下一动作**：S3-01，按 redesign todo `:76-78` 的顺序清场两个点名对象，再按 S3-02 只建一个新对象
 - **当前阻塞**：无
 - **待 owner / 外部决定**：U7 八张图的 P2 设计结论（到 `S4-02` 才需要）；桌面切换继续推迟，不需本轮处理
 - **最终交接目标**：`S6-02` 之后的工作树删除与 [业主] 验收

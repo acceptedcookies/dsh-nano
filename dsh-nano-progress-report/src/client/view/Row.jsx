@@ -2,7 +2,9 @@
  *  carries the chevron/indent/running-shimmer chrome; this module only supplies
  *  the leading glyph, the semantic title class, and the expanded payload.
  *  Row anatomy mirrors the Devin Progress view: glyph → summary → trailing
- *  relative time, with a failure mark when the step ended badly. */
+ *  56px time column (relative time, or a tail label like a turn reason when
+ *  the caller supplies `tail`). Detail expands to error/text/duration/job
+ *  and child steps — raw args, results and reasoning never render. */
 import React from 'react'
 import { DisclosureRow } from '@deepseek-ai/dsh-client-ui-primitives'
 import { oneLine } from '../args.js'
@@ -12,10 +14,7 @@ import { relTime } from '../time.js'
 const { createElement: h } = React
 
 const LABEL = {
-  args: 'detail.args',
-  result: 'detail.result',
   error: 'detail.error',
-  reasoning: 'detail.reasoning',
   duration: 'detail.duration',
 }
 
@@ -25,20 +24,9 @@ function DetailBody({ row, t }) {
   if (d.error !== undefined) parts.push(h('div', { key: 'e', className: 'npr-detail-line', 'data-field': 'error' },
     h('span', { className: 'npr-detail-label' }, t(LABEL.error)),
     h('span', { className: 'npr-detail-value' }, String(d.error))))
-  if (d.argsRaw) parts.push(h('div', { key: 'a', className: 'npr-detail-line', 'data-field': 'args' },
-    h('span', { className: 'npr-detail-label' }, t(LABEL.args)),
-    h('span', { className: 'npr-detail-value' }, String(d.argsRaw))))
-  if (d.resultText) parts.push(h('div', { key: 'r', className: 'npr-detail-line', 'data-field': 'result' },
-    h('span', { className: 'npr-detail-label' }, t(LABEL.result)),
-    h('span', { className: 'npr-detail-value' }, String(d.resultText))))
-  if (d.resultTruncated === true) parts.push(h('div', { key: 'rt', className: 'npr-detail-line', 'data-field': 'truncated' },
-    h('span', { className: 'npr-detail-label' }, t('detail.truncated').replace('{n}', String(d.resultLength)))))
   if (row.job !== undefined) parts.push(h('div', { key: 'j', className: 'npr-detail-line', 'data-field': 'job' },
     h('span', { className: 'npr-detail-label' }, t('detail.job')),
     h('span', { className: 'npr-detail-value' }, String(row.job.label ?? row.job.status))))
-  if (d.reasoning) parts.push(h('div', { key: 'q', className: 'npr-detail-line', 'data-field': 'reasoning' },
-    h('span', { className: 'npr-detail-label' }, t(LABEL.reasoning)),
-    h('span', { className: 'npr-detail-value' }, String(d.reasoning))))
   if (d.text) parts.push(h('div', { key: 't', className: 'npr-detail-line', 'data-field': 'text' },
     h('span', { className: 'npr-detail-value' }, String(d.text))))
   if (d.durationMs !== undefined) parts.push(h('div', { key: 'd', className: 'npr-detail-line', 'data-field': 'duration' },
@@ -58,11 +46,11 @@ function DetailBody({ row, t }) {
 
 /**
  * @param {{ row: object, now: number, t: Function, open: boolean,
- *   onToggle: Function, level?: 0|1 }} props
+ *   onToggle: Function, level?: 0|1, tail?: string|null }} props
  */
-export function Row({ row, now, t, open, onToggle, level = 0 }) {
+export function Row({ row, now, t, open, onToggle, level = 0, tail = null }) {
   const Icon = TYPE_ICON[row.type] ?? FALLBACK_ICON
-  const time = relTime(row.time, now, t)
+  const time = tail ?? relTime(row.time, now, t)
   return h('div', {
     className: 'npr-row',
     'data-npr': 'row',

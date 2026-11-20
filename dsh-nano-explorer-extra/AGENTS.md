@@ -41,7 +41,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 4. `git` 必须在跑宿主的那台机器的 PATH 上。浏览器里没有 git 不影响。状态栏读的是宿主上的仓库。
 5. 本包构建期依赖 `dsh-nano-ui`，声明为 `devDependencies` 的 `file:../packages/dsh-nano-ui`。`npm install`/`npm run build` 时解析这个相对路径；构建时它被打进 `lib/client.js`，运行中的页面不单独加载它。不要改这条依赖。tarball 只含构建产物，`dsh plugin add` 不再需要旁边的 `packages/` 目录。
 6. 本包还构建期依赖 `dsh-performance-review`，同样声明为 `devDependencies` 的 `file:`，约束同上。它被打进 `lib/client.js` 和 `lib/host.js` 两份产物；默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
-7. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。构建把它与本插件 19 条路由行的烤入常量表一起打进 `lib/host.js`；全部 web 路由经它注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
+7. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。构建把它与本插件 20 条路由行的烤入常量表一起打进 `lib/host.js`；全部 web 路由经它注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 
@@ -89,6 +89,7 @@ dsh plugin --profile web add <spec>
 「在终端中打开」：装了 dsh-nano-terminal 时在对话区 Nano 终端视图里开一个本地窗格，shell 落在该目录（文件行落其父目录）；未装时开原生工作台终端，原生 tab 不接受目录参数，shell 落在会话工作区根。检测走 cordis `ctx.get('nanoTerminal')`，不是 inject，加载顺序无关。
 
 | 顶栏新建文件或文件夹 | 先问名字，确认后才落盘 |
+| 文件树有焦点时 Cmd 或 Ctrl+V | 剪贴板里是 png、jpeg、gif 或 webp 时，写入当前选中的文件夹（选中的是文件则写入它的父目录，什么都没选则写入工作区根）。不询问名字，不覆盖已有文件，重名变成 `image-2` 这样的后缀。不是图片则什么都不做，也不会抢走对话框里的粘贴 |
 | 底部分支按钮 | 仓库视图：多车道彩色提交图（亮段=未推送、暗段=已推送）、工作树列表、刷新、拉取、推送、仓库设置（远端 / 署名 / SSH 三个分页，每项一行、按钮另起一行）。本地/远端分支在固定高度的分页面板内切换（与提交卡的筛选条同款）：本地页按「已检出（物理工作树）/仅本地 ref」分组，远端页标「refs/remotes 快照」组头；标题小字给「仓库 · 分支 · 上游 · 工作树数 · 远端快照时间」的定位说明，不含 ↓↑ 计数（那是提交卡的事）。远端行点击即 `checkout --track` 检出跟踪分支，已跟踪的行标徽章。「刷新」= `git fetch --all --prune` + 整仓重读（离线或凭证失败不遮蔽本地视图，错误照常上屏），标题栏 spin 期间禁用。切换分支先确认，成功后「当前」跟着变。状态栏的 `!` 会列出冲突路径，并在解决前禁用切换。卡片沉在文件区底部，不会跑到工作区外面 |
 | 底部提交 | 只看本地工作区：已暂存 / 未暂存 / 未跟踪 / 冲突。确认后 `git add --all` 再提交，筛选不会缩小范围。有冲突时按钮不可用。`Ctrl+Enter` 同样会提交。点一行在卡片里看该文件相对 HEAD 的差异；行尾箭头打开预览。这里没有提交图，也没有拉取 |
 | 分支卡片里的拉取 | `git pull --ff-only`。不能快进就失败并显示 Git 原文，不会自动产生合并提交 |
@@ -101,7 +102,7 @@ dsh plugin --profile web add <spec>
 
 用户没明确要求时，不要提交、拉取、切分支或删除。
 
-路由前缀 `/nano-explorer-extra`。请求带会话 id，路径相对该会话的工作目录。POST 正文是 JSON，最大 64KB。都有 `connection.requestRejection`。不要绕过文件页去批量改用户的仓库，除非用户要求的就是那个文件操作。
+路由前缀 `/nano-explorer-extra`。请求带会话 id，路径相对该会话的工作目录。POST 正文是 JSON。除 `/paste-image` 外最大 64KB；`/paste-image` 的正文上限是 12MB，解码后的图片不超过 8MB。都有 `connection.requestRejection`。不要绕过文件页去批量改用户的仓库，除非用户要求的就是那个文件操作。
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
@@ -118,6 +119,7 @@ dsh plugin --profile web add <spec>
 | POST | `/ssh-key` | `{ sessionId, keyPath }`。写本仓库 `core.sshCommand`：`ssh -i '<keyPath>' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`。`pull`/`push`/fetch 自动生效；`keyPath` 为空则 `--unset` 清回默认。路径不能含引号/反引号/换行 |
 | POST | `/checkout` | `{ sessionId, branch }`。分支名不能以 `-` 开头 |
 | POST | `/create-file` | `{ sessionId, directory, name }` |
+| POST | `/paste-image` | `{ sessionId, directory, name?, data }`。`data` 是图片的 base64。只接受 png、jpeg、gif、webp 的魔数，不信客户端自己报的类型。不覆盖已有文件。不收 svg，不把文字落成文件 |
 | POST | `/create-folder` | `{ sessionId, directory, name }` |
 | POST | `/rename` | `{ sessionId, path, name, kind }`。`kind` 为 `file` 或 `directory` |
 | POST | `/delete` | `{ sessionId, path, kind }`。不能删除工作区根 |

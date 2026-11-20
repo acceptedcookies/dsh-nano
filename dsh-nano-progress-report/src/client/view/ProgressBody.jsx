@@ -11,9 +11,8 @@ import {
   IconSlidersTwoOutlineRegular, Input, Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { applyFilter, isEmptyFilter, parseFilter } from '../filter.js'
-import { activeMenuTokens, filterCounts, toggleMenuToken } from '../filter-menu.js'
-import { STATUSES, TYPES } from '../constants.js'
-import { taskCompletionTimes } from '../task-times.js'
+import { activeMenuTokens, filterCounts, toggleMenuToken, visibleMenuOptions } from '../filter-menu.js'
+import { LEDGER_FACE_KEY, STATUSES, TYPES } from '../constants.js'
 import { perf } from '../perf.js'
 import { Row } from './Row.jsx'
 import { TasksSection } from './TasksSection.jsx'
@@ -84,10 +83,12 @@ export default function ProgressBody(props) {
   }, [ctx, sessionId])
   const sessionSnap = useExternal(sessionFace, [sessionFace])
 
-  const todosSource = useMemo(() => {
-    try { return sessionFace?.projections?.faceOf?.('todos') ?? null } catch { return null }
+  // The footer reads the same ledger view the model's read_progress serves:
+  // the newest full-tier work item carries tasks/files/failures/jobs.
+  const ledgerSource = useMemo(() => {
+    try { return sessionFace?.projections?.faceOf?.(LEDGER_FACE_KEY) ?? null } catch { return null }
   }, [sessionFace])
-  const todos = useExternal(todosSource, [todosSource])
+  const ledgerView = useExternal(ledgerSource, [ledgerSource])
 
   const jobsSource = useMemo(() => ctx.jobs?.state ?? null, [ctx])
   const jobsSnap = useExternal(jobsSource, [jobsSource])
@@ -114,14 +115,17 @@ export default function ProgressBody(props) {
     () => (isEmptyFilter(filter) ? rows : applyFilter(rows, filter)),
     [rows, filter],
   )
-  // Devi's Tasks rows carry a completion time; derive it from the event stream.
-  const taskTimes = useMemo(() => taskCompletionTimes(rows), [rows])
+  const currentItem = useMemo(
+    () => ledgerView?.items?.find(item => item?.tier === 'full') ?? null,
+    [ledgerView],
+  )
 
   const counts = useMemo(() => filterCounts(rows), [rows])
   const selectedTokens = useMemo(() => activeMenuTokens(query), [query])
   const menuItems = useMemo(() => [
     { type: 'label', id: 'label-status', text: t('filter.status') },
-    ...STATUSES.map(value => ({
+    // C0-05: zero-count dimensions hide; an already-selected token stays.
+    ...visibleMenuOptions(STATUSES, counts.statuses, selectedTokens, 'status').map(value => ({
       id: `status:${value}`,
       // The host menu's `shortcut` slot renders key caps (array), not a count;
       // fold the number into the label instead of abusing it.
@@ -129,18 +133,17 @@ export default function ProgressBody(props) {
     })),
     { type: 'separator', id: 'sep-1' },
     { type: 'label', id: 'label-type', text: t('filter.type') },
-    ...TYPES.map(value => ({
+    ...visibleMenuOptions(TYPES, counts.types, selectedTokens, 'type').map(value => ({
       id: `type:${value}`,
       label: `${t(`filter.type.${value}`)} (${String(counts.types[value] ?? 0)})`,
     })),
     { type: 'separator', id: 'sep-2' },
     { id: 'clear', label: t('filter.clearAll'), disabled: query === '' },
-  ], [counts, query, t])
+  ], [counts, query, selectedTokens, t])
 
   const hasMore = sessionSnap?.hasMore === true
   const loadingOlder = sessionSnap?.loadingOlder === true
   const jobs = jobsSnap?.rows?.[sessionId] ?? []
-  const todoItems = Array.isArray(todos) ? todos : []
   const setTasksField = (patch) => setTasks(current => ({ ...current, ...patch }))
 
   if (bindingError) {
@@ -228,6 +231,7 @@ export default function ProgressBody(props) {
               t,
               openKey,
               onRowToggle: toggleRow,
+              condensed: true,
             })))
           : h(AnimatedRows, {
             className: 'npr-rows',
@@ -253,8 +257,13 @@ export default function ProgressBody(props) {
       onCollapsed: value => setTasksField({ collapsed: value }),
       height: tasks.height,
       onResize: value => setTasksField({ height: value }),
-      todos: todoItems,
-      taskTimes,
+      item: currentItem,
       jobs,
+      // Borrow the timeline's action title for bash failures (T-O-16): the
+      // label is what the row already displays, never a new args render.
+      failureTitleOf: (callId) => {
+        const row = rows.find(entry => entry.detail?.callId === callId)
+        return row === undefined ? null : row.summary
+      },
     }))
 }

@@ -6,7 +6,8 @@ import { createWebRegistrar } from 'dsh-interface/host'
 import { BINDING_TABLE, PLUGIN } from '../../lib/bindings.js'
 import { checkoutBranch, commitAll, fetchAll, ignoredAmong, ignoredPathsOf, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readPathDiff, readStatus, writeRemote, writeAuthor, writeSshKey } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
-import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
+import { createFile, createFolder, moveEntry, pasteImage, removeEntry, rename } from './mutate.js'
+import { decodeImageData, PASTE_IMAGE_BODY_BYTES, writeExclusiveFile } from './paste-image.js'
 import { statisticsOf } from './stats.js'
 import { resolveExecutionWorld, worldCacheKey, assertBoundWorld } from './execution-world.js'
 
@@ -17,17 +18,37 @@ export const PREFIX = '/nano-explorer-extra'
 const MAX_BODY_BYTES = 64 * 1024
 
 /**
+ * Constant script. The destination path is argv, never interpolated.
+ * stdin is the base64 image. `wx` refuses to replace an existing file.
+ */
+const PASTE_WRITER_SCRIPT = [
+  "const { writeFileSync } = require('node:fs')",
+  'const chunks = []',
+  "process.stdin.on('data', chunk => chunks.push(chunk))",
+  "process.stdin.on('end', () => {",
+  '  try {',
+  "    const raw = Buffer.concat(chunks).toString('utf8')",
+  "    writeFileSync(process.argv[1], Buffer.from(raw, 'base64'), { flag: 'wx' })",
+  '  } catch (error) {',
+  '    process.stderr.write(String(error && error.code || error))',
+  '    process.exit(1)',
+  '  }',
+  '})',
+].join('\n')
+
+/**
  * Read a bounded JSON body.
  * @param req - inbound request.
+ * @param limit - byte cap. The shared routes stay at {@link MAX_BODY_BYTES}.
  * @returns the parsed object, or an empty object when the body is absent.
  * @throws when the body exceeds the cap or is not a JSON object.
  */
-async function jsonBody(req) {
+async function jsonBody(req, limit = MAX_BODY_BYTES) {
   const chunks = []
   let total = 0
   for await (const chunk of req) {
     total += chunk.length
-    if (total > MAX_BODY_BYTES) throw new Error('request body is too large')
+    if (total > limit) throw new Error('request body is too large')
     chunks.push(chunk)
   }
   if (total === 0) return {}
@@ -144,6 +165,64 @@ export async function runExternal(ctx, config, request) {
       if (outcome.exitCode !== 0) {
         const line = stderr.split(/\r?\n/u).map(item => item.trim()).find(item => item.length > 0)
         throw new Error(line ?? `${argv[0]} failed (${outcome.signal ?? outcome.exitCode})`)
+      }
+    } finally {
+      child.terminate()
+      await child.waitForExit().catch(() => {})
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Write image bytes after the workspace fence has already accepted the path.
+ *
+ * A full-access session, a host with no sandbox, and Windows write in process:
+ * `writeText` cannot store a PNG. A confined session spawns the same node
+ * binary under `sandbox.confine`, with the path only in argv and the bytes
+ * only on stdin, so a stricter policy still applies.
+ * @param ctx - host context.
+ * @param config - process limits.
+ * @param request - absolute path, bytes, policy, and the parent directory.
+ */
+async function writePastedBytes(ctx, config, request) {
+  const { path, bytes, sandboxPolicy: policy, cwd } = request
+  const sandbox = ctx.get('sandbox')
+  const direct = process.platform === 'win32'
+    || sandbox == null
+    || policy == null
+    || policy.mode === 'danger-full-access'
+  if (direct) {
+    await writeExclusiveFile(path, bytes)
+    return
+  }
+  const subprocess = ctx.get('subprocess')
+  if (subprocess == null) throw new Error('this deployment has no subprocess service')
+  const stop = new AbortController()
+  const timer = setTimeout(() => stop.abort(new Error('image write timed out')), config.gitTimeoutMs)
+  timer.unref?.()
+  try {
+    const command = [process.execPath, '-e', PASTE_WRITER_SCRIPT, '--', path]
+    const confined = (await sandbox.confine(command, policy, stop.signal)).argv
+    const child = subprocess.spawn({
+      argv: confined,
+      cwd,
+      signal: stop.signal,
+      graceMs: 5000,
+      stdio: {
+        stdin: { data: Buffer.from(bytes).toString('base64') },
+        stdout: { maxBytes: 1024 },
+        stderr: { maxBytes: 8192 },
+      },
+    })
+    try {
+      const outcome = await child.done
+      if (outcome.exitCode !== 0) {
+        const stderr = child.collected?.stderr?.readFrom(0)?.text ?? ''
+        const error = new Error(stderr.trim() || 'image write failed')
+        if (stderr.includes('EEXIST')) error.code = 'EEXIST'
+        throw error
       }
     } finally {
       child.terminate()
@@ -519,6 +598,29 @@ export function createRoutes(ctx, config) {
           name: body.name,
           sandboxPolicy: policy,
         })
+      },
+    },
+    /* One clipboard bitmap. The body cap is PASTE_IMAGE_BODY_BYTES, not the
+       shared 64KB: a screenshot does not fit in the other routes' envelope.
+       Bytes are sniffed; the client media type is ignored. */
+    '/paste-image': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req, PASTE_IMAGE_BODY_BYTES)
+        const { root, policy } = await scopeOf(ctx, body.sessionId)
+        const bytes = decodeImageData(body.data)
+        const directory = typeof body.directory === 'string' ? body.directory : ''
+        return pasteImage(fs(body.sessionId, root), {
+          workspaceRoot: root,
+          directory,
+          name: typeof body.name === 'string' ? body.name : '',
+          bytes,
+        }, (filePath, image) => writePastedBytes(ctx, config, {
+          path: filePath,
+          bytes: image,
+          sandboxPolicy: policy,
+          cwd: filePath.slice(0, filePath.lastIndexOf('/')) || '/',
+        }))
       },
     },
     '/create-folder': {

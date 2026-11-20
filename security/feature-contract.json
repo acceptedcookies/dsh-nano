@@ -260,6 +260,17 @@
     },
     {
       "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/paste-image",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 12582912
+      },
+      "responseShape": "200 {ok:true,data:{path,name}} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/create-folder",
       "methods": [
         "POST"

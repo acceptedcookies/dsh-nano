@@ -413,7 +413,11 @@ Lead：我已复核差异和回归用例。                  （对用户的答�
 
 ### 11.4 [DNPR]：按身份看同一段执行（C04、C06、C08）
 
-`conversation.view` 中的 Progress 与右侧 [dsh工作台] 的 Progress 沿用同一 `ProgressBody`，不新建两个日志库。根会话有 Fusion 事实才出现 `全部 / Lead / Sidekick` 分段控件，与原 `type:`/`status:` 文本过滤取交集。Chat 默认折叠执行细节；Progress 默认显示**交接组和执行行**。工作台适合并排查证：保留现有 Tasks/Jobs 抽屉，明确其作用域是根会话；主区域的 Progress 不凭空多出抽屉。切换角色只改视图，不切活跃 Session、不同步用户输入，也不改变另一处面板的滚动位置。
+`conversation.view` 中的 Progress 与右侧 [dsh工作台] 的 Progress 沿用同一 `ProgressBody`，不新建两个日志库。
+
+> DNPR01 已按 `T-O-13` 交付账本与 A/B/C 精简；`conversation.view` 仍按 R5 裁决不注册。
+
+根会话有 Fusion 事实才出现 `全部 / Lead / Sidekick` 分段控件，与原 `type:`/`status:` 文本过滤取交集。Chat 默认折叠执行细节；Progress 默认显示**交接组和执行行**。工作台适合并排查证：保留现有 Tasks/Jobs 抽屉，明确其作用域是根会话；主区域的 Progress 不凭空多出抽屉。切换角色只改视图，不切活跃 Session、不同步用户输入，也不改变另一处面板的滚动位置。
 
 **三个不同维度必须分栏。** 行首 glyph 仍表示 shell/file/tool 等事件类型；第二列是文字身份 `Lead` / `Sidekick`（人类始终标「用户」，普通子代理标「其他子代理」）；尾部 `StateDot` + 文字才表示运行/错误。Lead 用 `IconAgentPresetOutlineRegular`，Sidekick 用 `IconBranchOutlineRegular`，用户保留 `IconUserOutlineRegular`；同一行不为相同语义重复堆图标。沿用 [ProgressRow](../../../dsh-nano-progress-report/src/client/rows.js) 的 `role` 表达人类/工具/边界等行语义，**另从绑定得出 actor**，不把所有 `exec` 都归 Sidekick。窄栏省重复模型名而不省角色；详情显示当时的模型、effort、修订、成员和来源定位。
 

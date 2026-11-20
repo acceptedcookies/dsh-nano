@@ -1,6 +1,7 @@
 /** File and folder creation, plus renaming, each guarded by the workspace boundary. */
 
 import { absoluteOf, isLexicallyInside } from './listing.js'
+import { candidateNames, extensionFor, sniffImage, PASTE_IMAGE_MAX_BYTES } from './paste-image.js'
 
 /**
  * Run a filesystem mutation. POSIX hosts spawn the coreutils (mv/mkdir/rm)
@@ -122,6 +123,64 @@ export async function createFile(fs, request, signal) {
     throw translate(error, path)
   }
   return { path }
+}
+
+/**
+ * Whether a stat/lstat answer is a directory.
+ *
+ * The host provider reports `type`; a node `fs` stat used by tests reports
+ * `isDirectory()`. Either is enough.
+ * @param info - stat result, or undefined when the path is absent.
+ * @returns true when the entry is a directory.
+ */
+function isDirectory(info) {
+  if (info == null) return false
+  if (info.type === 'directory') return true
+  if (typeof info.isDirectory === 'function') return info.isDirectory()
+  return false
+}
+
+/**
+ * Write one clipboard image into a workspace folder.
+ *
+ * The destination is fenced the same way as {@link createFile}: lexical root,
+ * realpath, and no `.git` segment, on both the folder and the leaf. The host
+ * filesystem service cannot store binary (`writeText` is UTF-8 and rejects
+ * it), so the bytes go through `writeExclusive`, which must create the file
+ * without replacing an existing one. A name that is already taken is skipped;
+ * the next candidate is `stem-2.ext`.
+ * @param fs - filesystem provider.
+ * @param request - workspace root, parent directory, preferred name, and bytes.
+ * @param writeExclusive - creates the absolute path or throws `EEXIST`.
+ * @returns the created absolute path and basename.
+ */
+export async function pasteImage(fs, request, writeExclusive) {
+  const { workspaceRoot, directory, name, bytes } = request
+  if (typeof writeExclusive !== 'function') throw new Error('image write is unavailable')
+  if (bytes == null || bytes.length === 0) throw new Error('image is empty')
+  if (bytes.length > PASTE_IMAGE_MAX_BYTES) throw new Error('image is larger than 8MB')
+  const kind = sniffImage(bytes)
+  if (kind == null) throw new Error('clipboard data is not a png, jpeg, gif, or webp')
+  const ext = extensionFor(kind)
+  const parent = absoluteOf(workspaceRoot, typeof directory === 'string' ? directory : '')
+  await assertInside(fs, workspaceRoot, parent, undefined)
+  const parentInfo = await fs.lstat(parent).catch(() => undefined)
+  if (!isDirectory(parentInfo)) throw new Error('paste destination is not a folder')
+  for (const candidate of candidateNames(typeof name === 'string' ? name : '', ext)) {
+    const finalName = validateName(candidate)
+    const path = `${parent}/${finalName}`
+    await assertInside(fs, workspaceRoot, path, undefined)
+    const existing = await fs.lstat(path).catch(() => undefined)
+    if (existing !== undefined) continue
+    try {
+      await writeExclusive(path, bytes)
+      return { path, name: finalName }
+    } catch (error) {
+      if (error?.code === 'EEXIST' || error?.code === 'FS_NOT_OBSERVED') continue
+      throw translate(error, path)
+    }
+  }
+  throw new Error('too many pasted images in this folder')
 }
 
 /**

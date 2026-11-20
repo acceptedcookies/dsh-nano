@@ -19,6 +19,7 @@ const ZH = {
   'filter.status.running': '运行中',
   'filter.status.awaiting': '等待中',
   'filter.type.prompt': '提示',
+  'filter.type.schedule': '计划任务',
   'filter.type.goal': '目标',
   'filter.type.message': '消息',
   'filter.type.shell': '命令',
@@ -58,6 +59,11 @@ const ZH = {
 
   'drawer.tasks': 'Tasks',
   'drawer.jobs': 'Jobs',
+  'drawer.files': 'Files',
+  'drawer.failures': 'Failures',
+  'files.empty': '没有改动文件',
+  'failures.empty': '没有未恢复失败',
+  'panel.truncated': '另有 {n} 条未保留',
   'drawer.resize': '调整面板高度',
 
   'tasks.done': 'done',
@@ -85,6 +91,7 @@ const EN = {
   'filter.status.running': 'Running',
   'filter.status.awaiting': 'Awaiting',
   'filter.type.prompt': 'Prompts',
+  'filter.type.schedule': 'Scheduled',
   'filter.type.goal': 'Goals',
   'filter.type.message': 'Messages',
   'filter.type.shell': 'Shell',
@@ -124,6 +131,11 @@ const EN = {
 
   'drawer.tasks': 'Tasks',
   'drawer.jobs': 'Jobs',
+  'drawer.files': 'Files',
+  'drawer.failures': 'Failures',
+  'files.empty': 'No changed files',
+  'failures.empty': 'No unresolved failures',
+  'panel.truncated': '{n} more not retained',
   'drawer.resize': 'Resize panel',
 
   'tasks.done': 'done',

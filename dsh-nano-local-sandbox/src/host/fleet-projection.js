@@ -174,6 +174,17 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
     return !verdict.status && verdict.principal?.key === principal?.key ? verdict : null
   }
 
+  // Populate sampled usage only after all page observations have settled;
+  // another row's probe may outlive this reader's operator grant.
+  function finishRow(peer, entry, item) {
+    const current = entry.source.registry.get(item.sandboxId)
+    const verdict = current && stillAuthorized(peer, entry, current)
+    if (!verdict || (item.generation && current.binding?.generation !== item.generation)) return null
+    if (item.observedState !== 'running' || verdict.principal.operator !== true ||
+        verdict.principal.key !== current.principal) return item
+    return { ...item, lastMinute: entry.source.usage?.lastMinute?.(current) ?? null }
+  }
+
   /**
    * Project one row through the strict allowlist. Returns null when the
    * row stopped authorizing this principal or was replaced in flight —
@@ -227,10 +238,10 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
         entry.state !== 'ended' && entry.principal === again.principal?.key &&
         entry.generation === fresh.binding?.generation).length,
     }
-    if (!detail) return base
     const resources = ok && obs?.resources && typeof obs.resources === 'object'
       ? { cpus: obs.resources.cpus ?? null, memoryBytes: obs.resources.memoryBytes ?? null }
       : null
+    if (!detail) return { ...base, resources }
     // Operator-only plane: desired configuration and the applied receipt.
     // A bare read grant never discloses overrides, idle policy or the
     // verified digest — persisted values are cloned out of the ledger row,
@@ -368,10 +379,7 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
       return { envs: envs.flatMap(env => {
         const entry = visible.find(item => item.source.envId === env.envId)
         if (!entry) return []
-        const rows = env.rows.filter(item => {
-          const row = entry.source.registry.get(item.sandboxId)
-          return row && stillAuthorized(peer, entry, row) && (!item.generation || item.generation === row.binding?.generation)
-        })
+        const rows = env.rows.map(item => finishRow(peer, entry, item)).filter(Boolean)
         return [{ ...env, rows, complete: env.complete && rows.length === env.rows.length }]
       }) }
     }
@@ -414,9 +422,13 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
       livePeer(peer)
       const visible = new Set(visibleSources(peer).map(entry => entry.source.envId))
       const remaining = authorized.filter(({ entry, row }) => visible.has(entry.source.envId) && stillAuthorized(peer, entry, row))
-      const ids = new Set(remaining.map(({ entry, row }) => `${entry.source.envId}/${row.sandboxId}`))
-      return { envs: envs.filter(env => visible.has(env.envId)), rows: pageRows.filter(r => ids.has(`${r.envId}/${r.sandboxId}`)),
-        total: remaining.length, offset, limit, complete: complete && remaining.length === authorized.length }
+      const entries = new Map(remaining.map(({ entry, row }) => [`${entry.source.envId}/${row.sandboxId}`, entry]))
+      const rows = pageRows.map(r => {
+        const entry = entries.get(`${r.envId}/${r.sandboxId}`)
+        return entry ? finishRow(peer, entry, r) : null
+      }).filter(Boolean)
+      return { envs: envs.filter(env => visible.has(env.envId)), rows, total: remaining.length, offset, limit,
+        complete: complete && remaining.length === authorized.length && rows.length === pageRows.length }
     }
 
     if (capability === 'sandbox.inspect' || capability === 'sandbox.processes') {
@@ -447,7 +459,9 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
           detail.usage = await entry.source.usage.summary(row, window)
           const again = entry.source.registry.get(row.sandboxId)
           const recheck = again && authorize({ peer, envId: entry.source.envId, row: again, action: 'read', resolvePrincipal })
-          if (!again || recheck.status || recheck.principal?.key !== scoped.principal?.key ||
+          if (!again || recheck.status || recheck.principal?.operator !== true ||
+              recheck.principal.key !== scoped.principal.key || again.principal !== recheck.principal.key ||
+              !stillVisible(entry.source, recheck.principal) || again.stateVolume !== row.stateVolume ||
               again.binding?.generation !== row.binding?.generation || again.binding?.locator !== row.binding?.locator) {
             throw notFound()
           }

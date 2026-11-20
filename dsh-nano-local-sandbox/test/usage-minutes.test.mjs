@@ -75,7 +75,12 @@ test('DNLS03-T52 completed UTC slots, real zeros, weighted CPU, and holes surviv
     assert.deepEqual(s.states, { running: 6, stopped: 1, missing: 1, failed: 1 })
     assert.deepEqual(s.memory, { unit: 'bytes', valid: 5, expected: 9, mean: 60, peak: 200 })
     assert.deepEqual(s.cpu, { unit: 'core', valid: 3, expected: 9, mean: 170 / 180, peak: 2 })
+    assert.deepEqual(s.history.map(b => b.cpuCores), [null, 1, 2, null, null, null, null, null, 0])
+    assert.deepEqual(s.history.map(b => b.memoryBytes), [0, 100, 200, null, null, null, null, 0, 0])
+    assert.equal(s.history[3].at, T + 3 * M)
   }
+  assert.deepEqual(f.db.lastMinute(f.row), { at: T + 8 * M, memoryBytes: 0, cpuCores: 0 })
+  assert.equal(f.db.lastMinute({ ...f.row, binding: { ...f.row.binding, generation: 'other' } }), null)
   const missed = f.db.fleetMinute([f.row], T / M + 3)
   assert.deepEqual(missed.memory, { unit: 'bytes', contributors: 0, total: null })
   const latest = f.db.fleetMinute([f.row, { ...f.row, sandboxId: 'B' }])
@@ -110,6 +115,21 @@ test('no CPU deltas across generations or counter reversal; aged-out readings ar
   assert.equal(s.memory.mean, null)
   assert.equal(s.memory.expected, 43200)
   assert.throws(() => f.db.fleetMinute([f.row], T / M))
+})
+
+test('long windows have bounded, time-aligned bins, not inferred values for unsampled minutes', async t => {
+  const f = fixture(t)
+  await f.take(0, 0, 0, 0)
+  await f.take(1, 0, 60e6, 200)
+  f.time(720)
+  const s = f.db.summary(f.row, '24h')
+  assert.equal(s.history.length, 36)
+  assert.deepEqual(s.history[0], {
+    at: T, minutes: 20, memoryValid: 2, cpuValid: 1, memoryBytes: 100, cpuCores: 1,
+  })
+  assert.ok(s.history.slice(1).every(b => b.memoryBytes === null && b.cpuCores === null))
+  assert.equal(s.history.at(-1).at, T + 700 * M)
+  assert.equal(f.db.lastMinute(f.row), null)
 })
 
 test('the public interval starts at the earliest verified create, not the ledger mark', async t => {

@@ -150,19 +150,32 @@ export function openUsageMinutes({ root, envId, registry, observe, backend, cloc
     const expected = Math.max(0, hi - lo)
     const samples = range.all(scope.sandboxId, Math.max(born, lo - 1), hi)
     const states = { running: 0, stopped: 0, failed: 0, missing: expected }
+    // Bin only authorized, completed UTC minutes. Keep validity counts per
+    // metric: a hole in the chart is not a sample with a value of zero.
+    const stride = Math.max(1, Math.ceil(expected / 36))
+    const bins = Array.from({ length: Math.ceil(expected / stride) }, (_, i) => ({
+      at: (lo + i * stride) * MINUTE, minutes: Math.min(stride, expected - i * stride),
+      memoryValid: 0, cpuValid: 0, bytes: 0, coreMs: 0, ms: 0,
+    }))
     let memSlots = 0, memSum = 0, memPeak = 0, cpuSlots = 0, cpuPeak = 0, cpuCoreMs = 0, cpuMs = 0
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i]
       if (s.minute < lo) continue
+      const bin = bins[Math.floor((s.minute - lo) / stride)]
       states[s.state]++
       states.missing--
       if (s.state === 'running' && uint(s.memory_bytes)) {
+        bin.bytes += s.memory_bytes
+        bin.memoryValid++
         memSlots++
         memSum += s.memory_bytes
         memPeak = Math.max(memPeak, s.memory_bytes)
       }
       const cpu = rates(s, samples[i - 1])
       if (!cpu) continue
+      bin.coreMs += cpu.cores * cpu.elapsed
+      bin.ms += cpu.elapsed
+      bin.cpuValid++
       cpuSlots++
       cpuCoreMs += cpu.cores * cpu.elapsed
       cpuMs += cpu.elapsed
@@ -170,9 +183,25 @@ export function openUsageMinutes({ root, envId, registry, observe, backend, cloc
     }
     return {
       sandboxId: scope.sandboxId, window, end: end * MINUTE, source: 'backend.stats', states,
+      history: bins.map(({ at, minutes, memoryValid, cpuValid, bytes, coreMs, ms }) => ({
+        at, minutes, memoryValid, cpuValid,
+        memoryBytes: memoryValid ? bytes / memoryValid : null, cpuCores: ms ? coreMs / ms : null,
+      })),
       memory: { unit: 'bytes', expected, valid: memSlots, mean: memSlots ? memSum / memSlots : null, peak: memSlots ? memPeak : null },
       cpu: { unit: 'core', expected, valid: cpuSlots, mean: cpuMs ? cpuCoreMs / cpuMs : null, peak: cpuSlots ? cpuPeak : null },
     }
+  }
+
+  function lastMinute(row) {
+    const minute = slot(clock()) - 1
+    const [lo, hi] = lifetime(row)
+    if (minute < lo || minute >= hi) return null
+    const pair = range.all(row.sandboxId, Math.max(lo, minute - 1), minute + 1)
+    const s = pair.at(-1)
+    if (!s || s.minute !== minute || s.generation !== row.binding?.generation ||
+        s.segment !== segmentOf(row) || s.state !== 'running') return null
+    return { at: minute * MINUTE, memoryBytes: uint(s.memory_bytes) ? s.memory_bytes : null,
+      cpuCores: rates(s, pair.at(-2))?.cores ?? null }
   }
 
   // Scope is a list of already-authorized historical intervals, not the environment's whole registry.
@@ -205,5 +234,5 @@ export function openUsageMinutes({ root, envId, registry, observe, backend, cloc
     closing = Promise.resolve(flight).finally(() => db.close())
     return closing
   }
-  return { start, tick, summary, fleetMinute, close, get error() { return lastError } }
+  return { start, tick, summary, fleetMinute, lastMinute, close, get error() { return lastError } }
 }

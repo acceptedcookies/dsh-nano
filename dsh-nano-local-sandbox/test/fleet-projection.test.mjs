@@ -96,6 +96,29 @@ function principalOf(candidate) {
   return typeof candidate === 'function' ? candidate() : candidate
 }
 
+test('fleet instruments show sampled zero only to the current operator for their own object', async () => {
+  const mine = makeRow()
+  const other = makeRow({ principal: 'elsewhere' })
+  const used = []
+  const zero = { at: 1_700_000_000_000, cpuCores: 0, memoryBytes: 0 }
+  const local = makeSource('dev', [mine, other], { usage: { lastMinute(row) { used.push(row.sandboxId); return zero } } })
+  let operator = true
+  const { http } = setup({ sources: [local], principal: () => ({ key: 'owner', operator, canSee: true, canUse: true }) })
+  const list = await http('/nano-local-sandbox/sandboxes')
+  assert.equal(list.status, 200)
+  assert.deepEqual(list.body.rows.find(r => r.sandboxId === mine.sandboxId).lastMinute, zero)
+  assert.equal(Object.hasOwn(list.body.rows.find(r => r.sandboxId === other.sandboxId), 'lastMinute'), false)
+  assert.deepEqual(used, [mine.sandboxId])
+  local.observe = async row => {
+    if (row.sandboxId === other.sandboxId) operator = false
+    return liveObs(row)
+  }
+  const revoked = await http('/nano-local-sandbox/fleet')
+  assert.equal(revoked.status, 200)
+  assert.ok(revoked.body.envs[0].rows.every(r => !Object.hasOwn(r, 'lastMinute')))
+  assert.deepEqual(used, [mine.sandboxId])
+})
+
 function setup({ sources, principal = { key: 'owner', operator: true, canSee: true, canUse: true } } = {}) {
   let peer = ownerPeer()
   const connection = { admit: async () => ({ peer }) }

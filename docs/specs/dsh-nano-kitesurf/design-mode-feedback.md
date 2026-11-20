@@ -1,3 +1,5 @@
+> 冻结指针（2026-11-20）：现状判断以 [DNLS03-extra 问答](../../dsh-nano-local-sandbox/qna/DNLS03-extra-qna.md) §1 与 [补充阶段 S1–S6 跟踪](../../dsh-nano-local-sandbox/plan/todo.DNLS03.md) 为准；本文件正文保留为历史记录，不回改。
+
 # Cursor Design Mode 反馈记录
 
 检索日期：2026-11-13。只记这次实际读到的来源，不补写没打开的帖子。

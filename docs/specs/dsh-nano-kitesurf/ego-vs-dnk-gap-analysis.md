@@ -1,3 +1,5 @@
+> 冻结指针（2026-11-20）：现状判断以 [DNLS03-extra 问答](../../dsh-nano-local-sandbox/qna/DNLS03-extra-qna.md) §1 与 [补充阶段 S1–S6 跟踪](../../dsh-nano-local-sandbox/plan/todo.DNLS03.md) 为准；本文件正文保留为历史记录，不回改。
+
 # DNK vs ego 自动化体系：三方差距分析报告
 
 > 基线版本：DNK @ `68399dd`（dev/desktop 部署一致，e2e 23/23）。ego 侧 = ego lite 0.6.2.9（ego-browser CLI，Chromium 156 + Node 24）+ agent-browser 0.42.0（DNK 容器内嵌的同一 npm 包，Rust 原生 CLI）。

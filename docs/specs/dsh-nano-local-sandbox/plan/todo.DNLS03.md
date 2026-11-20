@@ -1,7 +1,7 @@
 # DNLS03 Action Todo — 受管 sandbox 控制面
 [执行计划](DNLS03-managed-sandbox-control.md) · [真相层](../qna/DNLS03-qna-truth.md) · [决策来源](../qna/DNLS03-qna.md)
 
-当前追踪：[`DNLS03/control-redesign` — 中性控制、原生工作台、内部工具与开发站验收](todo.DNLS03-control-redesign.md)。本轮验收以该清单逐项记录；前次开发站启停成功不代表新版设计通过。原发车附件不变。
+当前追踪：§8「补充阶段 S1–S6」。执行项、DAG、证据与终态都登记在该节；原 [`DNLS03/control-redesign`](todo.DNLS03-control-redesign.md) 清单转为它的 P2/P4 输入，`266bbda` 起的开发站启停成功不代表补充阶段通过。原发车附件（附件 A、附件 B）不变。
 
 ## 1. 目标与边界
 [业主] 本次 directive 是实现、测试及分组提交的授权，不是重新裁决 T-O-33 至 T-O-54。只交付计划 §2 的 Case 1/3 和点名的消费面；不改官方 pin、第三方与 local 协议，不做 Case 2/4、远端 provider、版本、tag 或发布。计划不依赖 workers 上线。
@@ -218,11 +218,11 @@ S1-01 并入 main
   - **完成判据**：`git merge --no-ff main` 只做一次；冲突只出现在三个账本并经仓内脚本重建；两条 check 0 漂移；无 rebase；这一笔不带问答与本计划
   - **验证映射**：`DNLS03X-T01` · **依赖**：无（S1 首项）
   - **执行状态**：`complete` · **执行时间**：`2026-11-20T15:16Z` · **证据 / 备注**：并入 `805df28`，三账本无冲突；`check-route-sensitivity` 100 路由 0 漂移、`check-feature-contract` 101 路由；三包 468/52/272 全绿；并入提交不含 `qna/` 与补充计划
-- [ ] `S1-02` — 跟踪节、旧文档指针、closure 两段横幅
+- [x] `S1-02` — 跟踪节、旧文档指针、closure 两段横幅
   - **落点 / 对象**：`plan/todo.DNLS03.md:4`、`plan/todo.DNLS03-control-redesign.md` 文首、`closure/DNLS03-closure.md:1` 与 `:7`、`docs/specs/dsh-nano-kitesurf/` 七份旧文档、DNK01 台账状态行与部署快照
   - **完成判据**：唯一的跟踪节存在，`todo.DNLS03.md:4` 指向本节；closure 两段横幅都换成一行且 §0 未改；七份旧文档只有文首指针；DNK01 只追加 `T-O-63/64/66/68` 的指针
   - **验证映射**：`DNLS03X-T02` · **依赖**：`S1-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-20T15:41Z` · **证据 / 备注**：closure `:1` 与 `:7` 两段横幅并成一行；redesign 文首加冻结指针；七份旧文档各加一行指针；DNK01 文头加四 ID 指针（状态行与部署快照并为一条：同一文件同一头块，重复两行无信息增量）；`todo.DNLS03.md:4` 改指本节
 - [x] `S1-03` — owner 可持有自己的沙箱终端
   - **落点 / 对象**：`src/host/object-authz.js:49-57`、`AGENTS.md:96`、`test/dnls03-journey.mega.test.mjs:117-123`、`src/client/i18n.js:329`
   - **完成判据**：`principalKey` 为 `owner` 且代次匹配时可 create/attach；非 owner kind 仍 403；journey 断言改为同代次允许并另留一条非 owner 拒绝；AGENTS 写明两个浏览器标签不是跨用户证明
@@ -377,6 +377,7 @@ S1-01 并入 main
 | `S4-01`–`S5-03` | `not-started` | 等新对象 | S3-02 通过后开工 | lead | 真机行失败则转 `S5-01` |
 | `S6-01`–`S6-02` | `not-started` | 等 main 上的比对 | `S5-03` 通过后开工 | lead | SHA 不一致即停 |
 | P2 设计结论 | `deferred` | 需 [业主] 看八张图 | `S4-02` 交付后请 [业主] 裁决 | [业主] | 图未齐 |
+| P4 实机 | `deferred` | 等新对象与 S2 制品 | `S3-02` 通过后按补充计划 §4.4 执行 | lead | 无对象时的半截不算完成 |
 
 ### 8.6 已启用插件
 

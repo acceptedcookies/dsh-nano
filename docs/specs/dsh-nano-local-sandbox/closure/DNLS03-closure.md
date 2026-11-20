@@ -1,10 +1,9 @@
-**原生工作台更新（2026-11-20 UTC）**：当前 `dsh-dev.local` 加载 `2ba1d4a`。[实机台账](../plan/todo.DNLS03-control-redesign.md)记录 Fusion 参考对照、原生排版实测、列表到对象的往返、设置弹窗、深浅色、390px 截图及页面加载制品。`3ed97b4` 的设备卡不是设计基线。未声称 NVX 执行、共享身份个人终端成功或测试对象实际重建/移除。开发站已有对象与卷未清场。
+**补充阶段进行中（2026-11-20 UTC）**：开发站已切到 `2ba1d4a` 的三包；S1–S6 的当前状态见 [`todo.DNLS03.md`](../plan/todo.DNLS03.md) 的「补充阶段 S1–S6」。以下 §0–9 是 `b3ad7e5` 的历史裁定与旧快照，不是当前部署状态。
 
 # [DNLS] DNLS03：受管沙箱控制面
 
 > Close-type：`close-with-known-issues`（本地交接记录，不是全量验收）。分支：`dnls03-managed-sandbox-control`。代码快照：`b3ad7e5`。日期：2026-11-19 UTC。
 
-**2026-11-20，真实 `dsh-dev.local` 已切换。** [业主] 指定的旧 `kitesurf-dev` 容器及其旧数据目录均已删除，未备份、未迁入新对象。开发 Web profile 从三个正式 tarball 加载 [DNLS]、[DNK]、[DNT]；Chrome 同源访问 `/contract` 的头与正文均为 `dnls.control/1`。以下 §0–9 是 `b3ad7e5` 的历史裁定，不是当前部署状态。
 
 | 实机验收项 | 结果与边界 |
 |---|---|

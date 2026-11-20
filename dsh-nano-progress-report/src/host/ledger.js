@@ -39,6 +39,7 @@ const PENDING_MAX = 64
 const TEXT_MAX_BYTES = 200
 const PATH_MAX_BYTES = 192
 const FILE_TOOLS = new Set(['write', 'edit', 'apply_patch'])
+const ITEM_KINDS = new Set(['user', 'goal', 'schedule'])
 
 // Cut on a codepoint boundary: decoding a split multi-byte sequence would
 // yield U+FFFD and could push the text past maxBytes, which parseState rejects.
@@ -137,13 +138,10 @@ function apply(state, event) {
     case 'turn/end': {
       const reason = typeof data.reason === 'string' ? data.reason : (data.reason?.kind ?? 'completed')
       const current = state.items[0]
-      if (current === undefined && Object.keys(state.approvals).length === 0) {
-        return { ...state, turnOpen: false }
-      }
+      // Without a work item no view fact moves; approvals only close.
+      if (current === undefined) return { ...state, turnOpen: false, approvals: {} }
       let next = touch({ ...state, turnOpen: false }, seq)
-      if (current !== undefined) {
-        next = patchItem(next, current, { ...current, endReason: reason, lastSeq: seq })
-      }
+      next = patchItem(next, current, { ...current, endReason: reason, lastSeq: seq })
       // Approvals pending at turn end are closed (T-O-10).
       if (Object.keys(next.approvals).length > 0) {
         const items = next.items.map(item => {
@@ -248,8 +246,10 @@ function apply(state, event) {
           }
         }
         if (failures.length > FAILURES_MAX) {
+          // Keep the most recently failed entries, in their original order.
           truncated += failures.length - FAILURES_MAX
-          failures = failures.slice(failures.length - FAILURES_MAX)
+          const keep = new Set(failures.slice().sort((a, b) => b.lastSeq - a.lastSeq).slice(0, FAILURES_MAX))
+          failures = failures.filter(f => keep.has(f))
         }
         patch = { ...patch, failures, truncated: { ...patch.truncated, failures: truncated } }
       } else {
@@ -404,7 +404,7 @@ const isText = value => typeof value === 'string' && Buffer.byteLength(value) <=
 function parseItem(value) {
   if (!value || typeof value !== 'object' || !isCount(value.id)
     || (value.tier !== 'full' && value.tier !== 'skeleton')
-    || typeof value.kind !== 'string' || (value.goalId !== undefined && typeof value.goalId !== 'string')
+    || !ITEM_KINDS.has(value.kind) || (value.goalId !== undefined && typeof value.goalId !== 'string')
     || !isCount(value.firstSeq) || !isCount(value.lastSeq)) {
     throw new Error('Invalid progress ledger item')
   }
@@ -445,13 +445,15 @@ function parseItem(value) {
       .map(f => ({
         tool: f.tool, key: f.key,
         path: typeof f.path === 'string' && Buffer.byteLength(f.path) <= PATH_MAX_BYTES ? f.path : null,
-        count: f.count, firstSeq: f.firstSeq, lastSeq: f.lastSeq, callId: String(f.callId ?? ''),
+        count: f.count, firstSeq: f.firstSeq, lastSeq: f.lastSeq,
+        callId: typeof f.callId === 'string' && isText(f.callId) ? f.callId : '',
       })),
     tasks: (value.tasks ?? []).filter(t => t && isText(t.content) && isCount(t.firstSeq))
       .map(t => ({
         content: t.content, status: t.status === 'completed' || t.status === 'in_progress' ? t.status : 'pending',
         firstSeq: t.firstSeq,
-        ...(t.completedSeq !== undefined ? { completedSeq: t.completedSeq, completedAt: t.completedAt } : {}),
+        ...(isCount(t.completedSeq) && Number.isFinite(t.completedAt)
+          ? { completedSeq: t.completedSeq, completedAt: t.completedAt } : {}),
       })),
     truncated: {
       files: isCount(value.truncated?.files) ? value.truncated.files : 0,
@@ -570,7 +572,9 @@ function view(state) {
   let v = stateViewCache.get(state)
   if (v !== undefined) return v
   const prev = viewByItems.get(state.items)
-  if (prev !== undefined && prev.asOfSeq === state.asOfSeq && prev.turnOpen === state.turnOpen
+  const turnMatters = state.items[0]?.tier === 'full'
+  if (prev !== undefined && prev.asOfSeq === state.asOfSeq
+    && (!turnMatters || prev.turnOpen === state.turnOpen)
     && prev.firstSeq === state.firstSeq && prev.inherited === state.inherited
     && prev.unattributed === state.unattributed && prev.cumulative === state.cumulative) {
     v = prev.view

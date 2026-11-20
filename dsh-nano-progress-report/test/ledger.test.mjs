@@ -194,8 +194,8 @@ test('inherited prefix cut: events below inherited are skipped; checkpoint round
   assert.strictEqual(ledger.apply(child, ev(5, 'user/message', { source: { kind: 'user' }, content: 'old' })), child)
   assert.strictEqual(ledger.apply(child, ev(9, 'turn/start')), child)
   // checkpoint cannot smuggle payloads
-  assert.throws(() => ledger.stateSchema.parse({ ...restored, items: [{ tier: 'full', id: 0, kind: 'u', title: '', firstSeq: 1, lastSeq: 1, files: 'nope' }] }))
-  assert.throws(() => ledger.stateSchema.parse({ ...restored, items: [{ tier: 'full', id: 0, kind: 'u', firstSeq: 1, lastSeq: 1, files: [], failures: [], tasks: [], truncated: { files: 0, failures: 0, tasks: 0 }, awaiting: 0, calls: 0, failedCalls: 0, evidence: ['x'] }] }),
+  assert.throws(() => ledger.stateSchema.parse({ ...restored, items: [{ tier: 'full', id: 0, kind: 'user', title: '', firstSeq: 1, lastSeq: 1, files: 'nope' }] }))
+  assert.throws(() => ledger.stateSchema.parse({ ...restored, items: [{ tier: 'full', id: 0, kind: 'user', firstSeq: 1, lastSeq: 1, files: [], failures: [], tasks: [], truncated: { files: 0, failures: 0, tasks: 0 }, awaiting: 0, calls: 0, failedCalls: 0, evidence: ['x'] }] }),
     /evidence/)
   assert.throws(() => ledger.stateSchema.parse({ ...restored, smuggle: 1 }), /state\.smuggle/)
 })
@@ -334,4 +334,54 @@ test('recovered failures are counted per item; unresolved stays in the view coun
   assert.equal(counts.failures, 3)
   assert.equal(counts.unresolved, 1)
   assert.equal(counts.recovered, 2)
+})
+
+test('failures cap keeps the most recently failed entries; item-less turns keep the view', () => {
+  let state = fold([prompt(1, 't')])
+  let seq = 2
+  const fail = path => {
+    state = fold([call(seq, `c${seq}`, 'edit', { file_path: path }), result(seq + 1, `c${seq}`, { failed: true, meta: { path } })], state)
+    seq += 2
+  }
+  for (let i = 0; i < 16; i += 1) fail(`/f${i}`)
+  fail('/f0')
+  fail('/f16')
+  const failures = state.items[0].failures
+  assert.equal(failures.length, 16)
+  assert.ok(failures.some(f => f.path === '/f0'), 'a re-failed early entry stays')
+  assert.ok(!failures.some(f => f.path === '/f1'), 'the least recently failed entry is dropped')
+  assert.equal(state.items[0].truncated.failures, 1)
+
+  const fresh = init()
+  const before = viewOf(fresh)
+  const idle = fold([ev(1, 'turn/start'), ev(2, 'approval/asked', { id: 'x' }), ev(3, 'turn/end', { reason: 'completed' })], fresh)
+  assert.strictEqual(viewOf(idle), before)
+  assert.deepEqual(idle.approvals, {})
+})
+
+test('checkpoint: unknown item kinds throw; malformed completion marks and oversized call ids drop', () => {
+  const state = fold([
+    prompt(1, 't'),
+    ev(2, 'todo/write', { todos: [{ content: 'a', status: 'completed' }] }),
+    call(3, 'c', 'edit', { file_path: '/x' }), result(4, 'c', { failed: true, meta: { path: '/x' } }),
+  ])
+  const raw = JSON.parse(JSON.stringify(state))
+  assert.throws(() => ledger.stateSchema.parse({ ...raw, items: [{ ...raw.items[0], kind: 'u' }] }), /Invalid progress ledger item/)
+  const item = raw.items[0]
+  const forged = {
+    ...raw,
+    items: [{
+      ...item,
+      tasks: [{ ...item.tasks[0], completedSeq: 'x'.repeat(4096), completedAt: {} }],
+      failures: [{ ...item.failures[0], callId: 'y'.repeat(4096) }],
+    }],
+  }
+  const restored = ledger.stateSchema.parse(forged).items[0]
+  assert.equal(restored.tasks[0].completedSeq, undefined)
+  assert.equal(restored.tasks[0].completedAt, undefined)
+  assert.equal(restored.failures[0].callId, '')
+  // a well-formed checkpoint keeps both
+  const kept = ledger.stateSchema.parse(raw).items[0]
+  assert.equal(kept.tasks[0].completedSeq, 2)
+  assert.equal(kept.failures[0].callId, 'c')
 })

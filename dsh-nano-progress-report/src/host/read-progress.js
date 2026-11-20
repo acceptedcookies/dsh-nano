@@ -16,9 +16,11 @@ export const READ_PROGRESS_NAME = 'read_progress'
 
 const clip = text => {
   const buf = Buffer.from(text, 'utf8')
-  return buf.length <= MAX_BYTES
-    ? buf.toString('utf8')
-    : `${buf.subarray(0, MAX_BYTES - 40).toString('utf8')}\n[truncated at 16 KiB]`
+  if (buf.length <= MAX_BYTES) return text
+  // Back off to a codepoint boundary so the cut never decodes to U+FFFD.
+  let end = MAX_BYTES - 40
+  while (end > 0 && (buf[end] & 0xc0) === 0x80) end -= 1
+  return `${buf.subarray(0, end).toString('utf8')}\n[truncated at 16 KiB]`
 }
 
 const taskDone = item => item.tier === 'full'

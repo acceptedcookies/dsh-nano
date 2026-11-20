@@ -284,6 +284,7 @@ var PENDING_MAX = 64;
 var TEXT_MAX_BYTES = 200;
 var PATH_MAX_BYTES = 192;
 var FILE_TOOLS = /* @__PURE__ */ new Set(["write", "edit", "apply_patch"]);
+var ITEM_KINDS = /* @__PURE__ */ new Set(["user", "goal", "schedule"]);
 var utf8Slice = (text, maxBytes) => {
   const buf = Buffer.from(String(text), "utf8");
   if (buf.length <= maxBytes) return buf.toString("utf8");
@@ -375,13 +376,9 @@ function apply(state, event) {
     case "turn/end": {
       const reason = typeof data.reason === "string" ? data.reason : data.reason?.kind ?? "completed";
       const current = state.items[0];
-      if (current === void 0 && Object.keys(state.approvals).length === 0) {
-        return { ...state, turnOpen: false };
-      }
+      if (current === void 0) return { ...state, turnOpen: false, approvals: {} };
       let next = touch({ ...state, turnOpen: false }, seq);
-      if (current !== void 0) {
-        next = patchItem(next, current, { ...current, endReason: reason, lastSeq: seq });
-      }
+      next = patchItem(next, current, { ...current, endReason: reason, lastSeq: seq });
       if (Object.keys(next.approvals).length > 0) {
         const items = next.items.map((item) => {
           const pend = Object.values(next.approvals).filter((id) => id === item.id).length;
@@ -482,7 +479,8 @@ function apply(state, event) {
         }
         if (failures.length > FAILURES_MAX) {
           truncated += failures.length - FAILURES_MAX;
-          failures = failures.slice(failures.length - FAILURES_MAX);
+          const keep = new Set(failures.slice().sort((a, b) => b.lastSeq - a.lastSeq).slice(0, FAILURES_MAX));
+          failures = failures.filter((f) => keep.has(f));
         }
         patch = { ...patch, failures, truncated: { ...patch.truncated, failures: truncated } };
       } else {
@@ -628,7 +626,7 @@ var isCount = (value) => Number.isSafeInteger(value) && value >= 0;
 var isPath = (value) => typeof value === "string" && Buffer.byteLength(value) <= PATH_MAX_BYTES;
 var isText = (value) => typeof value === "string" && Buffer.byteLength(value) <= TEXT_MAX_BYTES;
 function parseItem(value) {
-  if (!value || typeof value !== "object" || !isCount(value.id) || value.tier !== "full" && value.tier !== "skeleton" || typeof value.kind !== "string" || value.goalId !== void 0 && typeof value.goalId !== "string" || !isCount(value.firstSeq) || !isCount(value.lastSeq)) {
+  if (!value || typeof value !== "object" || !isCount(value.id) || value.tier !== "full" && value.tier !== "skeleton" || !ITEM_KINDS.has(value.kind) || value.goalId !== void 0 && typeof value.goalId !== "string" || !isCount(value.firstSeq) || !isCount(value.lastSeq)) {
     throw new Error("Invalid progress ledger item");
   }
   rejectUnknown(value, value.tier === "full" ? ALLOWED_ITEM_FULL : ALLOWED_ITEM_SKEL, `item ${value.tier}`);
@@ -678,13 +676,13 @@ function parseItem(value) {
       count: f.count,
       firstSeq: f.firstSeq,
       lastSeq: f.lastSeq,
-      callId: String(f.callId ?? "")
+      callId: typeof f.callId === "string" && isText(f.callId) ? f.callId : ""
     })),
     tasks: (value.tasks ?? []).filter((t) => t && isText(t.content) && isCount(t.firstSeq)).map((t) => ({
       content: t.content,
       status: t.status === "completed" || t.status === "in_progress" ? t.status : "pending",
       firstSeq: t.firstSeq,
-      ...t.completedSeq !== void 0 ? { completedSeq: t.completedSeq, completedAt: t.completedAt } : {}
+      ...isCount(t.completedSeq) && Number.isFinite(t.completedAt) ? { completedSeq: t.completedSeq, completedAt: t.completedAt } : {}
     })),
     truncated: {
       files: isCount(value.truncated?.files) ? value.truncated.files : 0,
@@ -815,7 +813,8 @@ function view(state) {
   let v = stateViewCache.get(state);
   if (v !== void 0) return v;
   const prev = viewByItems.get(state.items);
-  if (prev !== void 0 && prev.asOfSeq === state.asOfSeq && prev.turnOpen === state.turnOpen && prev.firstSeq === state.firstSeq && prev.inherited === state.inherited && prev.unattributed === state.unattributed && prev.cumulative === state.cumulative) {
+  const turnMatters = state.items[0]?.tier === "full";
+  if (prev !== void 0 && prev.asOfSeq === state.asOfSeq && (!turnMatters || prev.turnOpen === state.turnOpen) && prev.firstSeq === state.firstSeq && prev.inherited === state.inherited && prev.unattributed === state.unattributed && prev.cumulative === state.cumulative) {
     v = prev.view;
   } else {
     v = {
@@ -877,7 +876,10 @@ var OVERVIEW_MAX_LINES = 80;
 var READ_PROGRESS_NAME = "read_progress";
 var clip = (text) => {
   const buf = Buffer.from(text, "utf8");
-  return buf.length <= MAX_BYTES2 ? buf.toString("utf8") : `${buf.subarray(0, MAX_BYTES2 - 40).toString("utf8")}
+  if (buf.length <= MAX_BYTES2) return text;
+  let end = MAX_BYTES2 - 40;
+  while (end > 0 && (buf[end] & 192) === 128) end -= 1;
+  return `${buf.subarray(0, end).toString("utf8")}
 [truncated at 16 KiB]`;
 };
 var taskDone = (item) => item.tier === "full" ? item.tasks.filter((task) => task.status === "completed").length : 0;

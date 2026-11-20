@@ -134,7 +134,304 @@ Phase 7 提交 `b33a2a8`。Phase 8 的真实入口只注册 managed 分派器。
 - [ ] **K-07** 发布配对 — 合并后的 [DNK] 依赖 `dnls.control/1` 提供方；生产当前是 kitesurf 版 [DNK] 加旧 [DNLS]，两者须同批升级
 
 合并态软件回归（2026-11-20，本分支工作树）：[DNLS] 468/468、[DNK] 52/52、[DNT] 272/272、`dsh-host-route-guard` 15/15；`check-route-sensitivity`（99 路由 0 漂移）、`check-feature-contract`、`check-clean-lib`、`check-client-rules` 通过，`check-ui-rules` 仅告警（新增 1 条来自 [DNK] 打开失败对话框的修复按钮）。新增断言：受管能力不含 `dnls.res` 且其路由返回 `sandbox.provider_unsupported`；`proxy: false` 时 https 与 http 引用保持原地址。未部署开发站。
-## 附件：原始发车指令
+## 8. 补充阶段 S1–S6（`DNLS03&extra`）· action-todo
+
+> 文档性质：`action-todo`（DAG-guided execution）。执行对象是[执行计划](DNLS03-managed-sandbox-control.md)文末「DNLS03 补充计划 · W1 / W2 / W3（S1–S6）」。
+> 目标：按 S1 → S6 完成补充阶段的编码、测试、现场取证与文档回填。
+> In-scope：补充计划 §3 的 23 个工作项，编号 `S1-01`–`S1-13`、`S2-01`、`S3-01`–`S3-02`、`S4-01`–`S4-02`、`S5-01`–`S5-03`、`S6-01`–`S6-02`。
+> Out-of-scope：桌面切换与桌面回滚、删除镜像、新增裁决或新阶段名、另立计划文件、把问答或本补充计划打进合并提交。
+> 上游依据：[真相层](../qna/DNLS03-extra-qna-truth.md)（`T-O-55`–`T-O-71`，`FROZEN`；`NOT IMPLEMENTATION GRANT`）与补充计划 §2.4 的 CITE 表。
+> authority / owner：[业主]。授权边界只到真相层已写明的开发站五类（`T-O-65`）与生产六类（`T-O-70`）。模型消息至多 6 条，一次完整重放上限 20 条，不提高。
+> 基线：测量提交 `3e7a775`；分支 `dnls03-managed-sandbox-control`；开发站 `DSH_HOME=/Users/seanz/.dsh-dev`，`dsh` 为 `/Users/seanz/.dsh-runtimes/0.2.2-rc.5/bin/dsh`。
+> 文档状态：`active` · 执行状态：`in-progress`
+>
+> **跟踪节写在本文件、而不是 `todo.DNLS03&extra.md` 的理由**：发车 STEP.0 的工作项目名是 `DNLS03&extra`，但 `T-O-55` 与「单一真源」禁止另立阶段或计划文件，补充计划 `S1-02` 也明写「`todo.DNLS03.md` 增加『补充阶段 S1–S6』」。因此本节是唯一执行跟踪，发车原文见文末附件 B。
+>
+> **本轮开工前的工作树处置（WARN#1）**：开工前有 3 项未提交内容，都是文档，不含产品代码——补充计划的附录与修订，以及两份新增的 extra 问答。已在当前分支落一笔普通提交 `27c43a9`。该提交早于 `S1-01` 的并入提交；补充计划 `S1-13 c)` 要求「问答与补充计划放在合并提交之后的第一个普通提交」，两者的共同约束是「并入提交本身不携带问答与本计划」，一笔独立的文档提交满足这一点，此处按 WARN#1 的干净工作树要求先落盘，偏差已记录。
+
+### 8.1 核心脊
+
+- **目标与边界**：交付补充计划 S1–S6 的代码、测试、现场证据与三处文档回填。不改官方 pin，不新增裁决，不扩授权，不碰桌面与镜像删除。
+- **权威与决策**：已冻结的是[真相层](../qna/DNLS03-extra-qna-truth.md) 的 `T-O-55`–`T-O-71` 与 `R-1`–`R-12`。执行中若与冻结句冲突，停手回 [业主]，不在本节悄悄裁决。
+- **完成定义**：`S1-01`–`S6-02` 全部勾选，且每个勾选都带 `DNLS03X-T*` 的通过证据；W3 另需 [业主] 在 P2 行的结论。
+- **证据原则**：每项都要有四元组（操作号或命令、对象 ID 或文件、时间 UTC、结论）。「测试退出码 0」「文件在磁盘上」「页面能打开」都不能单独充当通过证据；夹具通过不是 W1 通过。
+- **执行回写**：每完成一项，立即把本节 `- [ ]` 改为 `- [x]`，并补齐执行状态、UTC 和证据引用。未做、失败、被阻塞的项保持未勾选并写明原因。
+- **交接原则**：被宿主依赖阻塞的项登记为宿主依赖，不冒充可用；不能完成的项写明下一动作与承接方。
+
+### 8.2 依赖关系 / DAG
+
+```text
+S1-01 并入 main
+  ├─▶ S1-02 跟踪与指针 ──────────────┐
+  ├─▶ S1-03 终端主体 ─┐              │
+  ├─▶ S1-04 写闸 ─────┴─▶ S1-05 四个工具
+  ├─▶ S1-06 公开引用 ──▶ S1-07 页签与 drivers
+  ├─▶ S1-08 删除 /res                │
+  ├─▶ S1-09 失败体                    │
+  ├─▶ S1-10 外壳回迁                  │
+  └─▶ S1-11 删旧脚本                  │
+                        S1-12 台账初值 ◀┘（需 S1-02 与全部代码项）
+                                  │
+                            S1-13 S1 出口（不部署）
+                                  │
+                            S2-01 一次构建
+                                  │
+                    S3-01 清场 ──▶ S3-02 新建一个
+                                  │
+                    S4-01 重放 ──▶ S4-02 八张截图
+                                  │
+                    S5-01 复跑 ──▶ S5-02 P2 返工 ──▶ S5-03 合入 main
+                                  │
+                    S6-01 生产六步 ──▶ S6-02 回填与删树
+```
+
+| 节点 | depends on | entry condition | exit condition | failure / blocked 路径 |
+|------|------------|-----------------|----------------|------------------------|
+| `S1-01` | 工作树干净 | 文档提交 `27c43a9` 已在分支上 | 并入提交只含并入与账本重建；两条 check 0 漂移 | 冲突出现在三个账本之外即停，不回退到 rebase |
+| `S1-02` | `S1-01` | 并入已完成 | 本节存在；`todo.DNLS03.md:4` 指向本节；closure 两段横幅换一行 | 旧正文被改写即判失败 |
+| `S1-03` | `S1-01` | — | owner 同代次可 create/attach；非 owner 仍拒 | 只改测试凑旧拒绝即判失败 |
+| `S1-04` | `S1-01` | — | 代次凭据认出宿主；读白名单放行；`relay.conns` 只计 agent | 把 `publishHealth` 当凭据、按 `:79` 改 Origin 即判失败 |
+| `S1-05` | `S1-03`、`S1-04` | — | 四个工具经 `tools.register`；接管中打开在 [DNLS] 分派器被拒 | 在桥上做拒绝、手改 `SKILL.md` 即判失败 |
+| `S1-06` | `S1-01` | — | 不再调用 `kitesurf()` / `openKitesurf` / 私有 kind | 地址编码 URL 或 token 即判失败 |
+| `S1-07` | `S1-06` | — | 引用页签锁定；`drivers` 只读；不可见即停全部定时请求 | 只删 `setInterval` 即判失败 |
+| `S1-08` | `S1-01` | — | `/res` 与 `res.*` 消失；无墓碑；隧道 hint 只在 `/open` | 留别名或墓碑即判失败 |
+| `S1-09` | `S1-01` | — | 内核失败带 `error`/`hint`；派发前只有 `errorId`；无 `incidentId` | 只断言「有 errorId」即判失败 |
+| `S1-10` | `S1-01` | — | nano-ui 不再导出外壳；U10 计数等于 DESIGN §10 | 去凑第二个使用方即判失败 |
+| `S1-11` | `S1-01` | — | 六条路径都不存在；`test:e2e` 消失 | 留别名即判失败 |
+| `S1-12` | `S1-02` 与全部 S1 代码项 | — | 点名行与普查行逐行有终态 | 留「开放」即判失败 |
+| `S1-13` | `S1-01`–`S1-12` | — | 三包 `npm test` 与 `check-*` 全绿；开发站未写、未重启、未发模型消息 | 任一红即停 |
+| `S2-01` | `S1-13` | 三包全绿 | 记下 digest 与三包 SHA；只经 confine 构建一次 | 无 `ctx.sandbox` 即失败关闭 |
+| `S3-01` | `S2-01` | — | 两个旧 UUID 的容器与精确卷都不在；审计与台账还在 | 任一步未证实即写「未清场」 |
+| `S3-02` | `S3-01` | — | 新 ID、新卷、挂载三者都对上；只剩一个受管对象卷 | 半截或保卷重建不得 PASS |
+| `S4-01` | `S3-02` | 安装 S2 候选 | 每条真机行各自通过；消息数 ≤ 20 | 失败行留到 `S5-01` |
+| `S4-02` | `S4-01` | 同一对象同一 SHA | 八张 `p2-*.png` 齐 | 没有 [业主] 结论时状态是 `未观察` |
+| `S5-01` | `S4-01` | 有失败行 | 只复跑失败行；对象 ID 不变 | 重跑未失败行刷绿即判失败 |
+| `S5-02` | `S5-01` | — | P2 只有一处结论；镜像 digest 不变 | 顺手改别的插件即判失败 |
+| `S5-03` | `S5-01`、`S5-02` | P2 已通过 | main 测试绿；重建 SHA 与 S5 复跑逐包一致 | 不一致即停，不得写回基准 |
+| `S6-01` | `S5-03` | SHA 已比对通过 | 五项只读验收通过；镜像仍在 | 留存目录删除后才失败即停手报告 |
+| `S6-02` | `S6-01` | — | 三处回填在删树之前写完 | 删树早于回填即判失败 |
+
+### 8.3 工作项清单
+
+- [ ] `S1-01` — 并入 main 并重建三个 security 账本
+  - **落点 / 对象**：本工作树；`security/route-sensitivity.json`、`security/feature-contract.json`、`security/perf-binding-ids.md`
+  - **完成判据**：`git merge --no-ff main` 只做一次；冲突只出现在三个账本并经仓内脚本重建；两条 check 0 漂移；无 rebase；这一笔不带问答与本计划
+  - **验证映射**：`DNLS03X-T01` · **依赖**：无（S1 首项）
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-02` — 跟踪节、旧文档指针、closure 两段横幅
+  - **落点 / 对象**：`plan/todo.DNLS03.md:4`、`plan/todo.DNLS03-control-redesign.md` 文首、`closure/DNLS03-closure.md:1` 与 `:7`、`docs/specs/dsh-nano-kitesurf/` 七份旧文档、DNK01 台账状态行与部署快照
+  - **完成判据**：唯一的跟踪节存在，`todo.DNLS03.md:4` 指向本节；closure 两段横幅都换成一行且 §0 未改；七份旧文档只有文首指针；DNK01 只追加 `T-O-63/64/66/68` 的指针
+  - **验证映射**：`DNLS03X-T02` · **依赖**：`S1-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-03` — owner 可持有自己的沙箱终端
+  - **落点 / 对象**：`src/host/object-authz.js:49-57`、`AGENTS.md:96`、`test/dnls03-journey.mega.test.mjs:117-123`、`src/client/i18n.js:329`
+  - **完成判据**：`principalKey` 为 `owner` 且代次匹配时可 create/attach；非 owner kind 仍 403；journey 断言改为同代次允许并另留一条非 owner 拒绝；AGENTS 写明两个浏览器标签不是跨用户证明
+  - **验证映射**：`DNLS03X-T03` · **依赖**：`S1-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-04` — 代次凭据、读白名单、relay 记账
+  - **落点 / 对象**：`profiles/kitesurf/mcp-bridge.mjs:731-797,933,1045-1076`、`src/host/backend-apple.js:484-498`
+  - **完成判据**：每代次随机凭据经 root/stdin/`env -i` 投放；宿主类接管中写成功；agent 类被拒且 `lastAt` 不变；无凭据 `POST /control` 403；换代后旧凭据失效；凭据不入任何响应；`relay.conns` 只计 agent 类；`:79` 的 `originAllowed` 不改
+  - **验证映射**：`DNLS03X-T04` · **依赖**：`S1-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-05` — 四个模型工具与打开前拒绝
+  - **落点 / 对象**：`index.js:19-35`（inject 增加 `tools`）、`src/host/routes.js:2`、`dsh-nano-kitesurf/lib/skill.js:38,82-83`、`src/skill/kitesurf-cdp/references/observability.md:26`
+  - **完成判据**：四个工具经 `tools.register` 注册、主体走组合层适配器、缺 `sandboxId` 拒绝、结果经同一 `redact`；接管中模型工具与 `/mcp` 在 [DNLS] 分派器以 `kitesurf.control.held` 拒绝且只有 `errorId`；HTTP `/open` 不受此闸；卸载即注销；skill 改真源后经构建生成 `skills/`
+  - **验证映射**：`DNLS03X-T05` · **依赖**：`S1-03`、`S1-04`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-06` — 公开对象引用硬切
+  - **落点 / 对象**：`src/client/index.jsx:393-394,835-838`、`src/client/i18n.js:102-103,319-320`、`src/host/terminal-resource.js:1-13`、[DNK] `src/client/index.js` 的 `patterns`/`canOpen` 注册处
+  - **完成判据**：`kitesurf()`、`openKitesurf`、`openWorkspaceHint`、`workspaceMissing`、`'dnt-sandbox-terminal'` 判断都消失；`dsh-resource://sandbox/<envId>/<sandboxId>` 校验与 `terminal-resource.js` 同组；地址不编码 URL、session、token；零/一/多候选与核实失败都有断言
+  - **验证映射**：`DNLS03X-T06` · **依赖**：`S1-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-07` — 引用页签、`drivers`、隐藏即停
+  - **落点 / 对象**：`profiles/kitesurf/profile.yaml:84-86`、`src/host/fleet-projection.js:222`、[DNK] `src/client/index.js:608-611,2030-2110,3058`
+  - **完成判据**：一引用一页签且同一引用复用；`drivers` 只读投影到 `sandbox.list`/`inspect` 与列表工具；不含 `cdp` 时显示原因且不发对象请求；`tab.visible` 为假时 `/status`、`/shot`、`/dom`、`/control` 全停，恢复可见刷新一次；`keepMounted` 保留；「两个引用两个页签」只作软件回归
+  - **验证映射**：`DNLS03X-T07` · **依赖**：`S1-06`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-08` — 退役 `/res` 与 HTML 代理改写
+  - **落点 / 对象**：`src/host/res-proxy.js`、`test/res-proxy.test.mjs`、`src/host/routes.js:39,57,1081,1493`、`src/host/dom-srcdoc.js:23,76-117`、`src/host/object-pages.js:9-13`、`src/host/error-catalog.js:46-54`、账本五处、[DNK] `src/client/index.js:1533`、`src/client/i18n.js:106,338`、`src/skill/**/routes.md:19`、`recovery-playbook.md:18`
+  - **完成判据**：路径与 `res.*` 九行消失且不留别名、开关或墓碑；srcdoc 只有真实地址；隧道域命中时 `/open` 成功体与失败体都带 hint 且状态码不变；账本少一行且 0 漂移；`proxied` 推断删除；HTML 提示改为静态投影说明；diagnostics 不再写「+ `/res`」
+  - **验证映射**：`DNLS03X-T08` · **依赖**：`S1-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-09` — 失败投影收口
+  - **落点 / 对象**：`src/host/object-pages.js:137`、`src/host/routes.js:1122-1128`、[DNK] `src/client/index.js:1436-1439`
+  - **完成判据**：至少一例内核失败同时带 `error` 与 `hint`，键只有 `ok`/`errorId`/`error`/`hint`；`error` 按 240 字截断；另有一例派发前失败只有 `errorId` 且无 `hint`；失败体无 `incidentId`、操作行仍有；[DNK] 的 `engineLog` 死分支与 `openErrorLoopback` 删除
+  - **验证映射**：`DNLS03X-T09` · **依赖**：`S1-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-10` — 外壳退回 [DNLS]
+  - **落点 / 对象**：`packages/dsh-nano-ui/src/shell.js:9,103`、`packages/dsh-nano-ui/index.js:18`、`src/client/index.jsx:12,762`、`docs/specs/dsh-nano-ui/DESIGN.md:153,210-216`
+  - **完成判据**：`WorkbenchShell`、`StatusDock` 移回 [DNLS] client；nano-ui 入口不再导出；DESIGN §6 删该行、§10 为自绘控件登记 `nano-ui-exempt`；U10 计数等于 §10 行数；不去凑第二个使用方
+  - **验证映射**：`DNLS03X-T10` · **依赖**：`S1-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-11` — 旧验收脚本整批删除
+  - **落点 / 对象**：[DNK] `scripts/e2e-ego.mjs`、`eval-design-mode.mjs`、`eval-ego-vs-dnk.mjs`、`eval-proto-mcp.mjs`、`test/e2e-script.test.mjs`、仓根 `scripts/gui-smoke-kitesurf.sh`、`package.json:11`、`RELEASE.md:97`
+  - **完成判据**：六条路径都不存在；`test:e2e` 消失；`RELEASE.md:97` 改写且不新增必跑项；不留别名；历史文档里的脚本名不回改
+  - **验证映射**：`DNLS03X-T11` · **依赖**：`S1-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-12` — 收口台账终态初值
+  - **落点 / 对象**：本节下方的终态表；`plan/todo.DNLS03.md:126` 的旧 `/res` 句不改，由新节取代
+  - **完成判据**：点名行（含 `K-02`）都有终态且属于四种允许值；普查行逐行复核后不留「开放」；可见行的证据栏写「待 S4」或「待 S6」
+  - **验证映射**：`DNLS03X-T12` · **依赖**：`S1-02` 与 `S1-03`–`S1-11`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S1-13` — S1 出口，仍不部署
+  - **落点 / 对象**：三包 `npm test` 与 `check-*`
+  - **完成判据**：三包全绿且 `check-*` 通过；开发站未被写、未被重启、未发模型消息；`S1-13 c)` 的文档提交已在分支上（见本节开头的偏差记录）
+  - **验证映射**：`DNLS03X-T13` · **依赖**：`S1-01`–`S1-12`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S2-01` — 一次镜像与三包构建
+  - **落点 / 对象**：`scripts/build-profile.mjs`（经 `ctx.sandbox.confine`）、`profiles/kitesurf/profile.yaml:10-14`
+  - **完成判据**：只在同一阶段内构建；记下镜像 digest 与三包 tarball SHA-256；不创建对象、不清场；无 `ctx.sandbox` 即失败关闭
+  - **验证映射**：`DNLS03X-T20` · **依赖**：`S1-13`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S3-01` — 清场两个点名对象
+  - **落点 / 对象**：`~/.dsh-dev/nano-local-sandbox/state/kitesurf/`、两个旧 UUID `7ef19658-39c7-43e7-8dc8-d387a45a9d83`、`75bfac14-8cd4-4978-a101-32cb7115d988`
+  - **完成判据**：先核对绑定与挂载，容器证实不存在之后才删各自精确卷；台账与 `term.audit` 不删；半截即写「未清场」
+  - **验证映射**：`DNLS03X-T30` · **依赖**：`S2-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S3-02` — 只建一个新对象
+  - **落点 / 对象**：同清场顺序末两步
+  - **完成判据**：新 ID、新卷、挂载三者都对上；该 profile 只剩一个受管对象卷且不是两个旧目录；保卷 `recreate` 不算这一步
+  - **验证映射**：`DNLS03X-T31` · **依赖**：`S3-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S4-01` — 一次完整真机重放（W1 → W2 → W3）
+  - **落点 / 对象**：`.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；场景 U1–U9、A1–A3 与 U7
+  - **完成判据**：每条真机行各自有通过结论，带操作号、对象 ID 或截图名、session 标识、UTC；模型消息至多 6 条；加载字节与 tarball 一致
+  - **验证映射**：`DNLS03X-T40` · **依赖**：`S3-02`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S4-02` — 八张设计截图
+  - **落点 / 对象**：同上目录，`p2-<视图>-<dark|light|390>.png`
+  - **完成判据**：八张齐、每张带参考行与 client SHA；不截会话内容；[业主] 的结论只写在 P2 行
+  - **验证映射**：`DNLS03X-T41` · **依赖**：`S4-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S5-01` — 只复跑失败行
+  - **落点 / 对象**：失败行的代码与本节对应工作项
+  - **完成判据**：不第二次清场；换镜像只在同一对象换代；agent 行复跑仍受同一 20 条上限；对象 ID 不变
+  - **验证映射**：`DNLS03X-T50` · **依赖**：`S4-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S5-02` — P2 设计返工
+  - **落点 / 对象**：`dsh-nano-local-sandbox/src/client/`
+  - **完成判据**：只改 [DNLS] client；只重装 [DNLS] 并重启开发 Web；镜像 digest 不变；与 agent 无关的返工不发模型消息
+  - **验证映射**：`DNLS03X-T51` · **依赖**：`S5-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S5-03` — 合入 main
+  - **落点 / 对象**：主工作区；不覆盖未提交文件
+  - **完成判据**：`--no-ff` 合入且提交信息为 `merge(dnls): …`；main 上三包测试与 `check-*` 绿；按合并提交重建的三包与 S5 复跑逐一比对一致；不一致即停且不写回基准
+  - **验证映射**：`DNLS03X-T52` · **依赖**：`S5-01`、`S5-02`，且 P2 已通过
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S6-01` — 生产 web 六步切换
+  - **落点 / 对象**：`~/.dsh`；三包目录、`~/.dsh/nano-local-sandbox/state/kitesurf/`、容器 `kitesurf`
+  - **完成判据**：使用 `S5-03` 的比对结果不再重建；删除前核对 ID/镜像/挂载；状态根无其他条目且 `term.audit` 仍在；一次 `plugin add` 三个 tarball 加一次重启；五项只读验收都通过后才删留存目录；不删镜像、不碰桌面
+  - **验证映射**：`DNLS03X-T60` · **依赖**：`S5-03`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+- [ ] `S6-02` — 回填并删除工作树
+  - **落点 / 对象**：本计划 §11、本节、`closure/DNLS03-closure.md` §0、三份 `AGENTS.md`
+  - **完成判据**：三处回填在删树之前写完；其余 closure 各节保留 `b3ad7e5` 快照并注明；三份 AGENTS 各加一行且不进 RELEASE 必跑项
+  - **验证映射**：`DNLS03X-T61` · **依赖**：`S6-01`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+
+### 8.4 验收与证据
+
+判定细则以补充计划 §8.1 的 Test-ID 表为准；本表只登记执行结果。
+
+| Check ID | 验证什么 | 方法 / 命令 / 产物 | 预期 | 实际结果 | 状态 |
+|----------|----------|--------------------|------|----------|------|
+| `DNLS03X-T01` | 并入后账本 0 漂移且并入提交不含问答 | `check-route-sensitivity`、`check-feature-contract` + `git show --stat` | 0 漂移；提交只含并入与三账本 | 未执行 | pending |
+| `DNLS03X-T02` | 跟踪节与指针；closure 两段横幅只剩一行 | 人工 `git diff -U0` | 旧正文未被改写 | 未执行 | pending |
+| `DNLS03X-T03` | owner 同代次 create/attach；非 owner 拒绝 | `node --test test/dnls03-journey.mega.test.mjs` | 两条断言都过 | 未执行 | pending |
+| `DNLS03X-T04` | 代次凭据、读白名单、`relay.conns` | 现有 bridge 测试 + 新增攻击用例 | 缺任一条不 PASS | 未执行 | pending |
+| `DNLS03X-T05` | 四个工具与三入口打开差异 | 三入口同夹具 | 拒绝在内核之前且只有 `errorId` | 未执行 | pending |
+| `DNLS03X-T06` | 地址语法与候选分支；源码无私有入口 | 资源地址单测 + 源码扫描 | 扫描 0 命中 | 未执行 | pending |
+| `DNLS03X-T07` | 页签复用、`drivers`、隐藏即停 | fork [DNK] pane 测试 | 四类定时请求全停 | 未执行 | pending |
+| `DNLS03X-T08` | `/res` 与代理改写消失；隧道 hint 不换状态码 | 改三份旧断言 + 账本 check | 无墓碑；hint 双向 | 未执行 | pending |
+| `DNLS03X-T09` | 失败投影白名单 | 投影单测 | 同时带 `error` 与 `hint` 的一例存在 | 未执行 | pending |
+| `DNLS03X-T10` | 外壳回迁与 U10 计数 | `check-ui-rules --plugin DNLS --json` | 计数等于 DESIGN §10 | 未执行 | pending |
+| `DNLS03X-T11` | 六条删除路径与 RELEASE 改写 | 存在性断言 | 六条都不在 | 未执行 | pending |
+| `DNLS03X-T12` | 台账逐行终态 | 人工逐行核对 | 无「开放」 | 未执行 | pending |
+| `DNLS03X-T13` | 三包测试与检查；未部署 | 三包 `npm test` + `check-*` | 全绿且日志写「未部署」 | 未执行 | pending |
+| `DNLS03X-T20` | 一次构建的 digest 与三包 SHA | `build-profile.mjs` 经 confine | 记录齐全；只一次 | 未执行 | pending |
+| `DNLS03X-T30` | 清场顺序与残留 | 现场核对容器、卷、审计 | 三者都被记录 | 未执行 | pending |
+| `DNLS03X-T31` | 新对象三要素 | 现场核对 | 新 ID + 新卷 + 挂载 | 未执行 | pending |
+| `DNLS03X-T40` | 每条真机行独立通过 | ego-browser + session 证据 | 逐行通过；消息 ≤ 20 | 未执行 | pending |
+| `DNLS03X-T41` | 八张截图 | 文件名 + SHA | 八张齐 | 未执行 | pending |
+| `DNLS03X-T50` | 只复跑失败行 | 对比 S4 记录 | 未失败行不重跑 | 未执行 | pending |
+| `DNLS03X-T51` | P2 返工不换镜像 | 返工前后 digest | digest 不变 | 未执行 | pending |
+| `DNLS03X-T52` | main 上的比对 | `npm test` + 重建 SHA 对比 | 逐包一致 | 未执行 | pending |
+| `DNLS03X-T60` | 生产六步与五项只读验收 | 现场核对 + contract 响应 | 五项都过；镜像仍在 | 未执行 | pending |
+| `DNLS03X-T61` | 回填先于删树 | 三处 diff 与删树时间 | 回填在前 | 未执行 | pending |
+
+- **状态词**：`pass | partial | pending | blocked | not-applicable`。后四类都要写原因。
+- **真实成功**：部署与 live 能力不得只凭 HTTP 状态、计数、health 或空结果抬绿；W1 只认 `dsh-dev` 上 U1 的通过。
+
+### 8.5 当前状态与交接
+
+- **当前节点 / 已完成**：`S1-01` 待开工 / 无
+- **下一动作**：在本工作树执行 `git merge --no-ff main`，只处理三个 security 账本
+- **当前阻塞**：无
+- **待 owner / 外部决定**：U7 八张图的 P2 设计结论（到 `S4-02` 才需要）；桌面切换继续推迟，不需本轮处理
+- **最终交接目标**：`S6-02` 之后的工作树删除与 [业主] 验收
+
+| Item / node | 当前状态 | 原因或证据 | 下一动作 | 责任 / 承接方 | 重开条件 |
+|-------------|----------|------------|----------|---------------|----------|
+| `S1-01`–`S1-13` | `not-started` | 工作树已干净，`27c43a9` 已落盘 | 依次执行 S1 | lead | 三条账本以外出现冲突 |
+| `S2-01`–`S3-02` | `not-started` | 等 S1 出口 | S1-13 通过后开工 | lead | 无 `ctx.sandbox` 时失败关闭 |
+| `S4-01`–`S5-03` | `not-started` | 等新对象 | S3-02 通过后开工 | lead | 真机行失败则转 `S5-01` |
+| `S6-01`–`S6-02` | `not-started` | 等 main 上的比对 | `S5-03` 通过后开工 | lead | SHA 不一致即停 |
+| P2 设计结论 | `deferred` | 需 [业主] 看八张图 | `S4-02` 交付后请 [业主] 裁决 | [业主] | 图未齐 |
+
+### 8.6 已启用插件
+
+#### `P-CTX` — Context / rebaseline
+
+- **触发理由**：补充计划跨多阶段，且有大量 file:line 锚点会随并入 main 漂移。
+- **本任务最低要求**：每次改代码前以 `git rev-parse HEAD` 与符号名重新对齐锚点；行号漂移以「路径 + 符号名」为准。
+- **实际记录**：基线 `3e7a775`，文档提交 `27c43a9`。
+- **证据 / 状态 / handoff**：并入 main 后重算一次锚点。
+
+#### `P-SCOPE` — Scope / no-sideload
+
+- **触发理由**：涉及容器特权、宿主路由、`.dsh` 生产目录与三个 security 账本。
+- **本任务最低要求**：容器 CLI 只在 `backend-apple.js`；构建只经 `ctx.sandbox.confine`；不硬编 base-url 或密钥；不跨插件建专有通道。
+- **实际记录**：S1 全程不部署；S6 只动 `~/.dsh` 的三包与状态根。
+- **证据 / 状态 / handoff**：越界即停手回 [业主]。
+
+#### `P-TEST` — Test ledger
+
+- **触发理由**：23 个 Test-ID 跨单测、契约、live 三层。
+- **本任务最低要求**：每个 PASS 都有四元组；夹具不等于真机；旧 e2e 与 E1–E15 不得移用。
+- **实际记录**：见 §8.4。
+- **证据 / 状态 / handoff**：见补充计划 §8.1。
+
+#### `P-LIVE` — Live / root
+
+- **触发理由**：S2–S6 要动容器、镜像、开发站与生产 `~/.dsh`。
+- **本任务最低要求**：只执行 `T-O-65` 五类与 `T-O-70` 六类；模型消息至多 6 条；S6 不外发模型消息。
+- **实际记录**：未开始。
+- **证据 / 状态 / handoff**：超出清单即停手另请 [业主]。
+
+#### `P-EXEC` — Execution log
+
+- **触发理由**：多阶段、多轮、计划与实际必有偏差。
+- **本任务最低要求**：append-only 记录偏差、first-red 与实际证据；偏差不藏。
+- **实际记录**：文档提交提前于并入提交的偏差已记在 §8 开头。
+- **证据 / 状态 / handoff**：随每阶段追加。
+
+#### `P-CLOSE` — Closure / handoff
+
+- **触发理由**：STEP.6 要求按 `closure模板` 更新 `closure/DNLS03-closure.md`。
+- **本任务最低要求**：S1 只换文首两段横幅；§0 留到 S6 之后一次改写；其余各节保留 `b3ad7e5` 快照。
+- **实际记录**：未开始。
+- **证据 / 状态 / handoff**：`S6-02`。
+
+### 8.7 Todo 自检
+
+- [x] 核心脊齐全；目标、边界、authority、完成定义与下一步没有歧义。
+- [x] DAG 的依赖、入口、出口、失败路径可读，且没有机械复制示例 block。
+- [x] 每个 Item 都是 checkbox，初始 `not-started` 且未勾选。
+- [ ] 每个 Item 的 Check-ID 都有实际证据（执行中逐项补齐）。
+- [x] 适用插件已启用，不适用插件未保留。
+- [x] 未把计划、可达性或计数写成完成；未完成项已有下一动作与承接方。
+
+## 附件 A：原始发车指令（directive-1）
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。
 
 ```text
@@ -189,3 +486,61 @@ STEP.8 - 回收子代理的代码审查报告, 在汇聚, 分析, 整理, 核实
 基于我的上述要求, 请立刻按照工作方法, 完成 [执行计划] 中全部的编码, 并进行测试与文档撰写工作
 > Step.0 中的 todo 需要保留完整业主发车指令, 并注册本 directive
 ```
+
+## 附件 B：补充阶段发车指令（directive-2）
+登记 ID：`DNLS03-managed-sandbox-control/directive-2`。以下为本次授权原文，引用此处，不另建授权副本。
+
+```text
+# 工作范围与目标
+仓库与分支: dsh-nano / main
+目标: 按照工作方法, 完成 [执行计划] 中全部的编码, 并进行测试与文档撰写工作
+
+## 本次工作涉及的编号
+| 工作插件 | 工作波次 | 工作项目 | 子项阶段 |
+|-------|-------|-------|-------|
+| `dsh-nano-local-sandbox` | N/A | `DNLS03&extra` | N/A |
+
+---
+## 原则
+WARN#1 - 开始 `编码` 执行前, 必须保证工作树干净。如果工作树中有未保存的内容, 你会对内容进行分析, 然后在当前分支下完成 commit
+WARN#2 - `业主授权`: 必须阅读 AGENTS.md 对应文档的指导下进行工作
+WARN#3 - 每一个 [执行计划] 中的 Phase 完成后, 你需要回到 todo.{工作项目}.md 中, 更新 checkbox 并登记执行状态, 不得在所有工作完成后一次性 tick 全部的 boxes
+INFO#1 - 必须按照 [执行计划] 中的 DAG 中明确要求, 构建执行顺序。在构建 todo 文档的时候, 必须严格进行顺序 block 限制
+INFO#2 - 工作波次是可选项。如果存在, 则下面的对应目录层级可以增加。如果没有指定, 则忽略这个层级
+INFO#3 - 代码审查子代理的的 `专用审查PROMPT` 以及审查产出的 review 报告, 需要落盘于 [.anote/reviews/{工作阶段}/{工作项目}] 文件夹
+INFO#4 - 按照 [执行计划], 在 `业主授权` 规范下, 有权对 workers 集群进行 live migration + rebuild + deploy , 并授权你在当前 `工作阶段` + `工作项目` 的框架内完成 digest 的创建与 SSOT 建立
+
+---
+## 上游必读文件
+**执行计划**: [.agents/worktrees/dnls03-managed-sandbox-control/docs/specs/dsh-nano-local-sandbox/plan/DNLS03-managed-sandbox-control.md]
+真相层: [.agents/worktrees/dnls03-managed-sandbox-control/docs/specs/dsh-nano-local-sandbox/qna/DNLS03-extra-qna-truth.md]
+
+---
+## 工作方法
+STEP.0 - 在 [执行计划] 位于的目录内, 在 `todo计划模板` 规范下创建 todo.{工作项目}.md 这个跟踪对象, 以 DAG + checkbox 的创建任务执行的跟踪文件. 你会将本次发车的完整指令, 作为附件, 注入在 todo 文档底部
+STEP.1 - 重新拉取本阶段使用的全部上游必读文件, 并对工作区域的代码进行梳理, 从结构上理解当前工作区域的性质, 业务流转的方向, 建立对当前业务的横向层面认知
+STEP.2 - 在建立横向认知后, 对重点代码的 git 历史进行回溯, 建立起从时间轴纵向上, 对焦点代码的历史沿革的认知。创建对 git HASH 映射关系的图谱
+STEP.3 - 从横向和纵向上建立执行关系后, 判断是否存在对应的 reference-anchor, 是否拥有正例/反例可供参考, 是否在 context/ 内存在对应的参考系可以进行借鉴
+STEP.4 - 在获得全部上下文后, 你会严格在 [工作目标] 的范围内, 按照 [执行计划] 中的详细要求, 进行完整, 完全的代码开发, 静态审查, 以及测试收口工作。在执行期间内每完成一个 Phase, 就对当前阶段对应的代码完成分组 commit
+STEP.5 - 全部编码工作完成后, 使用 `工作日志模板` 创建 [工作日志] 并回填至 [执行计划] 文档的底部
+STEP.6 - 按照 todo 中的安排, 完成全部的工作后, 按照 `closure模板` 要求, 输出本阶段 closure 文件至 [.agents/worktrees/dnls03-managed-sandbox-control/docs/specs/dsh-nano-local-sandbox/closure/DNLS03-closure.md]
+STEP.7 - 你会定制不少于3路从 **真相层对账**, **工作完成度**, **防测试假绿,防业务侧载** 等工作面的审查子代理, 对当前 todo 内已完成工作内容进行深度审查。审查开始前, 请为每一路子代理, 定制其专用的 Comprehensive 进攻性 `专用审查PROMPT`, 以便让子代理载入本次工作的 [执行计划] 后, 对我们本次执行展开深度, 专注, 全面地展开工作质量与数量的全面回顾
+STEP.8 - 回收子代理的代码审查报告, 在汇聚, 分析, 整理, 核实全部子代理的分析后, 执行更新或修复。修复完成后再次进入 测试↔修复 循环, 直至完成本工作项目的收口。并更新 closure 文件
+
+---
+## 使用到的模板
+`closure模板` = [.adocs/templates/closure.md]
+`工作日志模板` = [.adocs/templates/code-execution-log.md]
+`todo计划模板` = [.adocs/templates/action-todo.md]
+
+---
+# 发车指令
+基于我的上述要求, 请立刻按照工作方法, 完成 [执行计划] 中全部的编码, 并进行测试与文档撰写工作
+> Step.0 中的 todo 需要保留完整业主发车指令, 并注册本 directive
+> 界定好边界后，继续在 [.agents/worktrees/dnls03-managed-sandbox-control] 工作树内，完成 DNLS03&extra 的开发
+```
+
+### 附件 B 的边界登记
+- 工作项目名 `DNLS03&extra` 只作登记名；阶段名仍是 `DNLS03` 补充阶段，不另立阶段或计划文件（`T-O-55`）。
+- STEP.6 的目标路径在发车里写作 `closure/DNLS03-closure.md`，与仓内既有唯一终判文件一致，直接沿用。
+- 发车 `INFO#4` 的 live/rebuild/deploy 权限，按真相层收窄为 `T-O-65` 的开发站五类与 `T-O-70` 的生产六类；不因此新增第七类，也不覆盖桌面与镜像删除。

@@ -2,10 +2,21 @@ window.__ModuleLoader__.load({
 	id: "dsh-nano-local-sandbox",
 	factory: (require) => {
 var __dnlsClient = (() => {
+  var __create = Object.create;
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __getProtoOf = Object.getPrototypeOf;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+    get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+  }) : x)(function(x) {
+    if (typeof require !== "undefined") return require.apply(this, arguments);
+    throw Error('Dynamic require of "' + x + '" is not supported');
+  });
+  var __esm = (fn, res) => function __init() {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  };
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
@@ -18,7 +29,2386 @@ var __dnlsClient = (() => {
     }
     return to;
   };
+  var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+    // If the importer is in node compatibility mode or this is not an ESM
+    // file that has been converted to a CommonJS file using a Babel-
+    // compatible transform (i.e. "__esModule" has not been set), then set
+    // "default" to the CommonJS "module.exports" for node compatibility.
+    isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+    mod
+  ));
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // ../packages/dsh-nano-ui/src/version.js
+  var VERSION;
+  var init_version = __esm({
+    "../packages/dsh-nano-ui/src/version.js"() {
+      VERSION = "0.2.1";
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/layers.js
+  var NANO_LAYER, NANO_SPACE, kebab, LAYER_CSS;
+  var init_layers = __esm({
+    "../packages/dsh-nano-ui/src/layers.js"() {
+      NANO_LAYER = Object.freeze({
+        shellSlot: 20,
+        hostModal: 1e3,
+        hostPortal: 1100,
+        menu: 1100,
+        window: 1200,
+        windowRaised: 1210,
+        overlay: 10,
+        local1: 1,
+        local2: 2,
+        local3: 3,
+        local4: 4,
+        local5: 5,
+        local6: 6,
+        local7: 7
+      });
+      NANO_SPACE = Object.freeze([4, 8, 12, 16, 20, 24]);
+      kebab = (name) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+      LAYER_CSS = `:root {
+${Object.entries(NANO_LAYER).map(([name, value]) => `  --nano-layer-${kebab(name)}: ${value};`).join("\n")}
+${NANO_SPACE.map((value, index) => `  --nano-space-${index + 1}: ${value}px;`).join("\n")}
+}`;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/styles.js
+  var NANO_STYLES;
+  var init_styles = __esm({
+    "../packages/dsh-nano-ui/src/styles.js"() {
+      init_layers();
+      init_version();
+      NANO_STYLES = `/* dsh-nano-ui@${VERSION} */
+${LAYER_CSS}
+[data-nano-scheme="light"] { color-scheme: light; }
+[data-nano-scheme="dark"] { color-scheme: dark; }
+
+/* \u2500\u2500 main-window dialog (NanoDialog over the host Modal) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.nano-dialog-card { color: var(--dsw-alias-label-primary); }
+.nano-dialog-card.nano-dialog-w-480 { width: min(480px, 100%); }
+.nano-dialog-card.nano-dialog-w-560 { width: min(560px, 100%); }
+.nano-dialog-card.nano-dialog-w-720 { width: min(720px, 100%); }
+.nano-dialog-body { display: flex; flex-direction: column; gap: var(--nano-space-2); min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.nano-dialog-error { margin: var(--nano-space-2) 0 0; font-size: var(--nano-desc-size, inherit); color: var(--dsw-alias-state-error-primary); }
+/* The host Button has no danger variant: keep the outline metrics, paint the error state. */
+.nano-modal-action.nano-modal-danger {
+  color: var(--dsw-alias-state-error-primary);
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width) var(--dsw-alias-state-error-primary);
+  transition: background-color .12s ease, color .12s ease, box-shadow .12s ease;
+}
+@media (hover: hover) {
+  .nano-modal-action.nano-modal-danger:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+    color: var(--dsw-alias-state-error-secondary);
+    box-shadow: inset 0 0 0 var(--dsh-hairline-width) var(--dsw-alias-state-error-secondary);
+  }
+}
+
+/* \u2500\u2500 window overlay (NanoWindowDialog) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+   Positioned against the owner container; the owner layer may be pointer-events:none,
+   so the overlay turns hit-testing back on. */
+.nano-overlay { position: absolute; inset: 0; z-index: var(--nano-layer-overlay); box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; padding: var(--nano-space-3); pointer-events: auto;
+  font-family: var(--nano-font-family, inherit); font-size: var(--nano-font-size, inherit); line-height: var(--nano-line-height, inherit); }
+.nano-overlay-mask { position: absolute; inset: 0; background: var(--dsw-alias-bg-mask-1); border-radius: inherit; }
+.nano-wdlg { position: relative; box-sizing: border-box; display: flex; flex-direction: column; gap: var(--nano-space-3);
+  width: min(380px, 100%); max-height: 100%; padding: var(--nano-space-5); outline: none;
+  background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary);
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg);
+  box-shadow: var(--dsw-elevation-prominent); }
+.nano-wdlg-head { display: flex; align-items: center; justify-content: space-between; gap: var(--nano-space-2); }
+.nano-wdlg-title { margin: 0; font-size: var(--nano-title-size, 1.1em); font-weight: 600; }
+.nano-wdlg-desc { margin: 0; font-size: var(--nano-desc-size, inherit); color: var(--dsw-alias-label-secondary); }
+.nano-wdlg-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--nano-space-2); overflow-y: auto; overscroll-behavior: contain; }
+.nano-wdlg-foot { display: flex; justify-content: flex-end; gap: var(--nano-space-2); }
+.nano-wdlg button { font-family: inherit; }
+
+/* \u2500\u2500 menus (host Menu) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.nano-anchor { position: absolute; z-index: var(--nano-layer-menu); width: 0; height: 0; }
+.nano-cap-120 { max-height: 120px; }
+.nano-cap-160 { max-height: 160px; }
+.nano-cap-200 { max-height: 200px; }
+.nano-cap-240 { max-height: 240px; }
+.nano-cap-320 { max-height: 320px; }
+.nano-cap-400 { max-height: 400px; }
+.nano-cap-480 { max-height: 480px; }
+
+/* \u2500\u2500 panels behind a SegmentedControl (NanoTabs) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.nano-panes { display: flex; flex-direction: column; gap: var(--nano-space-2); height: 100%; min-height: 0; }
+.nano-pane { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.nano-pane[hidden] { display: none; }
+
+/* \u2500\u2500 toolbar / empty state / window shell \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.nano-toolbar { display: flex; align-items: center; gap: var(--nano-space-1); min-height: 36px; padding: 0 var(--nano-space-2);
+  border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l1); }
+.nano-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--nano-space-2);
+  padding: var(--nano-space-6); text-align: center; color: var(--dsw-alias-label-secondary); }
+.nano-empty-icon { display: inline-flex; color: var(--dsw-alias-label-tertiary); }
+.nano-empty-title { margin: 0; color: var(--dsw-alias-label-primary); font-weight: 600; }
+.nano-empty-desc { margin: 0; }
+.nano-window { position: relative; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary);
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel);
+  box-shadow: var(--dsw-elevation-panel); }
+.nano-window-floating { position: fixed; z-index: var(--nano-layer-window); }
+.nano-window-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.nano-window-body { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+/* Generic panel skeleton (\xA76.3): scrollable layout, sections, fact grid. */
+.nano-panel { box-sizing: border-box; block-size: 100%; min-block-size: 0; overflow: auto;
+  padding: var(--nano-space-3); color: var(--dsw-alias-label-primary); overflow-wrap: anywhere;
+  font: var(--dsw-font-s-14); }
+.nano-panes > .nano-toolbar { flex: none; flex-wrap: wrap; font: var(--dsw-font-xs-13); }
+.nano-panel-header, .nano-panel-section { display: grid; gap: var(--nano-space-2); margin-block-end: var(--nano-space-3); }
+.nano-panel-header h2, .nano-panel-section h3 { margin: 0; font: var(--dsw-font-s-14); font-weight: 500; }
+.nano-panel-header p { margin: 0; color: var(--dsw-alias-label-secondary); }
+.nano-panel-kicker { font-size: var(--nano-desc-size, inherit); }
+.nano-panel-section { padding-block: var(--nano-space-2); font: var(--dsw-font-s-14); }
+.nano-panel-section > p { margin: 0; }
+.nano-panel th { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.nano-panel-section > pre { min-inline-size: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.nano-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--nano-space-2); margin: 0; }
+.nano-facts dt { color: var(--dsw-alias-label-secondary); }
+.nano-facts dd { margin: 0; font-weight: 500; }
+/* Card surface for a fact block. Host has no bordered card; layer-2 on the base, hairline, radius-lg. */
+.nano-card { box-sizing: border-box; padding: var(--nano-space-3); background: var(--dsw-alias-bg-layer-2);
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); }
+/* Label on the left, control on the right, hairline between rows. */
+.nano-split { display: flex; align-items: center; justify-content: space-between; gap: var(--nano-space-2); min-height: 32px;
+  border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3); }
+.nano-split-label { color: var(--dsw-alias-label-primary); }
+.nano-split-control { flex: none; }
+/* Usage track: 3px rail, fill only when a measurement exists. */
+.nano-meter { display: grid; gap: 4px; }
+.nano-meter-label { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+.nano-meter-track { display: block; height: 3px; background: var(--dsw-alias-border-l3); }
+.nano-meter-fill { display: block; height: 3px; background: var(--dsw-alias-state-business-primary); }
+.nano-table { width: max-content; max-width: 100%; border-collapse: collapse; }
+.nano-table th, .nano-table td { padding: 4px 16px 4px 0; text-align: left; white-space: nowrap; font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-secondary); font-weight: 400; }
+.nano-table th { color: var(--dsw-alias-label-tertiary); border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3); }
+.nano-panel .nano-toolbar { flex-wrap: wrap; }
+.nano-panel .nano-panes { height: auto; }
+.nano-panel .nano-pane { overflow: visible; }
+@media (pointer: coarse) {
+  .nano-panel input,
+  .nano-facts dt,
+  .nano-facts dd { font-size: max(1em, 16px); }
+  .nano-facts dd { font-weight: 500; }
+}
+
+/* Workbench shell. Heights match the measured design-mode pane: bar 38px,
+   drawer 216px, status 26px. Tokens only; no card fill on the body. */
+.nano-shell { position: relative; box-sizing: border-box; display: flex; flex-direction: column; height: 100%; min-height: 0;
+  color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); font: var(--dsw-font-xxs-12); }
+.nano-shell-bar { position: relative; z-index: var(--nano-layer-local3); box-sizing: border-box; display: flex; flex: none; align-items: center;
+  gap: var(--nano-space-2); height: 38px; padding: 5px 6px; border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3); }
+/* DNK .nks-nav-toggle: one 28px pill, icon+label, markdown-tag fill, 4px inset so the left edge meets the host tab. */
+.nano-shell-toggle { display: inline-flex; flex: none; align-items: center; gap: 5px; height: 28px; margin-left: 4px; padding: 0 10px;
+  border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-markdown-tag); color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12); font-size: var(--dsh-content-font-size-secondary, 13px); white-space: nowrap; cursor: pointer; }
+.nano-shell-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.nano-shell-toggle[aria-pressed="true"] { background: color-mix(in srgb, var(--dsw-alias-link) 14%, var(--dsw-alias-markdown-tag)); }
+/* DNK .nks-toolbar-tail / .nks-tool: 28\xD728 seats, 8px pitch, under the host \u5206\u680F/\u5168\u5C4F/\u6536\u8D77 cluster. */
+.nano-shell-tail { display: flex; flex: none; align-items: center; gap: 8px; }
+.nano-shell-tool { width: 28px; height: 28px; display: inline-flex; flex: none; align-items: center; justify-content: center; padding: 0;
+  border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.nano-shell-tool:hover:not(:disabled) { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.nano-shell-tool[aria-pressed="true"] { color: var(--dsw-alias-label-primary); background: color-mix(in srgb, var(--dsw-alias-link) 18%, transparent); }
+.nano-shell-tool:disabled { opacity: .45; cursor: default; }
+.nano-shell-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--dsw-font-xs-13); }
+.nano-shell-gap { flex: auto; }
+.nano-shell-body { flex: auto; min-height: 0; overflow: auto; }
+.nano-drawer { position: absolute; z-index: var(--nano-layer-local4); top: 44px; left: 10px; bottom: 36px; width: 216px; box-sizing: border-box;
+  display: flex; flex-direction: column; min-height: 0; background: var(--dsw-alias-bg-layer-2);
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg);
+  box-shadow: var(--dsw-elevation-prominent); transform: translateX(calc(-100% - 12px)); visibility: hidden;
+  transition: transform var(--ds-transition-duration-slow, .32s) var(--ds-ease-in-out, ease), visibility 0s linear var(--ds-transition-duration-slow, .32s); }
+.nano-drawer[data-nano-drawer-state="open"] { transform: none; visibility: visible; transition: transform var(--ds-transition-duration-slow, .32s) var(--ds-ease-in-out, ease); }
+@starting-style { .nano-drawer[data-nano-drawer-state="open"] { transform: translateX(calc(-100% - 12px)); } }
+@media (prefers-reduced-motion: reduce) { .nano-drawer, .nano-drawer[data-nano-drawer-state="open"] { transition: none; } }
+/* DNK .nks-nav-head: 30px, hairline under it, so the title is not the first row. */
+.nano-drawer-head { display: flex; flex: none; align-items: center; height: 30px; padding: 0 10px; border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-11); }
+.nano-drawer-list { flex: auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--nano-space-1); }
+/* DNK .nks-nav-tab: one row, name ellipsizes, current row is its own markdown-tag plate. */
+.nano-drawer-row { display: flex; align-items: center; gap: 7px; width: 100%; box-sizing: border-box; min-height: 30px; margin: 0; padding: 4px 8px;
+  border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); text-align: left; cursor: pointer; }
+.nano-drawer-row:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.nano-drawer-row[aria-current="page"] { background: var(--dsw-alias-markdown-tag); color: var(--dsw-alias-label-primary); }
+.nano-drawer-mark { display: inline-flex; flex: none; }
+.nano-drawer-copy { display: flex; flex-direction: column; flex: auto; min-width: 0; }
+.nano-drawer-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nano-drawer-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+.nano-status { position: relative; z-index: var(--nano-layer-local3); flex: none; display: flex; align-items: center; gap: var(--nano-space-2);
+  height: 26px; padding: 0 10px; border-top: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
+  font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-tertiary); }
+.nano-status-text { flex: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nano-status-actions { flex: none; display: flex; align-items: center; gap: var(--nano-space-1); }
+.nano-status-btn { height: 20px; padding: 0 8px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent;
+  color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-11); cursor: pointer; }
+.nano-status-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.nano-status-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--dsw-alias-link) 22%, transparent); color: var(--dsw-alias-label-primary); }
+.nano-status-btn:disabled { opacity: .45; cursor: default; }
+.nano-dock { position: relative; z-index: var(--nano-layer-local6); flex: none; display: flex; flex-direction: column; min-height: 88px;
+  box-sizing: border-box; background: var(--dsw-alias-bg-base); border-top: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); }
+.nano-dock-grip { position: absolute; left: 0; right: 0; top: -3px; height: 7px; cursor: row-resize; touch-action: none; }
+.nano-dock-grip:hover { background: color-mix(in srgb, var(--dsw-alias-link) 35%, transparent); }
+.nano-dock-body { flex: auto; min-height: 0; overflow: auto; padding: var(--nano-space-2); }
+`;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/catalog/tokens.json
+  var schemes;
+  var init_tokens = __esm({
+    "../packages/dsh-nano-ui/catalog/tokens.json"() {
+      schemes = {
+        dark: {
+          "--dsw-alias-bg-base": "#151517",
+          "--dsw-alias-bg-document-preview": "#151517",
+          "--dsw-alias-bg-layer-1": "#232324",
+          "--dsw-alias-bg-layer-2": "#2c2c2e",
+          "--dsw-alias-bg-layer-3": "#353638",
+          "--dsw-alias-bg-mask-1": "#00000080",
+          "--dsw-alias-bg-mask-2": "#0003",
+          "--dsw-alias-bg-mask-drop": "#272730b3",
+          "--dsw-alias-bg-module-platform": "#353638",
+          "--dsw-alias-bg-multi-select": "#212123",
+          "--dsw-alias-bg-overlay": "#61666b",
+          "--dsw-alias-bg-skeleton": "#ffffff14",
+          "--dsw-alias-border-inverted": "#ffffff0f",
+          "--dsw-alias-border-inverted2": "#ffffff14",
+          "--dsw-alias-border-l1": "#ffffff0f",
+          "--dsw-alias-border-l2": "#ffffff1f",
+          "--dsw-alias-border-l2-darkmode-thin": "#ffffff0f",
+          "--dsw-alias-border-l3": "#ffffff29",
+          "--dsw-alias-border-l4": "#fff3",
+          "--dsw-alias-brand-primary": "#f9fafb",
+          "--dsw-alias-brand-primary-invert": "#f9fafb",
+          "--dsw-alias-brand-primary-new-colorprimary-new-color": "#5686fe",
+          "--dsw-alias-brand-text": "#f9fafb",
+          "--dsw-alias-button-contrast-fill": "#f9fafb",
+          "--dsw-alias-button-elevated-fill": "#43454a",
+          "--dsw-alias-button-floating-fill": "#2c2c2e",
+          "--dsw-alias-button-floating-hover": "#353638",
+          "--dsw-alias-button-ghost-active-border": "#81858c",
+          "--dsw-alias-button-ghost-active-fill": "#43454a",
+          "--dsw-alias-button-ghost-active-hover": "#61666b",
+          "--dsw-alias-button-info-fill": "#7aaaff",
+          "--dsw-alias-button-info-hover": "#4176e6",
+          "--dsw-alias-button-primary-dimmed": "#43454a",
+          "--dsw-alias-button-primary-fill": "#f9fafb",
+          "--dsw-alias-button-primary-hover": "#ebeef2",
+          "--dsw-alias-code-diff-added": "#22c55e1f",
+          "--dsw-alias-code-diff-deleted": "#f25a5a1f",
+          "--dsw-alias-file-diff-added-bg": "#1f3124",
+          "--dsw-alias-file-diff-added-gutter": "#132016",
+          "--dsw-alias-file-diff-added-marker": "#41c977",
+          "--dsw-alias-file-diff-deleted-bg": "#3c1f1b",
+          "--dsw-alias-file-diff-deleted-gutter": "#28130e",
+          "--dsw-alias-file-diff-deleted-marker": "#fa423e",
+          "--dsw-alias-illustration-background": "#2c2c2e",
+          "--dsw-alias-illustration-backing": "#43454a",
+          "--dsw-alias-illustration-detail": "#81858c",
+          "--dsw-alias-illustration-inset": "#43454a",
+          "--dsw-alias-illustration-shadow": "#43454a",
+          "--dsw-alias-illustration-surface": "#61666b",
+          "--dsw-alias-interactive-bg-active": "#ffffff24",
+          "--dsw-alias-interactive-bg-hover": "#ffffff14",
+          "--dsw-alias-interactive-bg-hover-accent": "#ffffff3d",
+          "--dsw-alias-interactive-bg-hover-danger": "#f25a5a26",
+          "--dsw-alias-interactive-bg-hover-solid": "#353638",
+          "--dsw-alias-label-caption": "#81858c",
+          "--dsw-alias-label-deep-diving": "color-mix(in srgb, #5686fe 55%, #adb2b8)",
+          "--dsw-alias-label-deep-diving-shimmer": "color-mix(in srgb, #93c5fd 65%, #7aaaff)",
+          "--dsw-alias-label-dimmed": "#43454a",
+          "--dsw-alias-label-document-preview": "#cfd3d6",
+          "--dsw-alias-label-primary": "#f9fafb",
+          "--dsw-alias-label-primary-bluish": "#f9fafb",
+          "--dsw-alias-label-primary-dimmed": "#ebeef2",
+          "--dsw-alias-label-primary-foreground": "#0f1115",
+          "--dsw-alias-label-primary-inverted": "#353638",
+          "--dsw-alias-label-secondary": "#cfd3d6",
+          "--dsw-alias-label-shimmer": "color-mix(in srgb, #fff 45%, transparent)",
+          "--dsw-alias-label-tertiary": "#adb2b8",
+          "--dsw-alias-link": "#7aaaff",
+          "--dsw-alias-markdown-citation": "#353638",
+          "--dsw-alias-markdown-code-block": "#1b1b1c",
+          "--dsw-alias-markdown-code-block-banner": "#2c2c2e",
+          "--dsw-alias-markdown-code-segment-selected": "#353638",
+          "--dsw-alias-markdown-code-segment-unselected": "#1b1b1c",
+          "--dsw-alias-markdown-inline-code": "#292929",
+          "--dsw-alias-markdown-placeholder": "#2c2c2e",
+          "--dsw-alias-markdown-tag": "#2c2c2e",
+          "--dsw-alias-menu-group-header-fill": "#303136f0",
+          "--dsw-alias-menu-icon": "#ebeef2",
+          "--dsw-alias-onboarding-card-fill": "color-mix(in srgb, #2c2c2e 80%, transparent)",
+          "--dsw-alias-onboarding-checkbox-border": "#ffffff1f",
+          "--dsw-alias-onboarding-secondary-fill": "#48494c",
+          "--dsw-alias-scrollbar-bg-l1": "#3c3c3d",
+          "--dsw-alias-scrollbar-bg-l2": "#545557",
+          "--dsw-alias-scrollbar-hover-l1": "#545557",
+          "--dsw-alias-scrollbar-hover-l2": "#65676b",
+          "--dsw-alias-settings-card-fill": "#2c2c2e",
+          "--dsw-alias-settings-card-stroke": "#fff3",
+          "--dsw-alias-state-business-primary": "#7aaaff",
+          "--dsw-alias-state-business-tertiary": "#34415b",
+          "--dsw-alias-state-done-primary": "#a78bfa",
+          "--dsw-alias-state-error-primary": "#f25a5a",
+          "--dsw-alias-state-idle-primary": "#545557",
+          "--dsw-alias-state-success-tertiary": "#233c2c",
+          "--dsw-alias-state-warn-tertiary": "#27241f",
+          "--dsw-alias-switch-thumb": "#adb2b8",
+          "--dsw-alias-toast-bg": "#43454a",
+          "--dsw-alias-tooltip-bg": "#43454a",
+          "--dsw-alias-tooltip-key-bg": "color-mix(in srgb, #43454a, white 18%)",
+          "--dsw-alias-turn-trigger-bg": "#ffffff14",
+          "--dsw-alias-turn-trigger-bg-hover": "#ffffff24",
+          "--dsw-elevation-panel": "0 0 0 .5px #fff3, 0 3px 8px 0 #00000008, 0 0 16px 0 #00000005",
+          "--dsw-elevation-prominent": "0 0 0 .5px #fff3, 0 3px 8px 0 #0000000a, 0 0 20px 0 #0000000d",
+          "--dsw-elevation-soft": "0 0 0 .5px #fff3, 0 4px 16px 0 #00000008, 0 0 24px 0 #00000008",
+          "--dsw-elevation-stroke": "0 0 0 .5px #fff3",
+          "--dsw-elevation-stroke-color": "#fff3",
+          "--dsw-linear-gradient-think": "linear-gradient(180deg, #151517 20.19%, #15151700 100%)",
+          "--dsw-linear-think-select": "linear-gradient(180deg, #232325 20.19%, #23232500 100%)",
+          "--dsw-menu-surface-fill": "#303136a3",
+          "--dsw-specific-bubble": "#2c2c2e",
+          "--dsw-specific-bubble-highlight": "#43454a",
+          "--dsw-specific-input-major": "#2c2c2e",
+          "--dsw-specific-login-input": "#1b1b1c",
+          "--dsw-specific-menu": "#303136a3",
+          "--dsw-specific-selector": "#353638",
+          "--dsw-specific-sidebar-fill": "#1b1b1c",
+          "--dsw-specific-sidebar-nav-item-active": "#43454a",
+          "--dsw-specific-sidebar-nav-item-active-accent": "#353638",
+          "--dsw-specific-tip": "#353638",
+          "--dsw-static-neutral-bluish-60": "#f9fafb"
+        },
+        light: {
+          "--dsw-alias-bg-base": "#fff",
+          "--dsw-alias-bg-document-preview": "#ebeef2",
+          "--dsw-alias-bg-layer-1": "#fff",
+          "--dsw-alias-bg-layer-2": "#fff",
+          "--dsw-alias-bg-layer-3": "#fff",
+          "--dsw-alias-bg-mask-1": "#0000003d",
+          "--dsw-alias-bg-mask-2": "#0000001f",
+          "--dsw-alias-bg-mask-drop": "#ffffffb3",
+          "--dsw-alias-bg-module-platform": "#f5f6f7",
+          "--dsw-alias-bg-multi-select": "#f5f6f7",
+          "--dsw-alias-bg-overlay": "#e9ecf2",
+          "--dsw-alias-bg-skeleton": "#0000000a",
+          "--dsw-alias-border-inverted": "#0000",
+          "--dsw-alias-border-inverted2": "#0000",
+          "--dsw-alias-border-l1": "#0000000a",
+          "--dsw-alias-border-l2": "#0000001a",
+          "--dsw-alias-border-l2-darkmode-thin": "#0000001a",
+          "--dsw-alias-border-l3": "#0000001f",
+          "--dsw-alias-border-l4": "#00000029",
+          "--dsw-alias-brand-primary": "#0f1115",
+          "--dsw-alias-brand-primary-invert": "#0f1115",
+          "--dsw-alias-brand-primary-new-colorprimary-new-color": "#4176e6",
+          "--dsw-alias-brand-text": "#0f1115",
+          "--dsw-alias-button-contrast-fill": "#61666b",
+          "--dsw-alias-button-elevated-fill": "#fff",
+          "--dsw-alias-button-floating-fill": "#fff",
+          "--dsw-alias-button-floating-hover": "#f1f3f5",
+          "--dsw-alias-button-ghost-active-border": "#979da6",
+          "--dsw-alias-button-ghost-active-fill": "#ebeef2",
+          "--dsw-alias-button-ghost-active-hover": "#e9ecf2",
+          "--dsw-alias-button-info-fill": "#4176e6",
+          "--dsw-alias-button-info-hover": "#7aaaff",
+          "--dsw-alias-button-primary-dimmed": "#ebeef2",
+          "--dsw-alias-button-primary-fill": "#0f1115",
+          "--dsw-alias-button-primary-hover": "#43454a",
+          "--dsw-alias-code-diff-added": "#22c55e14",
+          "--dsw-alias-code-diff-deleted": "#ec131314",
+          "--dsw-alias-file-diff-added-bg": "#e6f4e7",
+          "--dsw-alias-file-diff-added-gutter": "#edf7ed",
+          "--dsw-alias-file-diff-added-marker": "#01a241",
+          "--dsw-alias-file-diff-deleted-bg": "#fce6e2",
+          "--dsw-alias-file-diff-deleted-gutter": "#fdece9",
+          "--dsw-alias-file-diff-deleted-marker": "#ba2723",
+          "--dsw-alias-illustration-background": "#f5f7fa",
+          "--dsw-alias-illustration-backing": "#cad2db",
+          "--dsw-alias-illustration-detail": "#cad2db",
+          "--dsw-alias-illustration-inset": "#edf0f4",
+          "--dsw-alias-illustration-shadow": "#edf0f4",
+          "--dsw-alias-illustration-surface": "#edf0f4",
+          "--dsw-alias-interactive-bg-active": "#2631481a",
+          "--dsw-alias-interactive-bg-hover": "#2631480f",
+          "--dsw-alias-interactive-bg-hover-accent": "#26314824",
+          "--dsw-alias-interactive-bg-hover-danger": "#ec13130d",
+          "--dsw-alias-interactive-bg-hover-solid": "#f1f3f5",
+          "--dsw-alias-label-caption": "#adb2b8",
+          "--dsw-alias-label-deep-diving": "color-mix(in srgb, #4176e6 70%, #172554)",
+          "--dsw-alias-label-deep-diving-shimmer": "color-mix(in srgb, #4176e6 30%, #172554)",
+          "--dsw-alias-label-dimmed": "#e1e5ee",
+          "--dsw-alias-label-document-preview": "#61666b",
+          "--dsw-alias-label-primary": "#0f1115",
+          "--dsw-alias-label-primary-bluish": "#0e3074",
+          "--dsw-alias-label-primary-dimmed": "#151517",
+          "--dsw-alias-label-primary-foreground": "#fff",
+          "--dsw-alias-label-primary-inverted": "#fff",
+          "--dsw-alias-label-secondary": "#61666b",
+          "--dsw-alias-label-shimmer": "color-mix(in srgb, #000 30%, transparent)",
+          "--dsw-alias-label-tertiary": "#81858c",
+          "--dsw-alias-link": "#4176e6",
+          "--dsw-alias-markdown-citation": "#ebeef2",
+          "--dsw-alias-markdown-code-block": "#f9fafb",
+          "--dsw-alias-markdown-code-block-banner": "#f9fafb",
+          "--dsw-alias-markdown-code-segment-selected": "#fff",
+          "--dsw-alias-markdown-code-segment-unselected": "#f1f3f5",
+          "--dsw-alias-markdown-inline-code": "#fafafa",
+          "--dsw-alias-markdown-placeholder": "#f5f6f7",
+          "--dsw-alias-markdown-tag": "#f1f3f5",
+          "--dsw-alias-menu-group-header-fill": "#f8f9faf0",
+          "--dsw-alias-menu-icon": "#353638",
+          "--dsw-alias-onboarding-card-fill": "color-mix(in srgb, #fff 80%, transparent)",
+          "--dsw-alias-onboarding-checkbox-border": "color-mix(in srgb, #0f1115 20%, transparent)",
+          "--dsw-alias-onboarding-secondary-fill": "#fff",
+          "--dsw-alias-scrollbar-bg-l1": "#e5e5e5",
+          "--dsw-alias-scrollbar-bg-l2": "#e5e5e5",
+          "--dsw-alias-scrollbar-hover-l1": "#d4d4d4",
+          "--dsw-alias-scrollbar-hover-l2": "#d4d4d4",
+          "--dsw-alias-settings-card-fill": "#fff",
+          "--dsw-alias-settings-card-stroke": "#00000029",
+          "--dsw-alias-state-business-primary": "#4176e6",
+          "--dsw-alias-state-business-tertiary": "#e4edfd",
+          "--dsw-alias-state-done-primary": "#7c3aed",
+          "--dsw-alias-state-error-primary": "#ec1313",
+          "--dsw-alias-state-idle-primary": "#d4d4d4",
+          "--dsw-alias-state-success-tertiary": "#e6faed",
+          "--dsw-alias-state-warn-tertiary": "#fef5e7",
+          "--dsw-alias-switch-thumb": "#fff",
+          "--dsw-alias-toast-bg": "#353638",
+          "--dsw-alias-tooltip-bg": "#2c2c2e",
+          "--dsw-alias-tooltip-key-bg": "color-mix(in srgb, #2c2c2e, white 18%)",
+          "--dsw-alias-turn-trigger-bg": "#f9fafb",
+          "--dsw-alias-turn-trigger-bg-hover": "#2631480f",
+          "--dsw-elevation-panel": "0 0 0 .5px #00000029, 0 3px 8px 0 #00000008, 0 0 16px 0 #00000005",
+          "--dsw-elevation-prominent": "0 0 0 .5px #00000029, 0 3px 8px 0 #0000000a, 0 0 20px 0 #0000000d",
+          "--dsw-elevation-soft": "0 0 0 .5px #00000029, 0 4px 16px 0 #00000008, 0 0 24px 0 #00000008",
+          "--dsw-elevation-stroke": "0 0 0 .5px #00000029",
+          "--dsw-elevation-stroke-color": "#00000029",
+          "--dsw-linear-gradient-think": "linear-gradient(180deg, #fff 20.19%, #fff0 100%)",
+          "--dsw-linear-think-select": "linear-gradient(180deg, #f5f6f7 20.19%, #f5f6f700 100%)",
+          "--dsw-menu-surface-fill": "#fcfdfeb3",
+          "--dsw-specific-bubble": "#edf3fe",
+          "--dsw-specific-bubble-highlight": "#d3e2ff",
+          "--dsw-specific-input-major": "#fff",
+          "--dsw-specific-login-input": "#f9fafb",
+          "--dsw-specific-menu": "#fcfdfeb3",
+          "--dsw-specific-selector": "#f5f6f7",
+          "--dsw-specific-sidebar-fill": "#f9fafb",
+          "--dsw-specific-sidebar-nav-item-active": "#ebeef2",
+          "--dsw-specific-sidebar-nav-item-active-accent": "#e4edfd",
+          "--dsw-specific-tip": "#f5f6f7",
+          "--dsw-static-neutral-bluish-60": "#f5f6f7"
+        }
+      };
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/theme-scheme.js
+  function hostScheme(theme) {
+    try {
+      const snapshot = theme?.getTheme?.();
+      const value = snapshot?.active?.colorScheme ?? snapshot?.colorScheme;
+      return value === "light" ? "light" : "dark";
+    } catch {
+      return "dark";
+    }
+  }
+  function resolveScheme({ pin, theme } = {}) {
+    if (pin === "light" || pin === "dark") return pin;
+    return hostScheme(theme);
+  }
+  function schemeDeclarations({ schemes: schemes2, scheme, host }) {
+    if (scheme === host) return [];
+    const table = schemes2?.[scheme];
+    if (table === void 0 || table === null) throw new Error(`dsh-nano-ui: catalog has no "${scheme}" scheme table`);
+    return Object.entries(table);
+  }
+  var init_theme_scheme = __esm({
+    "../packages/dsh-nano-ui/src/theme-scheme.js"() {
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/theme.js
+  function createThemeScope({ theme, element, pin, subscribe }) {
+    if (!(element instanceof HTMLElement)) throw new TypeError("dsh-nano-ui: createThemeScope needs an owner element");
+    let current = pin;
+    let scheme = resolveScheme({ pin: current, theme });
+    let written = [];
+    let disposed = false;
+    const clear = () => {
+      for (const name of written) element.style.removeProperty(name);
+      written = [];
+    };
+    const apply2 = () => {
+      if (disposed) return;
+      scheme = resolveScheme({ pin: current, theme });
+      clear();
+      for (const [name, value] of schemeDeclarations({ schemes, scheme, host: hostScheme(theme) })) {
+        element.style.setProperty(name, value);
+        written.push(name);
+      }
+      element.setAttribute("data-nano-scheme", scheme);
+    };
+    apply2();
+    const unsubscribe = typeof subscribe === "function" ? subscribe(apply2) : void 0;
+    return {
+      scheme: () => scheme,
+      refresh: apply2,
+      setPin: (next) => {
+        current = next === "light" || next === "dark" ? next : void 0;
+        apply2();
+      },
+      dispose: () => {
+        if (disposed) return;
+        disposed = true;
+        if (typeof unsubscribe === "function") unsubscribe();
+        clear();
+        element.removeAttribute("data-nano-scheme");
+      }
+    };
+  }
+  var init_theme = __esm({
+    "../packages/dsh-nano-ui/src/theme.js"() {
+      init_tokens();
+      init_theme_scheme();
+    }
+  });
+
+  // ../packages/dsh-nano-ui/catalog/icons.json
+  var sprite;
+  var init_icons = __esm({
+    "../packages/dsh-nano-ui/catalog/icons.json"() {
+      sprite = {
+        from: "rc.3",
+        glyphs: [
+          "agent-preset-outline",
+          "alarm-clock-outline",
+          "api-outline",
+          "apps-add-compact-outline",
+          "apps-add-outline",
+          "archive-check-outline",
+          "archive-off-outline",
+          "archive-outline",
+          "branch-outline",
+          "browse-outline",
+          "check-circle-fill",
+          "check-circle-outline",
+          "check-outline",
+          "checklist-outline",
+          "chevron-down-outline",
+          "chevron-left-outline",
+          "chevron-right-outline",
+          "chevron-up-outline",
+          "chevrons-up-down-outline",
+          "clock-outline",
+          "close-circle-fill",
+          "close-fill",
+          "close-outline",
+          "code-outline",
+          "compact-outline",
+          "compare-split-outline",
+          "context-injection-outline",
+          "copy-outline",
+          "cordis-plugin-outline",
+          "dark-outline",
+          "data-outline",
+          "database-outline",
+          "deliver-doc",
+          "dislike-fill",
+          "dislike-outline",
+          "download-outline",
+          "drag-handle-outline",
+          "edit-outline",
+          "ellipsis-outline",
+          "enhance-outline",
+          "eye-off-outline",
+          "eye-outline",
+          "flat-list-outline",
+          "folder-close",
+          "folder-open",
+          "folder-open-outline",
+          "followsystem-outline",
+          "fullscreen-outline",
+          "gauge-outline",
+          "globe-outline",
+          "goal-outline",
+          "info-outline",
+          "inspect-outline",
+          "layers-outline",
+          "light-outline",
+          "like-fill",
+          "like-outline",
+          "link-outline",
+          "list-pen-outline",
+          "loading-outline",
+          "microphone-outline",
+          "new-chat-outline",
+          "nowrap-fill",
+          "panel-left-outline",
+          "paper-plane-outline",
+          "paperclip-outline",
+          "pause-outline",
+          "personalization-outline",
+          "pin-fill",
+          "pin-outline",
+          "plan-outline",
+          "play-outline",
+          "plugin-pinwheel-outline",
+          "plus-outline",
+          "project-add-outline",
+          "question-outline",
+          "queue-outline",
+          "refresh-outline",
+          "right-up-outline",
+          "save-outline",
+          "search-outline",
+          "send-outline",
+          "settings-outline",
+          "share-outline",
+          "shield-outline",
+          "skill-outline",
+          "sliders-two-outline",
+          "stop-fill",
+          "think-outline",
+          "trash-outline",
+          "tree-corner",
+          "triangle-right-fill",
+          "unarchive-outline",
+          "upload-outline",
+          "user-outline",
+          "users-outline",
+          "warning-outline",
+          "warning-triangle-outline",
+          "workspace-tree-outline",
+          "wrap-fill",
+          "wrap-lines-outline"
+        ],
+        weights: [
+          "medium",
+          "regular"
+        ]
+      };
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/icon-markup.js
+  function spriteMarkup(glyph, weight = "regular", size = 16) {
+    if (typeof glyph !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(glyph)) throw new TypeError(`dsh-nano-ui: bad sprite glyph "${glyph}"`);
+    if (!SPRITE_WEIGHTS.includes(weight)) throw new TypeError(`dsh-nano-ui: bad sprite weight "${weight}"`);
+    const id = `dsw-icon-${glyph}-${weight}`;
+    return `<svg width="${size}" height="${size}" data-icon="${id}" aria-hidden="true"><use href="#${id}"/></svg>`;
+  }
+  function isSpriteGlyph(sprite2, glyph, weight = "regular") {
+    return sprite2?.glyphs?.includes(glyph) === true && sprite2?.weights?.includes(weight) === true;
+  }
+  var SPRITE_WEIGHTS;
+  var init_icon_markup = __esm({
+    "../packages/dsh-nano-ui/src/icon-markup.js"() {
+      SPRITE_WEIGHTS = Object.freeze(["regular", "medium"]);
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/icons.js
+  function icon(name) {
+    const component = /^Icon[A-Z]/.test(name) ? primitives[name] : void 0;
+    if (component === void 0) throw new Error(`dsh-nano-ui: the host exports no icon "${name}"`);
+    return component;
+  }
+  function iconMarkup(glyph, weight = "regular", size = 16) {
+    if (!isSpriteGlyph(sprite, glyph, weight) && !warned.has(`${glyph}-${weight}`)) {
+      warned.add(`${glyph}-${weight}`);
+      console.warn(`dsh-nano-ui: sprite glyph "${glyph}-${weight}" is not in the catalog`);
+    }
+    return spriteMarkup(glyph, weight, size);
+  }
+  var primitives, warned;
+  var init_icons2 = __esm({
+    "../packages/dsh-nano-ui/src/icons.js"() {
+      primitives = __toESM(__require("@deepseek-ai/dsh-client-ui-primitives"), 1);
+      init_icons();
+      init_icon_markup();
+      warned = /* @__PURE__ */ new Set();
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/dialog.js
+  function preset(list, value) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return void 0;
+    return list.find((step) => step >= value) ?? list[list.length - 1];
+  }
+  function bodyStyle({ maxHeight, fixedHeight }) {
+    const style = {};
+    const fixed = preset(DIALOG_HEIGHTS, fixedHeight);
+    if (fixed !== void 0) style.height = `${fixed - DIALOG_CHROME}px`;
+    if (typeof maxHeight === "number" && Number.isFinite(maxHeight)) style.maxHeight = `${Math.max(120, Math.round(maxHeight) - DIALOG_CHROME)}px`;
+    return style;
+  }
+  function actionRow({ copy, confirmLabel, confirmDisabled, busy, danger, onConfirm, onCancel }) {
+    return h(
+      import_react.default.Fragment,
+      null,
+      h(import_dsh_client_ui_primitives.Button, { variant: "outline", className: "nano-modal-action", onClick: onCancel }, copy.cancel),
+      h(import_dsh_client_ui_primitives.Button, {
+        variant: danger ? "outline" : "primary",
+        className: danger ? "nano-modal-action nano-modal-danger" : "nano-modal-action",
+        disabled: confirmDisabled === true || busy === true,
+        onClick: onConfirm
+      }, confirmLabel ?? copy.confirm)
+    );
+  }
+  function NanoDialog({ copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, width, maxHeight, fixedHeight, className, onConfirm, onCancel, children }) {
+    const w = preset(DIALOG_WIDTHS, width);
+    return h(import_dsh_client_ui_primitives.Modal, {
+      open: true,
+      onClose: onCancel,
+      title,
+      description,
+      closeLabel: copy.close ?? copy.cancel,
+      className: ["nano-dialog-card", w === void 0 || w === DIALOG_WIDTHS[0] ? "" : `nano-dialog-w-${w}`, className ?? ""].filter(Boolean).join(" "),
+      footer: footer ?? actionRow({ copy, confirmLabel, confirmDisabled, busy, danger, onConfirm, onCancel })
+    }, h(
+      "div",
+      { className: "nano-dialog-body", style: bodyStyle({ maxHeight, fixedHeight }) },
+      children,
+      error === void 0 ? null : h("p", { className: "nano-dialog-error", role: "alert" }, error)
+    ));
+  }
+  var import_react, import_dsh_client_ui_primitives, h, DIALOG_WIDTHS, DIALOG_HEIGHTS, DIALOG_CHROME;
+  var init_dialog = __esm({
+    "../packages/dsh-nano-ui/src/dialog.js"() {
+      import_react = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives = __require("@deepseek-ai/dsh-client-ui-primitives");
+      h = import_react.default.createElement;
+      DIALOG_WIDTHS = Object.freeze([380, 480, 560, 720]);
+      DIALOG_HEIGHTS = Object.freeze([480, 560, 640]);
+      DIALOG_CHROME = 136;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/overlay.js
+  function assertContainer(container, who) {
+    if (!(container instanceof HTMLElement) || !container.isConnected) {
+      throw new Error(`dsh-nano-ui: ${who} needs a container element attached to the document; overlays never fall back to document.body`);
+    }
+  }
+  function NanoWindowDialog({ container, copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, width, maxHeight, fixedHeight, className, onConfirm, onCancel, children }) {
+    const cardRef = import_react2.default.useRef(null);
+    (0, import_dsh_client_ui_primitives2.useModalLayer)(cardRef, true, onCancel);
+    if (container !== void 0) assertContainer(container, "NanoWindowDialog");
+    const style = {};
+    if (typeof width === "number") style.width = `min(${Math.round(width)}px, 100%)`;
+    if (typeof maxHeight === "number") style.maxHeight = `min(${Math.round(maxHeight)}px, 100%)`;
+    if (typeof fixedHeight === "number") style.height = `min(${Math.round(fixedHeight)}px, 100%)`;
+    const overlay = h2(
+      "div",
+      { className: "nano-overlay", role: "presentation" },
+      h2("div", { className: "nano-overlay-mask", "aria-hidden": "true", onClick: onCancel }),
+      h2(
+        "div",
+        {
+          ref: cardRef,
+          tabIndex: -1,
+          role: "dialog",
+          "aria-modal": "true",
+          "aria-label": title,
+          className: ["nano-wdlg", className ?? ""].filter(Boolean).join(" "),
+          style
+        },
+        h2(
+          "div",
+          { className: "nano-wdlg-head" },
+          h2("h2", { className: "nano-wdlg-title" }, title),
+          h2(import_dsh_client_ui_primitives2.Button, { variant: "ghost", size: "sm", icon: h2(import_dsh_client_ui_primitives2.IconCloseOutlineRegular, { size: 14 }), "aria-label": copy.close ?? copy.cancel, onClick: onCancel })
+        ),
+        description === void 0 || description === "" ? null : h2("p", { className: "nano-wdlg-desc" }, description),
+        h2(
+          "div",
+          { className: "nano-wdlg-body" },
+          children,
+          error === void 0 ? null : h2("p", { className: "nano-dialog-error", role: "alert" }, error)
+        ),
+        h2(
+          "div",
+          { className: "nano-wdlg-foot" },
+          footer ?? actionRow({ copy, confirmLabel, confirmDisabled, busy, danger, onConfirm, onCancel })
+        )
+      )
+    );
+    return container === void 0 ? overlay : (0, import_react_dom.createPortal)(overlay, container);
+  }
+  var import_react2, import_react_dom, import_dsh_client_ui_primitives2, h2;
+  var init_overlay = __esm({
+    "../packages/dsh-nano-ui/src/overlay.js"() {
+      import_react2 = __toESM(__require("react"), 1);
+      import_react_dom = __require("react-dom");
+      import_dsh_client_ui_primitives2 = __require("@deepseek-ai/dsh-client-ui-primitives");
+      init_dialog();
+      h2 = import_react2.default.createElement;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/menu-model.js
+  function menuHeight(items) {
+    let height = 8;
+    for (const item of items) height += item?.separator === true ? 9 : 28;
+    return height;
+  }
+  function capClass(maxHeight) {
+    if (typeof maxHeight !== "number" || !Number.isFinite(maxHeight)) return void 0;
+    const cap = [...MENU_CAPS].reverse().find((step) => step <= maxHeight) ?? MENU_CAPS[0];
+    return `nano-cap-${cap}`;
+  }
+  function toHostItems(actions) {
+    return actions.map((action) => action?.separator === true ? { type: "separator", id: action.id } : { id: action.id, label: action.label, icon: action.icon, danger: action.tone === "danger", disabled: action.disabled === true });
+  }
+  var MENU_CAPS;
+  var init_menu_model = __esm({
+    "../packages/dsh-nano-ui/src/menu-model.js"() {
+      MENU_CAPS = Object.freeze([120, 160, 200, 240, 320, 400, 480]);
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/menu.js
+  function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, portal = true, direction }) {
+    if (menu === null || menu === void 0 || actions.length === 0) return null;
+    const onSelect = (id) => {
+      const action = actions.find((candidate) => candidate?.separator !== true && candidate?.id === id);
+      onClose();
+      action?.run?.();
+    };
+    const list = h3(import_dsh_client_ui_primitives3.Menu, {
+      open: true,
+      items: toHostItems(actions),
+      onSelect,
+      onClose,
+      side: direction === "up" ? "top" : "bottom",
+      portal,
+      /* The running host places a portaled list with CSS anchor positioning on
+       * `anchorPoint` ({x,y} viewport pixels) and does not read `getAnchorRect`.
+       * Without the point, the list anchors to this wrapper's own child, which
+       * sits wherever the caller rendered <NanoMenu> — for the files row menu
+       * that is the bottom of the pane, not the pointer. `getAnchorRect` stays
+       * for a host that positions from a DOMRect instead. */
+      anchorPoint: portal ? { x: menu.x, y: menu.y } : void 0,
+      getAnchorRect: portal ? () => new DOMRect(menu.x, menu.y, menu.width ?? 0, menu.height ?? 0) : void 0,
+      listClassName: capClass(maxHeight)
+    }, h3("div", { "aria-hidden": "true", style: { width: `${width}px`, height: 0 } }));
+    if (portal) return list;
+    return h3("span", { className: "nano-anchor", style: { left: `${menu.x}px`, top: `${menu.y}px` } }, list);
+  }
+  var import_react3, import_dsh_client_ui_primitives3, h3;
+  var init_menu = __esm({
+    "../packages/dsh-nano-ui/src/menu.js"() {
+      import_react3 = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives3 = __require("@deepseek-ai/dsh-client-ui-primitives");
+      init_menu_model();
+      h3 = import_react3.default.createElement;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/toast.js
+  function NanoToast({ text, anchor, tone, icon: icon2, actions, holdMs, onDone }) {
+    if (text === void 0 || text === null || text === "") return null;
+    return import_react4.default.createElement(import_dsh_client_ui_primitives4.Toast, { key: String(text), text, anchor: anchor ?? void 0, tone, icon: icon2, actions, holdMs, onDone: onDone ?? noop });
+  }
+  var import_react4, import_dsh_client_ui_primitives4, noop;
+  var init_toast = __esm({
+    "../packages/dsh-nano-ui/src/toast.js"() {
+      import_react4 = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives4 = __require("@deepseek-ai/dsh-client-ui-primitives");
+      noop = () => {
+      };
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/mount.js
+  function mountNano(el, Component, props = {}) {
+    if (!(el instanceof Element)) throw new TypeError("dsh-nano-ui: mountNano needs an element");
+    const root = (0, import_client.createRoot)(el);
+    let current = { ...props };
+    let mounted = true;
+    root.render(import_react5.default.createElement(Component, current));
+    return {
+      update: (next) => {
+        if (!mounted) return;
+        current = { ...current, ...next };
+        root.render(import_react5.default.createElement(Component, current));
+      },
+      unmount: () => {
+        if (!mounted) return;
+        mounted = false;
+        root.unmount();
+      }
+    };
+  }
+  var import_react5, import_client;
+  var init_mount = __esm({
+    "../packages/dsh-nano-ui/src/mount.js"() {
+      import_react5 = __toESM(__require("react"), 1);
+      import_client = __require("react-dom/client");
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/tabs.js
+  function nanoTabs({ items, value, onChange, label }) {
+    const id = `nano-seg-${++seq}`;
+    const el = document.createElement("div");
+    for (const item of items) {
+      item.panel.id = `${id}-${item.value}-panel`;
+      item.panel.setAttribute("role", "tabpanel");
+      item.panel.setAttribute("aria-labelledby", `${id}-${item.value}`);
+    }
+    let current;
+    const strip = mountNano(el, import_dsh_client_ui_primitives5.SegmentedControl, {
+      id,
+      value,
+      label,
+      options: items.map((item) => ({ value: item.value, label: item.label })),
+      onChange: (next) => select(next)
+    });
+    function select(next) {
+      if (!items.some((item) => item.value === next)) return;
+      current = next;
+      for (const item of items) item.panel.hidden = item.value !== next;
+      strip.update({ value: next });
+      onChange?.(next);
+    }
+    select(value);
+    return { el, select, value: () => current };
+  }
+  function NanoTabs({ items, value, onChange, label, className }) {
+    const [inner, setInner] = import_react6.default.useState(() => value ?? items[0]?.value);
+    const id = `nano-seg-${import_react6.default.useId().replaceAll(":", "")}`;
+    const current = value ?? inner;
+    const select = (next) => {
+      if (value === void 0) setInner(next);
+      onChange?.(next);
+    };
+    return h4(
+      "div",
+      { className: ["nano-panes", className ?? ""].filter(Boolean).join(" ") },
+      h4(import_dsh_client_ui_primitives5.SegmentedControl, { id, value: current, label, options: items.map((item) => ({ value: item.value, label: item.label })), onChange: select }),
+      items.map((item) => h4("div", {
+        key: item.value,
+        id: `${id}-${item.value}-panel`,
+        role: "tabpanel",
+        className: "nano-pane",
+        "aria-labelledby": `${id}-${item.value}`,
+        hidden: item.value !== current
+      }, item.content))
+    );
+  }
+  var import_react6, import_dsh_client_ui_primitives5, h4, seq;
+  var init_tabs = __esm({
+    "../packages/dsh-nano-ui/src/tabs.js"() {
+      import_react6 = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives5 = __require("@deepseek-ai/dsh-client-ui-primitives");
+      init_mount();
+      h4 = import_react6.default.createElement;
+      seq = 0;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/dom.js
+  function mount(parent) {
+    const host = document.createElement("div");
+    parent.appendChild(host);
+    const root = (0, import_client2.createRoot)(host);
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      root.unmount();
+      host.remove();
+    };
+    return { host, root, close };
+  }
+  function openNanoDialog(options) {
+    const { container, ...props } = options;
+    if (container !== void 0) assertContainer(container, "openNanoDialog");
+    const { root, close } = mount(container ?? document.body);
+    const onCancel = () => {
+      options.onCancel?.();
+      close();
+    };
+    root.render(import_react7.default.createElement(container === void 0 ? NanoDialog : NanoWindowDialog, { ...props, onCancel }));
+    return { close };
+  }
+  function openNanoMenu(options) {
+    const { container } = options;
+    if (container !== void 0) assertContainer(container, "openNanoMenu");
+    const { host, root, close } = mount(container ?? document.body);
+    const r = options.anchor;
+    const left = r.left ?? r.x ?? 0;
+    const top = r.top ?? r.y ?? 0;
+    const right = r.right ?? left + (r.width ?? 0);
+    const bottom = r.bottom ?? top + (r.height ?? 0);
+    const gap = options.gap ?? 0;
+    const up = options.direction === "up";
+    let menu;
+    if (container === void 0) {
+      const extra = Math.max(0, gap - HOST_MENU_GAP);
+      menu = { x: left, y: up ? top - extra : top, width: right - left, height: bottom - top + extra };
+    } else {
+      const box = (host.offsetParent ?? container).getBoundingClientRect();
+      const scroller = host.offsetParent ?? container;
+      menu = {
+        x: left - box.left - scroller.clientLeft + scroller.scrollLeft,
+        y: (up ? top - gap : bottom + gap) - box.top - scroller.clientTop + scroller.scrollTop
+      };
+    }
+    root.render(import_react7.default.createElement(NanoMenu, {
+      menu,
+      actions: options.items ?? [],
+      width: options.width,
+      maxHeight: options.maxHeight,
+      direction: options.direction,
+      portal: container === void 0,
+      onClose: close
+    }));
+    return { close };
+  }
+  var import_react7, import_client2, HOST_MENU_GAP;
+  var init_dom = __esm({
+    "../packages/dsh-nano-ui/src/dom.js"() {
+      import_react7 = __toESM(__require("react"), 1);
+      import_client2 = __require("react-dom/client");
+      init_dialog();
+      init_menu();
+      init_overlay();
+      HOST_MENU_GAP = 4;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/button.js
+  function IconButton({ icon: icon2, variant = "ghost", size = "sm", ...rest }) {
+    const label = rest["aria-label"];
+    if (typeof label !== "string" || label.trim() === "") throw new TypeError("dsh-nano-ui: IconButton needs an aria-label");
+    return import_react8.default.createElement(import_dsh_client_ui_primitives6.Button, { variant, size, icon: icon2, title: label, ...rest });
+  }
+  var import_react8, import_dsh_client_ui_primitives6;
+  var init_button = __esm({
+    "../packages/dsh-nano-ui/src/button.js"() {
+      import_react8 = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives6 = __require("@deepseek-ai/dsh-client-ui-primitives");
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/toolbar.js
+  function Toolbar({ label, className, children }) {
+    return import_react9.default.createElement("div", { role: "toolbar", "aria-label": label, className: ["nano-toolbar", className ?? ""].filter(Boolean).join(" ") }, children);
+  }
+  var import_react9;
+  var init_toolbar = __esm({
+    "../packages/dsh-nano-ui/src/toolbar.js"() {
+      import_react9 = __toESM(__require("react"), 1);
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/empty.js
+  function EmptyState({ icon: icon2, title, description, action, className }) {
+    return h5(
+      "div",
+      { className: ["nano-empty", className ?? ""].filter(Boolean).join(" ") },
+      icon2 === void 0 ? null : h5("span", { className: "nano-empty-icon", "aria-hidden": "true" }, icon2),
+      h5("p", { className: "nano-empty-title" }, title),
+      description === void 0 ? null : h5("p", { className: "nano-empty-desc" }, description),
+      action ?? null
+    );
+  }
+  var import_react10, h5;
+  var init_empty = __esm({
+    "../packages/dsh-nano-ui/src/empty.js"() {
+      import_react10 = __toESM(__require("react"), 1);
+      h5 = import_react10.default.createElement;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/window.js
+  function useNanoWindow() {
+    return import_react11.default.useContext(WindowContext);
+  }
+  function FloatingWindow({ theme, pin, subscribe, title, actions, onClose, closeLabel, floating, className, style, children }) {
+    const ref = import_react11.default.useRef(null);
+    const scope = import_react11.default.useRef(null);
+    const [element, setElement] = import_react11.default.useState(null);
+    import_react11.default.useLayoutEffect(() => {
+      const next = createThemeScope({ theme, element: ref.current, pin, subscribe });
+      scope.current = next;
+      setElement(ref.current);
+      return () => {
+        next.dispose();
+        scope.current = null;
+      };
+    }, [theme, subscribe]);
+    import_react11.default.useLayoutEffect(() => {
+      scope.current?.setPin(pin);
+    }, [pin]);
+    return h6(
+      "section",
+      {
+        ref,
+        "aria-label": title,
+        className: ["nano-window", floating ? "nano-window-floating" : "", className ?? ""].filter(Boolean).join(" "),
+        style
+      },
+      h6(
+        Toolbar,
+        { label: title },
+        h6("span", { className: "nano-window-title" }, title),
+        actions ?? null,
+        onClose === void 0 ? null : h6(IconButton, { icon: h6(import_dsh_client_ui_primitives7.IconCloseOutlineRegular, { size: 14 }), "aria-label": closeLabel ?? "Close", onClick: onClose })
+      ),
+      h6("div", { className: "nano-window-body" }, h6(WindowContext.Provider, { value: element }, children))
+    );
+  }
+  var import_react11, import_dsh_client_ui_primitives7, h6, WindowContext;
+  var init_window = __esm({
+    "../packages/dsh-nano-ui/src/window.js"() {
+      import_react11 = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives7 = __require("@deepseek-ai/dsh-client-ui-primitives");
+      init_button();
+      init_theme();
+      init_toolbar();
+      h6 = import_react11.default.createElement;
+      WindowContext = import_react11.default.createContext(null);
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/panel.js
+  function PanelLayout({ title, kicker, description, actions, children, className, ...rest }) {
+    return h7(
+      "section",
+      { className: className ? `nano-panel ${className}` : "nano-panel", ...rest },
+      h7(
+        "header",
+        { className: "nano-panel-header" },
+        kicker ? h7("p", { className: "nano-panel-kicker" }, kicker) : null,
+        h7("h2", null, title),
+        description ? h7("p", null, description) : null,
+        actions ? h7("div", null, actions) : null
+      ),
+      children
+    );
+  }
+  function PanelSection({ title, children }) {
+    return h7(
+      "section",
+      { className: "nano-panel-section" },
+      title ? h7("h3", null, title) : null,
+      children
+    );
+  }
+  function FactGrid({ items }) {
+    return h7(
+      "dl",
+      { className: "nano-facts" },
+      (items ?? []).map((item, index) => h7(
+        "div",
+        { key: index },
+        h7("dt", null, item.label),
+        h7("dd", null, item.value ?? "\u2014")
+      ))
+    );
+  }
+  function Card({ children }) {
+    return h7("div", { className: "nano-card" }, children);
+  }
+  function SplitRow({ label, children }) {
+    return h7(
+      "div",
+      { className: "nano-split" },
+      h7("span", { className: "nano-split-label" }, label),
+      h7("span", { className: "nano-split-control" }, children)
+    );
+  }
+  function Meter({ label, text, value }) {
+    const width = typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : null;
+    return h7(
+      "div",
+      { className: "nano-meter" },
+      h7("span", { className: "nano-meter-label" }, `${label} ${text ?? ""}`),
+      width === null ? null : h7(
+        "span",
+        { className: "nano-meter-track" },
+        h7("span", { className: "nano-meter-fill", style: { width: `${width}%` } })
+      )
+    );
+  }
+  function PlainTable({ columns, children }) {
+    return h7(
+      "table",
+      { className: "nano-table" },
+      h7("thead", null, h7("tr", null, (columns ?? []).map((column) => h7("th", { key: column }, column)))),
+      h7("tbody", null, children)
+    );
+  }
+  var import_react12, h7;
+  var init_panel = __esm({
+    "../packages/dsh-nano-ui/src/panel.js"() {
+      import_react12 = __toESM(__require("react"), 1);
+      h7 = import_react12.default.createElement;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/shell.js
+  function WorkbenchShell({ label, bar, drawer, dock, shellRef, children, ...rest }) {
+    return h8(
+      "section",
+      { ...rest, ref: shellRef, className: "nano-shell" },
+      h8("div", { className: "nano-shell-bar", role: "toolbar", "aria-label": label }, bar),
+      h8("div", { className: "nano-shell-body" }, children),
+      drawer ?? null,
+      dock ?? null
+    );
+  }
+  function ShellTitle({ children }) {
+    return h8("span", { className: "nano-shell-title" }, children);
+  }
+  function ShellGap() {
+    return h8("span", { className: "nano-shell-gap" });
+  }
+  function TabDrawer({ open, label, onClose, children }) {
+    const ref = import_react13.default.useRef(null);
+    import_react13.default.useEffect(() => {
+      if (!open) return void 0;
+      const onKey = (event) => {
+        if (event.key === "Escape") onClose?.();
+      };
+      const onDown = (event) => {
+        const target = event.target;
+        if (ref.current?.contains(target)) return;
+        if (typeof target?.closest === "function" && target.closest("[data-nano-drawer-toggle]")) return;
+        onClose?.();
+      };
+      document.addEventListener("keydown", onKey);
+      document.addEventListener("pointerdown", onDown);
+      return () => {
+        document.removeEventListener("keydown", onKey);
+        document.removeEventListener("pointerdown", onDown);
+      };
+    }, [open, onClose]);
+    return h8("nav", {
+      ref,
+      className: "nano-drawer",
+      "data-nano-drawer-state": open ? "open" : "closed",
+      "aria-label": label,
+      "aria-hidden": open ? void 0 : true
+    }, h8("div", { className: "nano-drawer-list" }, children));
+  }
+  function DrawerHead({ children }) {
+    return h8("div", { className: "nano-drawer-head" }, children);
+  }
+  function DrawerRow({ current, onClick, mark, label, meta }) {
+    return h8(
+      "button",
+      {
+        type: "button",
+        className: "nano-drawer-row",
+        "aria-current": current ? "page" : void 0,
+        onClick
+      },
+      mark ? h8("span", { className: "nano-drawer-mark" }, mark) : null,
+      h8(
+        "span",
+        { className: "nano-drawer-copy" },
+        h8("span", { className: "nano-drawer-label" }, label),
+        meta ? h8("span", { className: "nano-drawer-meta" }, meta) : null
+      )
+    );
+  }
+  function ShellToggle({ icon: icon2, label, pressed, onClick }) {
+    return h8("button", {
+      type: "button",
+      className: "nano-shell-toggle",
+      "data-nano-drawer-toggle": "1",
+      "aria-pressed": pressed ? "true" : "false",
+      "aria-label": label,
+      onClick
+    }, icon2, h8("span", null, label));
+  }
+  function ShellIcon({ icon: icon2, label, pressed, disabled, onClick }) {
+    return h8("button", {
+      type: "button",
+      className: "nano-shell-tool",
+      "aria-label": label,
+      title: label,
+      "aria-pressed": pressed ? "true" : "false",
+      disabled: disabled === true,
+      onClick
+    }, icon2);
+  }
+  function ShellTail({ children }) {
+    return h8("span", { className: "nano-shell-tail" }, children);
+  }
+  function clampHeight(shell, height) {
+    const limit = Math.max(88, Math.floor((shell?.clientHeight ?? 480) * 0.6));
+    return Math.min(limit, Math.max(88, Math.round(height)));
+  }
+  function StatusDock({ label, text, actions = [], height = 0, onHeight, onCommit, children }) {
+    const open = height > 0;
+    const drag = (event) => {
+      if (event.button != null && event.button !== 0) return;
+      event.preventDefault();
+      const shell = event.currentTarget.closest(".nano-shell");
+      const startY = event.clientY;
+      const startH = height;
+      const move = (ev) => onHeight?.(clampHeight(shell, startH + (startY - ev.clientY)));
+      const up = (ev) => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        const next = clampHeight(shell, startH + (startY - ev.clientY));
+        onHeight?.(next);
+        onCommit?.(next);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    };
+    return h8(
+      import_react13.default.Fragment,
+      null,
+      open ? h8(
+        "div",
+        { className: "nano-dock", style: { height: `${height}px` } },
+        h8("div", {
+          className: "nano-dock-grip",
+          role: "separator",
+          "aria-orientation": "horizontal",
+          "aria-label": label,
+          onPointerDown: drag
+        }),
+        h8("div", { className: "nano-dock-body" }, children)
+      ) : null,
+      h8(
+        "footer",
+        { className: "nano-status" },
+        h8("span", { className: "nano-status-text" }, text),
+        h8("span", { className: "nano-status-actions" }, actions.map((action) => (
+          /* nano-ui-exempt: 宿主 Button 最小档 28px，26px 状态条里的 20px 文字按钮没有对应档。 */
+          h8("button", {
+            key: action.id,
+            type: "button",
+            className: "nano-status-btn",
+            "aria-pressed": action.pressed ? "true" : "false",
+            disabled: action.disabled === true,
+            onClick: action.onClick
+          }, action.label)
+        )))
+      )
+    );
+  }
+  var import_react13, h8;
+  var init_shell = __esm({
+    "../packages/dsh-nano-ui/src/shell.js"() {
+      import_react13 = __toESM(__require("react"), 1);
+      h8 = import_react13.default.createElement;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/index.js
+  var dsh_nano_ui_exports = {};
+  __export(dsh_nano_ui_exports, {
+    Card: () => Card,
+    DrawerHead: () => DrawerHead,
+    DrawerRow: () => DrawerRow,
+    EmptyState: () => EmptyState,
+    FactGrid: () => FactGrid,
+    FloatingWindow: () => FloatingWindow,
+    IconButton: () => IconButton,
+    Meter: () => Meter,
+    NANO_LAYER: () => NANO_LAYER,
+    NANO_SPACE: () => NANO_SPACE,
+    NANO_STYLES: () => NANO_STYLES,
+    NanoDialog: () => NanoDialog,
+    NanoMenu: () => NanoMenu,
+    NanoTabs: () => NanoTabs,
+    NanoToast: () => NanoToast,
+    NanoWindowDialog: () => NanoWindowDialog,
+    PanelLayout: () => PanelLayout,
+    PanelSection: () => PanelSection,
+    PlainTable: () => PlainTable,
+    ShellGap: () => ShellGap,
+    ShellIcon: () => ShellIcon,
+    ShellTail: () => ShellTail,
+    ShellTitle: () => ShellTitle,
+    ShellToggle: () => ShellToggle,
+    SplitRow: () => SplitRow,
+    StatusDock: () => StatusDock,
+    TabDrawer: () => TabDrawer,
+    Toolbar: () => Toolbar,
+    VERSION: () => VERSION,
+    WorkbenchShell: () => WorkbenchShell,
+    createThemeScope: () => createThemeScope,
+    icon: () => icon,
+    iconMarkup: () => iconMarkup,
+    menuHeight: () => menuHeight,
+    mountNano: () => mountNano,
+    nanoTabs: () => nanoTabs,
+    openNanoDialog: () => openNanoDialog,
+    openNanoMenu: () => openNanoMenu,
+    resolveScheme: () => resolveScheme,
+    useNanoWindow: () => useNanoWindow
+  });
+  var init_dsh_nano_ui = __esm({
+    "../packages/dsh-nano-ui/index.js"() {
+      init_version();
+      init_layers();
+      init_styles();
+      init_theme();
+      init_icons2();
+      init_dialog();
+      init_overlay();
+      init_menu();
+      init_toast();
+      init_tabs();
+      init_dom();
+      init_mount();
+      init_button();
+      init_toolbar();
+      init_empty();
+      init_window();
+      init_panel();
+      init_shell();
+    }
+  });
+
+  // src/client/managed.js
+  var managed_exports = {};
+  __export(managed_exports, {
+    CONTRACT_HEADER: () => CONTRACT_HEADER,
+    CONTRACT_META: () => CONTRACT_META,
+    CONTRACT_VERSION: () => CONTRACT_VERSION,
+    createDnlsClient: () => createDnlsClient,
+    createTicket: () => createTicket
+  });
+  function refuse(code, message) {
+    const error = new Error(message);
+    error.errorId = `dnls.client.${code}`;
+    error.restricted = true;
+    throw error;
+  }
+  function createTicket() {
+    let seq2 = 0;
+    let alive = true;
+    return {
+      take() {
+        seq2 += 1;
+        const mine = seq2;
+        return () => alive && seq2 === mine;
+      },
+      kill() {
+        alive = false;
+        seq2 += 1;
+      }
+    };
+  }
+  function createDnlsClient({ fetch: impl, origin } = {}) {
+    const doFetch = impl ?? globalThis.fetch?.bind(globalThis);
+    if (typeof doFetch !== "function") throw new Error("dnls client requires fetch");
+    const base = new URL(origin ?? globalThis.location?.origin);
+    if (!base.origin || base.origin === "null") throw new Error("dnls client requires an origin");
+    let contract = null;
+    const announced = (capabilityId) => {
+      if (!contract) refuse("discovery", "contract discovery has not run");
+      if (!contract.capabilities.includes(capabilityId)) {
+        refuse("capability", `${capabilityId} is not announced`);
+      }
+    };
+    async function request(path, { method = "GET", query, body, signal, sandboxId, envelope = "dnls" } = {}) {
+      if (!path.startsWith(PREFIX) || path.includes("..")) refuse("path", `unexpected path ${path}`);
+      const url = new URL(path, base);
+      if (url.origin !== base.origin) refuse("origin", "requests stay on the pane origin");
+      for (const [key, value] of Object.entries(query ?? {})) {
+        if (value !== void 0 && value !== null) url.searchParams.set(key, String(value));
+      }
+      const res = await doFetch(url.href, {
+        method,
+        credentials: "same-origin",
+        redirect: "error",
+        headers: {
+          [CONTRACT_HEADER]: CONTRACT_VERSION,
+          accept: "application/json",
+          ...body !== void 0 ? { "content-type": "application/json" } : {}
+        },
+        body: body === void 0 ? void 0 : JSON.stringify(body),
+        signal
+      });
+      const parsed = await res.json().catch(() => null);
+      if (!res.ok) {
+        const error = new Error(parsed?.error ?? `request failed (${res.status})`);
+        error.errorId = parsed?.errorId ?? "dnls.client.http";
+        error.status = res.status;
+        throw error;
+      }
+      if (parsed === null || typeof parsed !== "object") refuse("shape", "malformed response body");
+      if (envelope === "jsonrpc") return parsed;
+      if (res.headers.get(CONTRACT_HEADER) !== CONTRACT_VERSION) refuse("contract", "response contract header mismatch");
+      if (parsed.contractVersion !== CONTRACT_VERSION) refuse("contract", "response contract mismatch");
+      if (sandboxId && parsed.sandboxId !== sandboxId) {
+        refuse("target", "response names a different sandbox");
+      }
+      if (parsed.ok === false) {
+        const error = new Error(parsed.error ?? "request failed");
+        error.errorId = parsed.errorId ?? "dnls.client.refused";
+        throw error;
+      }
+      return parsed;
+    }
+    async function mcp(name, args, { signal, sandboxId } = {}) {
+      announced(name);
+      const parsed = await request(`${PREFIX}mcp`, {
+        method: "POST",
+        body: {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name,
+            arguments: args,
+            _meta: { [CONTRACT_META]: CONTRACT_VERSION }
+          }
+        },
+        signal,
+        envelope: "jsonrpc"
+      });
+      if (parsed?.jsonrpc !== "2.0" || parsed.id !== 1) refuse("mcp", "invalid jsonrpc envelope");
+      const result = parsed?.result;
+      if (!result || typeof result !== "object") refuse("mcp", "missing mcp result");
+      const out = result.structuredContent;
+      if (result.isError === true) {
+        const error = new Error(out?.error ?? out?.errorId ?? `${name} refused`);
+        error.errorId = out?.errorId ?? "dnls.client.mcp";
+        error.status = Number.isInteger(out?.status) ? out.status : null;
+        throw error;
+      }
+      if (out?.contractVersion !== CONTRACT_VERSION) {
+        refuse("contract", "response contract mismatch");
+      }
+      if (sandboxId && out.sandboxId !== sandboxId) {
+        refuse("target", "response names a different sandbox");
+      }
+      return out ?? {};
+    }
+    return {
+      /** The only request that runs before discovery; resets announced caps. */
+      async discover({ signal } = {}) {
+        contract = null;
+        const res = await doFetch(new URL(CONTRACT_PATH, base).href, {
+          method: "GET",
+          credentials: "same-origin",
+          redirect: "error",
+          headers: { accept: "application/json" },
+          signal
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok || res.headers.get(CONTRACT_HEADER) !== CONTRACT_VERSION || body?.contractVersion !== CONTRACT_VERSION || !Array.isArray(body.capabilities)) {
+          refuse("contract", "unknown control contract");
+        }
+        contract = { capabilities: body.capabilities };
+        return contract;
+      },
+      capabilities: () => contract ? [...contract.capabilities] : null,
+      /** Per-capability gate: `sandbox.instance.stop` is advertised
+       * independently of `sandbox.instance.create` — the pane enables only
+       * the actions the provider actually announced. */
+      supports: (capabilityId) => contract?.capabilities.includes(capabilityId) === true,
+      /** Flat `sandbox.list` payload: `{envs, rows, total, complete}`. */
+      async listSandboxes({ signal } = {}) {
+        const cap = PATH_CAPS.get(`${PREFIX}sandboxes`);
+        announced(cap);
+        const body = await request(`${PREFIX}sandboxes`, { signal });
+        if (!Array.isArray(body.rows)) refuse("shape", "invalid sandbox list");
+        return { envs: body.envs, rows: body.rows, total: body.total, complete: body.complete };
+      },
+      async inspect(sandboxId, { window: usageWindow = "24h", signal } = {}) {
+        assertSandboxId(sandboxId);
+        announced(PATH_CAPS.get(`${PREFIX}inspect`));
+        if (usageWindow !== null && !INSPECT_WINDOWS.has(usageWindow)) refuse("params", "unknown usage window");
+        return request(`${PREFIX}inspect`, {
+          query: usageWindow === null ? { sandboxId } : { sandboxId, window: usageWindow },
+          signal,
+          sandboxId
+        });
+      },
+      async processes(sandboxId, { limit, signal } = {}) {
+        assertSandboxId(sandboxId);
+        announced(PATH_CAPS.get(`${PREFIX}processes`));
+        return request(`${PREFIX}processes`, {
+          query: { sandboxId, ...Number.isInteger(limit) ? { limit } : {} },
+          signal,
+          sandboxId
+        });
+      },
+      /** Object lifecycle POST. `create` is target-none: it must not carry a selector. */
+      async lifecycle({ action, sandboxId, name, profileId, requestId, args: extra, signal } = {}) {
+        announced(PATH_CAPS.get(`${PREFIX}lifecycle`));
+        announced(`sandbox.instance.${action}`);
+        if (typeof requestId !== "string" || requestId.length === 0) refuse("params", "requestId required");
+        const body = { ...extra ?? {}, action, requestId };
+        const query = {};
+        if (action === "create") {
+          if (sandboxId !== void 0) refuse("target", "create never carries a selector");
+          if (typeof name !== "string" || name.length === 0) refuse("params", "name required");
+          body.name = name;
+          if (profileId !== void 0) body.profileId = profileId;
+        } else {
+          assertSandboxId(sandboxId);
+          query.sandboxId = sandboxId;
+        }
+        const answer = await request(`${PREFIX}lifecycle`, { method: "POST", query, body, signal, sandboxId });
+        if (typeof answer.operationId !== "string" || answer.operationId.length === 0) {
+          refuse("receipt", "missing operation receipt");
+        }
+        if (action === "create" && !SANDBOX_ID.test(answer.sandboxId ?? "")) {
+          refuse("receipt", "create answered without a valid sandboxId");
+        }
+        return answer;
+      },
+      /** Exact operation read by sandboxId + operationId on the paired route. */
+      async readOperation(sandboxId, operationId, { signal } = {}) {
+        assertSandboxId(sandboxId);
+        if (typeof operationId !== "string" || operationId.length === 0) {
+          refuse("params", "operationId required");
+        }
+        announced(PATH_CAPS.get(`${PREFIX}operations`));
+        const answer = await request(`${PREFIX}operations`, {
+          query: { sandboxId, operationId },
+          signal,
+          sandboxId
+        });
+        if (answer.operationId !== operationId) refuse("target", "response names a different operation");
+        return answer;
+      },
+      /** Authorized profiles via the `sandbox.profile.list` MCP tool. */
+      async listProfiles({ signal } = {}) {
+        const out = await mcp("sandbox.profile.list", {}, { signal });
+        if (!Array.isArray(out.profiles)) refuse("shape", "invalid profile list");
+        return out.profiles;
+      },
+      /** Targeted engine status page (kitesurf profile): the pane reads only
+       * whitelisted fields, never page/url/credential material. */
+      async logs(sandboxId, { tail = 20, signal } = {}) {
+        assertSandboxId(sandboxId);
+        announced(PATH_CAPS.get(`${PREFIX}logs`));
+        const bounded = Number.isInteger(tail) && tail >= 1 && tail <= 200 ? tail : 20;
+        return request(`${PREFIX}logs`, { query: { sandboxId, tail: bounded }, signal, sandboxId });
+      },
+      async status(sandboxId, { signal } = {}) {
+        assertSandboxId(sandboxId);
+        announced(PATH_CAPS.get(`${PREFIX}status`));
+        return request(`${PREFIX}status`, { query: { sandboxId }, signal, sandboxId });
+      },
+      /** Shared-engine HITL control: GET reads writer/humanHold; POST is
+       * limited to takeover|release — there is no arbitrary action. */
+      async control(sandboxId, action, { signal } = {}) {
+        assertSandboxId(sandboxId);
+        announced(PATH_CAPS.get(`${PREFIX}control`));
+        if (action === void 0) {
+          return request(`${PREFIX}control`, { query: { sandboxId }, signal, sandboxId });
+        }
+        if (!CONTROL_ACTIONS.has(action)) refuse("params", `unknown control action ${action}`);
+        return request(`${PREFIX}control`, {
+          method: "POST",
+          query: { sandboxId },
+          body: { action },
+          signal,
+          sandboxId
+        });
+      },
+      /** This principal's terminals on one sandbox — `{sandboxId, terminals}`. */
+      async terminalList(sandboxId, { signal } = {}) {
+        assertSandboxId(sandboxId);
+        const out = await mcp("term.session.list", { sandboxId }, { signal, sandboxId });
+        if (!Array.isArray(out.terminals)) refuse("shape", "invalid terminal list");
+        return out;
+      },
+      /** Create-only terminal spawn: `{sandboxId, terminalId}` — never an
+       * attach, and the caller supplies the pane/open correlation ids. */
+      async terminalCreate(sandboxId, { service, paneId, openId } = {}, { signal } = {}) {
+        assertSandboxId(sandboxId);
+        if (typeof paneId !== "string" || !paneId || typeof openId !== "string" || !openId) {
+          refuse("params", "paneId and openId are required");
+        }
+        const args = { sandboxId, paneId, openId };
+        if (service !== void 0) args.service = service;
+        const out = await mcp("term.session.create", args, { signal, sandboxId });
+        if (typeof out.terminalId !== "string" || !SANDBOX_ID.test(out.terminalId)) {
+          refuse("receipt", "terminal create answered without a valid terminalId");
+        }
+        return out;
+      },
+      /** Resize an owned terminal worker. Does not create or attach. */
+      async terminalResize(sandboxId, terminalId, cols, rows, { signal } = {}) {
+        assertSandboxId(sandboxId);
+        if (!SANDBOX_ID.test(terminalId ?? "")) refuse("params", "terminalId required");
+        if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 2 || rows < 2 || cols > 512 || rows > 512) {
+          refuse("params", "cols and rows out of range");
+        }
+        return mcp("term.session.resize", { sandboxId, terminalId, cols, rows }, { signal, sandboxId });
+      },
+      /** Confirmed close of an owned terminal worker. */
+      async terminalClose(sandboxId, terminalId, { signal } = {}) {
+        assertSandboxId(sandboxId);
+        if (!SANDBOX_ID.test(terminalId ?? "")) refuse("params", "terminalId required");
+        return mcp("term.session.close", { sandboxId, terminalId }, { signal, sandboxId });
+      },
+      /** Desired resources: `{expectedRevision, overrides:{cpus?,memoryBytes?}}`. */
+      async saveRevision(sandboxId, { expectedRevision, overrides } = {}, { signal } = {}) {
+        assertSandboxId(sandboxId);
+        if (!Number.isInteger(expectedRevision) || expectedRevision < 0) refuse("params", "expectedRevision required");
+        if (!overrides || typeof overrides !== "object" || Array.isArray(overrides)) refuse("params", "overrides required");
+        return mcp("sandbox.revision.save", { sandboxId, expectedRevision, overrides }, { signal, sandboxId });
+      },
+      /** Idle timeout in whole minutes on the wire as milliseconds. */
+      async configureIdle(sandboxId, idleTimeoutMs, { signal } = {}) {
+        assertSandboxId(sandboxId);
+        if (!Number.isSafeInteger(idleTimeoutMs) || idleTimeoutMs < 0) refuse("params", "idleTimeoutMs out of range");
+        return mcp("sandbox.idle.configure", { sandboxId, idleTimeoutMs }, { signal, sandboxId });
+      }
+    };
+  }
+  var CONTRACT_VERSION, CONTRACT_HEADER, CONTRACT_META, PREFIX, CONTRACT_PATH, SANDBOX_ID, INSPECT_WINDOWS, PATH_CAPS, CONTROL_ACTIONS, assertSandboxId;
+  var init_managed = __esm({
+    "src/client/managed.js"() {
+      CONTRACT_VERSION = "dnls.control/1";
+      CONTRACT_HEADER = "x-dnls-contract";
+      CONTRACT_META = "dnls/contract";
+      PREFIX = "/nano-local-sandbox/";
+      CONTRACT_PATH = `${PREFIX}contract`;
+      SANDBOX_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+      INSPECT_WINDOWS = /* @__PURE__ */ new Set(["24h", "7d", "30d"]);
+      PATH_CAPS = /* @__PURE__ */ new Map([
+        [`${PREFIX}sandboxes`, "sandbox.list"],
+        [`${PREFIX}inspect`, "sandbox.inspect"],
+        [`${PREFIX}processes`, "sandbox.processes"],
+        [`${PREFIX}lifecycle`, "sandbox.lifecycle"],
+        [`${PREFIX}operations`, "sandbox.operations"],
+        [`${PREFIX}status`, "dnls.status"],
+        [`${PREFIX}control`, "dnls.control"],
+        [`${PREFIX}logs`, "dnls.logs"]
+      ]);
+      CONTROL_ACTIONS = /* @__PURE__ */ new Set(["takeover", "release"]);
+      assertSandboxId = (sandboxId) => {
+        if (typeof sandboxId !== "string" || !SANDBOX_ID.test(sandboxId)) {
+          refuse("target", "a sandboxId uuid is required");
+        }
+      };
+    }
+  });
+
+  // src/client/i18n.js
+  var i18n_exports = {};
+  __export(i18n_exports, {
+    copyFor: () => copyFor,
+    fill: () => fill
+  });
+  function copyFor(language) {
+    return language === "zh" ? ZH : EN;
+  }
+  function fill(template, params) {
+    return String(template).replace(/\{(\w+)\}/g, (_, key) => String(params?.[key] ?? ""));
+  }
+  var EN, ZH;
+  var init_i18n = __esm({
+    "src/client/i18n.js"() {
+      EN = {
+        localeTag: "en",
+        typeLabel: "Sandboxes",
+        typeDescription: "Managed local sandboxes: overview and lifecycle control.",
+        overview: "Overview",
+        control: "Control",
+        loading: "Loading\u2026",
+        refresh: "Refresh",
+        retry: "Retry",
+        failed: "Request failed",
+        empty: "No managed sandboxes are visible to this session.",
+        emptyTitle: "No sandboxes",
+        emptyHint: "Create one from an installed profile to get started.",
+        pick: "Select a sandbox to control it",
+        back: "Back to sandboxes",
+        backToMonitor: "Back to resource monitor",
+        allObjects: "All",
+        lastMinuteHint: "Last complete minute \xB7 Used / allocated. A dash means no reading.",
+        allocation: "Allocated: {cpu} cores \xB7 {memory}",
+        searchPlaceholder: "Filter sandboxes",
+        create: "Create sandbox",
+        createTitle: "Create a sandbox",
+        createName: "Name",
+        createProfile: "Profile",
+        createSubmit: "Create",
+        creating: "Creating\u2026",
+        noProfiles: "No installable profiles were listed.",
+        profileNotReady: "not ready",
+        listShort: "{shown}/{total} visible",
+        listPartial: "scope incomplete",
+        fieldName: "Name",
+        fieldProfile: "Profile",
+        fieldEnv: "Environment",
+        fieldState: "Observed state",
+        fieldRevision: "Revision",
+        fieldServices: "Services",
+        fieldGeneration: "Generation",
+        fieldSandboxId: "Sandbox id",
+        desiredRev: "desired",
+        appliedRev: "applied",
+        health: "Health",
+        observedAt: "Observed at",
+        opLatest: "Latest operation",
+        none: "\u2014",
+        // detail tabs
+        tabOverview: "Resource monitor",
+        tabServices: "Services & tools",
+        tabSettings: "Settings",
+        // overview tab
+        resources: "Resources",
+        resCpus: "CPUs",
+        resMemory: "Memory",
+        usageStates: "States",
+        usageMemory: "Memory",
+        usageCpu: "CPU",
+        stateRunning: "running",
+        stateStopped: "stopped",
+        stateFailed: "failed",
+        stateMissing: "missing",
+        expected: "expected",
+        valid: "valid",
+        mean: "mean",
+        peak: "peak",
+        details: "Details",
+        deployment: "Deployment",
+        appliedDigest: "Image digest",
+        appliedVerified: "Verified at",
+        network: "Network",
+        netGateway: "Host gateway",
+        netAddress: "Container address",
+        storage: "Storage",
+        storeVolume: "State volume proven",
+        processes: "Show processes",
+        processesHide: "Hide processes",
+        processesEmpty: "No guest processes reported.",
+        // lifecycle
+        start: "Start",
+        stop: "Stop",
+        restart: "Restart",
+        recreate: "Recreate",
+        remove: "Remove",
+        confirmTitle: "Confirm {action}",
+        confirmBody: "Run {action} on sandbox {name}? This interrupts its terminals and in-flight work; the state volume is preserved.",
+        confirmBodyRemove: "Remove sandbox {name}? The record is destroyed; the state volume on disk is kept, not wiped.",
+        confirmGo: "Confirm",
+        cancel: "Cancel",
+        close: "Close",
+        // activity
+        activity: "Activity",
+        opAccepted: "Operation accepted",
+        opState: "Operation {operationId}: {state}",
+        opRecheck: "Recheck operation",
+        opPending: "pending \u2014 press recheck; the request is never resent automatically",
+        // services tab
+        servicePublication: "Host publication",
+        serviceHealth: "Probe",
+        engineProbe: "Engine",
+        engineState: "Engine state",
+        bridgeState: "Bridge",
+        engineUnavailable: "Engine status is not announced for this sandbox.",
+        openWorkspace: "Open design workspace",
+        openWorkspaceHint: "Select the same sandbox inside Kitesurf.",
+        workspaceMissing: "The Kitesurf tab type is not installed.",
+        humanHold: "Manual control",
+        humanHoldActive: "held by an operator",
+        humanHoldFree: "free for writers",
+        takeover: "Take over",
+        release: "Release",
+        terminals: "Terminals",
+        terminalsList: "List terminals",
+        terminalsEmpty: "No live terminals on this sandbox.",
+        terminalsDenied: "Terminals are unavailable under this shared identity.",
+        terminalCreate: "New terminal",
+        terminalCreateFor: "New {service} terminal",
+        terminalOpen: "Open",
+        terminalClose: "Close",
+        terminalCloseConfirm: "Close terminal {id}? Its worker is reaped.",
+        terminalUnavailable: "No terminal tab type is registered to open it.",
+        // settings tab
+        config: "Desired resources",
+        configCpus: "CPUs",
+        configMemory: "Memory (MiB)",
+        configSave: "Save desired resources",
+        configSaved: "Saved revision {revision} \u2014 apply it with Recreate when ready.",
+        configUnobserved: "not configured",
+        idle: "Idle policy",
+        idleMinutes: "Idle timeout (minutes)",
+        idleSave: "Save idle policy",
+        idleSaved: "Idle policy saved.",
+        danger: "Danger zone",
+        recreateConfirmTitle: "Recreate sandbox",
+        recreateConfirmBody: "Recreate {name}? The container is replaced and verified; terminals and in-flight work are interrupted. The state volume is preserved.",
+        recreateAcknowledge: "I understand the sandbox will be replaced",
+        removeConfirmTitle: "Remove sandbox",
+        removeConfirmBody: "Remove {name}? Its record and live container go away; the state volume on disk is kept.",
+        removeAcknowledge: "I understand the record is destroyed",
+        apply: "Apply",
+        // dashboard
+        fleetTitle: "Sandbox overview",
+        fleetStats: "{running} running \xB7 {stopped} stopped \xB7 {attention} need attention",
+        faceUnverified: "not yet verified",
+        faceUnverifiedHint: "Observation pending \u2014 state unverified",
+        revPending: "Saved revision {rev} awaits deployment verification.",
+        revisionPair: "Applied revision {applied} \xB7 Saved revision {saved}. Recreate to apply.",
+        reviewSettings: "Review settings",
+        saveNoChange: "Saving does not change the running configuration.",
+        profileSeats: "{count} visible / {limit} profile slots",
+        guestProcesses: "Guest processes",
+        draftInvalid: "Enter a whole number",
+        serviceColumn: "Service",
+        workbenchTitle: "Sandbox workbench",
+        envKicker: "Environment / {env}",
+        visibleWord: "visible",
+        faceRunning: "Operating \u2014 live sampling",
+        faceStopped: "Stopped",
+        samplingStopped: "Sampling stopped",
+        lastMinute: "last completed minute",
+        unknown: "\u2014",
+        coresUnit: "cores",
+        pendingConfig: "Saved configuration pending apply",
+        servicesVerified: "verified services",
+        chartMean: "mean",
+        chartPeak: "peak",
+        samplesWord: "samples",
+        noSamples: "No samples in this window.",
+        chartFrom: "from",
+        chartTo: "to",
+        unpublished: "unpublished",
+        cfgPendingCpu: "CPU: allocated {cur} cores, saved {saved} cores \u2014 not yet applied",
+        cfgPendingMem: "Memory: allocated {cur}, saved {saved} \u2014 not yet applied",
+        allocated: "allocated",
+        measured: "measured",
+        opStates: { accepted: "accepted", running: "running", succeeded: "succeeded", failed: "failed", indeterminate: "indeterminate", cancelled: "cancelled" },
+        fleetAttention: "Needs attention",
+        healthUnverified: "Service health not yet verified",
+        opLine: "{action} \xB7 {state}",
+        opIdLine: "Operation {operationId}",
+        timeline: "Recent operations",
+        guestCwd: "Guest cwd",
+        protocol: "Protocol",
+        persistence: "Persistence",
+        persistVolume: "State volume persists across recreate",
+        stateUnknown: "unknown",
+        stateCreating: "creating",
+        stateStarting: "starting",
+        idleHint: "leave blank to keep the current policy",
+        startConfirmTitle: "Start sandbox",
+        startConfirmBody: "Start {name} and resume its declared services?",
+        stopConfirmTitle: "Stop sandbox",
+        restartConfirmTitle: "Restart sandbox",
+        lifecycleAcknowledge: "I understand this interrupts terminals and in-flight work",
+        closeConfirmTitle: "Close terminal",
+        searchMiss: "No sandboxes match the filter.",
+        clearFilter: "Clear filter",
+        configNotAuthorized: "read-only \u2014 desired configuration is not authorized for this principal",
+        usageNotAuthorized: "usage history is not authorized for this principal",
+        capacity: "Capacity",
+        opsOlder: "Older operations",
+        readLogs: "Read logs",
+        logsTitle: "Engine logs",
+        procsTruncated: "list truncated by the provider",
+        readOnly: "read-only",
+        sessionRequired: "This pane needs a mounted session.",
+        confirm: "Confirm",
+        dockLabel: "Terminal",
+        dockNeed: "Select a sandbox before opening a terminal.",
+        dockHint: "Opening a terminal uses the host terminal tab. Dragging this sheet resizes that terminal and does not start one.",
+        coverageLine: "{valid}/{expected} minutes",
+        objectsData: "{shown}/{total} with samples",
+        statusRun: "{running} running \xB7 {stopped} stopped",
+        notYetApplied: "Not yet applied",
+        procPid: "PID",
+        procPpid: "PPID",
+        procName: "Name",
+        procState: "State",
+        procRss: "RSS",
+        auditEmpty: "No operations in this reading.",
+        window24: "24h",
+        window7: "7d",
+        window30: "30d"
+      };
+      ZH = {
+        localeTag: "zh-CN",
+        typeLabel: "\u6C99\u7BB1",
+        typeDescription: "\u6258\u7BA1\u672C\u5730\u6C99\u7BB1\uFF1A\u603B\u89C8\u4E0E\u751F\u547D\u5468\u671F\u63A7\u5236\u3002",
+        overview: "\u603B\u89C8",
+        control: "\u63A7\u5236",
+        loading: "\u52A0\u8F7D\u4E2D\u2026",
+        refresh: "\u5237\u65B0",
+        retry: "\u91CD\u8BD5",
+        failed: "\u8BF7\u6C42\u5931\u8D25",
+        empty: "\u5F53\u524D\u4F1A\u8BDD\u770B\u4E0D\u5230\u4EFB\u4F55\u6258\u7BA1\u6C99\u7BB1\u3002",
+        emptyTitle: "\u6682\u65E0\u6C99\u7BB1",
+        emptyHint: "\u4ECE\u5DF2\u5B89\u88C5\u7684 profile \u521B\u5EFA\u4E00\u4E2A\u5373\u53EF\u5F00\u59CB\u3002",
+        pick: "\u9009\u62E9\u4E00\u4E2A\u6C99\u7BB1\u540E\u8FDB\u884C\u63A7\u5236",
+        back: "\u8FD4\u56DE\u6C99\u7BB1\u5217\u8868",
+        backToMonitor: "\u8FD4\u56DE\u8D44\u6E90\u76D1\u63A7",
+        allObjects: "\u5168\u90E8",
+        lastMinuteHint: "\u6700\u8FD1\u4E00\u4E2A\u5B8C\u6574\u5206\u949F \xB7 \u5B9E\u6D4B\u7528\u91CF / \u5206\u914D\u91CF\uFF1B\u6A2A\u7EBF\u8868\u793A\u6CA1\u6709\u8BFB\u6570\u3002",
+        allocation: "\u5F53\u524D\u5206\u914D\uFF1A{cpu} \u6838 \xB7 {memory}",
+        searchPlaceholder: "\u7B5B\u9009\u6C99\u7BB1",
+        create: "\u521B\u5EFA\u6C99\u7BB1",
+        createTitle: "\u521B\u5EFA\u6C99\u7BB1",
+        createName: "\u540D\u79F0",
+        createProfile: "Profile",
+        createSubmit: "\u521B\u5EFA",
+        creating: "\u521B\u5EFA\u4E2D\u2026",
+        noProfiles: "\u6CA1\u6709\u5217\u51FA\u53EF\u5B89\u88C5\u7684 profile\u3002",
+        profileNotReady: "\u672A\u5C31\u7EEA",
+        listShort: "\u53EF\u89C1 {shown}/{total}",
+        listPartial: "\u8303\u56F4\u4E0D\u5B8C\u6574",
+        fieldName: "\u540D\u79F0",
+        fieldProfile: "Profile",
+        fieldEnv: "\u73AF\u5883",
+        fieldState: "\u89C2\u6D4B\u72B6\u6001",
+        fieldRevision: "\u4FEE\u8BA2",
+        fieldServices: "\u670D\u52A1",
+        fieldGeneration: "\u4E16\u4EE3",
+        fieldSandboxId: "\u6C99\u7BB1 ID",
+        desiredRev: "\u671F\u671B",
+        appliedRev: "\u5DF2\u5E94\u7528",
+        health: "\u5065\u5EB7\u5EA6",
+        observedAt: "\u89C2\u6D4B\u65F6\u95F4",
+        opLatest: "\u6700\u8FD1\u64CD\u4F5C",
+        none: "\u2014",
+        tabOverview: "\u8D44\u6E90\u76D1\u63A7",
+        tabServices: "\u670D\u52A1\u4E0E\u5DE5\u5177",
+        tabSettings: "\u8BBE\u7F6E",
+        resources: "\u8D44\u6E90",
+        resCpus: "CPU \u6838\u6570",
+        resMemory: "\u5185\u5B58",
+        usageStates: "\u72B6\u6001\u5206\u5E03",
+        usageMemory: "\u5185\u5B58",
+        usageCpu: "CPU",
+        stateRunning: "\u8FD0\u884C",
+        stateStopped: "\u505C\u6B62",
+        stateFailed: "\u5931\u8D25",
+        stateMissing: "\u7F3A\u5931",
+        expected: "\u5E94\u6709",
+        valid: "\u6709\u6548",
+        mean: "\u5747\u503C",
+        peak: "\u5CF0\u503C",
+        details: "\u8BE6\u60C5",
+        deployment: "\u90E8\u7F72",
+        appliedDigest: "\u955C\u50CF\u6458\u8981",
+        appliedVerified: "\u9A8C\u8BC1\u65F6\u95F4",
+        network: "\u7F51\u7EDC",
+        netGateway: "\u5BBF\u4E3B\u7F51\u5173",
+        netAddress: "\u5BB9\u5668\u5730\u5740",
+        storage: "\u5B58\u50A8",
+        storeVolume: "\u72B6\u6001\u5377\u5DF2\u8BC1\u5B9E",
+        processes: "\u67E5\u770B\u8FDB\u7A0B",
+        processesHide: "\u6536\u8D77\u8FDB\u7A0B",
+        processesEmpty: "\u6CA1\u6709\u6765\u5BBE\u8FDB\u7A0B\u8BB0\u5F55\u3002",
+        start: "\u542F\u52A8",
+        stop: "\u505C\u6B62",
+        restart: "\u91CD\u542F",
+        recreate: "\u91CD\u5EFA",
+        remove: "\u79FB\u9664",
+        confirmTitle: "\u786E\u8BA4{action}",
+        confirmBody: "\u5BF9\u6C99\u7BB1 {name} \u6267\u884C {action}\uFF1F\u4F1A\u4E2D\u65AD\u5176\u7EC8\u7AEF\u4E0E\u8FDB\u884C\u4E2D\u7684\u5DE5\u4F5C\uFF0C\u72B6\u6001\u5377\u4FDD\u7559\u3002",
+        confirmBodyRemove: "\u79FB\u9664\u6C99\u7BB1 {name}\uFF1F\u8BB0\u5F55\u5C06\u88AB\u9500\u6BC1\uFF0C\u78C1\u76D8\u4E0A\u7684\u72B6\u6001\u5377\u4FDD\u7559\u4E0D\u64E6\u9664\u3002",
+        confirmGo: "\u786E\u8BA4",
+        cancel: "\u53D6\u6D88",
+        close: "\u5173\u95ED",
+        activity: "\u6D3B\u52A8",
+        opAccepted: "\u64CD\u4F5C\u5DF2\u53D7\u7406",
+        opState: "\u64CD\u4F5C {operationId}\uFF1A{state}",
+        opRecheck: "\u91CD\u67E5\u64CD\u4F5C",
+        opPending: "\u5904\u7406\u4E2D\u2014\u2014\u8BF7\u70B9\u91CD\u67E5\uFF0C\u4E0D\u4F1A\u81EA\u52A8\u91CD\u53D1\u8BF7\u6C42",
+        servicePublication: "\u5BBF\u4E3B\u673A\u53D1\u5E03",
+        serviceHealth: "\u63A2\u9488",
+        engineProbe: "\u5F15\u64CE",
+        engineState: "\u5F15\u64CE\u72B6\u6001",
+        bridgeState: "\u6865\u63A5",
+        engineUnavailable: "\u6B64\u6C99\u7BB1\u672A\u5BA3\u544A\u5F15\u64CE\u72B6\u6001\u9762\u3002",
+        openWorkspace: "\u6253\u5F00\u8BBE\u8BA1\u5DE5\u4F5C\u533A",
+        openWorkspaceHint: "\u5728 Kitesurf \u4E2D\u663E\u5F0F\u9009\u62E9\u540C\u4E00\u4E2A\u6C99\u7BB1\u3002",
+        workspaceMissing: "\u672A\u5B89\u88C5 Kitesurf \u9875\u7B7E\u7C7B\u578B\u3002",
+        humanHold: "\u4EBA\u5DE5\u63A5\u7BA1",
+        humanHoldActive: "\u5DF2\u7531\u64CD\u4F5C\u8005\u63A5\u7BA1",
+        humanHoldFree: "\u5BF9\u5199\u5165\u65B9\u5F00\u653E",
+        takeover: "\u63A5\u7BA1",
+        release: "\u91CA\u653E",
+        terminals: "\u7EC8\u7AEF",
+        terminalsList: "\u5217\u51FA\u7EC8\u7AEF",
+        terminalsEmpty: "\u6B64\u6C99\u7BB1\u4E0A\u6CA1\u6709\u5B58\u6D3B\u7EC8\u7AEF\u3002",
+        terminalsDenied: "\u5171\u4EAB\u8EAB\u4EFD\u4E0B\u7EC8\u7AEF\u4E0D\u53EF\u7528\u3002",
+        terminalCreate: "\u65B0\u5EFA\u7EC8\u7AEF",
+        terminalCreateFor: "\u65B0\u5EFA {service} \u7EC8\u7AEF",
+        terminalOpen: "\u6253\u5F00",
+        terminalClose: "\u5173\u95ED",
+        terminalCloseConfirm: "\u5173\u95ED\u7EC8\u7AEF {id}\uFF1F\u5176 worker \u5C06\u88AB\u56DE\u6536\u3002",
+        terminalUnavailable: "\u6CA1\u6709\u53EF\u6253\u5F00\u5B83\u7684\u7EC8\u7AEF\u9875\u7B7E\u7C7B\u578B\u3002",
+        config: "\u671F\u671B\u8D44\u6E90",
+        configCpus: "CPU \u6838\u6570",
+        configMemory: "\u5185\u5B58\uFF08MiB\uFF09",
+        configSave: "\u4FDD\u5B58\u671F\u671B\u8D44\u6E90",
+        configSaved: "\u5DF2\u4FDD\u5B58\u4FEE\u8BA2 {revision}\u2014\u2014\u5C31\u7EEA\u540E\u7528\u91CD\u5EFA\u5E94\u7528\u3002",
+        configUnobserved: "\u672A\u914D\u7F6E",
+        idle: "\u95F2\u7F6E\u7B56\u7565",
+        idleMinutes: "\u95F2\u7F6E\u8D85\u65F6\uFF08\u5206\u949F\uFF09",
+        idleSave: "\u4FDD\u5B58\u95F2\u7F6E\u7B56\u7565",
+        idleSaved: "\u95F2\u7F6E\u7B56\u7565\u5DF2\u4FDD\u5B58\u3002",
+        danger: "\u5371\u9669\u533A",
+        recreateConfirmTitle: "\u91CD\u5EFA\u6C99\u7BB1",
+        recreateConfirmBody: "\u91CD\u5EFA {name}\uFF1F\u5BB9\u5668\u5C06\u88AB\u66FF\u6362\u5E76\u91CD\u65B0\u9A8C\u8BC1\uFF0C\u7EC8\u7AEF\u4E0E\u8FDB\u884C\u4E2D\u7684\u5DE5\u4F5C\u4F1A\u4E2D\u65AD\uFF0C\u72B6\u6001\u5377\u4FDD\u7559\u3002",
+        recreateAcknowledge: "\u6211\u4E86\u89E3\u6C99\u7BB1\u5C06\u88AB\u66FF\u6362",
+        removeConfirmTitle: "\u79FB\u9664\u6C99\u7BB1",
+        removeConfirmBody: "\u79FB\u9664 {name}\uFF1F\u5176\u8BB0\u5F55\u4E0E\u8FD0\u884C\u4E2D\u7684\u5BB9\u5668\u5C06\u88AB\u79FB\u9664\uFF0C\u78C1\u76D8\u4E0A\u7684\u72B6\u6001\u5377\u4FDD\u7559\u3002",
+        removeAcknowledge: "\u6211\u4E86\u89E3\u8BB0\u5F55\u5C06\u88AB\u9500\u6BC1",
+        apply: "\u5E94\u7528",
+        // dashboard
+        fleetTitle: "\u6C99\u7BB1\u603B\u89C8",
+        fleetStats: "{running} \u8FD0\u884C \xB7 {stopped} \u505C\u6B62 \xB7 {attention} \u9700\u8981\u6CE8\u610F",
+        faceUnverified: "\u5C1A\u672A\u9A8C\u8BC1",
+        faceUnverifiedHint: "\u7B49\u5F85\u89C2\u6D4B\u2014\u2014\u72B6\u6001\u672A\u9A8C\u8BC1",
+        revPending: "\u5DF2\u4FDD\u5B58\u4FEE\u8BA2 {rev} \u7B49\u5F85\u90E8\u7F72\u9A8C\u8BC1\u3002",
+        revisionPair: "\u5DF2\u5E94\u7528\u4FEE\u8BA2 {applied} \xB7 \u5DF2\u4FDD\u5B58\u4FEE\u8BA2 {saved}\u3002\u91CD\u5EFA\u540E\u751F\u6548\u3002",
+        reviewSettings: "\u67E5\u770B\u914D\u7F6E",
+        saveNoChange: "\u4FDD\u5B58\u4E0D\u6539\u53D8\u5F53\u524D\u8FD0\u884C\u914D\u7F6E\u3002",
+        profileSeats: "\u53EF\u89C1 {count} \u4E2A\uFF0C\u4E0A\u9650 {limit} \u4E2A",
+        guestProcesses: "\u6765\u5BBE\u8FDB\u7A0B",
+        draftInvalid: "\u8BF7\u8F93\u5165\u6574\u6570",
+        serviceColumn: "\u670D\u52A1",
+        workbenchTitle: "\u6C99\u7BB1\u5DE5\u4F5C\u53F0",
+        envKicker: "\u8FD0\u884C\u73AF\u5883 / {env}",
+        visibleWord: "\u53EF\u89C1",
+        faceRunning: "\u8FD0\u884C\u4E2D\u2014\u2014\u5B9E\u65F6\u91C7\u6837",
+        faceStopped: "\u5DF2\u505C\u6B62",
+        samplingStopped: "\u5DF2\u505C\u6B62\u91C7\u6837",
+        lastMinute: "\u6700\u8FD1\u4E00\u4E2A\u5B8C\u6574\u5206\u949F",
+        unknown: "\u2014",
+        coresUnit: "\u6838",
+        pendingConfig: "\u6709\u5F85\u5E94\u7528\u7684\u914D\u7F6E",
+        servicesVerified: "\u5DF2\u9A8C\u8BC1\u670D\u52A1",
+        chartMean: "\u5747\u503C",
+        chartPeak: "\u5CF0\u503C",
+        samplesWord: "\u4E2A\u91C7\u6837",
+        noSamples: "\u6B64\u7A97\u53E3\u6CA1\u6709\u91C7\u6837\u3002",
+        chartFrom: "\u4ECE",
+        chartTo: "\u5230",
+        unpublished: "\u672A\u53D1\u5E03",
+        cfgPendingCpu: "CPU\uFF1A\u5F53\u524D {cur} \u6838\uFF0C\u5DF2\u4FDD\u5B58 {saved} \u6838\uFF0C\u5C1A\u672A\u5E94\u7528",
+        cfgPendingMem: "\u5185\u5B58\uFF1A\u5F53\u524D {cur}\uFF0C\u5DF2\u4FDD\u5B58 {saved}\uFF0C\u5C1A\u672A\u5E94\u7528",
+        allocated: "\u5206\u914D",
+        measured: "\u5B9E\u6D4B",
+        opStates: { accepted: "\u5DF2\u63A5\u53D7", running: "\u6267\u884C\u4E2D", succeeded: "\u6210\u529F", failed: "\u5931\u8D25", indeterminate: "\u7ED3\u679C\u672A\u77E5", cancelled: "\u5DF2\u53D6\u6D88" },
+        fleetAttention: "\u9700\u8981\u5173\u6CE8",
+        healthUnverified: "\u670D\u52A1\u5065\u5EB7\u5C1A\u672A\u9A8C\u8BC1",
+        opLine: "{action} \xB7 {state}",
+        opIdLine: "\u64CD\u4F5C {operationId}",
+        timeline: "\u6700\u8FD1\u64CD\u4F5C",
+        guestCwd: "\u6765\u5BBE\u5DE5\u4F5C\u76EE\u5F55",
+        protocol: "\u534F\u8BAE",
+        persistence: "\u6301\u4E45\u5316",
+        persistVolume: "\u72B6\u6001\u5377\u5728\u91CD\u5EFA\u95F4\u4FDD\u7559",
+        stateUnknown: "\u672A\u77E5",
+        stateCreating: "\u521B\u5EFA\u4E2D",
+        stateStarting: "\u542F\u52A8\u4E2D",
+        idleHint: "\u7559\u7A7A\u5219\u4FDD\u7559\u5F53\u524D\u7B56\u7565",
+        startConfirmTitle: "\u542F\u52A8\u6C99\u7BB1",
+        startConfirmBody: "\u542F\u52A8 {name} \u5E76\u6062\u590D\u5176\u58F0\u660E\u7684\u670D\u52A1\uFF1F",
+        stopConfirmTitle: "\u505C\u6B62\u6C99\u7BB1",
+        restartConfirmTitle: "\u91CD\u542F\u6C99\u7BB1",
+        lifecycleAcknowledge: "\u6211\u4E86\u89E3\u8FD9\u4F1A\u4E2D\u65AD\u7EC8\u7AEF\u4E0E\u8FDB\u884C\u4E2D\u7684\u5DE5\u4F5C",
+        closeConfirmTitle: "\u5173\u95ED\u7EC8\u7AEF",
+        searchMiss: "\u6CA1\u6709\u5339\u914D\u7B5B\u9009\u7684\u6C99\u7BB1\u3002",
+        clearFilter: "\u6E05\u9664\u7B5B\u9009",
+        configNotAuthorized: "\u53EA\u8BFB\u2014\u2014\u6B64 principal \u672A\u83B7\u671F\u671B\u914D\u7F6E\u6388\u6743",
+        usageNotAuthorized: "\u6B64 principal \u672A\u83B7\u7528\u91CF\u5386\u53F2\u6388\u6743",
+        capacity: "\u5BB9\u91CF",
+        opsOlder: "\u66F4\u65E9\u7684\u64CD\u4F5C",
+        readLogs: "\u8BFB\u53D6\u65E5\u5FD7",
+        logsTitle: "\u5F15\u64CE\u65E5\u5FD7",
+        procsTruncated: "provider \u5DF2\u622A\u65AD\u6B64\u5217\u8868",
+        readOnly: "\u53EA\u8BFB",
+        sessionRequired: "\u6B64\u9762\u677F\u9700\u8981\u4E00\u4E2A\u5DF2\u6302\u8F7D\u7684\u4F1A\u8BDD\u3002",
+        confirm: "\u786E\u8BA4",
+        dockLabel: "\u7EC8\u7AEF",
+        dockNeed: "\u5148\u9009\u62E9\u4E00\u4E2A\u6C99\u7BB1\uFF0C\u518D\u6253\u5F00\u5B83\u7684\u7EC8\u7AEF\u3002",
+        dockHint: "\u6253\u5F00\u7EC8\u7AEF\u8D70\u5BBF\u4E3B\u7EC8\u7AEF\u9875\u7B7E\u3002\u62D6\u52A8\u6B64\u5C42\u53EA\u8C03\u6574\u5DF2\u6253\u5F00\u7EC8\u7AEF\u7684\u5C3A\u5BF8\uFF0C\u4E0D\u4F1A\u65B0\u5EFA\u3002",
+        coverageLine: "{valid}/{expected} \u5206\u949F",
+        objectsData: "{shown}/{total} \u6709\u6837\u672C",
+        statusRun: "{running} \u8FD0\u884C \xB7 {stopped} \u505C\u6B62",
+        notYetApplied: "\u5C1A\u672A\u5E94\u7528",
+        procPid: "PID",
+        procPpid: "PPID",
+        procName: "\u540D\u79F0",
+        procState: "\u72B6\u6001",
+        procRss: "RSS",
+        auditEmpty: "\u8FD9\u6B21\u8BFB\u6570\u91CC\u6CA1\u6709\u64CD\u4F5C\u3002",
+        window24: "24\u5C0F\u65F6",
+        window7: "7\u5929",
+        window30: "30\u5929"
+      };
+    }
+  });
+
+  // src/client/format.js
+  var format_exports = {};
+  __export(format_exports, {
+    DASH: () => DASH,
+    formatBytes: () => formatBytes,
+    formatCores: () => formatCores,
+    serviceAddress: () => serviceAddress,
+    serviceLine: () => serviceLine,
+    serviceSummary: () => serviceSummary
+  });
+  function formatBytes(value) {
+    if (value === null || value === void 0 || !Number.isFinite(value)) return null;
+    if (value >= 1 << 30) return `${(value / (1 << 30)).toFixed(1)} GiB`;
+    if (value >= 1 << 20) return `${(value / (1 << 20)).toFixed(1)} MiB`;
+    return `${Math.round(value / 1024)} KiB`;
+  }
+  function formatCores(value) {
+    if (value === null || value === void 0 || !Number.isFinite(value)) return null;
+    return `${Number(value).toFixed(3)} cores`;
+  }
+  function serviceAddress(service) {
+    if (service?.published !== true) return null;
+    if (typeof service.hostAddress !== "string" || service.hostAddress === "") return null;
+    if (!Number.isInteger(service.hostPort)) return null;
+    return `${service.hostAddress}:${service.hostPort}`;
+  }
+  function serviceLine(service) {
+    if (!service || typeof service.serviceId !== "string") return null;
+    const head = `${service.serviceId}:${service.containerPort}${service.protocol ? ` ${service.protocol}` : ""}`;
+    const addr = serviceAddress(service);
+    return [head, addr ? `\u2192 ${addr}` : null, service.health ?? null].filter(Boolean).join(" ");
+  }
+  function serviceSummary(services) {
+    if (!Array.isArray(services)) return "";
+    return services.map((entry) => typeof entry === "string" ? entry : entry?.serviceId).filter((id) => typeof id === "string" && id.length > 0).join(", ");
+  }
+  var DASH;
+  var init_format = __esm({
+    "src/client/format.js"() {
+      DASH = "\u2014";
+    }
+  });
+
+  // src/host/terminal-resource.js
+  var terminal_resource_exports = {};
+  __export(terminal_resource_exports, {
+    managementAvailability: () => managementAvailability,
+    terminalAddress: () => terminalAddress,
+    terminalGesture: () => terminalGesture
+  });
+  function terminalAddress({ envId, sandboxId, terminalId }) {
+    if (![envId, sandboxId, terminalId].every((v) => typeof v === "string") || !ENV.test(envId) || !UUID.test(sandboxId) || !UUID.test(terminalId)) throw new TypeError("invalid sandbox terminal reference");
+    return `${prefix}${envId}/${sandboxId}/${terminalId}`;
+  }
+  function terminalGesture({ envId, sandboxId, paneId, openId, service }, { create, canOpen, navigate }) {
+    if (!ENV.test(envId) || !UUID.test(sandboxId) || !paneId || !openId) throw new TypeError("invalid create intent");
+    let issued;
+    const issue = () => issued ??= Promise.resolve().then(async () => {
+      const ref = await create({ sandboxId, paneId, openId, ...service === void 0 ? {} : { service } });
+      if (ref?.sandboxId !== sandboxId) throw new Error("sandbox reference mismatch");
+      return terminalAddress({ envId, sandboxId, terminalId: ref.terminalId });
+    });
+    return {
+      createOnly: issue,
+      async open() {
+        if (!issued && canOpen() !== true) return { state: "handler-unavailable" };
+        const address = await issue();
+        try {
+          if (canOpen() !== true || await navigate(address) === false) return { state: "created-not-connected", address };
+          return { state: "navigation-requested", address };
+        } catch {
+          return { state: "created-not-connected", address };
+        }
+      }
+    };
+  }
+  var ENV, UUID, prefix, managementAvailability;
+  var init_terminal_resource = __esm({
+    "src/host/terminal-resource.js"() {
+      ENV = /^[a-z][a-z0-9-]{0,15}$/;
+      UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+      prefix = "dsh-resource://sandbox-terminal/";
+      managementAvailability = () => ({
+        available: false,
+        managementApi: true,
+        dependency: "\u5BBF\u4E3B\u4F9D\u8D56\uFF1A\u5F53\u524D [dsh\u5DE5\u4F5C\u53F0] \u7684\u9875\u7B7E\u9700\u8981\u5DF2\u6302\u8F7D\u7684 session\uFF0C\u4E0D\u80FD\u63D0\u4F9B\u65E0 session \u7684\u6C99\u7BB1\u9875\u3002"
+      });
+    }
+  });
+
+  // src/client/history.jsx
+  var history_exports = {};
+  __export(history_exports, {
+    HistoryLine: () => HistoryLine
+  });
+  function segments(points) {
+    const deltas = [];
+    for (let i = 1; i < points.length; i++) deltas.push(points[i].at - points[i - 1].at);
+    const positive = deltas.filter((delta) => delta > 0);
+    if (positive.length === 0) return [];
+    const ordered = [...positive].sort((a, b) => a - b);
+    const stride = ordered[Math.floor(ordered.length / 2)];
+    const groups = [];
+    let current = [points[0]];
+    for (let i = 1; i < points.length; i++) {
+      if (points[i].at - points[i - 1].at > stride * 1.5) {
+        if (current.length > 1) groups.push(current);
+        current = [points[i]];
+      } else current.push(points[i]);
+    }
+    if (current.length > 1) groups.push(current);
+    return groups;
+  }
+  function HistoryLine({ points }) {
+    if (!Array.isArray(points) || points.length < 2) return null;
+    const groups = segments(points);
+    if (groups.length === 0) return null;
+    const values = points.map((point) => point.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = max - min || 1;
+    const first = points[0].at;
+    const last = points[points.length - 1].at;
+    const width = last - first || 1;
+    const d = groups.map((group) => group.map((point, index) => {
+      const x = (point.at - first) / width * 240;
+      const y = 46 - (point.value - min) / span * 40;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ")).join(" ");
+    return h9("svg", {
+      className: "dnls-history",
+      viewBox: "0 0 240 48",
+      preserveAspectRatio: "none",
+      "aria-hidden": "true"
+    }, h9("path", {
+      d,
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "1.25",
+      vectorEffect: "non-scaling-stroke"
+    }));
+  }
+  var import_react14, h9;
+  var init_history = __esm({
+    "src/client/history.jsx"() {
+      import_react14 = __toESM(__require("react"), 1);
+      h9 = import_react14.default.createElement;
+    }
+  });
 
   // src/client/index.jsx
   var index_exports = {};
@@ -26,11 +2416,981 @@ var __dnlsClient = (() => {
     apply: () => apply,
     inject: () => inject
   });
-  var inject = [];
-  function apply() {
+  var React15 = __require("react");
+  var primitives2 = __require("@deepseek-ai/dsh-client-ui-primitives");
+  var {
+    EmptyState: EmptyState2,
+    NanoDialog: NanoDialog2,
+    NANO_STYLES: NANO_STYLES2,
+    FactGrid: FactGrid2,
+    PanelSection: PanelSection2,
+    Card: Card2,
+    SplitRow: SplitRow2,
+    Meter: Meter2,
+    PlainTable: PlainTable2,
+    openNanoMenu: openNanoMenu2,
+    WorkbenchShell: WorkbenchShell2,
+    ShellGap: ShellGap2,
+    ShellToggle: ShellToggle2,
+    ShellIcon: ShellIcon2,
+    ShellTail: ShellTail2,
+    TabDrawer: TabDrawer2,
+    DrawerHead: DrawerHead2,
+    DrawerRow: DrawerRow2,
+    StatusDock: StatusDock2
+  } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
+  var { createDnlsClient: createDnlsClient2, createTicket: createTicket2 } = (init_managed(), __toCommonJS(managed_exports));
+  var { copyFor: copyFor2, fill: fill2 } = (init_i18n(), __toCommonJS(i18n_exports));
+  var { formatBytes: formatBytes2, serviceAddress: serviceAddress2 } = (init_format(), __toCommonJS(format_exports));
+  var { terminalAddress: terminalAddress2 } = (init_terminal_resource(), __toCommonJS(terminal_resource_exports));
+  var { HistoryLine: HistoryLine2 } = (init_history(), __toCommonJS(history_exports));
+  var h10 = React15.createElement;
+  var KIND = "dnls-sandbox";
+  var {
+    Button: Button4,
+    Input,
+    SegmentedControl: SegmentedControl2,
+    DisclosureRow,
+    StateDot,
+    Tag,
+    RiskConfirmation,
+    IconChevronLeftOutlineRegular,
+    IconRefreshOutlineRegular,
+    IconSettingsOutlineRegular,
+    IconPlusOutlineRegular,
+    IconPanelLeftOutlineRegular
+  } = primitives2;
+  var DOT = {
+    running: "done",
+    stopped: "idle",
+    failed: "error",
+    missing: "warning",
+    creating: "ongoing",
+    starting: "ongoing"
+  };
+  var STATE_KEY = {
+    running: "stateRunning",
+    stopped: "stateStopped",
+    failed: "stateFailed",
+    missing: "stateMissing",
+    creating: "stateCreating",
+    starting: "stateStarting"
+  };
+  var CONFIRM = {
+    start: ["startConfirmTitle", "startConfirmBody", "lifecycleAcknowledge"],
+    stop: ["stopConfirmTitle", "confirmBody", "lifecycleAcknowledge"],
+    restart: ["restartConfirmTitle", "confirmBody", "lifecycleAcknowledge"],
+    recreate: ["recreateConfirmTitle", "recreateConfirmBody", "recreateAcknowledge"],
+    remove: ["removeConfirmTitle", "removeConfirmBody", "removeAcknowledge"]
+  };
+  var STYLE = `
+/* Page inset. The shell body has none; the gap is nano space-3. */
+.dnls-stack{display:flex;flex-direction:column;gap:var(--nano-space-3);padding:var(--nano-space-3)}
+/* Muted line. No host text role; tertiary label, 11px. */
+.dnls-muted{margin:0;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11)}
+/* Column under a heading that is not a PanelSection: the history block and the dock. */
+.dnls-section{display:flex;flex-direction:column;gap:var(--nano-space-2)}
+/* Window control on the left, coverage count on the right. */
+.dnls-head{display:flex;align-items:center;justify-content:space-between;gap:var(--nano-space-2);color:var(--dsw-alias-label-secondary)}
+/* Host Button has no group, so the row only sets the gap. */
+.dnls-actions{display:flex;flex-wrap:wrap;gap:var(--nano-space-2)}
+/* The one primary entry under the summary. Host Button sizes to its label. */
+.dnls-primary{display:flex}
+.dnls-primary>*{flex:1 1 auto}
+/* Error line. No host alert paragraph; the color is the error token. */
+.dnls-error{margin:0;color:var(--dsw-alias-state-error-primary)}
+/* Dialog fields. SettingsForm writes host preferences, not a sandbox revision. */
+.dnls-settings,.dnls-field{display:flex;flex-direction:column;gap:var(--nano-space-2)}
+.dnls-field{gap:4px;color:var(--dsw-alias-label-secondary)}
+/* Box for the exempt history polyline. The path lives in history.jsx. */
+.dnls-history{display:block;width:100%;height:48px;color:var(--dsw-alias-label-secondary)}
+/* Native select. Host and nano-ui have no Select. 28px matches the tool seat; tokens only. */
+.dnls-select{height:28px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border:var(--dsh-hairline-width) solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxs-12)}
+`;
+  var stateLabel = (copy, state) => copy[STATE_KEY[state]] ?? copy.stateUnknown;
+  var shownHealth = (copy, value) => !value || value === "unknown" ? copy.unknown : value;
+  var pending = (row) => Number.isInteger(row?.desiredRevision) && row.desiredRevision > 0 && row.desiredRevision !== row.appliedRevision;
+  var profileIdOf = (profile) => typeof profile === "string" ? profile : profile?.profileId ?? profile?.id ?? "";
+  var when = (copy, value) => {
+    const ms = typeof value === "number" ? value : Date.parse(value ?? "");
+    if (!Number.isFinite(ms)) return null;
+    try {
+      return new Intl.DateTimeFormat(copy.localeTag, { dateStyle: "short", timeStyle: "short" }).format(ms);
+    } catch {
+      return null;
+    }
+  };
+  var whole = (text) => {
+    if (text === "") return null;
+    return /^\d+$/.test(text) ? Number(text) : void 0;
+  };
+  var ratio = (measured, allocated) => typeof measured === "number" && typeof allocated === "number" && allocated > 0 ? Math.max(0, Math.min(100, measured / allocated * 100)) : null;
+  function usageLine(row) {
+    const cpu = row.resources?.cpus;
+    const memory = formatBytes2(row.resources?.memoryBytes);
+    const allocated = `${cpu ?? "\u2014"} \xB7 ${memory ?? "\u2014"}`;
+    if (row.observedState !== "running" || !row.lastMinute) return allocated;
+    const usedCpu = typeof row.lastMinute.cpuCores === "number" ? Number(row.lastMinute.cpuCores).toFixed(2) : "\u2014";
+    const usedMemory = formatBytes2(row.lastMinute.memoryBytes) ?? "\u2014";
+    return `${usedCpu} / ${cpu ?? "\u2014"} \xB7 ${usedMemory} / ${memory ?? "\u2014"}`;
+  }
+  function pointsOf(usage, key, unit, valueKey) {
+    if (usage?.[key]?.unit !== unit || !Array.isArray(usage.history)) return [];
+    return usage.history.flatMap((bin) => typeof bin?.at === "number" && typeof bin[valueKey] === "number" && Number.isFinite(bin[valueKey]) ? [{ at: bin.at, value: bin[valueKey] }] : []);
+  }
+  function aggregate(usages, key, unit, valueKey) {
+    let objects = 0;
+    let expected = 0;
+    let valid = 0;
+    const byAt = /* @__PURE__ */ new Map();
+    for (const usage of usages) {
+      const metric = usage?.[key];
+      if (!metric || metric.unit !== unit) continue;
+      objects += 1;
+      expected += Number(metric.expected) || 0;
+      valid += Number(metric.valid) || 0;
+      for (const point of pointsOf(usage, key, unit, valueKey)) {
+        const slot = byAt.get(point.at) ?? { at: point.at, sum: 0, n: 0 };
+        slot.sum += point.value;
+        slot.n += 1;
+        byAt.set(point.at, slot);
+      }
+    }
+    return {
+      objects,
+      expected,
+      valid,
+      points: [...byAt.values()].sort((a, b) => a.at - b.at).map((slot) => ({ at: slot.at, value: slot.sum / slot.n }))
+    };
+  }
+  function Track({ label, measured, allocated, text }) {
+    return h10(Meter2, { label, text, value: ratio(measured, allocated) });
+  }
+  function DnlsPane({ sessionId, copy, host }) {
+    const [phase, setPhase] = React15.useState("loading");
+    const [error, setError] = React15.useState(null);
+    const [rows, setRows] = React15.useState(null);
+    const [total, setTotal] = React15.useState(null);
+    const [complete, setComplete] = React15.useState(true);
+    const [boot, setBoot] = React15.useState(0);
+    const [navOpen, setNavOpen] = React15.useState(false);
+    const [selection, setSelection] = React15.useState(null);
+    const [detail, setDetail] = React15.useState(null);
+    const [usageWindow, setUsageWindow] = React15.useState("24h");
+    const [fleet, setFleet] = React15.useState(null);
+    const [procs, setProcs] = React15.useState(null);
+    const [openAudit, setOpenAudit] = React15.useState(null);
+    const [probeId, setProbeId] = React15.useState(null);
+    const [confirm, setConfirm] = React15.useState(null);
+    const [acknowledged, setAcknowledged] = React15.useState(false);
+    const [busy, setBusy] = React15.useState(false);
+    const [createOpen, setCreateOpen] = React15.useState(false);
+    const [profiles, setProfiles] = React15.useState(null);
+    const [createName, setCreateName] = React15.useState("");
+    const [createProfile, setCreateProfile] = React15.useState("");
+    const [settingsOpen, setSettingsOpen] = React15.useState(false);
+    const [cfgCpus, setCfgCpus] = React15.useState("");
+    const [cfgMem, setCfgMem] = React15.useState("");
+    const [idleMin, setIdleMin] = React15.useState("");
+    const [settingsMsg, setSettingsMsg] = React15.useState(null);
+    const [dock, setDock] = React15.useState(0);
+    const [terms, setTerms] = React15.useState(null);
+    const [termBusy, setTermBusy] = React15.useState(false);
+    const [focused, setFocused] = React15.useState(null);
+    const rootRef = React15.useRef(null);
+    const clientRef = React15.useRef(null);
+    const tickets = React15.useRef({});
+    const writeLock = React15.useRef(false);
+    const paneId = React15.useId();
+    const closeDrawer = React15.useCallback(() => setNavOpen(false), []);
+    const take = (key) => {
+      if (!tickets.current[key]) tickets.current[key] = createTicket2();
+      return tickets.current[key].take();
+    };
+    const api = () => clientRef.current;
+    const supports = (id) => api()?.supports(id) === true;
+    React15.useEffect(() => () => {
+      for (const ticket of Object.values(tickets.current)) ticket.kill();
+    }, []);
+    const loadList = React15.useCallback(async () => {
+      const ok = take("list");
+      try {
+        const client = api() ?? createDnlsClient2();
+        clientRef.current = client;
+        if (!client.capabilities()) await client.discover();
+        const list = await client.listSandboxes();
+        if (!ok()) return;
+        setRows(list.rows);
+        setTotal(list.total);
+        setComplete(list.complete !== false);
+        setError(null);
+        setPhase("ready");
+      } catch (caught) {
+        if (!ok()) return;
+        setError(caught);
+        setPhase((prev) => prev === "ready" ? "ready" : "failed");
+      }
+    }, []);
+    React15.useEffect(() => {
+      if (!sessionId) return void 0;
+      loadList();
+    }, [sessionId, boot, loadList]);
+    React15.useEffect(() => {
+      if (!sessionId || !rows || selection) return void 0;
+      const ok = take("fleet");
+      (async () => {
+        const usages = [];
+        const audits = [];
+        for (const row of rows) {
+          if (!ok()) return;
+          try {
+            const body = await api().inspect(row.sandboxId, { window: usageWindow });
+            if (!ok()) return;
+            if (body?.usage) usages.push(body.usage);
+            const ops = Array.isArray(body?.operations) ? body.operations : [];
+            for (const op of ops) audits.push({ name: row.name ?? row.sandboxId, ...op });
+            if (ops.length === 0 && row.operation) audits.push({ name: row.name ?? row.sandboxId, ...row.operation });
+          } catch (caught) {
+            if (caught?.status !== 403 && ok()) setError(caught);
+          }
+        }
+        if (ok()) setFleet({ usages, audits });
+      })();
+    }, [sessionId, rows, selection, usageWindow]);
+    React15.useEffect(() => {
+      if (!sessionId || !selection) return void 0;
+      const ok = take("detail");
+      const sandboxId = selection.sandboxId;
+      (async () => {
+        try {
+          const body = await api().inspect(sandboxId, { window: usageWindow });
+          if (ok()) setDetail(body);
+        } catch (caught) {
+          if (!ok()) return;
+          setDetail(null);
+          setError(caught);
+        }
+      })();
+    }, [sessionId, selection, usageWindow, boot]);
+    React15.useEffect(() => {
+      setFocused(null);
+      setTerms(null);
+      setProcs(null);
+      setDetail(null);
+    }, [selection?.sandboxId]);
+    React15.useEffect(() => {
+      if (!selection || dock <= 0) return void 0;
+      const ok = take("terms");
+      const sandboxId = selection.sandboxId;
+      (async () => {
+        try {
+          if (!api().supports("term.session.list")) {
+            if (ok()) setTerms({ denied: true });
+            return;
+          }
+          const out = await api().terminalList(sandboxId);
+          if (ok()) setTerms({ list: out.terminals });
+        } catch (caught) {
+          if (!ok()) return;
+          setTerms(caught?.status === 403 ? { denied: true } : { error: caught.message });
+        }
+      })();
+    }, [selection, dock > 0]);
+    React15.useEffect(() => {
+      const row = (rows ?? []).find((item) => item.sandboxId === selection?.sandboxId);
+      const state = detail?.observedState ?? row?.observedState;
+      if (!selection || state !== "running" || !supports("sandbox.processes")) return void 0;
+      const ok = take("procs");
+      const sandboxId = selection.sandboxId;
+      (async () => {
+        try {
+          const body = await api().processes(sandboxId, { limit: 200 });
+          if (ok()) setProcs({ list: body.processes ?? [], truncated: body.truncated === true });
+        } catch (caught) {
+          if (ok()) setProcs({ error: caught.message });
+        }
+      })();
+    }, [selection, rows, detail]);
+    if (!sessionId) return null;
+    const visible = rows ?? [];
+    const running = visible.filter((row) => row.observedState === "running").length;
+    const stopped = visible.filter((row) => row.observedState === "stopped").length;
+    const current = selection ? visible.find((row) => row.sandboxId === selection.sandboxId) ?? selection : null;
+    const observed = detail?.observedState ?? current?.observedState;
+    function choose(row) {
+      setSelection({ sandboxId: row.sandboxId, envId: row.envId, name: row.name });
+      setNavOpen(false);
+      setError(null);
+    }
+    function unchoose() {
+      setSelection(null);
+      setDetail(null);
+      setSettingsOpen(false);
+      setError(null);
+    }
+    async function submit(action, { sandboxId, name, profileId, args } = {}) {
+      if (writeLock.current) return;
+      writeLock.current = true;
+      setBusy(true);
+      try {
+        await api().lifecycle({ action, sandboxId, name, profileId, requestId: crypto.randomUUID(), args });
+        setConfirm(null);
+        setAcknowledged(false);
+        setCreateOpen(false);
+        await loadList();
+        if (sandboxId) setBoot((value) => value + 1);
+      } catch (caught) {
+        setError(caught);
+      } finally {
+        writeLock.current = false;
+        setBusy(false);
+      }
+    }
+    function ask(kind) {
+      setAcknowledged(false);
+      setConfirm({ kind });
+    }
+    async function openCreate() {
+      setCreateOpen(true);
+      setProfiles(null);
+      try {
+        const listed = supports("sandbox.profile.list") ? await api().listProfiles() : [];
+        setProfiles(listed);
+        setCreateProfile(profileIdOf(listed[0]) || "");
+      } catch (caught) {
+        setProfiles([]);
+        setError(caught);
+      }
+    }
+    function openSettings() {
+      const cfg = detail?.configuration;
+      setCfgCpus(cfg?.overrides?.cpus == null ? "" : String(cfg.overrides.cpus));
+      setCfgMem(cfg?.overrides?.memoryBytes == null ? "" : String(Math.round(cfg.overrides.memoryBytes / (1024 * 1024))));
+      setIdleMin(cfg?.idleTimeoutMs == null ? "" : String(Math.round(cfg.idleTimeoutMs / 6e4)));
+      setSettingsMsg(null);
+      setSettingsOpen(true);
+    }
+    async function saveSettings() {
+      const cpus = whole(cfgCpus);
+      const mem = whole(cfgMem);
+      const idle = whole(idleMin);
+      if (cpus === void 0 || mem === void 0 || idle === void 0) {
+        setSettingsMsg(copy.draftInvalid);
+        return;
+      }
+      const overrides = {};
+      if (cpus !== null) overrides.cpus = cpus;
+      if (mem !== null) overrides.memoryBytes = mem * 1024 * 1024;
+      if (Object.keys(overrides).length === 0 && idle === null) {
+        setSettingsMsg(copy.saveNoChange);
+        return;
+      }
+      if (writeLock.current) return;
+      writeLock.current = true;
+      setBusy(true);
+      try {
+        if (Object.keys(overrides).length > 0) {
+          await api().saveRevision(selection.sandboxId, { expectedRevision: detail?.desiredRevision ?? 0, overrides });
+        }
+        if (idle !== null) await api().configureIdle(selection.sandboxId, idle * 6e4);
+        setSettingsMsg(Object.keys(overrides).length > 0 ? copy.notYetApplied : copy.idleSaved);
+        setBoot((value) => value + 1);
+      } catch (caught) {
+        setSettingsMsg(caught.message);
+      } finally {
+        writeLock.current = false;
+        setBusy(false);
+      }
+    }
+    function openDesign() {
+      if (host.kitesurf() !== true) {
+        setError(new Error(copy.workspaceMissing));
+        return;
+      }
+      host.openKitesurf();
+    }
+    function openTerm(term) {
+      let address;
+      try {
+        address = terminalAddress2({ envId: selection.envId, sandboxId: selection.sandboxId, terminalId: term.terminalId });
+      } catch {
+        setError(new Error(copy.terminalUnavailable));
+        return;
+      }
+      if (host.openTerminal(address) !== true) setError(new Error(copy.terminalUnavailable));
+      else setFocused(term.terminalId);
+    }
+    async function createTerm() {
+      if (termBusy || !selection) return;
+      setTermBusy(true);
+      try {
+        const out = await api().terminalCreate(selection.sandboxId, { paneId, openId: crypto.randomUUID() });
+        const listed = await api().terminalList(selection.sandboxId);
+        setTerms({ list: listed.terminals });
+        openTerm(listed.terminals.find((item) => item.terminalId === out.terminalId) ?? out);
+      } catch (caught) {
+        if (caught?.status === 403) setTerms({ denied: true });
+        else setError(caught);
+      } finally {
+        setTermBusy(false);
+      }
+    }
+    async function commitDock(px) {
+      const node = rootRef.current;
+      if (!selection || !focused || !node || !supports("term.session.resize")) return;
+      const cols = Math.min(512, Math.max(2, Math.floor((node.clientWidth - 16) / 8)));
+      const rows2 = Math.min(512, Math.max(2, Math.floor((px - 28) / 16)));
+      try {
+        await api().terminalResize(selection.sandboxId, focused, cols, rows2);
+      } catch {
+      }
+    }
+    async function probe(serviceId) {
+      setProbeId(serviceId);
+      try {
+        const body = await api().inspect(selection.sandboxId, { window: usageWindow });
+        setDetail(body);
+      } catch (caught) {
+        setError(caught);
+      } finally {
+        setProbeId(null);
+      }
+    }
+    const windows = h10(SegmentedControl2, {
+      label: copy.usageStates,
+      value: usageWindow,
+      onChange: setUsageWindow,
+      options: [
+        { value: "24h", label: copy.window24 },
+        { value: "7d", label: copy.window7 },
+        { value: "30d", label: copy.window30 }
+      ]
+    });
+    function rowMenu(event, row) {
+      event.stopPropagation();
+      const rect = event.currentTarget.getBoundingClientRect();
+      openNanoMenu2({
+        anchor: rect,
+        width: 220,
+        items: [
+          { id: "open", label: row.name ?? row.sandboxId, run: () => choose(row) },
+          { id: "start", label: copy.start, disabled: busy || !supports("sandbox.instance.start"), run: () => {
+            choose(row);
+            ask("start");
+          } },
+          { id: "stop", label: copy.stop, disabled: busy || !supports("sandbox.instance.stop"), run: () => {
+            choose(row);
+            ask("stop");
+          } },
+          { id: "restart", label: copy.restart, disabled: busy || !supports("sandbox.instance.restart"), run: () => {
+            choose(row);
+            ask("restart");
+          } },
+          { id: "break", separator: true },
+          { id: "design", label: copy.openWorkspace, run: () => {
+            choose(row);
+            openDesign();
+          } },
+          { id: "danger", separator: true },
+          { id: "remove", label: copy.remove, tone: "danger", disabled: busy || !supports("sandbox.instance.remove"), run: () => {
+            choose(row);
+            ask("remove");
+          } }
+        ]
+      });
+    }
+    function reading(row) {
+      return h10(SplitRow2, {
+        key: row.sandboxId,
+        label: h10(
+          Button4,
+          { variant: "ghost", size: "sm", onClick: () => choose(row) },
+          h10(StateDot, { state: DOT[row.observedState] ?? "idle" }),
+          ` ${row.name ?? row.sandboxId}`,
+          h10("span", { className: "dnls-muted" }, ` ${stateLabel(copy, row.observedState)}`)
+        )
+      }, h10(
+        React15.Fragment,
+        null,
+        h10("span", { className: "dnls-muted" }, usageLine(row)),
+        h10(Button4, {
+          variant: "ghost",
+          size: "sm",
+          "aria-label": copy.control,
+          onClick: (event) => rowMenu(event, row)
+        }, "\u2026")
+      ));
+    }
+    function historyBlock(usages, total2) {
+      const cpu = aggregate(usages, "cpu", "core", "cpuCores");
+      const memory = aggregate(usages, "memory", "bytes", "memoryBytes");
+      return h10(
+        "div",
+        { className: "dnls-section" },
+        h10(
+          "div",
+          { className: "dnls-head" },
+          windows,
+          h10("span", { className: "dnls-muted" }, fill2(copy.objectsData, { shown: cpu.objects, total: total2 }))
+        ),
+        h10(HistoryLine2, { points: cpu.points }),
+        h10(
+          "p",
+          { className: "dnls-muted" },
+          `${copy.usageCpu} ${fill2(copy.coverageLine, { valid: cpu.valid, expected: cpu.expected })}`
+        ),
+        h10(
+          "p",
+          { className: "dnls-muted" },
+          `${copy.usageMemory} ${fill2(copy.coverageLine, { valid: memory.valid, expected: memory.expected })}`
+        )
+      );
+    }
+    function overview() {
+      if (phase === "loading" && !rows) return h10(EmptyState2, { title: copy.loading });
+      if (phase === "failed" && !rows) {
+        return h10(EmptyState2, {
+          title: copy.failed,
+          description: error?.message,
+          action: h10(Button4, { variant: "ghost", onClick: () => setBoot((value) => value + 1) }, copy.retry)
+        });
+      }
+      if (visible.length === 0) {
+        return h10(EmptyState2, {
+          title: copy.emptyTitle,
+          description: copy.emptyHint,
+          action: h10(Button4, { variant: "primary", onClick: openCreate }, copy.create)
+        });
+      }
+      const audits = fleet?.audits ?? [];
+      return h10(
+        "div",
+        { className: "dnls-stack", "data-dnls-view": "overview" },
+        error ? h10("p", { className: "dnls-error", role: "alert" }, error.message) : null,
+        !complete ? h10(Tag, { tone: "warning" }, copy.listPartial) : null,
+        h10(Card2, null, h10(FactGrid2, { items: [
+          { label: copy.stateRunning, value: String(running) },
+          { label: copy.stateStopped, value: String(stopped) },
+          { label: copy.typeLabel, value: String(visible.length) }
+        ] })),
+        h10(
+          PanelSection2,
+          { title: copy.typeLabel },
+          h10(
+            SplitRow2,
+            { label: fill2(copy.listShort, { shown: visible.length, total: total ?? visible.length }) },
+            h10(Button4, { variant: "primary", size: "sm", onClick: openCreate }, copy.create)
+          ),
+          visible.map(reading)
+        ),
+        h10(PanelSection2, { title: copy.usageStates }, historyBlock(fleet?.usages ?? [], visible.length)),
+        h10(
+          PanelSection2,
+          { title: copy.timeline },
+          audits.length === 0 ? h10("p", { className: "dnls-muted" }, copy.auditEmpty) : audits.map((op, index) => {
+            const key = `${op.name}:${op.action ?? op.step ?? index}:${op.at ?? index}`;
+            const open = openAudit === key;
+            return h10(DisclosureRow, {
+              key,
+              title: [op.name, op.action, op.state].filter(Boolean).join(" \xB7 "),
+              open,
+              expandable: true,
+              expandOnRowClick: true,
+              onToggle: () => setOpenAudit(open ? null : key)
+            }, open ? h10(
+              "p",
+              { className: "dnls-muted" },
+              [op.step, when(copy, op.at), when(copy, op.finishedAt), op.operationId].filter(Boolean).join(" \xB7 ") || copy.none
+            ) : null);
+          })
+        )
+      );
+    }
+    function services(list) {
+      return (list ?? []).map((service) => {
+        const head = `${service.serviceId}:${service.containerPort ?? ""}${service.protocol ? ` ${service.protocol}` : ""}`;
+        const addr = serviceAddress2(service);
+        const where = typeof service.guestCwd === "string" && service.guestCwd !== "/" ? service.guestCwd : null;
+        const role = typeof service.role === "string" && service.role !== "" && service.role !== service.serviceId ? service.role : null;
+        return h10(SplitRow2, {
+          key: service.serviceId,
+          label: [head, addr ? `\u2192 ${addr}` : null].filter(Boolean).join(" ")
+        }, h10(
+          "span",
+          { className: "dnls-actions" },
+          role || where ? h10("span", { className: "dnls-muted" }, [role, where].filter(Boolean).join(" \xB7 ")) : null,
+          h10(Tag, { tone: service.health === "healthy" ? "success" : "neutral" }, shownHealth(copy, service.health)),
+          h10(Button4, {
+            variant: "ghost",
+            size: "sm",
+            disabled: probeId === service.serviceId,
+            onClick: () => probe(service.serviceId)
+          }, copy.serviceHealth)
+        ));
+      });
+    }
+    function sandboxPage() {
+      const minute = observed === "running" ? detail?.lastMinute ?? current?.lastMinute : null;
+      const usage = detail?.usage;
+      const cpuText = minute ? `${typeof minute.cpuCores === "number" ? Number(minute.cpuCores).toFixed(2) : "\u2014"} / ${(detail ?? current)?.resources?.cpus ?? "\u2014"}` : copy.samplingStopped;
+      const memoryText = minute ? `${formatBytes2(minute.memoryBytes) ?? "\u2014"} / ${formatBytes2((detail ?? current)?.resources?.memoryBytes) ?? "\u2014"}` : copy.samplingStopped;
+      return h10(
+        "div",
+        { className: "dnls-stack", "data-dnls-view": "sandbox" },
+        error ? h10("p", { className: "dnls-error", role: "alert" }, error.message) : null,
+        h10(
+          Card2,
+          null,
+          h10(FactGrid2, { items: [
+            { label: copy.fieldState, value: stateLabel(copy, observed) },
+            { label: copy.health, value: shownHealth(copy, (detail ?? current)?.health) },
+            { label: copy.usageCpu, value: cpuText },
+            { label: copy.usageMemory, value: memoryText },
+            { label: copy.fieldRevision, value: pending(detail ?? current) ? copy.notYetApplied : String((detail ?? current)?.appliedRevision ?? copy.none) }
+          ] })
+        ),
+        h10(
+          "div",
+          { className: "dnls-primary" },
+          h10(Button4, { variant: "primary", onClick: openDesign }, copy.openWorkspace)
+        ),
+        h10(
+          PanelSection2,
+          { title: copy.control },
+          h10(
+            "div",
+            { className: "dnls-actions" },
+            h10(Button4, { variant: "ghost", size: "sm", disabled: busy || !supports("sandbox.instance.start"), onClick: () => ask("start") }, copy.start),
+            h10(Button4, { variant: "ghost", size: "sm", disabled: busy || !supports("sandbox.instance.stop"), onClick: () => ask("stop") }, copy.stop),
+            h10(Button4, { variant: "ghost", size: "sm", disabled: busy || !supports("sandbox.instance.restart"), onClick: () => ask("restart") }, copy.restart),
+            h10(Button4, { variant: "ghost", size: "sm", disabled: busy || !supports("sandbox.instance.recreate"), onClick: () => ask("recreate") }, copy.recreate)
+          )
+        ),
+        h10(
+          PanelSection2,
+          { title: copy.resources },
+          h10(Track, {
+            label: copy.usageCpu,
+            measured: minute?.cpuCores,
+            allocated: (detail ?? current)?.resources?.cpus,
+            text: cpuText
+          }),
+          h10(Track, {
+            label: copy.usageMemory,
+            measured: minute?.memoryBytes,
+            allocated: (detail ?? current)?.resources?.memoryBytes,
+            text: memoryText
+          }),
+          detail == null ? h10("p", { className: "dnls-muted" }, copy.loading) : usage ? historyBlock([usage], 1) : h10("p", { className: "dnls-muted" }, copy.usageNotAuthorized)
+        ),
+        h10(
+          PanelSection2,
+          { title: copy.guestProcesses },
+          observed !== "running" ? h10("p", { className: "dnls-muted" }, copy.samplingStopped) : procs == null ? h10("p", { className: "dnls-muted" }, copy.loading) : procs.error ? h10("p", { className: "dnls-error", role: "alert" }, procs.error) : (procs.list ?? []).length === 0 ? h10("p", { className: "dnls-muted" }, copy.processesEmpty) : [
+            h10(
+              PlainTable2,
+              { key: "procs", columns: [copy.procPid, copy.procPpid, copy.procName, copy.procState, copy.procRss] },
+              procs.list.map((proc) => h10(
+                "tr",
+                { key: proc.pid },
+                h10("td", null, String(proc.pid)),
+                h10("td", null, String(proc.ppid ?? "")),
+                h10("td", null, proc.name),
+                h10("td", null, proc.state),
+                h10("td", null, formatBytes2(proc.rssBytes) ?? copy.none)
+              ))
+            ),
+            procs.truncated ? h10("p", { key: "trunc", className: "dnls-muted" }, copy.procsTruncated) : null
+          ]
+        ),
+        h10(PanelSection2, { title: copy.fieldServices }, services(detail?.services)),
+        h10(
+          PanelSection2,
+          { title: copy.deployment },
+          detail == null ? h10("p", { className: "dnls-muted" }, copy.loading) : [
+            h10(
+              SplitRow2,
+              { key: "digest", label: copy.appliedDigest },
+              typeof detail.applied?.imageDigest === "string" && detail.applied.imageDigest !== "" ? detail.applied.imageDigest.slice(0, 18) : copy.none
+            ),
+            h10(SplitRow2, { key: "verified", label: copy.appliedVerified }, when(copy, detail.applied?.verifiedAt) ?? copy.none),
+            h10(SplitRow2, { key: "seen", label: copy.observedAt }, when(copy, detail.observedAt) ?? copy.none)
+          ]
+        ),
+        h10(
+          PanelSection2,
+          { title: copy.storage },
+          detail == null ? h10("p", { className: "dnls-muted" }, copy.loading) : !Array.isArray(detail.mounts) || detail.mounts.length === 0 ? h10("p", { className: "dnls-muted" }, copy.none) : detail.mounts.map((mount2, index) => h10(SplitRow2, {
+            key: `${mount2.target ?? "mount"}:${index}`,
+            label: mount2.target ?? copy.none
+          }, [mount2.type, mount2.readOnly ? copy.readOnly : null].filter(Boolean).join(" \xB7 ") || copy.none))
+        ),
+        detail == null || Array.isArray(detail.operations) ? h10(
+          PanelSection2,
+          { title: copy.timeline },
+          detail == null ? h10("p", { className: "dnls-muted" }, copy.loading) : detail.operations.length === 0 ? h10("p", { className: "dnls-muted" }, copy.auditEmpty) : [...detail.operations].reverse().map((op, index) => h10(SplitRow2, {
+            key: `${op.action ?? "op"}:${op.at ?? index}`,
+            label: [op.action, op.state].filter(Boolean).join(" \xB7 ") || copy.none
+          }, when(copy, op.finishedAt ?? op.at) ?? copy.none))
+        ) : null,
+        h10(
+          PanelSection2,
+          { title: copy.config },
+          detail?.configuration ? [
+            h10(SplitRow2, { key: "cpus", label: copy.configCpus }, String(detail.configuration.overrides?.cpus ?? copy.none)),
+            h10(SplitRow2, { key: "mem", label: copy.configMemory }, formatBytes2(detail.configuration.overrides?.memoryBytes) ?? copy.none),
+            h10(SplitRow2, { key: "idle", label: copy.idle }, detail.configuration.idleTimeoutMs == null ? copy.none : `${Math.round(detail.configuration.idleTimeoutMs / 6e4)}`),
+            h10(Button4, { key: "edit", variant: "ghost", size: "sm", onClick: openSettings }, copy.tabSettings)
+          ] : h10("p", { className: "dnls-muted" }, copy.configNotAuthorized)
+        ),
+        h10(
+          PanelSection2,
+          { title: copy.danger },
+          h10(Button4, { variant: "ghost", size: "sm", disabled: busy || !supports("sandbox.instance.remove"), onClick: () => ask("remove") }, copy.remove)
+        )
+      );
+    }
+    const title = selection ? detail?.name ?? current?.name ?? selection.name ?? selection.sandboxId : copy.typeLabel;
+    const statusText = selection ? [title, stateLabel(copy, observed), current?.lastMinute ? `${typeof current.lastMinute.cpuCores === "number" ? Number(current.lastMinute.cpuCores).toFixed(2) : "\u2014"} \xB7 ${formatBytes2(current.lastMinute.memoryBytes) ?? "\u2014"}` : null].filter(Boolean).join(" \xB7 ") : `${fill2(copy.statusRun, { running, stopped })} \xB7 ${fill2(copy.listShort, { shown: visible.length, total: total ?? visible.length })}`;
+    const drawer = h10(
+      TabDrawer2,
+      { open: navOpen, label: copy.typeLabel, onClose: closeDrawer },
+      h10(DrawerHead2, null, copy.overview),
+      h10(DrawerRow2, { current: !selection, onClick: unchoose, label: copy.overview }),
+      visible.map((row) => h10(DrawerRow2, {
+        key: row.sandboxId,
+        current: selection?.sandboxId === row.sandboxId,
+        onClick: () => choose(row),
+        mark: h10(StateDot, { state: DOT[row.observedState] ?? "idle" }),
+        label: row.name ?? row.sandboxId,
+        meta: [stateLabel(copy, row.observedState), pending(row) ? copy.notYetApplied : null, usageLine(row)].filter(Boolean).join(" \xB7 ")
+      }))
+    );
+    const termList = terms?.list ?? [];
+    const dockBody = !selection ? h10("p", { className: "dnls-muted" }, copy.dockNeed) : terms?.denied ? h10("p", { className: "dnls-muted" }, copy.terminalsDenied) : h10(
+      "div",
+      { className: "dnls-section" },
+      h10("p", { className: "dnls-muted" }, copy.dockHint),
+      terms?.error ? h10("p", { className: "dnls-error", role: "alert" }, terms.error) : null,
+      termList.length === 0 ? h10("p", { className: "dnls-muted" }, copy.terminalsEmpty) : termList.map((term) => h10(
+        "div",
+        { key: term.terminalId, className: "dnls-actions" },
+        h10("span", { className: "dnls-muted" }, `${term.terminalId.slice(0, 8)} ${term.state ?? ""}`),
+        h10(Button4, { variant: "ghost", size: "sm", onClick: () => openTerm(term) }, copy.terminalOpen)
+      )),
+      supports("term.session.create") && !terms?.denied ? h10(Button4, { variant: "ghost", size: "sm", disabled: termBusy, onClick: createTerm }, copy.terminalCreate) : null
+    );
+    const confirmCopy = confirm ? CONFIRM[confirm.kind] : null;
+    const risk = confirmCopy ? h10(RiskConfirmation, {
+      open: true,
+      title: copy[confirmCopy[0]],
+      description: fill2(copy[confirmCopy[1]], { action: copy[confirm.kind], name: title }),
+      acknowledgeLabel: copy[confirmCopy[2]],
+      acknowledged,
+      onAcknowledgedChange: setAcknowledged,
+      confirmLabel: copy[confirm.kind] ?? copy.confirm,
+      cancelLabel: copy.cancel,
+      closeLabel: copy.close,
+      disabled: busy,
+      onCancel: () => {
+        setConfirm(null);
+        setAcknowledged(false);
+      },
+      onConfirm: () => {
+        const args = confirm.kind === "recreate" ? { expectedRevision: detail?.desiredRevision ?? 0, preserveVolume: true, interruptTerminals: true } : void 0;
+        submit(confirm.kind, { sandboxId: selection.sandboxId, args });
+      }
+    }) : null;
+    const createDialog = createOpen ? h10(NanoDialog2, {
+      copy,
+      title: copy.createTitle,
+      confirmLabel: busy ? copy.creating : copy.createSubmit,
+      confirmDisabled: busy || createName.trim() === "" || createProfile === "",
+      busy,
+      onCancel: () => setCreateOpen(false),
+      onConfirm: () => submit("create", { name: createName.trim(), profileId: createProfile })
+    }, h10(
+      "div",
+      { className: "dnls-settings" },
+      h10(
+        "label",
+        { className: "dnls-field" },
+        copy.createName,
+        h10(Input, { value: createName, "aria-label": copy.createName, onChange: (event) => setCreateName(event.target.value) })
+      ),
+      h10(
+        "label",
+        { className: "dnls-field" },
+        copy.createProfile,
+        h10("select", {
+          className: "dnls-select",
+          "aria-label": copy.createProfile,
+          value: createProfile,
+          onChange: (event) => setCreateProfile(event.target.value)
+        }, (profiles ?? []).map((profile) => {
+          const id = profileIdOf(profile);
+          return h10("option", { key: id, value: id }, profile?.name ?? id);
+        }))
+      ),
+      profiles && profiles.length === 0 ? h10("p", { className: "dnls-muted" }, copy.noProfiles) : null
+    )) : null;
+    const settings = settingsOpen ? h10(NanoDialog2, {
+      copy,
+      title: copy.tabSettings,
+      width: 480,
+      onCancel: () => setSettingsOpen(false),
+      footer: h10(Button4, { variant: "outline", onClick: () => setSettingsOpen(false) }, copy.close)
+    }, detail?.configuration ? h10(
+      "div",
+      { className: "dnls-settings" },
+      h10("p", { className: "dnls-muted" }, copy.saveNoChange),
+      h10(
+        "label",
+        { className: "dnls-field" },
+        copy.configCpus,
+        h10(Input, { value: cfgCpus, "aria-label": copy.configCpus, onChange: (event) => setCfgCpus(event.target.value) })
+      ),
+      h10(
+        "label",
+        { className: "dnls-field" },
+        copy.configMemory,
+        h10(Input, { value: cfgMem, "aria-label": copy.configMemory, onChange: (event) => setCfgMem(event.target.value) })
+      ),
+      h10(
+        "label",
+        { className: "dnls-field" },
+        copy.idleMinutes,
+        h10(Input, { value: idleMin, "aria-label": copy.idleMinutes, onChange: (event) => setIdleMin(event.target.value) })
+      ),
+      settingsMsg ? h10("p", { className: "dnls-muted" }, settingsMsg) : null,
+      h10(Button4, { variant: "primary", disabled: busy, onClick: saveSettings }, copy.configSave),
+      h10(
+        "div",
+        { className: "dnls-actions" },
+        h10(Button4, { variant: "ghost", size: "sm", disabled: busy || !supports("sandbox.instance.recreate"), onClick: () => {
+          setSettingsOpen(false);
+          ask("recreate");
+        } }, copy.recreate),
+        h10(Button4, { variant: "ghost", size: "sm", disabled: busy || !supports("sandbox.instance.remove"), onClick: () => {
+          setSettingsOpen(false);
+          ask("remove");
+        } }, copy.remove)
+      )
+    ) : h10("p", { className: "dnls-muted" }, copy.configNotAuthorized)) : null;
+    return h10(
+      React15.Fragment,
+      null,
+      h10("style", null, NANO_STYLES2, STYLE),
+      h10(WorkbenchShell2, {
+        "data-dnls-pane": "1",
+        label: copy.workbenchTitle,
+        shellRef: rootRef,
+        bar: [
+          h10(ShellToggle2, {
+            key: "nav",
+            icon: h10(IconPanelLeftOutlineRegular, { size: 16 }),
+            label: selection ? title : copy.typeLabel,
+            pressed: navOpen,
+            onClick: () => setNavOpen((open) => !open)
+          }),
+          selection ? h10(ShellIcon2, {
+            key: "back",
+            icon: h10(IconChevronLeftOutlineRegular, { size: 16 }),
+            label: copy.back,
+            onClick: unchoose
+          }) : null,
+          h10(ShellGap2, { key: "gap" }),
+          h10(
+            ShellTail2,
+            { key: "tail" },
+            h10(ShellIcon2, {
+              icon: h10(IconRefreshOutlineRegular, { size: 16 }),
+              label: copy.refresh,
+              disabled: phase === "loading" || busy,
+              onClick: () => setBoot((value) => value + 1)
+            }),
+            selection ? h10(ShellIcon2, {
+              icon: h10(IconSettingsOutlineRegular, { size: 16 }),
+              label: copy.tabSettings,
+              disabled: !detail || busy,
+              onClick: openSettings
+            }) : h10(ShellIcon2, {
+              icon: h10(IconPlusOutlineRegular, { size: 16 }),
+              label: copy.create,
+              disabled: busy || !supports("sandbox.instance.create"),
+              onClick: openCreate
+            }),
+            selection ? h10(ShellIcon2, {
+              icon: h10(IconPanelLeftOutlineRegular, { size: 16 }),
+              label: copy.openWorkspace,
+              onClick: openDesign
+            }) : null
+          )
+        ],
+        drawer,
+        dock: h10(StatusDock2, {
+          label: copy.dockLabel,
+          text: statusText,
+          height: dock,
+          onHeight: setDock,
+          onCommit: commitDock,
+          actions: [{
+            id: "terminal",
+            label: copy.dockLabel,
+            pressed: dock > 0,
+            disabled: !selection,
+            onClick: () => setDock((height) => height > 0 ? 0 : 160)
+          }]
+        }, dockBody)
+      }, selection ? sandboxPage() : overview()),
+      createDialog,
+      settings,
+      risk
+    );
+  }
+  var inject = ["slots", "sidebarRightTabs", "sidebarRight", "locale"];
+  function apply(ctx) {
+    const zh = () => ctx.locale?.getSnapshot?.().active?.startsWith("zh") === true;
+    const copy = () => copyFor2(zh() ? "zh" : "en");
+    const host = {
+      kitesurf: () => ctx.sidebarRightTabs?.get?.("kitesurf") !== void 0,
+      openKitesurf: () => ctx.sidebarRight?.openTab?.("kitesurf"),
+      openTerminal: (address) => {
+        const candidates = ctx.sidebarRightTabs?.candidates?.(address) ?? [];
+        if (candidates[0]?.kind !== "dnt-sandbox-terminal" || typeof ctx.sidebarRight?.openResource !== "function") return false;
+        ctx.sidebarRight.openResource(address);
+        return true;
+      }
+    };
+    const Pane = (props) => h10(DnlsPane, { sessionId: props.sessionId, copy: copy(), host });
+    ctx.effect(() => ctx.sidebarRightTabs.register({
+      id: KIND,
+      kind: KIND,
+      priority: "extension",
+      keepMounted: true,
+      multiple: false,
+      title: () => copy().typeLabel,
+      guide: [{
+        id: KIND,
+        order: 45,
+        title: () => copy().typeLabel,
+        description: () => copy().typeDescription
+      }]
+    }));
+    ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
+      name: "sidebar.right.pane.tab",
+      key: KIND
+    }, Pane)));
+    ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
+      name: "sidebar.right.pane.tab.title",
+      key: KIND
+    }, function DnlsTitle() {
+      return copy().typeLabel;
+    })));
   }
   return __toCommonJS(index_exports);
 })();
+/*! dsh-nano-ui@0.2.1 */
 		return __dnlsClient;
 	}
 });

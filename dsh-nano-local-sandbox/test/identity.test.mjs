@@ -20,7 +20,13 @@ test('package id, engine range, and file whitelist', () => {
   assert.match(patch, /name: dsh-nano-local-sandbox/)
   assert.deepEqual(Object.keys(pkg.exports).sort(), ['.', './client', './icon', './locale/*.json', './package.json'])
   assert.equal(pkg.exports['./client'], './lib/client.js')
-  assert.equal(pkg.dsh?.client, undefined)
+  assert.equal(pkg.dsh.client.platform, 'web')
+  assert.deepEqual(pkg.dsh.client.inject, [
+    '@deepseek-ai/dsh-client-ui-layout',
+    '@deepseek-ai/dsh-client-ui-sidebar-right',
+    '@deepseek-ai/dsh-client-ui-primitives',
+    '@deepseek-ai/dsh-client-locale',
+  ])
 })
 
 test('inject is exactly the five host services', () => {

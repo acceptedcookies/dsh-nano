@@ -150,6 +150,8 @@
 | `icon(name)` / `iconMarkup(glyph, weight)` | 图标门面，名称对 catalog 校验 |
 | `VERSION` | 产物里以 `dsh-nano-ui@<版本>` 注释出现，可检索 |
 | `PanelLayout` / `PanelSection` / `FactGrid` | 通用滚动面板骨架、分节标题与事实格；宿主没有语义化面板布局（[DNLS] 首个使用方） |
+| `WorkbenchShell` / `ShellTitle` / `ShellGap` / `TabDrawer` / `DrawerRow` / `StatusDock` | 工作台外壳：38px 顶栏、216px 滑出竖列表、26px 状态条与可拖起的底层。宿主没有可关闭的竖向文档列表，也没有可拖起的状态层；行内控件仍用宿主 `Button` |
+| `Card` / `SplitRow` / `Meter` / `PlainTable` | 宿主没有带边框的事实卡、左标签右控件的行、用量细条和数据表。卡片只是 layer-2 表面，不带标题条 |
 
 ## 7. 宿主接口（解码结论）
 
@@ -215,7 +217,9 @@ U5 只覆盖上面三种模式。宿主 `data-*` 属性被当作样式钩子或�
 
 | 位置 | 缺口说明 |
 |---|---|
-| `dsh-nano-local-sandbox/src/client/instruments.jsx`（`MetricChart`） | 宿主及 nano-ui 没有可表达分钟缺样、有效零值及独立量纲的历史图。仅数据条和基线使用 SVG，以语义令牌着色；状态、文字和控制不在 SVG 内绘制。 |
+| `dsh-nano-local-sandbox/src/client/history.jsx`（`HistoryLine`） | 宿主及 nano-ui 没有可保留分钟缺样、且不把缺样画成零的历史折线。仅折线使用 SVG，文字与控件不在 SVG 内。 |
+| `packages/dsh-nano-ui/src/shell.js`（`.nano-status-btn`） | 宿主 `Button` 最小档 28px，测得的 26px 状态条只能放下 20px 文字按钮，故状态条动作保留原生 button。 |
+| `packages/dsh-nano-ui/src/shell.js`（`ShellToggle` / `ShellIcon` / `DrawerRow`） | 宿主 `Button` 没有 DNK 的 28px 图标+文字页签钮，也没有 28×28 顶栏座位；抽屉行用宿主按钮会把名字折开。度量照 `.nks-nav-toggle` / `.nks-tool` / `.nks-nav-tab`。 |
 | `dsh-nano-model-selector/src/client/styles.js`（`.nms-trigger-label` / `.nms-trigger-effort` / `.nms-trigger-icon`） | 读 `--dsh-composer-model-text-display` / `--dsh-composer-model-icon-display`：宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts`），不是 `--dsw` 令牌，catalog 不收录，U1 照报（`T20`） |
 | `dsh-nano-explorer-extra/src/client/format.js`（`formatBytes`） | 宿主 `fileSizeText` 输出不等价：不加空格、1024 进制套十进制单位名（`1.0KB`）、最高 GB、对 0/NaN 无兜底；本包状态栏读 `1 KiB`，替换会改掉全部体积文案 |
 | `dsh-nano-explorer-extra/src/client/styles.js`（`.nxe-git-alert`） | 宿主 `Toast` 到 `holdMs` 自动结束，没有「常驻到用户关闭」的形态；Git 读取失败提示必须常驻，故由本包自绘 |

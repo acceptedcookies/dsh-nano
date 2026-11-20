@@ -329,6 +329,16 @@ export function createDnlsClient({ fetch: impl, origin } = {}) {
       return out
     },
 
+    /** Resize an owned terminal worker. Does not create or attach. */
+    async terminalResize(sandboxId, terminalId, cols, rows, { signal } = {}) {
+      assertSandboxId(sandboxId)
+      if (!SANDBOX_ID.test(terminalId ?? '')) refuse('params', 'terminalId required')
+      if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 2 || rows < 2 || cols > 512 || rows > 512) {
+        refuse('params', 'cols and rows out of range')
+      }
+      return mcp('term.session.resize', { sandboxId, terminalId, cols, rows }, { signal, sandboxId })
+    },
+
     /** Confirmed close of an owned terminal worker. */
     async terminalClose(sandboxId, terminalId, { signal } = {}) {
       assertSandboxId(sandboxId)

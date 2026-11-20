@@ -47,3 +47,31 @@ export function FactGrid({ items }) {
       h('dt', null, item.label),
       h('dd', null, item.value ?? '—'))))
 }
+
+/** Bordered surface. The host has no card; this is only the layer, not a title strip. */
+export function Card({ children }) {
+  return h('div', { className: 'nano-card' }, children)
+}
+
+/** Left label, right control. FactGrid is label/value only and cannot hold a button. */
+export function SplitRow({ label, children }) {
+  return h('div', { className: 'nano-split' },
+    h('span', { className: 'nano-split-label' }, label),
+    h('span', { className: 'nano-split-control' }, children))
+}
+
+/** Thin measured/allocated track. The host has no meter. `value` is 0–100, or null for no fill. */
+export function Meter({ label, text, value }) {
+  const width = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : null
+  return h('div', { className: 'nano-meter' },
+    h('span', { className: 'nano-meter-label' }, `${label} ${text ?? ''}`),
+    width === null ? null : h('span', { className: 'nano-meter-track' },
+      h('span', { className: 'nano-meter-fill', style: { width: `${width}%` } })))
+}
+
+/** Column header plus body rows. The host has no data table. */
+export function PlainTable({ columns, children }) {
+  return h('table', { className: 'nano-table' },
+    h('thead', null, h('tr', null, (columns ?? []).map((column) => h('th', { key: column }, column)))),
+    h('tbody', null, children))
+}

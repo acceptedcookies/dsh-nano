@@ -77,15 +77,18 @@ function fakeCtx() {
   return { ctx, effects, tabSpecs, slotRegistrations }
 }
 
-test('the client registers no workbench tab, guide, or pane', () => {
+test('the client registers one sandbox tab and pane', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-  assert.equal(manifest.dsh.client, undefined)
+  assert.equal(manifest.dsh.client.platform, 'web')
   const client = loadClientModule()
-  assert.deepEqual(client.inject, [])
+  assert.deepEqual(client.inject, ['slots', 'sidebarRightTabs', 'sidebarRight', 'locale'])
   const { ctx, effects, tabSpecs, slotRegistrations } = fakeCtx()
   client.apply(ctx)
-  assert.equal(tabSpecs.length, 0)
-  assert.equal(slotRegistrations.length, 0)
+  assert.equal(tabSpecs.length, 1)
+  assert.equal(tabSpecs[0].kind, 'dnls-sandbox')
+  assert.equal(tabSpecs[0].guide[0].id, 'dnls-sandbox')
+  const panes = slotRegistrations.filter((entry) => entry.spec?.key === 'dnls-sandbox')
+  assert.equal(panes.length, 2)
   for (const dispose of effects) assert.doesNotThrow(() => dispose?.())
 })
 
@@ -329,9 +332,12 @@ test('provider-shaped projections render ids, ports and null-safe stats', () => 
   assert.equal(formatCores(null), null)
 })
 
-test('the client source does not paint a workbench surface', () => {
+test('the workbench is host primitives plus the nano shell, not a private dashboard', () => {
   const source = readFileSync(join(root, 'src/client/index.jsx'), 'utf8')
-  for (const forbidden of ['sidebarRightTabs', 'NANO_STYLES', 'nano-panes', 'guide:', '沙箱']) {
+  for (const required of ['WorkbenchShell', 'TabDrawer', 'StatusDock', 'StateDot', 'DisclosureRow', 'Button', 'FactGrid', 'PanelSection', 'NANO_STYLES']) {
+    assert.equal(source.includes(required), true, required)
+  }
+  for (const forbidden of ['PanelLayout', 'font-weight: 600', 'font-weight:600']) {
     assert.equal(source.includes(forbidden), false, forbidden)
   }
 })

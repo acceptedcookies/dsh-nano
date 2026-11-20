@@ -72,6 +72,9 @@ export function capabilityReport(supported = true) {
     inspect: supported,
     exec: { stdin: supported },
     publish: supported,
+    // Guest-channel relay credential delivery (T-O-63): the backend carries
+    // deliverBridgeCredential; consumers gate on the callable too.
+    bridge: { credential: supported },
     mount: supported,
     networkPolicy: supported,
     identity: supported,

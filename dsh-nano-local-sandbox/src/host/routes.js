@@ -33,11 +33,6 @@ export const FLEET_ROUTE = '/nano-local-sandbox/fleet'
 export const SANDBOXES_ROUTE = '/nano-local-sandbox/sandboxes'
 export const INSPECT_ROUTE = '/nano-local-sandbox/inspect'
 export const PROCESSES_ROUTE = '/nano-local-sandbox/processes'
-// Same-origin resource proxy (implementation in res-proxy.js). Declared here so
-// every DNLS path lives in one scanner-visible place; a drift test keeps this
-// literal and RES_PREFIX identical.
-export const RES_ROUTE = '/nano-local-sandbox/res'
-
 import { request as httpRequest } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, constants, fstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -54,7 +49,6 @@ import { createInstanceRegistry } from './instance-registry.js'
 import { policyFingerprint, tupleFromPolicy } from './policy-adapter.js'
 import { errorCatalog, errorCode, statusOf } from './error-catalog.js'
 import { buildSrcDoc } from './dom-srcdoc.js'
-import { RES_PREFIX, serveRes } from './res-proxy.js'
 import { bumpEpoch, projectSnapshot } from './observe.js'
 import { TERM_TOOLS } from './terminal-driver.js'
 
@@ -1007,10 +1001,43 @@ async function readJson(req, limit = 0) {
 }
 
 /**
+ * T-O-63: mint + deliver the host's generation credential and stash it on
+ * the session (memory only — never persisted, logged or returned in a
+ * response). A managed session carries the verified binding pair
+ * (containerName, generation); delivery rides `deps.relayCredentials`.
+ * No vault or no binding means agent-class — the call answers null instead
+ * of connecting the relay under false pretenses. A delivery failure is a
+ * real 503 so the object page stays off the relay (fail-closed).
+ */
+export async function ensureBridgeCredential(session, deps = {}) {
+  if (typeof session.relayToken === 'string' && session.relayToken) return session.relayToken
+  const vault = deps?.relayCredentials
+  const locator = session?.containerName
+  const generation = session?.generation
+  if (typeof vault?.tokenFor !== 'function' || !locator || !generation) {
+    // No host channel or no verified binding: agent-class, honestly — but
+    // never memoized, so a later fully-verified call can still prove itself.
+    session.relayToken = null
+    return null
+  }
+  try {
+    session.relayToken = await vault.tokenFor({ locator, generation })
+  } catch (error) {
+    // Fail-closed: the failure is NOT cached — the next verified action
+    // retries delivery instead of silently degrading to agent-class.
+    session.relayToken = null
+    throw Object.assign(error instanceof Error ? error : new Error(String(error)), { status: error?.status || 503 })
+  }
+  return session.relayToken
+}
+
+/**
  * CDP client for a base url. `deps.connect` lets tests and fixtures inject a
  * fake transport; production falls through to the real socket in cdp-elements.
  */
-function clientFor(session, base, deps) {
+async function clientFor(session, base, deps) {
+  // Present the generation credential at the relay handshake (T-O-63).
+  if (!deps?.connect) await ensureBridgeCredential(session, deps)
   return ensureClient(session, base, deps?.connect)
 }
 
@@ -1076,9 +1103,9 @@ async function captureDom(session, base, deps) {
   })
   if (!page?.html) return { error: 'empty' }
   if (page.url === 'about:blank') return { error: 'blank' }
-  // Managed hosts do not dispatch /res (see object-pages), so only the
-  // unmanaged route set may rewrite the document onto the proxy.
-  const built = buildSrcDoc({ url: page.url, html: page.html }, { proxy: !deps.managed })
+  // One build only: real addresses. The retired /res proxy rewriting is gone —
+  // the projection keeps the page's own base and subresource URLs verbatim.
+  const built = buildSrcDoc({ url: page.url, html: page.html })
   // domSeq is the pane's staleness cursor: it must only advance when the
   // captured document actually changed — bumping it on every read makes the
   // pane's "same-version" guard never hit and rewrites the iframe
@@ -1176,9 +1203,17 @@ async function bridgeFetch(session, deps, pathname, { method = 'GET', body = nul
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), timeoutMs)
   try {
+    // T-O-63: the only write face the bridge exposes (/control POST) is
+    // host-class gated; sign it with the generation credential. The token is
+    // a transport header only — never in the body, ops row or response.
+    const headers = body ? { 'content-type': 'application/json' } : {}
+    if (method === 'POST' && pathname === '/control') {
+      const relayToken = await ensureBridgeCredential(session, deps)
+      if (relayToken) headers['x-dnls-relay-credential'] = relayToken
+    }
     const res = await fetch(`${base}${pathname}`, {
       method,
-      headers: body ? { 'content-type': 'application/json' } : {},
+      headers,
       body: body ? JSON.stringify(body) : null,
       signal: ac.signal,
     })
@@ -1486,13 +1521,6 @@ export function routeSpecs(deps = {}) {
         // stays 'disconnected'; only pre-dispatch cancellation is 'cancelled'.
         if (op.status === null && res.destroyed) op.status = 'disconnected'
       })
-      // The resource proxy owns its whole subtree and does its own fetch; it
-      // must run before any engine-facing branch (it never touches the engine)
-      // and before the profile binding, which it does not need.
-      if (row.path === RES_PREFIX || row.path.startsWith(`${RES_PREFIX}/`)) {
-        await serveRes(req, res)
-        return
-      }
       if (row.path.endsWith('/shot')) {
         // Real implementation: the page-ready stub (deps.pageReady) was a
         // scaffold nobody ever wired — shot has a route row but no body. Drive
@@ -1692,6 +1720,11 @@ export function routeSpecs(deps = {}) {
           // written here — /operations?errorsOnly can then answer "which
           // URL refused" instead of only "navigate.failed".
           if (res.__op) res.__op.argSummary = JSON.stringify({ url }).slice(0, 300)
+          // Profile-owned advisory for this target (e.g. a public tunnel
+          // domain): same hint on success and failure bodies, never a status
+          // change or a refusal. The kernel holds no domain list — the loaded
+          // profile driver owns it (T-O-66).
+          const targetHint = driverOf(session).navigationHint?.(url) ?? null
           // Explicit navigation wins over startup restoration. Never replay a
           // remembered address on top of the page the human is opening now.
           restoreAttempted = true
@@ -1716,14 +1749,16 @@ export function routeSpecs(deps = {}) {
           // navigate() stamps session.lastArrival from the OBSERVED document
           // just before returning, so on success this IS this nav's landing —
           // never the previous open's. On failure this line is unreachable.
-          if (!res.destroyed) send(res, 200, { ok: true, url: result?.url || url, landed: session.lastArrival || null })
+          if (!res.destroyed) send(res, 200, { ok: true, url: result?.url || url, landed: session.lastArrival || null, ...(targetHint ? { hint: targetHint } : {}) })
         } catch (error) {
           const errorId = error.errorId || errorCode('navigate.failed')
-          const hint = error.blockedReason
+          const errorHint = error.blockedReason
             ? (error.blockedReason === 'private-network'
               ? '引擎私网访问策略拒绝：页面从公网源去够更私密的地址。容器内访问宿主服务请确认页面 origin 与目标同层级（GET /status → networking.hostGateway 取宿主网关地址），勿从公网页直联宿主 localhost。'
               : navigateHint(error, url))
             : navigateHint(error, url)
+          const targetHint = (() => { try { return driverOf(session).navigationHint?.(url) ?? null } catch { return null } })()
+          const hint = [targetHint, errorHint].filter(Boolean).join(' ') || errorHint
           if (!res.destroyed) send(res, error.status || statusOf(errorId), { ok: false, errorId, error: error.message, hint })
         }
         return

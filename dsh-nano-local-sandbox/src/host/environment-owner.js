@@ -1,4 +1,5 @@
 import { supportsAction } from './backend.js'
+import { createBridgeCredentialVault } from './bridge-credential.js'
 import { createBridgePublisher } from './bridge-projection.js'
 import { openControlRegistry } from './control-registry.js'
 import { createFleetProjection } from './fleet-projection.js'
@@ -33,8 +34,19 @@ export function openEnvironmentOwner(deps) {
     const observe = row => source(row.binding.locator, row)
     usage = openUsageMinutes({ root, envId, registry, observe, backend, clock: deps.clock, onError: deps.onError })
     const common = { envId, registry, resolvePrincipal, backend, profileFor }
+    // T-O-63: generation-scoped relay credential vault. One random token per
+    // (locator, generation), minted lazily on the object's first relay use
+    // (create/start/recreate/host-restart adoption all funnel through the
+    // first verified page or control action), delivered over the same root
+    // exec channel as publishHealth. The token lives only here — never in
+    // the registry, responses, audit or logs.
+    const relayCredentials = createBridgeCredentialVault({
+      deliver: typeof backend.deliverBridgeCredential === 'function'
+        ? (locator, token) => backend.deliverBridgeCredential(locator, token)
+        : null,
+    })
     const lifecycle = createLifecycleOwner({ ...common, observe: source, audit: deps.audit })
-    const pages = createObjectPages({ ...common, deps, lifecycle, connection })
+    const pages = createObjectPages({ ...common, deps: { ...deps, relayCredentials }, lifecycle, connection })
     const uses = createUseBindings(registry, sandboxId => idle.touch(sandboxId))
     const idle = createIdlePolicy({ ...common, observe, uses, stop: lifecycle.stopIfIdle })
     // Host-owned bridge health publication (dnls.control/1) — only over the
@@ -43,6 +55,7 @@ export function openEnvironmentOwner(deps) {
     const publisher = typeof backend.publishHealth === 'function'
       ? createBridgePublisher({ envId, registry, observe, onError: deps.onError, publish: (locator, doc) => backend.publishHealth(locator, doc) })
       : null
+
     const terminalRpc = (locator, verb, request) => backend.terminalRpc(locator, verb, request)
     stream = createTerminalStream({ ...common, connection, webServer, originFor, observe, terminalRpc })
     const terminal = createTerminalOwner({ ...common, observe, terminalRpc, issueLocator: stream.issueLocator,

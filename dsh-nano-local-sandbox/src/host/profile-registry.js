@@ -61,6 +61,7 @@ const PACKAGE_RECIPE = new Map([
   ['pty-entry.mjs', join(TERMINAL_DIR, 'pty-entry.mjs')],
   ['pty-worker.py', join(TERMINAL_DIR, 'pty-worker.py')],
   ['public-health.mjs', join(TERMINAL_DIR, 'public-health.mjs')],
+  ['relay-credential.mjs', join(TERMINAL_DIR, 'relay-credential.mjs')],
 ])
 
 /**

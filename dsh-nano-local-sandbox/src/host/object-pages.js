@@ -1,18 +1,18 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { BINDING_TABLE } from '../../lib/bindings.js'
 import { connectCdp, resetClient } from './cdp-elements.js'
+import { ensureBridgeCredential } from './routes.js'
 import { serviceMappings } from './managed-profile.js'
 import { authorize } from './object-authz.js'
 import { routeSpecs } from './routes.js'
 import { supportsAction } from './backend.js'
 
-// dnls.res is not a page action: iframe subresource fetches carry neither the
-// contract header nor a sandboxId, and its body is raw bytes, not JSON. Left out
-// here, managed-routes registers its row fail-closed until it gets its own owner.
+// Non-page rows (discovery, mcp, lifecycle, ops and the P7 projections) are
+// owned elsewhere; object pages serve only the per-object route set.
 const otherOwners = new Set(['dnls.contract', 'dnls.mcp', 'dnls.lifecycle', 'dnls.operations', 'dnls.sandboxes',
-  'dnls.fleet', 'dnls.inspect', 'dnls.processes', 'dnls.res'])
+  'dnls.fleet', 'dnls.inspect', 'dnls.processes'])
 const fail = status => Object.assign(new Error('object page unavailable'), { status })
-const deniedKeys = new Set(['cookies', 'cookiesApplied', 'extraHeaders', 'authorization', 'token', 'storePath',
+const deniedKeys = new Set(['cookies', 'cookiesApplied', 'extraHeaders', 'authorization', 'token', 'storePath', 'relayToken',
   'containerName', 'mounts', 'stateVolume', 'argv', 'env', 'engineUrl', 'stateSource', 'runtimeSource'])
 function redact(value) {
   if (Array.isArray(value)) return value.map(redact)
@@ -107,7 +107,12 @@ export function createObjectPages({ registry, envId, resolvePrincipal, connectio
       const check = grants.getStore()
       if (!check || !session.bridgeBase) throw fail(503)
       await check()
-      const client = await (deps.connect ?? connectCdp)(base, { relayUrl: `${session.bridgeBase.replace(/^http/, 'ws')}/cdp` })
+      // T-O-63: the host's own relay handshake must prove itself with the
+      // current generation credential. Delivery happens here — the first
+      // verified page/control use of the generation — so a failed delivery
+      // fails closed (503) and the object page never connects the relay.
+      if (deps.connect === undefined) await ensureBridgeCredential(session, deps)
+      const client = await (deps.connect ?? connectCdp)(base, { relayUrl: `${session.bridgeBase.replace(/^http/, 'ws')}/cdp`, relayToken: session.relayToken || undefined })
       try { await check() } catch (error) { client.close(); throw error }
       const send = client.send.bind(client)
       client.send = async (...command) => {

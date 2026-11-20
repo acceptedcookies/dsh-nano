@@ -14,8 +14,41 @@ import * as history from './history.js'
 
 const ENGINE_FINGERPRINT = /@?kitesurf/i
 
+/**
+ * Known public tunnel domain suffixes (T-O-66): a CONSTANT, not a security
+ * boundary. Tunnels come and go and can be self-hosted, so this list can never
+ * be exhaustive — it only drives the visible /open hint. Matching is exact
+ * host or any subdomain suffix; it never blocks, never changes a status.
+ */
+const PUBLIC_TUNNEL_SUFFIXES = Object.freeze([
+  'trycloudflare.com',
+  'ngrok.io', 'ngrok-free.app', 'ngrok-free.dev', 'ngrok.app', 'ngrok.dev',
+  'loca.lt',
+  'serveo.net',
+  'zrok.io',
+  'bore.pub',
+  'localhost.run',
+])
+
+/**
+ * The /open tunnel hint: same hint on success and failure bodies, never a
+ * refusal. The code is a catalog row (ERROR_ROWS, hint:true), not an errorId —
+ * DNK01 T-O-6. `api.errorCode` supplies the live profile namespace.
+ */
+function openTunnelHint(url, api) {
+  let host = ''
+  try { host = new URL(String(url || '')).hostname.toLowerCase() } catch { return null }
+  if (!host) return null
+  const suffix = PUBLIC_TUNNEL_SUFFIXES.find((item) => host === item || host.endsWith(`.${item}`))
+  if (!suffix) return null
+  return `${api.errorCode('navigate.public-tunnel')}：目标主机 ${host} 命中已知公网隧道域（常量清单，非安全边界）。隧道会绕过本部署的拓扑与鉴权；本地服务请改用容器宿主网关 networking.hostGateway 直接打开。`
+}
+
 /** Profile-local ids: emitted by the host or the bridge under this namespace. */
 const ERROR_ROWS = [
+  // Hint code (hint:true), not an error enum row: /open attaches it on
+  // tunnel-domain hits without touching the status (T-O-66; DNK01 T-O-6).
+  { code: 'navigate.public-tunnel', status: 200, hint: true, cause: '目标主机命中已知公网隧道域常量清单', next: '隧道会绕过部署拓扑；本地服务改用 networking.hostGateway 直接打开' },
   { code: 'control.busy', status: 409, cause: '写所有权被另一个 MCP writer 占着', next: 'sandbox.control {action:status} 看持有者；等其 release 或 claim' },
   { code: 'control.held', status: 409, cause: 'humanHold 生效中：人工接管了页面，agent 写类调用被拒', next: '人工点击「停止写入/释放」后重试；或等待人工完成' },
   { code: 'engine.mismatch', status: 409, cause: '该 origin 的 /health 不是本 profile 引擎', next: '不要 attach；报告后 POST /nano-local-sandbox/recover' },
@@ -111,6 +144,14 @@ export default function createDriver(api) {
       probes: { 'bridge-writer-free': bridgeWriterFree, 'history-consistent': historyConsistent },
     },
     errors: { namespace: 'kitesurf', rows: ERROR_ROWS },
+    /**
+     * /open target hint: null, or a single hint string carrying its registered
+     * code when the target host matches PUBLIC_TUNNEL_SUFFIXES. Same hint on
+     * success and failure bodies; advisory only (T-O-66).
+     */
+    navigationHint(url) {
+      return openTunnelHint(url, api)
+    },
     /**
      * The engine marks its egress refusals two ways: an
      * `x-kitesurf-blocked:<reason>` header on the synthetic 403 (visible in the

@@ -466,7 +466,7 @@ async function acquireClient(session, httpBase, connect) {
   session.network = session.network || []
   if (connect === connectCdp && !session.bridgeBase) throw new Error('verified CDP bridge publication unavailable')
   const client = connect === connectCdp
-    ? await connect(httpBase, { relayUrl: `${session.bridgeBase.replace(/^http/, 'ws')}/cdp` })
+    ? await connect(httpBase, { relayUrl: `${session.bridgeBase.replace(/^http/, 'ws')}/cdp`, relayToken: session.relayToken || undefined })
     : await connect(httpBase, {})
   client.__session = session
   session.cdp = client
@@ -568,14 +568,18 @@ async function acquireClient(session, httpBase, connect) {
 }
 
 /** Optional transport and budgets are a local test seam, not an HTTP setting. */
-export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket, timeouts = {}, relayUrl } = {}) {
+export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket, timeouts = {}, relayUrl, relayToken } = {}) {
   const budgets = { ...CDP_TIMEOUTS, ...timeouts }
   // A failed shared-page relay must not silently open a different page.
   const direct = `${String(httpBase).replace(/^http/, 'ws')}/devtools/browser`
   return openSocket(relayUrl || direct, relayUrl ? 'relay' : 'direct')
 
   function openSocket(wsUrl, via) {
-    const ws = new Socket(wsUrl)
+    // T-O-63: the host proves itself to the bridge with the current
+    // generation credential at the relay handshake. Node's WebSocket cannot
+    // send custom headers, so the token rides a dnls-relay.<token>
+    // subprotocol offer — never echoed back by the bridge's 101.
+    const ws = relayToken ? new Socket(wsUrl, [`dnls-relay.${relayToken}`]) : new Socket(wsUrl)
   let next = 1
   const navigations = new Set()
   const navIntents = new Map() // command id -> url the caller asked for

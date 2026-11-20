@@ -498,6 +498,29 @@ export function createAppleBackend(spec = {}, io = {}) {
       if (reply?.ok !== true) throw new Error(`publishHealth ${locator}: refused`)
       return reply
     },
+    /**
+     * Host→guest relay credential delivery (T-O-63): same privileged pattern
+     * as publishHealth — root helper, stdin, env -i, no argv, no env, no
+     * published-port write. The token never rides argv, logs or replies; a
+     * refused helper is an honest error, never a silent retry.
+     */
+    async deliverBridgeCredential(locator, token) {
+      const args = [
+        'exec', '-i', '--user', '0:0', '--workdir', '/', locator,
+        '/usr/bin/env', '-i', 'PATH=/usr/local/bin:/usr/bin:/bin',
+        '/usr/local/bin/node', '/opt/dnls/relay-credential.mjs',
+      ]
+      const text = await runSession(bound, args, { input: JSON.stringify({ v: 1, token }) })
+      const line = String(text).split('\n').find((row) => row.trim())
+      let reply
+      try {
+        reply = JSON.parse(line ?? '{}')
+      } catch {
+        reply = null
+      }
+      if (reply?.ok !== true) throw new Error(`deliverBridgeCredential ${locator}: refused`)
+      return reply
+    },
     /** Remove a container so it can be recreated at a different size. */
     async remove(name) {
       calls.remove += 1

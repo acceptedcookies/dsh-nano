@@ -13,14 +13,18 @@
  *    [DNLS]; keeping a second copy there would break 单一真源.
  * What remains is exactly the host concern: sanitize + rebase.
  *
+ * REAL ADDRESSES ONLY (T-O-66): the /res same-origin proxy and its rewriting
+ * are retired. There is exactly one build — <base> is the page's real URL and
+ * every subresource keeps its real address. A local http: page may render
+ * unstyled inside the https pane (mixed content); that is the deterministic
+ * behavior of HTML mode, and the styled surface is the engine render.
+ *
  * Fidelity trade-offs, stated honestly:
  *  - scripts, inline handlers and javascript: URLs are removed — the preview
  *    must never re-run page code;
  *  - relative URLs are rebased on the live page URL so CSS/img/font resolve;
  *  - form state is not carried over (values are attributes, not live props).
  */
-
-import { proxyBaseFor, RES_PREFIX } from './res-proxy.js'
 
 const SCRIPT_RE = /<script\b[^>]*>[\s\S]*?<\/script>/gi
 const BASE_TAG_RE = /<base\b[^>]*>/gi
@@ -56,71 +60,18 @@ export function sanitizeHtml(html) {
   return { html: text, stripped }
 }
 
-/** Absolute http(s) URL → its same-origin proxy path. Anything else is left alone. */
-function proxify(value) {
-  const text = String(value || '')
-  const match = /^(https?):\/\/([^/?#]+)(.*)$/i.exec(text)
-  if (!match) return text
-  return `${RES_PREFIX}/${match[1].toLowerCase()}/${match[2]}${match[3] || '/'}`
-}
-
-/**
- * Rewrite absolute http(s) URLs in load-bearing attributes onto the proxy.
- *
- * A <base> alone cannot save an absolutely-addressed subresource: an http: URL
- * written out in full stays http: and is still mixed content. Only attributes
- * that trigger a fetch are touched — text content that happens to mention a URL
- * is left verbatim, and relative values are untouched because <base> already
- * resolves them inside proxy space.
- */
-function rewriteAbsoluteUrls(html) {
-  return String(html)
-    // srcset is a comma-separated candidate list; each candidate is "url [descriptor]".
-    .replace(/(\ssrcset\s*=\s*)(["'])([^"']*)\2/gi, (whole, lead, quote, value) => {
-      const rewritten = value.split(',').map((candidate) => {
-        const trimmed = candidate.trim()
-        if (!trimmed) return trimmed
-        const [urlPart, ...descriptor] = trimmed.split(/\s+/)
-        return [proxify(urlPart), ...descriptor].join(' ')
-      }).join(', ')
-      return `${lead}${quote}${rewritten}${quote}`
-    })
-    .replace(/(\s(?:src|href|poster|data|action)\s*=\s*)(["'])([^"']*)\2/gi,
-      (whole, lead, quote, value) => `${lead}${quote}${proxify(value)}${quote}`)
-}
-
 /**
  * Build the document the pane's iframe renders.
- * `proxy: false` keeps every reference on its real URL: a host that does not
- * serve /res must not point the document at it, or every subresource (https
- * ones included) fails instead of only the mixed-content ones.
+ * `base` is the page's real URL; subresource references are untouched.
  * @param {{ url?: string, html?: string }} page
- * @param {{ proxy?: boolean }} [options]
  * @returns {{ srcdoc: string, url: string, base: string, bytes: number, stripped: object }}
  */
-export function buildSrcDoc(page, { proxy = true } = {}) {
+export function buildSrcDoc(page) {
   const url = typeof page?.url === 'string' ? page.url : ''
-  const { html: raw, stripped } = sanitizeHtml(page?.html)
-  if (!proxy) {
-    const head = url ? `<base href="${attr(url)}">` : ''
-    const srcdoc = /<head[^>]*>/i.test(raw)
-      ? raw.replace(/<head([^>]*)>/i, `<head$1>${head}`)
-      : `<!doctype html><html><head>${head}</head><body>${raw}</body></html>`
-    return { srcdoc, url, base: url, bytes: srcdoc.length, stripped }
-  }
-  const html = rewriteAbsoluteUrls(raw)
-  // Rebase on the PROXY form of the page URL, not the page URL itself. The
-  // srcdoc iframe inherits the host's (https) origin, so a direct http: base
-  // makes every relative asset mixed content — the exact bug that showed an
-  // unstyled skeleton. Resolving inside proxy space keeps the whole document
-  // same-origin with the pane while the host does the http fetch.
-  const base = proxyBaseFor(url) || url
-  const head = base ? `<base href="${attr(base)}">` : ''
-  let srcdoc
-  if (/<head[^>]*>/i.test(html)) {
-    srcdoc = html.replace(/<head([^>]*)>/i, `<head$1>${head}`)
-  } else {
-    srcdoc = `<!doctype html><html><head>${head}</head><body>${html}</body></html>`
-  }
-  return { srcdoc, url, base, bytes: srcdoc.length, stripped }
+  const { html, stripped } = sanitizeHtml(page?.html)
+  const head = url ? `<base href="${attr(url)}">` : ''
+  const srcdoc = /<head[^>]*>/i.test(html)
+    ? html.replace(/<head([^>]*)>/i, `<head$1>${head}`)
+    : `<!doctype html><html><head>${head}</head><body>${html}</body></html>`
+  return { srcdoc, url, base: url, bytes: srcdoc.length, stripped }
 }

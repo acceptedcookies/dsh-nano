@@ -633,19 +633,6 @@
     },
     {
       "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/res",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0
-      },
-      "responseShape": "binary"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/dom",
       "methods": [
         "GET",

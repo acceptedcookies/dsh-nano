@@ -15,8 +15,7 @@
 | GET | `/nano-local-sandbox/operations?sandboxId=<id>&operationId=<op>` | 只读单个 lifecycle operation；非 trace 面 |
 | GET | `/nano-local-sandbox/browse-history` | 持久浏览历史（DELETE `?id=`/POST `{clear:true}` 改） |
 | GET | `/nano-local-sandbox/elements?selector=…&depth=N` | 引擎 DOM.getDocument 元素列表（depth NaN→400） |
-| GET | `/nano-local-sandbox/dom` | 页面 DOM 文本 |
-| GET | `/nano-local-sandbox/res/<scheme>/<host>/<path>` | 同源资源代理（前缀路由）：为 HTML 原生预览取回 `http:` 子资源，仅 http/https；越界回 `res.scheme`/`res.host`/`res.path`/`res.url`/`res.size`/`res.timeout`/`res.upstream`/`res.redirect` |
+| GET | `/nano-local-sandbox/dom` | 页面 DOM 文本（静态投影，`<base>` 与子资源均为真实地址；本地 http 站在 HTML 模式下可能缺样式——看样式用默认的引擎渲染） |
 | GET | `/nano-local-sandbox/snapshot?maxNodes=1..500` | a11y-lite 树 + `@N` ref 表（人=agent 同一语言；默认 120） |
 | GET | `/nano-local-sandbox/refs?ref=@N` | `@N`→selector 反查；`?` 无参=整表 summary |
 | GET | `/nano-local-sandbox/logs?tail=20..2000` | 容器引擎输出（tail NaN→400） |

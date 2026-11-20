@@ -2888,7 +2888,7 @@ ${LAYER_CSS}
           hitlRelay: "Agent \u7ECF relay \u5DF2\u63A5\u5165",
           hitlRelayWrite: "Agent \u7ECF relay \u5199\u5165",
           hitlRefused: "\u88AB\u63A5\u7BA1\u62E6\u4E0B",
-          hintUnproxiedHtml: "\u5BBF\u4E3B\u672A\u58F0\u660E\u540C\u6E90\u8D44\u6E90\u4EE3\u7406\uFF1AHTML \u6A21\u5F0F\u7684\u90E8\u5206\u5916\u94FE\u8D44\u6E90\u53EF\u80FD\u88AB\u6D4F\u89C8\u5668\u6309\u6DF7\u5408\u5185\u5BB9\u62E6\u6389\uFF0C\u6837\u5F0F\u5F02\u5E38\u65F6\u5207\u56DE\u622A\u56FE\u6E32\u67D3\u5373\u53EF",
+          hintUnproxiedHtml: "HTML \u6A21\u5F0F\u662F\u4FDD\u7559\u771F\u5B9E\u5730\u5740\u7684\u9759\u6001\u6295\u5F71\uFF1A\u672C\u5730 http \u7AD9\u7684\u5916\u94FE\u8D44\u6E90\u53EF\u80FD\u88AB\u6309\u6DF7\u5408\u5185\u5BB9\u62E6\u6389\u3002\u8981\u770B\u6837\u5F0F\u8BF7\u7528\u9ED8\u8BA4\u7684\u5F15\u64CE\u6E32\u67D3",
           hitlTakeover: "\u63A5\u7BA1",
           hitlTakeoverTitle: "\u4EBA\u5DE5\u63A5\u7BA1\uFF1A\u6682\u505C Agent \u5BF9\u9875\u9762\u7684\u5199\u5165\uFF0C\u7531\u4F60\u64CD\u4F5C",
           hitlRelease: "\u505C\u6B62\u5199\u5165",
@@ -3120,7 +3120,7 @@ ${LAYER_CSS}
           hitlRelay: "Agent on relay",
           hitlRelayWrite: "Agent writing via relay",
           hitlRefused: "Blocked by override",
-          hintUnproxiedHtml: "This host does not declare a same-origin resource proxy: some external resources may be blocked as mixed content in HTML mode. If styling looks wrong, switch back to the screenshot render.",
+          hintUnproxiedHtml: "HTML mode is a static projection that keeps real addresses: subresources of a local http page may be blocked as mixed content. For styling, use the default engine render.",
           hitlTakeover: "Take over",
           hitlTakeoverTitle: "Human override: pause the agent\u2019s page writes while you drive",
           hitlRelease: "Stop writes",
@@ -5111,14 +5111,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             at: Date.now(),
             capturedAt: data.capturedAt ?? null,
             domSeq: data.domSeq ?? null,
-            generation: data.generation ?? null,
-            // `base` is the host's own statement that it rewrote the document
-            // onto a same-origin proxy. An older host omits it, and then whether
-            // a subresource survives is up to the browser's mixed-content policy
-            // — measured: a local http site still rendered styled in this
-            // browser, so the hint below must stay conditional. It reports the
-            // MISSING DECLARATION, never a guaranteed breakage.
-            proxied: typeof data.base === "string" && data.base !== ""
+            generation: data.generation ?? null
           });
           if (data.url && data.url !== "about:blank") setPageUrl(data.url);
           return true;
@@ -6378,9 +6371,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           onWheel,
           style: { cursor: annotate ? "crosshair" : "default" }
         },
-        // Independent of pins/annotate: this one is about the RENDER SURFACE, so
-        // it must be visible the moment HTML mode is on and the host is old.
-        nativeHtml && domDoc && domDoc.proxied === false ? h9("div", {
+        // Independent of pins/annotate: this one is about the RENDER SURFACE.
+        // HTML mode is a static projection over real addresses — local http
+        // subresources can be blocked as mixed content, so the notice is fixed
+        // while the mode is on, not conditional on a host declaration.
+        nativeHtml && domDoc ? h9("div", {
           className: "nks-hint nks-float-top",
           "data-nks-hint-unproxied": "1",
           role: "status",

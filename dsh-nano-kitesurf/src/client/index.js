@@ -937,8 +937,10 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
   // it silently — the pane then shows an unstyled skeleton while the engine
   // (which loads the page in its own container) renders perfectly. Local dev
   // servers are http:, so "native HTML by default" made the common case the
-  // broken one. Native HTML is an explicit opt-in; DNLS proxies its
-  // subresources (/res/...) so that opting in does not reintroduce the block.
+  // broken one. Native HTML is an explicit opt-in and keeps real addresses —
+  // the retired /res proxy is gone (T-O-66); missing styles on local http
+  // pages is the deterministic price of the static projection, and the styled
+  // surface stays the engine render.
   const [nativeHtml, setNativeHtml] = React.useState(false)
   const [domDoc, setDomDoc] = React.useState(null)
   // last-good 标记：导航/刷新失败时保留上一帧画面，并在画面上叠加
@@ -1524,13 +1526,6 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
           capturedAt: data.capturedAt ?? null,
           domSeq: data.domSeq ?? null,
           generation: data.generation ?? null,
-          // `base` is the host's own statement that it rewrote the document
-          // onto a same-origin proxy. An older host omits it, and then whether
-          // a subresource survives is up to the browser's mixed-content policy
-          // — measured: a local http site still rendered styled in this
-          // browser, so the hint below must stay conditional. It reports the
-          // MISSING DECLARATION, never a guaranteed breakage.
-          proxied: typeof data.base === 'string' && data.base !== '',
         })
         if (data.url && data.url !== 'about:blank') setPageUrl(data.url)
         return true
@@ -2721,9 +2716,11 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
       onWheel,
       style: { cursor: annotate ? 'crosshair' : 'default' },
     },
-      // Independent of pins/annotate: this one is about the RENDER SURFACE, so
-      // it must be visible the moment HTML mode is on and the host is old.
-      nativeHtml && domDoc && domDoc.proxied === false ? h('div', {
+      // Independent of pins/annotate: this one is about the RENDER SURFACE.
+      // HTML mode is a static projection over real addresses — local http
+      // subresources can be blocked as mixed content, so the notice is fixed
+      // while the mode is on, not conditional on a host declaration.
+      nativeHtml && domDoc ? h('div', {
         className: 'nks-hint nks-float-top',
         'data-nks-hint-unproxied': '1',
         role: 'status',

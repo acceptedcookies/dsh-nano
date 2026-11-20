@@ -215,6 +215,21 @@
       "match": "prefix"
     },
     {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/perf-review/host",
+      "methods": [
+        "GET"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "只读全进程视图。不排空，只接受 since。",
+      "id": "dnn.perf-review.host",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/status",
       "methods": [
@@ -226,6 +241,21 @@
       "sessionBinding": true,
       "justification": "dsh-nano-explorer-extra/src/host/routes.js:226 — read-only git status/stats for one session workspace; returns no secrets. scopeOf resolves caller-supplied sessionId (finding scopeof-cross-session, harden) — session-scoped read by design.",
       "id": "dnee.status",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/diff",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 65536,
+      "sessionBinding": true,
+      "justification": "Read-only unified diff of one workspace path against HEAD. Rejects paths that leave the checkout. No allowOutsideWorkspace.",
+      "id": "dnee.diff",
       "channel": "http",
       "match": "exact"
     },
@@ -500,21 +530,6 @@
       "match": "exact"
     },
     {
-      "plugin": "dsh-nano-explorer-extra",
-      "path": "/nano-explorer-extra/diff",
-      "methods": [
-        "POST"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 65536,
-      "sessionBinding": true,
-      "justification": "Read-only unified diff of one workspace path against HEAD. Rejects paths that leave the checkout. No allowOutsideWorkspace.",
-      "id": "dnee.diff",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
       "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/catalog",
       "methods": [
@@ -565,23 +580,6 @@
     },
     {
       "plugin": "dsh-nano-model-selector",
-      "path": "/nano-model-selector/subagent-default",
-      "methods": [
-        "GET",
-        "HEAD",
-        "PUT"
-      ],
-      "sensitivity": "L2",
-      "capability": "write:host",
-      "bodyLimit": 16384,
-      "sessionBinding": false,
-      "justification": "dsh-nano-model-selector/index.js — GET reads plugins/nano-model-selector/subagent-default.json; PUT enable/disable/reset writes that file (16384-byte cap). The host applies it on agent/created for a new subagent that did not name its own model. No secret.",
-      "id": "dnms.subagent-default",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/async-compact",
       "methods": [
         "GET",
@@ -625,6 +623,38 @@
       "sessionBinding": false,
       "justification": "dsh-nano-model-selector/index.js — DNMS01/-20⑦. POST {\"enabled\":boolean} (1024-byte cap) forwards to ctx.get('pluginManager').setBundleEnabled('dsh-nano-model-selector-compaction') — the panel's single write entry to the takeover toggle; same sanctioned writer, not a second truth source.",
       "id": "dnms.async-compact.switch",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/perf-review/host",
+      "methods": [
+        "GET"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "只读全进程视图。不排空，只接受 since。",
+      "id": "dnms.perf-review.host",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/subagent-default",
+      "methods": [
+        "GET",
+        "HEAD",
+        "PUT"
+      ],
+      "sensitivity": "L2",
+      "capability": "write:host",
+      "bodyLimit": 16384,
+      "sessionBinding": false,
+      "justification": "dsh-nano-model-selector/index.js — GET reads plugins/nano-model-selector/subagent-default.json; PUT enable/disable/reset writes that file (16384-byte cap). The host applies it on agent/created for a new subagent that did not name its own model. No secret.",
+      "id": "dnms.subagent-default",
       "channel": "http",
       "match": "exact"
     },
@@ -1120,6 +1150,70 @@
       "match": "exact"
     },
     {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/fleet",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "FLEET_ROUTE (P7) — dnls.control/1 read projection: per-env {envId,complete,rows} of visible managed sandboxes. Visibility filtered before any probe; unproven rows report generation:null and state unknown. No paths, credentials or bodies.",
+      "id": "dnls.fleet",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/sandboxes",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "SANDBOXES_ROUTE (P7) — dnls.control/1 paged flat list of visible managed sandbox projections (declared page/limit/offset/envId query keys only). Rows filtered by principal visibility before count/sort/page; stable order.",
+      "id": "dnls.sandboxes",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/inspect",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "INSPECT_ROUTE (P7) — dnls.control/1 single-object detail via ?sandboxId=: allowlisted projection plus actual service publications and scoped usage summary (operator, history-granted). No executable payload, mounts or env.",
+      "id": "dnls.inspect",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/processes",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "PROCESSES_ROUTE (P7) — dnls.control/1 operator+canUse process table via ?sandboxId=: verified running locator+generation+volume before AND after one constant in-guest /proc reader; returns pid/ppid/name/state/rssBytes sorted, bounded, accurate truncated flag. Non-running states distinguish unknown/stopped/missing.",
+      "id": "dnls.processes",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
       "plugin": "dsh-nano-terminal",
       "path": "/dsh-nano-terminal/mcp",
       "methods": [
@@ -1433,116 +1527,6 @@
       "id": "dncs.resources",
       "channel": "http",
       "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/perf-review/host",
-      "methods": [
-        "GET"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 0,
-      "sessionBinding": false,
-      "justification": "只读全进程视图。不排空，只接受 since。",
-      "id": "dnn.perf-review.host",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-model-selector",
-      "path": "/nano-model-selector/perf-review/host",
-      "methods": [
-        "GET"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 0,
-      "sessionBinding": false,
-      "justification": "只读全进程视图。不排空，只接受 since。",
-      "id": "dnms.perf-review.host",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/fleet",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 0,
-      "sessionBinding": true,
-      "justification": "FLEET_ROUTE (P7) — dnls.control/1 read projection: per-env {envId,complete,rows} of visible managed sandboxes. Visibility filtered before any probe; unproven rows report generation:null and state unknown. No paths, credentials or bodies.",
-      "id": "dnls.fleet",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/sandboxes",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 0,
-      "sessionBinding": true,
-      "justification": "SANDBOXES_ROUTE (P7) — dnls.control/1 paged flat list of visible managed sandbox projections (declared page/limit/offset/envId query keys only). Rows filtered by principal visibility before count/sort/page; stable order.",
-      "id": "dnls.sandboxes",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/inspect",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 0,
-      "sessionBinding": true,
-      "justification": "INSPECT_ROUTE (P7) — dnls.control/1 single-object detail via ?sandboxId=: allowlisted projection plus actual service publications and scoped usage summary (operator, history-granted). No executable payload, mounts or env.",
-      "id": "dnls.inspect",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/processes",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 0,
-      "sessionBinding": true,
-      "justification": "PROCESSES_ROUTE (P7) — dnls.control/1 operator+canUse process table via ?sandboxId=: verified running locator+generation+volume before AND after one constant in-guest /proc reader; returns pid/ppid/name/state/rssBytes sorted, bounded, accurate truncated flag. Non-running states distinguish unknown/stopped/missing.",
-      "id": "dnls.processes",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/res",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "sensitivity": "L2",
-      "capability": "net:host",
-      "bodyLimit": 0,
-      "sessionBinding": false,
-      "justification": "RES_ROUTE (prefix) — same-origin resource proxy for the pane’s native-HTML preview. The pane is an https page, so a srcdoc iframe cannot load the http: subresources of a local dev server (mixed content is blocked silently, leaving an unstyled skeleton). This route fetches <scheme>/<host>/<path> on the host and streams it back under the dsh origin, so the browser never crosses schemes and no certificate or public tunnel is involved. Only http/https are accepted (file:/data:/javascript: are rejected with a named errorId); Set-Cookie is stripped so a proxied page cannot write dsh cookies. Read-only passthrough, no engine or container mutation. Under dnls.control/1 the row is registered fail-closed (sandbox.provider_unsupported) and managed /dom does not rewrite onto it, until the owner places this non-object route.",
-      "id": "dnls.res",
-      "channel": "http",
-      "match": "prefix"
     }
   ]
 }

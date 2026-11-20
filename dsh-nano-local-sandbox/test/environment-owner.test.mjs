@@ -501,17 +501,15 @@ test('environment-owner partially capable provider: stop survives while unannoun
   assert.equal((await owner.observe(fresh)).state, 'stopped')
 })
 
-test('environment-owner keeps the resource proxy out of object dispatch and serves its row fail-closed', async (t) => {
+test('the retired /res proxy registers nowhere: not in bindings, specs, capabilities or the error catalog', async (t) => {
   const { owner } = await setup(t, true)
   assert.equal(owner.capabilities.has('dnls.dom'), true)
+  // T-O-66: no alias, switch or tombstone — the path simply does not exist.
   assert.equal(owner.capabilities.has('dnls.res'), false)
+  assert.equal(BINDING_TABLE.some((row) => row.id === 'dnls.res' || row.path === '/nano-local-sandbox/res'), false)
   const connection = { admit: async () => ({ peer: ownerPeer() }) }
   const specs = createManagedRoutes({ capabilities: owner.capabilities, execute: owner.execute, connection, table: BINDING_TABLE })
-  const route = specs.find((spec) => spec.path === '/nano-local-sandbox/res')
-  assert.ok(route, 'the ledger row still owns a registered spec')
-  const res = { statusCode: 0, setHeader() {}, end(text) { this.text = text } }
-  await route.handler({ method: 'GET', url: '/nano-local-sandbox/res/http/127.0.0.1:4321/styles.css', headers: {} }, res)
-  const body = JSON.parse(res.text)
-  assert.equal(body.errorId, 'sandbox.provider_unsupported')
-  assert.equal(res.statusCode, body.status)
+  assert.equal(specs.find((spec) => spec.path === '/nano-local-sandbox/res'), undefined)
+  const { errorCatalog } = await import('../src/host/error-catalog.js')
+  assert.equal(errorCatalog().some((row) => /^kitesurf\.res\.|^res\./.test(row.example)), false)
 })

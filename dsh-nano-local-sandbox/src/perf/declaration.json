@@ -42,8 +42,7 @@
     "dnls.fleet",
     "dnls.sandboxes",
     "dnls.inspect",
-    "dnls.processes",
-    "dnls.res"
+    "dnls.processes"
   ],
   "scenarios": [],
   "budgets": []

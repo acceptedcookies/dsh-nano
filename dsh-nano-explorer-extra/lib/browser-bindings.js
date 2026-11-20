@@ -1,6 +1,7 @@
 /** GENERATED: browser-safe binding identity (id + path only). */
 export const BROWSER_BINDINGS = Object.freeze([
   Object.freeze({ id: "dnee.status", path: "/nano-explorer-extra/status" }),
+  Object.freeze({ id: "dnee.diff", path: "/nano-explorer-extra/diff" }),
   Object.freeze({ id: "dnee.commit", path: "/nano-explorer-extra/commit" }),
   Object.freeze({ id: "dnee.pull", path: "/nano-explorer-extra/pull" }),
   Object.freeze({ id: "dnee.fetch", path: "/nano-explorer-extra/fetch" }),
@@ -19,5 +20,4 @@ export const BROWSER_BINDINGS = Object.freeze([
   Object.freeze({ id: "dnee.list", path: "/nano-explorer-extra/list" }),
   Object.freeze({ id: "dnee.perf-review.host", path: "/nano-explorer-extra/perf-review/host" }),
   Object.freeze({ id: "dnee.read", path: "/nano-explorer-extra/read" }),
-  Object.freeze({ id: "dnee.diff", path: "/nano-explorer-extra/diff" }),
 ])

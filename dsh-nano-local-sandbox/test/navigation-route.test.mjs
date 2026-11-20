@@ -147,3 +147,41 @@ test('/open hint for an unresolved name points at DNS, not the gateway', async t
   assert.equal(result.body.ok, false)
   assert.match(result.body.hint, /域名|DNS/)
 })
+
+test('/open on a known public-tunnel domain attaches the hint on success without changing the status', async t => {
+  const h = harness(t, () => ({ frameId: 'p' }))
+  const result = await h.open('https://cool-site.trycloudflare.com/')
+  assert.equal(result.status, 200)
+  assert.equal(result.body.ok, true)
+  assert.match(result.body.hint, /kitesurf\.navigate\.public-tunnel/)
+  assert.match(result.body.hint, /trycloudflare\.com/)
+  assert.equal(h.session.history.length, 1)
+})
+
+test('/open on a tunnel domain keeps the same hint on failure, status unchanged', async t => {
+  const h = harness(t, () => { throw new Error('Page.navigate timed out') })
+  const result = await h.open('https://demo.ngrok.io/')
+  assert.equal(result.status, 502)
+  assert.equal(result.body.ok, false)
+  assert.equal(result.body.errorId, 'kitesurf.navigate.failed')
+  assert.match(result.body.hint, /kitesurf\.navigate\.public-tunnel/)
+})
+
+test('/open on an ordinary host carries no hint on success, and only the error hint on failure', async t => {
+  const h = harness(t, () => ({ frameId: 'p' }))
+  const ok = await h.open('https://archy.studio/')
+  assert.equal(ok.status, 200)
+  assert.equal('hint' in ok.body, false)
+
+  const h2 = harness(t, () => { throw new Error('Page.navigate timed out') })
+  const fail = await h2.open('https://archy.studio/')
+  assert.equal(fail.status, 502)
+  assert.equal(fail.body.hint ?? null, null)
+})
+
+test('the tunnel hint code is registered as a hint row in the kitesurf driver catalog', async () => {
+  const { errorCatalog } = await import('../src/host/error-catalog.js')
+  const row = errorCatalog().find((entry) => entry.example === 'kitesurf.navigate.public-tunnel')
+  assert.ok(row, 'kitesurf.navigate.public-tunnel must be a registered catalog row')
+  assert.equal(row.hint, true)
+})

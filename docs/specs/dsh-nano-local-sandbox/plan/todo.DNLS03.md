@@ -238,11 +238,11 @@ S1-01 并入 main
   - **完成判据**：四个工具经 `tools.register` 注册、主体走组合层适配器、缺 `sandboxId` 拒绝、结果经同一 `redact`；接管中模型工具与 `/mcp` 在 [DNLS] 分派器以 `kitesurf.control.held` 拒绝且只有 `errorId`；HTTP `/open` 不受此闸；卸载即注销；skill 改真源后经构建生成 `skills/`
   - **验证映射**：`DNLS03X-T05` · **依赖**：`S1-03`、`S1-04`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `S1-06` — 公开对象引用硬切
+- [x] `S1-06` — 公开对象引用硬切
   - **落点 / 对象**：`src/client/index.jsx:393-394,835-838`、`src/client/i18n.js:102-103,319-320`、`src/host/terminal-resource.js:1-13`、[DNK] `src/client/index.js` 的 `patterns`/`canOpen` 注册处
   - **完成判据**：`kitesurf()`、`openKitesurf`、`openWorkspaceHint`、`workspaceMissing`、`'dnt-sandbox-terminal'` 判断都消失；`dsh-resource://sandbox/<envId>/<sandboxId>` 校验与 `terminal-resource.js` 同组；地址不编码 URL、session、token；零/一/多候选与核实失败都有断言
   - **验证映射**：`DNLS03X-T06` · **依赖**：`S1-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-21T00:02Z` · **证据 / 备注**：删 `kitesurf()`/`openKitesurf`/`openWorkspaceHint`/`workspaceMissing`/私有 kind；新增 `dsh-resource://sandbox/<envId>/<sandboxId>`（复用同一组正则）；`candidates`→`openResource` 交接；[DNK] 先 `contract` 再定向 `inspect`，失败不改投；DNLS 480/480、DNK 60/60
 - [ ] `S1-07` — 引用页签、`drivers`、隐藏即停
   - **落点 / 对象**：`profiles/kitesurf/profile.yaml:84-86`、`src/host/fleet-projection.js:222`、[DNK] `src/client/index.js:608-611,2030-2110,3058`
   - **完成判据**：一引用一页签且同一引用复用；`drivers` 只读投影到 `sandbox.list`/`inspect` 与列表工具；不含 `cdp` 时显示原因且不发对象请求；`tab.visible` 为假时 `/status`、`/shot`、`/dom`、`/control` 全停，恢复可见刷新一次；`keepMounted` 保留；「两个引用两个页签」只作软件回归

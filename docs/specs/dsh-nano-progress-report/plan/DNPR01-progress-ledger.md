@@ -613,21 +613,21 @@ Active: <j> background jobs, <s> direct subagents
 | 收口目标 | 工作项 | Test-ID | PASS 证据（四元组） | 状态 |
 |----------|--------|---------|---------------------|------|
 | 锚未漂移就开工 | P0-01 | `DNPR-T00` | `6174f7d` + todo PH0 逐锚清单（A-1..A-25 路径与符号、`version`/`engines` 行逐项命中）+ 命中 + 2026-11-19T18:20Z | `verified` |
-| 指纹单点且字节未改 | P1-01 | `DNPR-T01` | `cf49cb1` + `test/fingerprint.test.mjs`（digest 与 `node:crypto` 逐字节，含多字节/emoji）+ PASS + 2026-11-20T00:45:39Z | `verified` |
-| 开项与分层纯函数 | P1-02 | `DNPR-T02` | `cf49cb1` + `test/condense.test.mjs` + PASS + 2026-11-20T00:45:39Z | `verified` |
-| 账本推导与无证据字段 | P2-01 | `DNPR-T03` `DNPR-T05` | `cf49cb1` + `test/ledger.test.mjs`（T05：「coverage seq + asOfSeq advances only on fact change」「skeletons absorb no updates; the current item keeps its view when it shifts to index 1」）+ PASS + 2026-11-20T00:45:39Z | `verified` |
-| checkpoint 拒绝夹带 | P2-01 | `DNPR-T04` | `cf49cb1` + 用例「inherited prefix cut: … checkpoint round-trip replays」「cumulative layer: …」（`stateSchema` 拒 `state.smuggle`、`cumulative.extra`、旧 `title` 键）+ PASS + 2026-11-20T00:45:39Z | `verified` |
-| 只注册 ledger | P2-02 P3-03 | `DNPR-T06` `DNPR-T11` | `cf49cb1` + `test/ledger-register.test.mjs`（apply 后只有 ledger + `read_progress` + PromptContext；`stateVersion` 1、`summary:false`）+ `test/release-cut.test.mjs`「exactly one session projection」+ PASS + 2026-11-20T00:45:39Z | `verified` |
-| 四行锚且旧行消失 | P3-01 | `DNPR-T07` `DNPR-T08` | `cf49cb1` + `test/host-context.test.mjs`（逐字模板、≤600B、「old anchor lines are gone」）+ PASS + 2026-11-20T00:45:39Z | `verified` |
-| `read_progress` 字面与边界 | P3-02 | `DNPR-T09` `DNPR-T10` | `cf49cb1` + `test/read-progress.test.mjs`（描述/schema/`when`/未知 id/16KiB 裁剪/概览 unresolved 与累计行）+ PASS + 2026-11-20T00:45:39Z | `verified` |
-| 默认精简且不渲染原文 | P4-01 | `DNPR-T12` | `cf49cb1` + `test/timeline-condense.test.mjs`「src/client renders no args/result/reasoning detail fields (T12)」+ `test/condense.test.mjs` + PASS + 2026-11-20T00:45:39Z | `verified` |
-| C0-01–05 与 schedule 开组 | P4-02 | `DNPR-T13` | `cf49cb1` + 「C0-01: a todo_write tool row folds…」「C0-02: pending tasks use the host idle StateDot…」「C7-02: leading context envelopes fold…」「C-layer strip: … completed turn, default lifecycle…」「C0-05: zero-count types hide…」「schedule row opens its own group」+ PASS + 2026-11-20T00:45:39Z | `verified` |
-| 三列表、C2-05、清空官方 todos 后面板仍在 | P5-01 / P5-02 | `DNPR-T14` | `cf49cb1` + `test/panel.test.mjs`（view 四值与归零、Files 新的在前、Failures `工具名 标签 ×n`）+ `test/ledger.test.mjs`「a task left out of a later snapshot keeps its last status」+ `test/release-cut.test.mjs`「the panel never reads the todos face」+ `test/condense.test.mjs` 尾列 + PASS + 2026-11-20T00:45:39Z | `verified` |
-| `task-times` 退役 | P5-02 | `DNPR-T15` | `cf49cb1` + `test/release-cut.test.mjs`「task-times.js is gone」（未建独立 `task-times-removed.test.mjs`，断言并入 release-cut）+ PASS + 2026-11-20T00:45:39Z | `verified` |
-| 文档回写、版本、引擎全字、不注册 conversation.view | P6-01 / P4 | `DNPR-T16` | `cf49cb1` + `test/release-cut.test.mjs`（`version==='0.2.0'`、`engines.dsh` 全字、AGENTS 字段表含 `cumulative`、spec 取代句、[FUS] 一行）+ `test/view.test.mjs`「never registers a conversation.view tab」+ PASS + 2026-11-20T00:45:39Z | `verified` |
-| 套件与 UI 规则 | P6-02 | `DNPR-T17` | `cf49cb1` + `npm test` 193/193 + `node scripts/check-ui-rules.mjs` 行 `NPR 28 0 0 0 0 0 0 0 0 1` + 2026-11-20T00:45:39Z | `verified` |
-| 构建后的宿主产物与只记录回放 | P3-03 / P6-02 | `DNPR-T18` | `cf49cb1` + `npm run build && node --test test/built-host.mjs` 1/1 + pack 10 文件 52.2kB + §11.4 回放原文 + 2026-11-20T00:45Z | `verified` |
-| 无 provide / 无路由 / 无新 error 枚举 | P3-02 | `DNPR-T19` | `cf49cb1` + `test/host-boundary.test.mjs`「host exposes no provide, route, or exported error enum」+ PASS + 2026-11-20T00:45:39Z | `verified` |
+| 指纹单点且字节未改 | P1-01 | `DNPR-T01` | `5df1f9f` + `test/fingerprint.test.mjs`（digest 与 `node:crypto` 逐字节，含多字节/emoji）+ PASS + 2026-11-20T00:49:27Z | `verified` |
+| 开项与分层纯函数 | P1-02 | `DNPR-T02` | `5df1f9f` + `test/condense.test.mjs` + PASS + 2026-11-20T00:49:27Z | `verified` |
+| 账本推导与无证据字段 | P2-01 | `DNPR-T03` `DNPR-T05` | `5df1f9f` + `test/ledger.test.mjs`（T05：「coverage seq + asOfSeq advances only on fact change」「skeletons absorb no updates; the current item keeps its view when it shifts to index 1」）+ PASS + 2026-11-20T00:49:27Z | `verified` |
+| checkpoint 拒绝夹带 | P2-01 | `DNPR-T04` | `5df1f9f` + 用例「inherited prefix cut: … checkpoint round-trip replays」「cumulative layer: …」「checkpoint: unknown item kinds throw; malformed completion marks and oversized call ids drop」（`stateSchema` 拒 `state.smuggle`、`cumulative.extra`、旧 `title` 键）+ PASS + 2026-11-20T00:49:27Z | `verified` |
+| 只注册 ledger | P2-02 P3-03 | `DNPR-T06` `DNPR-T11` | `5df1f9f` + `test/ledger-register.test.mjs`（apply 后只有 ledger + `read_progress` + PromptContext；`stateVersion` 1、`summary:false`）+ `test/release-cut.test.mjs`「exactly one session projection」+ PASS + 2026-11-20T00:49:27Z | `verified` |
+| 四行锚且旧行消失 | P3-01 | `DNPR-T07` `DNPR-T08` | `5df1f9f` + `test/host-context.test.mjs`（逐字模板、≤600B、「old anchor lines are gone」）+ PASS + 2026-11-20T00:49:27Z | `verified` |
+| `read_progress` 字面与边界 | P3-02 | `DNPR-T09` `DNPR-T10` | `5df1f9f` + `test/read-progress.test.mjs`（描述/schema/`when`/未知 id/16KiB 裁剪/概览 unresolved 与累计行）+ PASS + 2026-11-20T00:49:27Z | `verified` |
+| 默认精简且不渲染原文 | P4-01 | `DNPR-T12` | `5df1f9f` + `test/timeline-condense.test.mjs`「src/client renders no args/result/reasoning detail fields (T12)」+ `test/condense.test.mjs` + PASS + 2026-11-20T00:49:27Z | `verified` |
+| C0-01–05 与 schedule 开组 | P4-02 | `DNPR-T13` | `5df1f9f` + 「C0-01: a todo_write tool row folds…」「C0-02: pending tasks use the host idle StateDot…」「C7-02: leading context envelopes fold…」「C-layer strip: … completed turn, default lifecycle…」「C0-05: zero-count types hide…」「schedule row opens its own group」+ PASS + 2026-11-20T00:49:27Z | `verified` |
+| 三列表、C2-05、清空官方 todos 后面板仍在 | P5-01 / P5-02 | `DNPR-T14` | `5df1f9f` + `test/panel.test.mjs`（view 四值与归零、Files 新的在前、Failures `工具名 标签 ×n`）+ `test/ledger.test.mjs`「a task left out of a later snapshot keeps its last status」+ `test/release-cut.test.mjs`「the panel never reads the todos face」+ `test/condense.test.mjs` 尾列 + PASS + 2026-11-20T00:49:27Z | `verified` |
+| `task-times` 退役 | P5-02 | `DNPR-T15` | `5df1f9f` + `test/release-cut.test.mjs`「task-times.js is gone」（未建独立 `task-times-removed.test.mjs`，断言并入 release-cut）+ PASS + 2026-11-20T00:49:27Z | `verified` |
+| 文档回写、版本、引擎全字、不注册 conversation.view | P6-01 / P4 | `DNPR-T16` | `5df1f9f` + `test/release-cut.test.mjs`（`version==='0.2.0'`、`engines.dsh` 全字、AGENTS 字段表含 `cumulative`、spec 取代句、[FUS] 一行）+ `test/view.test.mjs`「never registers a conversation.view tab」+ PASS + 2026-11-20T00:49:27Z | `verified` |
+| 套件与 UI 规则 | P6-02 | `DNPR-T17` | `5df1f9f` + `npm test` 195/195 + `node scripts/check-ui-rules.mjs` 行 `NPR 28 0 0 0 0 0 0 0 0 1` + 2026-11-20T00:49:27Z | `verified` |
+| 构建后的宿主产物与只记录回放 | P3-03 / P6-02 | `DNPR-T18` | `5df1f9f` + `npm run build && node --test test/built-host.mjs` 1/1 + pack 10 文件 52.3kB + §11.4 回放原文 + 2026-11-20T00:49Z | `verified` |
+| 无 provide / 无路由 / 无新 error 枚举 | P3-02 | `DNPR-T19` | `5df1f9f` + `test/host-boundary.test.mjs`「host exposes no provide, route, or exported error enum」+ PASS + 2026-11-20T00:49:27Z | `verified` |
 | C1-03 归属单测 | — | 无 | 不作为本次完成条件 | `deferred` |
 
 ### 10.3 Definition of Done
@@ -653,10 +653,10 @@ Active: <j> background jobs, <s> direct subagents
 > 文档状态：`draft → executing → executed`
 > 代码改动统计：8 新建源码 + 3 删除源码、9 新建/重写测试 + 2 删除测试、4 文档回写、`version` 0.1.0 → 0.2.0、删除 `pnpm-lock.yaml`（`package-lock.json` 为唯一 lockfile）
 
-- **实际执行摘要**：PH0 worktree + §7 锚复核（`T00`）；PH1 `src/shared/{fingerprint,open,condense}.js`；PH2 `src/host/ledger.js` 全量投影；PH3 四行锚 + `read_progress` 硬切删 summary；PH4 A/B/C 默认精简 + schedule 开组；PH5 面板读账本四列表 + 删 `task-times.js`；PH6 文档/版本/回放/验证；之后审查修复轮（`f6aba5a`）与合并前扫尾轮（`55fa2c0`、`cf49cb1`，见 §11.7）。全部在 `dnpr01-progress-ledger` 分支，基线 `0dd99ab`。
+- **实际执行摘要**：PH0 worktree + §7 锚复核（`T00`）；PH1 `src/shared/{fingerprint,open,condense}.js`；PH2 `src/host/ledger.js` 全量投影；PH3 四行锚 + `read_progress` 硬切删 summary；PH4 A/B/C 默认精简 + schedule 开组；PH5 面板读账本四列表 + 删 `task-times.js`；PH6 文档/版本/回放/验证；之后审查修复轮（`f6aba5a`）与合并前扫尾轮（`55fa2c0`、`cf49cb1`、`5df1f9f`，见 §11.7）。全部在 `dnpr01-progress-ledger` 分支，基线 `0dd99ab`。
 - **Phase 偏差（计划 vs 实际）**：① P4-01 段行只在前置空过滤时启用，按计划；`includeEnd` 语义改为「completed turn 行并入 opener 尾列」，与计划 §8.4 一致。② P5-01 `TASKS_KEY` 的 `view` 在打开时归零即回 Tasks（计划写的是「切到该列表后归零回 Tasks」，实现为持久 view 校验 + `useEffect` 回写，行为等价；判定抽到 `src/client/panel.js` 的 `activeView`）。③ P6-02 回放四项中「归属一致率」如实登记范围外未跑，其余三项实测（见 §11.4）。④ `schedule` 开组在 `message.js` 一处完成而非 `group.js` 两处——开项判定在 `openKind` 单点，`groupRows` 只加 `'schedule'` 进 `OPENERS`。⑤ `DNPR-T15` 未建独立 `task-times-removed.test.mjs`，断言并入 `release-cut.test.mjs`。⑥ 骨架驱逐的 `truncated` 计数改为 `cumulative` 累计层（`T-O-11` 的累计层），字段表已同步包 AGENTS。
 - **阻塞与处理**：`context.js` 的 `jsonCell` 正则曾写进字面控制字符使文件变二进制，`edit` 拒绝（"cannot edit … binary file"）→ 用 python 重写该行修回。`read_progress` 恢复计数起初按条目而非按失败数 → 改 `unresolved = Σ count`。16KiB 裁剪测试因真实明细被上限约束约 13KB 而失败 → 用伪造超大视图演练裁剪。`check-ui-rules` NPR 行 PH5 后出现 U2（`.npr-taskbar-switch`）+ U9（两个未定义类）→ 改类名 `npr-taskbar-view` + 补样式定义，回 0 告警。
-- **测试发现**：`npm test` 193/193 PASS（2026-11-20T00:45:39Z，`cf49cb1`）；`node scripts/check-ui-rules.mjs` NPR 行 0 告警（`NPR 28 0 0 0 0 0 0 0 0 1`，尾 1 为 U10 豁免登记）；`npm run build && node --test test/built-host.mjs` 1/1；`npm pack --dry-run`：10 文件，package 52.2kB / unpacked 152.6kB，`src/`/`test/` 不进 tarball。
+- **测试发现**：`npm test` 195/195 PASS（2026-11-20T00:49:27Z，`5df1f9f`）；`node scripts/check-ui-rules.mjs` NPR 行 0 告警（`NPR 28 0 0 0 0 0 0 0 0 1`，尾 1 为 U10 豁免登记）；`npm run build && node --test test/built-host.mjs` 1/1；`npm pack --dry-run`：10 文件，package 52.3kB / unpacked 152.9kB，`src/`/`test/` 不进 tarball。
 - **后续 handoff**：合并到 `main` 与删除 worktree 由 [业主] 自行判断执行（[业主] 2026-11-20 指令：不属于交付项）；`deploy-local` 由 [业主] 决定；`test/live/*.live.mjs`（浏览器实测）未跑，非闸门；`conversation.view` 按 R5 裁决不注册；C1-03 与附录 B 各项保留范围外重开条件。
 
 ### 11.1 逐工作项状态
@@ -676,18 +676,18 @@ Active: <j> background jobs, <s> direct subagents
 | `P5-01` | ✅ done | `d7d9325` | `TasksSection.jsx`、`TasksView.jsx`、`ProgressBody.jsx` | 面板读 `faceOf('nano-progress-report:ledger')` 当前项；四列表 ghost 开关；归零回 Tasks |
 | `P5-02` | ✅ done | `d7d9325` | 删除 `task-times.js`+测试；`Turn.jsx:27-33` | 尾列 = 非 `completed` 结束原因 + 耗时 |
 | `P6-01` | ✅ done | `ae22d82`、`55fa2c0` | `AGENTS.md`、`spec-v1.1.md` 头+§5+§7.1+§7.3+附录 A/B、FUS `:416`、`package.json:3` | 版本 0.2.0、engines 不变、字段表落包 AGENTS |
-| `P6-02` | ✅ done | `ae22d82`、`f6aba5a`、`55fa2c0`、`cf49cb1` | 本节 | 验证计数已回填；合并 `main` 与删除 worktree 由 [业主] 自行判断执行 |
+| `P6-02` | ✅ done | `ae22d82`、`f6aba5a`、`55fa2c0`、`cf49cb1`、`5df1f9f` | 本节 | 验证计数已回填；合并 `main` 与删除 worktree 由 [业主] 自行判断执行 |
 
 ### 11.2 关键指标
 
 | 指标 | 基线（0.1.0 / spec-v1.1 §7.3 基线列） | 本次（0.2.0） | Δ |
 |------|--------------------------------------|---------------|---|
-| `npm test` | 141 | 193 | +52 用例 |
+| `npm test` | 141 | 195 | +54 用例 |
 | `check-ui-rules` NPR 行告警 | 0 | 0 | 不变 |
 | 进度锚文本变化次数（`[PROD]` 33 顶层会话 138 次 `request/context` 逐字比对） | 127（旧格式：路径行+失败行驱动） | 84（四行锚） | **−34%** |
 | 可见行数（`[PROD]` 同批会话、按工作项分组） | 100 204（tool/call + assistant/message 原行） | 48 570（类别合并近似，不含 C 层剥除） | **−52%** |
 | 账本 wire view | — | 374 569 B / 33 会话（均值 11 351 B，单会话最大 34 226 B） | 只记录 |
-| 冷构建耗时（最大会话 58 916 事件） | — | 840.7ms（33 会话均值 138.5ms） | 只记录 |
+| 冷构建耗时（最大会话 58 916 事件） | — | 799.2ms（33 会话均值 134.0ms） | 只记录 |
 
 ### 11.3 时序执行日志
 
@@ -701,11 +701,11 @@ Active: <j> background jobs, <s> direct subagents
 | T5 | PH5 | 面板读账本四列表 + 删 task-times + ui-rules 修复；`d7d9325`+`4c04177` |
 | T6 | PH6 | 文档回写 + 版本 0.2.0 + 回放 + release-cut 用例 + 177 全绿；`ae22d82` |
 | T7 | 审查修复轮 | 三路审查 R1–R3 后修复：严格 `stateSchema`、锚 600B、denoise 折叠、面板 `T-O-16`、release-cut 逐字版本/引擎断言、回放 subagent 过滤前移；`f6aba5a` |
-| T8 | 合并前扫尾 | 对照 `T-O-11/12/15/16` 修复四处偏离 + 视图缓存外泄；AGENTS 字段表；删 closure 文档与 `pnpm-lock.yaml`；补 T05/T13/T14/T16/T19 用例；193 全绿；`55fa2c0`、`cf49cb1` |
+| T8 | 合并前扫尾 | 对照 `T-O-11/12/15/16` 修复四处偏离 + 视图缓存外泄 + 代码核查加固；AGENTS 字段表；删 closure 文档与 `pnpm-lock.yaml`；补 T05/T13/T14/T16/T19 用例；195 全绿；`55fa2c0`、`cf49cb1`、`5df1f9f` |
 
 ### 11.4 `[PROD]` 回放原文（spec-v1.1 §7.3 同源）
 
-`node test/live/prod-replay.mjs --limit=1000` 于 2026-11-20T00:44:37Z 对 `~/.dsh-desktop/sessions/**` 全部 344 个 `session.v4.jsonl.zstd` 做只读回放：33 个顶层会话过门槛（≥1 开项 `user/message` + ≥1 `tool/call`，排除 `origin:"subagent"`），138 次 `request/context` 为锚发射点逐字比对。四个数：锚文本变化 **127 → 84**；wire view 总量 **374 569 B**（均值 11 351 B，单会话最大 34 226 B）；最大会话（58 916 事件）所在批次冷构建最大 **840.7ms**（均值 138.5ms；同日另一次运行为 934.9ms / 148.8ms，耗时随机器负载波动）；按工作项分组的可见行 **100 204 → 48 570**（类别序列合并口径，C 层剥除未计入，实际界面行数更低）。输出 `evidence/prod-replay.json` 按 `.gitignore:108-110` 不入库。归属一致率（C1-03）如实登记：本机未复跑，因 C1-03 在 DNPR01 范围外（§2.3），不做归因推断。锚降幅 −34% 低于 QNA 取证时的离线估计，只记录，不设闸门。
+`node test/live/prod-replay.mjs --limit=1000` 于 2026-11-20T00:49:39Z 对 `~/.dsh-desktop/sessions/**` 全部 344 个 `session.v4.jsonl.zstd` 做只读回放：33 个顶层会话过门槛（≥1 开项 `user/message` + ≥1 `tool/call`，排除 `origin:"subagent"`），138 次 `request/context` 为锚发射点逐字比对。四个数：锚文本变化 **127 → 84**；wire view 总量 **374 569 B**（均值 11 351 B，单会话最大 34 226 B）；最大会话（58 916 事件）所在批次冷构建最大 **799.2ms**（均值 134.0ms；同日其他运行最大 840.7–934.9ms，耗时随机器负载波动）；按工作项分组的可见行 **100 204 → 48 570**（类别序列合并口径，C 层剥除未计入，实际界面行数更低）。输出 `evidence/prod-replay.json` 按 `.gitignore:108-110` 不入库。归属一致率（C1-03）如实登记：本机未复跑，因 C1-03 在 DNPR01 范围外（§2.3），不做归因推断。锚降幅 −34% 低于 QNA 取证时的离线估计，只记录，不设闸门。
 
 ### 11.5 pre-existing 失败甩锅
 
@@ -719,5 +719,5 @@ residual / follow-up → 附录 B 重开条件；`test/live/*.live.mjs` 浏览�
 ### 11.7 审查与修复轮
 
 - **三路审查（执行期，按发车指令 STEP.7）**：R1 真相层对账（`T-O-1…17` vs 实现）、R2 工作完成度（§8 全表 vs 提交）、R3 防测试假绿 / 防业务侧载。提示词与报告在 `.anote/reviews/dsh-nano-progress-report/DNPR01/`（gitignored，不入库）。三路均未报 blocking 缺陷；一条 medium（`contract.test.mjs` 的 `engines.dsh.includes('>=')` 弱断言）已在 `release-cut.test.mjs` 改为逐字断言。修复随 `f6aba5a` 落盘。
-- **合并前扫尾（[业主] 2026-11-20 指令）**：对照真相层逐项复核后修复：① `T-O-15` 未在后续快照列出的任务保留上次状态与历史，首次即 `completed` 也记 `completedSeq/At`，任务内容按码点安全截断到 200B；② `T-O-15` 只改内部缓冲的事件（未配对调用、cwd、无工作项回合）不推进 `asOfSeq`、复用同一视图对象，并修复当前项视图缓存在新项打开后外泄到 `items[1]`；③ `T-O-11/12` 驱逐骨架并入 `cumulative` 累计层，`read_progress` 概览只数未恢复失败并输出累计行，完整项 `counts` 增 `unresolved/recovered`；④ `T-O-16` Failures 列表行为 `工具名 标签 ×n` 并显示「另有 N 条未保留」，Files 新的在前。
+- **合并前扫尾（[业主] 2026-11-20 指令）**：对照真相层逐项复核后修复：① `T-O-15` 未在后续快照列出的任务保留上次状态与历史，首次即 `completed` 也记 `completedSeq/At`，任务内容按码点安全截断到 200B；② `T-O-15` 只改内部缓冲的事件（未配对调用、cwd、无工作项回合）不推进 `asOfSeq`、复用同一视图对象，并修复当前项视图缓存在新项打开后外泄到 `items[1]`；③ `T-O-11/12` 驱逐骨架并入 `cumulative` 累计层，`read_progress` 概览只数未恢复失败并输出累计行，完整项 `counts` 增 `unresolved/recovered`；④ `T-O-16` Failures 列表行为 `工具名 标签 ×n` 并显示「另有 N 条未保留」，Files 新的在前；⑤ 重点代码核查加固（`5df1f9f`）：失败列表超 16 条时保留最近失败的条目（不再按插入顺序丢掉被再次失败的早期条目），无工作项回合只关闭审批、不推进 `asOfSeq` 且视图对象不变，checkpoint 拒绝未知 `kind`、丢弃畸形 `completedSeq/At` 与超长 `callId`，`read_progress` 16KiB 裁剪按码点边界回退。
 - **收口文档**：执行期按发车指令 STEP.6 产出的 `closure/na/DNPR01-closure.md` 已按 [业主] 裁决删除（`T-O-17` 不另立收口文档），其必要信息并入本节与 §11.4；计划头部的两份对抗审查是 draft 期审查，保留引用。

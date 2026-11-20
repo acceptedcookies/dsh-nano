@@ -64,16 +64,16 @@ PH0 ──▶ PH1 ──▶ PH2 ──▶ PH3 ──▶ PH6 ──▶ MERGE
   - 落点：`TasksSection.jsx`、`TasksView.jsx`、`ProgressBody.jsx`、`Turn.jsx`；删 `src/client/task-times.js` + `test/task-times.test.mjs`
   - 完成判据：T14/T15；面板改读 ledger wire；56px 列有回合耗时/非 completed 原因
 - [x] `PH6` — 文档/版本/验证
-  - 执行状态：complete · 2026-11-20T00:45:39Z · 交付侧完成；**合并 → main + worktree 删除** 由 [业主] 自行判断执行（[业主] 2026-11-20 指令：不属于交付项）
-  - 落点：`AGENTS.md`、`spec-v1.1.md`、FUS §11.4 一行、`package.json` 0.2.0、本 todo、计划 §11 回填；R1/R2/R3 审查修复随 `f6aba5a`；合并前扫尾随 `55fa2c0`、`cf49cb1`（计划 §11.7）
-  - 完成判据：T16/T17/T18 已过——`npm test` 193/193、`check-ui-rules` NPR 行 0 告警、`npm run build` + `test/built-host.mjs` 1/1、`npm pack --dry-run` 10 文件 52.2kB、`prod-replay --limit=1000` 33 会话/138 请求（只记录，数字见计划 §11.4）
+  - 执行状态：complete · 2026-11-20T00:49:27Z · 交付侧完成；**合并 → main + worktree 删除** 由 [业主] 自行判断执行（[业主] 2026-11-20 指令：不属于交付项）
+  - 落点：`AGENTS.md`、`spec-v1.1.md`、FUS §11.4 一行、`package.json` 0.2.0、本 todo、计划 §11 回填；R1/R2/R3 审查修复随 `f6aba5a`；合并前扫尾随 `55fa2c0`、`cf49cb1`、`5df1f9f`（计划 §11.7）
+  - 完成判据：T16/T17/T18 已过——`npm test` 195/195、`check-ui-rules` NPR 行 0 告警、`npm run build` + `test/built-host.mjs` 1/1、`npm pack --dry-run` 10 文件 52.3kB、`prod-replay --limit=1000` 33 会话/138 请求（只记录，数字见计划 §11.4）
 
 ## 4. Check/状态台账
 
 | Check-ID | 名称 | 覆盖 | 起跑线 | 状态 |
 |----------|------|------|--------|------|
 | DNPR-T00 | 锚复核 | A-1..A-25 | — | pass（`6174f7d`，2026-11-19T18:20Z，全符号命中） |
-| DNPR-T01–T19 | 见计划 §8.1 | 计划 §10.2 逐行四元组 | — | pass（`cf49cb1`，`npm test` 193/193 + UI 规则 + built-host + pack，2026-11-20T00:45:39Z） |
+| DNPR-T01–T19 | 见计划 §8.1 | 计划 §10.2 逐行四元组 | — | pass（`5df1f9f`，`npm test` 195/195 + UI 规则 + built-host + pack，2026-11-20T00:49:27Z） |
 | C1-03 归属单测 | — | — | — | deferred（`T-O-15`） |
 
 ## 5. 交接 / handoff

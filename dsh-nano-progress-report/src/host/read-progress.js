@@ -1,6 +1,7 @@
 /** `read_progress { item?: integer ≥ 0 }` — the model's read-only view of the
  *  session ledger. No `item` → overview: asOfSeq + totals on line 1, one line
- *  per work item (newest first, ≤ 80 lines), a cumulative tail. With `item`
+ *  per work item (newest first, ≤ 80 lines), then the cumulative layer (items
+ *  evicted past 16 + 64: count, summed counts, last covered seq). With `item`
  *  (the first-seq shown in the overview) → that item's tasks, changed files,
  *  unresolved failures with seqs, a recovered-failure count, and honest
  *  truncation notes. Skeleton items give counts only. Plain text, ≤ 16 KiB.
@@ -23,12 +24,19 @@ const clip = text => {
 const taskDone = item => item.tier === 'full'
   ? item.tasks.filter(task => task.status === 'completed').length : 0
 
+const unresolvedOf = item => item.counts?.unresolved
+  ?? (item.tier === 'full' ? item.failures.reduce((n, f) => n + (f.count ?? 1), 0) : 0)
+
+const EMPTY_CUMULATIVE = { items: 0, lastSeq: 0, calls: 0, failures: 0, files: 0, tasks: 0, unresolved: 0 }
+
 function overview(view) {
   const items = view.items ?? []
   const full = items.filter(item => item.tier === 'full')
   const skeletons = items.filter(item => item.tier === 'skeleton')
+  const cum = { ...EMPTY_CUMULATIVE, ...view.cumulative }
   const lines = [
-    `asOfSeq ${view.asOfSeq} · ${items.length} work items (${full.length} full, ${skeletons.length} skeleton)`,
+    `asOfSeq ${view.asOfSeq} · ${items.length + cum.items} work items`
+      + ` (${full.length} full, ${skeletons.length} skeleton, ${cum.items} cumulative)`,
   ]
   for (const item of items.slice(0, OVERVIEW_MAX_LINES)) {
     const counts = item.counts ?? {}
@@ -36,11 +44,14 @@ function overview(view) {
       ? `${taskDone(item)}/${item.tasks.length}`
       : `${counts.tasks ?? 0}`
     lines.push(`item ${item.firstSeq} · ${kindWord(item.kind)} · ${item.status}`
-      + ` · tasks ${tasks} · files ${counts.files ?? 0} · unresolved failures ${counts.failures ?? 0}`)
+      + ` · tasks ${tasks} · files ${counts.files ?? 0} · unresolved failures ${unresolvedOf(item)}`)
   }
   const un = view.unattributed ?? { calls: 0, failures: 0 }
   const coverage = view.coverage ?? { firstSeq: null, lastSeq: view.asOfSeq }
-  lines.push(`cumulative · ${items.length} items (${full.length} full, ${skeletons.length} skeleton)`
+  lines.push(`cumulative · ${cum.items} items`
+    + ` · calls ${cum.calls}, failures ${cum.failures}, files ${cum.files}, tasks ${cum.tasks},`
+    + ` unresolved failures ${cum.unresolved}`
+    + (cum.items > 0 ? ` · through seq ${cum.lastSeq}` : '')
     + ` · unattributed ${un.calls} calls, ${un.failures} failures`
     + ` · coverage seq ${coverage.firstSeq ?? 'none'}–${coverage.lastSeq}`)
   return clip(lines.join('\n'))
@@ -71,8 +82,7 @@ function itemDetail(view, itemId) {
     lines.push(`failure ${failure.tool} ${path} ×${failure.count ?? 1} seq ${seqs}`)
   }
   // Recovered failures surface as a bare count (T-O-12: 已恢复失败只给数量).
-  const unresolved = item.failures.reduce((total, f) => total + (f.count ?? 1), 0)
-  const recovered = Math.max(0, (item.counts?.failures ?? unresolved) - unresolved)
+  const recovered = item.counts?.recovered ?? 0
   if (recovered > 0) lines.push(`recovered failures: ${recovered}`)
   if (item.truncated !== undefined) {
     const extra = (item.truncated.files ?? 0) + (item.truncated.failures ?? 0) + (item.truncated.tasks ?? 0)

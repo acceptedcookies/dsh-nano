@@ -55,3 +55,21 @@ test('npm pack --dry-run packs lib artifacts, not src or test', () => {
   assert.ok(!files.some(f => f.startsWith('src/')), 'src must not ship')
   assert.ok(!files.some(f => f.startsWith('test/')), 'test must not ship')
 })
+
+test('same-cut docs: package AGENTS field table, spec supersession line, [FUS] pointer (DNPR-T16)', () => {
+  const agents = read('AGENTS.md')
+  assert.match(agents, /### `v1` 视图字段表/)
+  for (const field of ['asOfSeq', 'inherited', 'unattributed', 'cumulative', 'items', 'files', 'failures', 'tasks', 'counts', 'truncated']) {
+    assert.match(agents, new RegExp(`\\| \`${field}\` \\|`), `field table lacks ${field}`)
+  }
+  assert.match(agents, /\{content, status, firstSeq, completedSeq\?, completedAt\?\}/)
+  for (const bound of ['≤ 16', '≤ 64', '≤ 32']) assert.ok(agents.includes(bound), `field table lacks bound ${bound}`)
+  assert.match(agents, /`view` 取 `tasks`\/`jobs`\/`files`\/`failures`/)
+  assert.doesNotMatch(agents, /Failures 行点击|task-times/)
+  assert.match(agents, /token 与 KV 缓存/)
+  const repo = join(dir, '..')
+  const spec = readFileSync(join(repo, 'docs/specs/dsh-nano-progress-report/spec-v1.1.md'), 'utf8')
+  assert.match(spec, /本文已被 \[`qna\/DNPR01-qna\.md`\]\(qna\/DNPR01-qna\.md\) §1 的 `T-O`.*取代，保留为形成史与证据索引；冲突以 `T-O` 为准/)
+  const fus = readFileSync(join(repo, 'docs/specs/dsh-nano-model-selector/decision-model-fusion-feasibility-1119.md'), 'utf8')
+  assert.match(fus, /DNPR01.*`T-O-13`/)
+})

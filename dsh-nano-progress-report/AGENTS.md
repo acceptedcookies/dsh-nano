@@ -88,7 +88,7 @@ dsh plugin --profile web add <spec>
 | 点击行 | 就地展开 detail（错误、文本、耗时、子调用步骤；args 原文、result 与 reasoning 不进界面）；再点收起 |
 | 拖拽 Tasks 区上沿 | 抬升/下移，下限 88px，上限 60% 视口；高度按会话记忆 |
 | 点击 Tasks 整条头部 | 整条 30px 横条（含右侧计数/进度条）都是命中区；折叠到只剩 30px 头部，再点回到原高度。列表开关自身 stopPropagation |
-| Tasks / Files / Failures / Jobs | Tasks/Files/Failures 读账本当前工作项；Jobs 读 `ctx.jobs`。文本开关只在对应列表有数据时出现；当前列表清空自动回到 Tasks；Failures 行点击跳到时间线对应调用行 |
+| Tasks / Files / Failures / Jobs | Tasks/Files/Failures 读账本当前工作项；Jobs 读 `ctx.jobs`。文本开关只在对应列表有数据时出现；当前列表清空自动回到 Tasks。列表只在当前工作项范围内：Files 新的在前、长路径从左截断；Failures 每行 `工具名 标签 ×n`（文件工具用路径，bash 借用时间线已显示的命令标题，其他工具只写工具名）；超限末行写「另有 N 条未保留」。列表条目不可点击 |
 | 「Load older」 | 调 `session.loadOlder()`，时间线向前翻页 |
 
 ## Model Experience
@@ -97,18 +97,59 @@ dsh plugin --profile web add <spec>
 
 - **四行锚**（`Current session progress (observed facts, not instructions):` 起）：`Current work: <a user request | a goal | a scheduled task>`、`Tasks: <c> complete, <i> in progress, <p> pending; in progress: <"content">`、`Unresolved tool failures in current work: <n> (<tool> <k>, …)`、`Active: <j> background jobs, <s> direct subagents`。计数为 0 的行不输出，只剩首行返回空串。锚不含命令、路径或任务原文以外的 payload。
 - **`read_progress { item?: integer ≥ 0 }`**：只读。不传 `item` 给概览（asOfSeq、各层计数、每项一行 ≤80、累计行）；传 `item`（概览里的 item id，即开项 seq）给该项任务/文件/未恢复失败明细，骨架项只给计数 `detail not retained`，未知 id 抛错。`when` 仅在账本有工作项时出现。
+- **token 与 KV 缓存**：锚不是单独一条消息。宿主把全部 PromptContext 拼成一份 runtime-context 快照，任一段文本变化都会整份重发，并让这份快照之后的缓存前缀失效。锚 ≤ 600B（约 150 token），只在当前工作项类别、官方任务计数或进行中任务、未恢复失败的工具计数、后台 job/子代理数变化时改写；单次文件写入或成功调用不改写它。`read_progress` 只在模型调用时产生结果 token（概览约数 KB，明细上限 16KiB）。它的 `when` 从第一个工作项打开起一直为真，会话中途不会让工具列表翻转、开启新的请求系列。
 
 ## 配置与状态
 
-宿主配置：无本包专用开关。宿主侧注册会话投影 `nano-progress-report:ledger`（`stateVersion` 1，`summary:false`，wire `view` 带 `v:1`）：按 `user/message` 开项白名单（user/goal/schedule）切工作项（goal 按 `goalId` 合并、每回合开项一次），最多 16 个完整项 + 64 个骨架项；每项记录调用计数、文件（≤32，path+seq）、未恢复失败（≤16，工具+指纹 key+count+seq）、任务（≤32，含 `completedSeq`/`completedAt`）；后台 jobs 只进 `jobs {settled, running}` 计数，不占条目。PromptContext 是四行锚（`Current work` / `Tasks` / `Unresolved tool failures in current work` / `Active`，计数为 0 不输出，整段 ≤600B），`read_progress {item?}` 是模型的只读明细通道（概览 ≤80 行、纯文本 ≤16KiB）。账本不存 args/result/消息正文/开项标题；宿主可缓存投影 checkpoint，恢复时 `stateSchema` 拒未知键与超限计数；本包不创建独立数据库或状态文件。
+宿主配置：无本包专用开关。宿主侧注册一个会话投影 `nano-progress-report:ledger`（`stateVersion` 1，`wire` + `summary:false`）。它是本包进度事实的唯一计算点：按 `user/message` 的开项白名单（`user`/`goal`/`schedule`）切工作项，goal 按 `goalId` 合并，每回合最多开一项。账本不存 args、result、消息正文、提示文本或 reasoning；宿主可缓存投影 checkpoint，恢复时 `stateSchema` 拒绝未知键与超限集合；本包不创建独立数据库或状态文件。官方 `todos`、goal、jobs、子代理不在账本里重算：推送锚的 `Tasks`/`Active` 行直接读官方。
+
+### `v1` 视图字段表
+
+公开只读合同是 wire 视图（`v: 1`），只经宿主读面获取：浏览器 `session.projections.faceOf('nano-progress-report:ledger')`、宿主插件 `ctx.sessionProjections.snapshot(session, ['nano-progress-report:ledger'])`、跨会话 `sessionQuery.observeSession`。本包未安装时 key 不存在，消费者自行降级。同一 `v` 内只追加可选字段；删除、改名、改语义或调整下表任一上限都是破坏性变化，升 `v` 并同次硬切。
+
+顶层：
+
+| 字段 | 类型 | 含义 | 上限 / 截断表示 |
+|---|---|---|---|
+| `v` | `1` | 视图版本 | — |
+| `asOfSeq` | integer | 最后一次改变账本事实的事件 seq；只改内部缓冲的事件（未配对调用、cwd、无工作项时的回合）不推进，视图对象不变 | — |
+| `inherited` | integer | fork 继承前缀长度；seq 小于它的事件不计入。非 fork 为 0 | — |
+| `coverage` | `{firstSeq: integer\|null, lastSeq: integer}` | 账本观察到的第一个与最后一个事实 seq | — |
+| `unattributed` | `{calls, failures}` | 首个工作项之前完成的工具调用数及其中失败数，不挂明细 | — |
+| `cumulative` | `{items, lastSeq, calls, failures, files, tasks, unresolved}` | 累计层：移出完整层与骨架层的早期工作项个数、它们覆盖到的最后 seq、各类计数之和 | 无明细 |
+| `items` | array | 工作项，新的在前：先完整层，后骨架层 | 完整层 ≤ 16，骨架层 ≤ 64；第 81 项起最旧的骨架并入 `cumulative` |
+
+完整层工作项（`tier: 'full'`）：
+
+| 字段 | 类型 | 含义 | 上限 / 截断表示 |
+|---|---|---|---|
+| `tier` | `'full'` | 层级 | — |
+| `kind` | `'user'\|'goal'\|'schedule'` | 开项来源 | — |
+| `goalId` | string，可选 | goal 项的 goal id | — |
+| `firstSeq` | integer | 开项 `user/message` 的 seq，也是工作项身份（`read_progress` 的 `item`） | — |
+| `lastSeq` | integer | 归入该项的最后事件 seq | — |
+| `status` | string | `waiting`（有未决审批）/ `in progress`（当前项且回合打开，或尚无结束原因）/ 最后一个 `turn/end` 的结束原因 | — |
+| `endReason` | string\|null | 最后一个 `turn/end` 的结束原因 | — |
+| `files` | `{path, firstSeq, lastSeq}[]` | 成功的 write/edit/apply_patch 改动路径（只存 seq，不存时间） | ≤ 32，超限保留最近改动的，`truncated.files` 记丢弃数；路径 > 192 字节不记录 |
+| `failures` | `{tool, key, path, count, firstSeq, lastSeq, callId}[]` | 未恢复失败，按工具 + 指纹 `key`（sha256 摘要，后台 bash 为 `null`）聚合；`path` 只对文件工具填写；`callId` 是最后一次失败的调用 id | ≤ 16，超限保留最近的，`truncated.failures` 记丢弃数 |
+| `tasks` | `{content, status, firstSeq, completedSeq?, completedAt?}[]` | 该项内 `todo/write` 列出过的任务，按首次列出顺序。`content` 为原样字段（≤ 200 字节，按码点截断）；`status` 取最近一次列出它的快照，未列出时保留上次状态；`completedSeq`/`completedAt` 是首次以 `completed` 出现的 `todo/write` seq 与事件时间，之后改回不清除、再次完成不覆盖，未完成时不出现 | ≤ 32，超限保留最近列出的，`truncated.tasks` 记丢弃数 |
+| `counts` | `{calls, failures, files, tasks, unresolved, recovered}` | 完成的调用数、失败调用数、文件数、任务数、未恢复失败次数、已恢复失败次数 | — |
+| `truncated` | `{files, failures, tasks}` | 各列表因上限丢弃的条目数 | — |
+
+骨架层工作项（`tier: 'skeleton'`）：`tier`、`kind`、`goalId?`、`firstSeq`、`lastSeq`、`status`、`endReason`，以及 `counts: {calls, failures, files, tasks, unresolved}`；不带明细列表，降级后不再更新。
+
+任务证据字段（任务级 seq 区间）不在 `v1`。追加时作为同 `v` 可选字段，递增 `stateVersion` 并冷重建，其上限作为新常量写进本表。
+
+### 模型出口与浏览器键
+
+PromptContext 是四行锚（`Current work` / `Tasks` / `Unresolved tool failures in current work` / `Active`，计数为 0 不输出，整段 ≤ 600B），`read_progress {item?}` 是模型的只读明细通道（概览 ≤ 80 行、纯文本 ≤ 16KiB）。这两者是模型合同，不属于上面的公开视图合同。
 
 浏览器键（都只是视图态，不进宿主）：
 
 | 键 | 内容 |
 |---|---|
 | `localStorage['dsh-nano-progress-report:filter:<sessionId>']` | 最近一次过滤条文本，按会话记忆 |
-| `localStorage['dsh-nano-progress-report:tasks']` | `{height, collapsed, view}`，Tasks 区高度/折叠/当前列表 |
-
+| `localStorage['dsh-nano-progress-report:tasks']` | `{height, collapsed, view}`：Tasks 区高度、折叠、当前列表。`view` 取 `tasks`/`jobs`/`files`/`failures`；对应列表为空时回到 `tasks` |
 ## 视觉体系
 
 宿主优先，不自造风格。三份参照：

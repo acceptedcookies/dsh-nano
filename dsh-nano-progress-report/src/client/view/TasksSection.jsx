@@ -12,6 +12,7 @@ import React from 'react'
 import { Button, DisclosureRow, IconChecklistOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { JobsView } from './JobsView.jsx'
 import { FailuresView, FilesView, TasksView } from './TasksView.jsx'
+import { activeView } from '../panel.js'
 
 const { createElement: h, useCallback, useEffect } = React
 
@@ -42,14 +43,11 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
     { id: 'failures', count: counts.failures },
     { id: 'jobs', count: jobs.length },
   ]
-  const active = options.some(option => option.id === view && option.count > 0)
-    ? view : 'tasks'
+  const active = activeView(view, { ...counts, jobs: jobs.length })
   // C2-04: a list that empties snaps the panel (and the persisted view) back
   // to Tasks — the switch itself is also removed by the same condition.
   useEffect(() => {
-    if (view !== 'tasks' && !options.some(option => option.id === view && option.count > 0)) {
-      onView('tasks')
-    }
+    if (view !== active) onView(active)
   })
   const tasks = item?.tasks ?? []
   const done = tasks.filter(task => task?.status === 'completed').length
@@ -153,7 +151,9 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
     ? null
     : h('div', { className: 'npr-taskbar-body', 'data-npr': 'tasks-body' },
       active === 'files' ? h(FilesView, { files: item?.files ?? [], truncated: truncated.files ?? 0, t })
-        : active === 'failures' ? h(FailuresView, { failures: item?.failures ?? [], titleOf: failureTitleOf ?? (() => null), t })
+        : active === 'failures' ? h(FailuresView, {
+          failures: item?.failures ?? [], truncated: truncated.failures ?? 0, titleOf: failureTitleOf ?? (() => null), t,
+        })
           : active === 'jobs' ? h(JobsView, { jobs, t })
             : h(TasksView, { tasks, truncated: truncated.tasks ?? 0, t })))
 }

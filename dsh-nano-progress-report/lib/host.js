@@ -286,7 +286,10 @@ var PATH_MAX_BYTES = 192;
 var FILE_TOOLS = /* @__PURE__ */ new Set(["write", "edit", "apply_patch"]);
 var utf8Slice = (text, maxBytes) => {
   const buf = Buffer.from(String(text), "utf8");
-  return buf.length <= maxBytes ? buf.toString("utf8") : buf.subarray(0, maxBytes).toString("utf8");
+  if (buf.length <= maxBytes) return buf.toString("utf8");
+  let end = maxBytes;
+  while (end > 0 && (buf[end] & 192) === 128) end -= 1;
+  return buf.subarray(0, end).toString("utf8");
 };
 var newItem = (seq, kind, goalId) => ({
   id: seq,
@@ -299,6 +302,7 @@ var newItem = (seq, kind, goalId) => ({
   lastSeq: seq,
   calls: 0,
   failedCalls: 0,
+  recovered: 0,
   files: [],
   failures: [],
   tasks: [],
@@ -338,29 +342,43 @@ function rebalance(items) {
   while (next.length > ITEMS_MAX) evicted.push(next.pop());
   return { items: next, evicted };
 }
+function absorb(cumulative, evicted) {
+  const next = { ...cumulative };
+  for (const item of evicted) {
+    next.items += 1;
+    next.lastSeq = Math.max(next.lastSeq, item.lastSeq);
+    next.calls += item.calls;
+    next.failures += item.failedCalls;
+    next.files += item.filesCount;
+    next.tasks += item.tasksCount;
+    next.unresolved += item.unresolvedCount;
+  }
+  return next;
+}
 function apply(state, event) {
   if (event.seq < state.inherited) return state;
   const seq = event.seq;
   const data = event.data ?? {};
   switch (event.type) {
     case "turn/start": {
-      let next = {
-        ...touch(state, seq),
+      const next = {
+        ...state,
         turn: state.turn + 1,
         turnOpen: true,
         openedThisTurn: false,
         pending: {}
       };
       const current = next.items[0];
-      if (current !== void 0) {
-        next = patchItem(next, current, { ...current, lastSeq: seq });
-      }
-      return next;
+      if (current === void 0) return next;
+      return touch(patchItem(next, current, { ...current, lastSeq: seq }), seq);
     }
     case "turn/end": {
       const reason = typeof data.reason === "string" ? data.reason : data.reason?.kind ?? "completed";
+      const current = state.items[0];
+      if (current === void 0 && Object.keys(state.approvals).length === 0) {
+        return { ...state, turnOpen: false };
+      }
       let next = touch({ ...state, turnOpen: false }, seq);
-      const current = next.items[0];
       if (current !== void 0) {
         next = patchItem(next, current, { ...current, endReason: reason, lastSeq: seq });
       }
@@ -376,7 +394,7 @@ function apply(state, event) {
     case "working-directory/change": {
       if (typeof data.cwd !== "string") return state;
       const cwd = digest(data.cwd);
-      return cwd === state.cwd ? state : { ...touch(state, seq), cwd };
+      return cwd === state.cwd ? state : { ...state, cwd };
     }
     case "user/message": {
       const kind = openKind(data.source?.kind);
@@ -390,12 +408,11 @@ function apply(state, event) {
         }
         const goalId = kind === "goal" ? data.source?.goalId : void 0;
         const { items, evicted } = rebalance([newItem(seq, kind, goalId), ...state.items]);
-        const evictedLast = evicted.reduce((max, item) => Math.max(max, item.lastSeq), state.truncated.lastSeq);
         return {
           ...touch(state, seq),
           items,
           openedThisTurn: state.turnOpen,
-          truncated: evicted.length > 0 ? { items: state.truncated.items + evicted.length, lastSeq: evictedLast } : state.truncated
+          cumulative: evicted.length > 0 ? absorb(state.cumulative, evicted) : state.cumulative
         };
       }
       const current = state.items[0];
@@ -421,7 +438,7 @@ function apply(state, event) {
         entries.sort((a, b) => a[1].seq - b[1].seq);
         for (const [key] of entries.slice(0, entries.length - PENDING_MAX)) delete pending[key];
       }
-      return { ...touch(state, seq), pending };
+      return { ...state, pending };
     }
     case "tool/result": {
       const message = data.message;
@@ -473,7 +490,10 @@ function apply(state, event) {
         if (clears.length > 0) {
           const cleared = new Set(clears);
           const kept = patch.failures.filter((f) => f.key === null || !cleared.has(f.key));
-          if (kept.length !== patch.failures.length) patch = { ...patch, failures: kept };
+          if (kept.length !== patch.failures.length) {
+            const recovered = patch.failures.reduce((n, f) => kept.includes(f) ? n : n + f.count, 0);
+            patch = { ...patch, failures: kept, recovered: patch.recovered + recovered };
+          }
         }
         if (FILE_TOOLS.has(call.name)) {
           const metaPaths = callPaths(null, data.meta);
@@ -499,28 +519,28 @@ function apply(state, event) {
       if (item === void 0 || item.tier !== "full") return state;
       const todos = Array.isArray(data.todos) ? data.todos : [];
       const now = event.time ?? 0;
-      const byContent = new Map(item.tasks.map((task) => [task.content, task]));
-      let tasks = [];
+      const listed = /* @__PURE__ */ new Map();
       for (const todo of todos) {
-        if (todo === null || typeof todo.content !== "string" || todo.content === "") continue;
-        const status = todo.status === "completed" || todo.status === "in_progress" ? todo.status : "pending";
-        const prev = byContent.get(todo.content);
-        if (prev === void 0) {
-          tasks.push({ content: utf8Slice(todo.content, TEXT_MAX_BYTES), status, firstSeq: seq });
-          byContent.set(todo.content, tasks[tasks.length - 1]);
-          continue;
-        }
-        const next = { ...prev, status };
-        if (status === "completed" && prev.completedSeq === void 0) {
-          next.completedSeq = seq;
-          next.completedAt = now;
-        }
-        tasks.push(next);
+        if (todo === null || typeof todo !== "object" || typeof todo.content !== "string" || todo.content === "") continue;
+        const content = utf8Slice(todo.content, TEXT_MAX_BYTES);
+        if (listed.has(content)) continue;
+        listed.set(content, todo.status === "completed" || todo.status === "in_progress" ? todo.status : "pending");
       }
+      const mark = (task, status) => {
+        const next = task.status === status ? task : { ...task, status };
+        return status === "completed" && next.completedSeq === void 0 ? { ...next, completedSeq: seq, completedAt: now } : next;
+      };
+      let tasks = item.tasks.map((task) => {
+        const status = listed.get(task.content);
+        if (status === void 0) return task;
+        listed.delete(task.content);
+        return mark(task, status);
+      });
+      for (const [content, status] of listed) tasks.push(mark({ content, status, firstSeq: seq }, status));
       let truncated = item.truncated.tasks;
       if (tasks.length > TASKS_MAX) {
         truncated += tasks.length - TASKS_MAX;
-        tasks = tasks.slice().sort((a, b) => b.firstSeq - a.firstSeq).slice(0, TASKS_MAX).sort((a, b) => a.firstSeq - b.firstSeq);
+        tasks = tasks.slice(tasks.length - TASKS_MAX);
       }
       return touch(patchItem(state, item, {
         ...item,
@@ -533,12 +553,9 @@ function apply(state, event) {
       const id = data.id;
       if (id === void 0 || id === null) return state;
       const approvals = { ...state.approvals, [String(id)]: state.items[0]?.id ?? null };
-      let next = { ...touch(state, seq), approvals };
-      const item = next.items[0];
-      if (item !== void 0 && item.tier === "full") {
-        next = patchItem(next, item, { ...item, awaiting: item.awaiting + 1, lastSeq: seq });
-      }
-      return next;
+      const item = state.items[0];
+      if (item === void 0 || item.tier !== "full") return { ...state, approvals };
+      return touch(patchItem({ ...state, approvals }, item, { ...item, awaiting: item.awaiting + 1, lastSeq: seq }), seq);
     }
     case "approval/decided": {
       const key = data.id === void 0 || data.id === null ? null : String(data.id);
@@ -546,12 +563,9 @@ function apply(state, event) {
       const itemId = state.approvals[key];
       const approvals = { ...state.approvals };
       delete approvals[key];
-      let next = { ...touch(state, seq), approvals };
-      const item = next.items.find((entry) => entry.id === itemId);
-      if (item !== void 0 && item.tier === "full" && item.awaiting > 0) {
-        next = patchItem(next, item, { ...item, awaiting: item.awaiting - 1, lastSeq: seq });
-      }
-      return next;
+      const item = state.items.find((entry) => entry.id === itemId);
+      if (item === void 0 || item.tier !== "full" || item.awaiting === 0) return { ...state, approvals };
+      return touch(patchItem({ ...state, approvals }, item, { ...item, awaiting: item.awaiting - 1, lastSeq: seq }), seq);
     }
     case "goal/change": {
       const current = state.items[0];
@@ -603,7 +617,9 @@ function itemView(item, index, state) {
       calls: item.calls,
       failures: item.failedCalls,
       files: item.files.length,
-      tasks: item.tasks.length
+      tasks: item.tasks.length,
+      unresolved: item.failures.reduce((n, f) => n + f.count, 0),
+      recovered: item.recovered
     },
     truncated: item.truncated
   };
@@ -653,6 +669,7 @@ function parseItem(value) {
   return {
     ...base,
     awaiting: isCount(value.awaiting) ? value.awaiting : 0,
+    recovered: isCount(value.recovered) ? value.recovered : 0,
     files: (value.files ?? []).filter((f) => f && isPath(f.path) && isCount(f.firstSeq) && isCount(f.lastSeq)).map((f) => ({ path: f.path, firstSeq: f.firstSeq, lastSeq: f.lastSeq })),
     failures: (value.failures ?? []).filter((f) => f && typeof f.tool === "string" && (f.key === null || isDigest(f.key)) && isCount(f.firstSeq) && isCount(f.lastSeq) && isCount(f.count)).map((f) => ({
       tool: f.tool,
@@ -677,13 +694,13 @@ function parseItem(value) {
   };
 }
 function parseState(value) {
-  if (!value || typeof value !== "object" || value.v !== STATE_VERSION || !isCount(value.inherited) || !isDigest(value.cwd) || !Array.isArray(value.items) || value.items.length > ITEMS_MAX || value.items.filter((item) => item?.tier === "full").length > FULL_MAX || !value.pending || typeof value.pending !== "object" || Array.isArray(value.pending) || !value.approvals || typeof value.approvals !== "object" || Array.isArray(value.approvals) || !value.unattributed || typeof value.unattributed !== "object" || !value.truncated || typeof value.truncated !== "object") {
+  if (!value || typeof value !== "object" || value.v !== STATE_VERSION || !isCount(value.inherited) || !isDigest(value.cwd) || !Array.isArray(value.items) || value.items.length > ITEMS_MAX || value.items.filter((item) => item?.tier === "full").length > FULL_MAX || !value.pending || typeof value.pending !== "object" || Array.isArray(value.pending) || !value.approvals || typeof value.approvals !== "object" || Array.isArray(value.approvals) || !value.unattributed || typeof value.unattributed !== "object" || !value.cumulative || typeof value.cumulative !== "object") {
     throw new Error("Invalid progress ledger checkpoint");
   }
   rejectUnknown(value, ALLOWED_STATE, "state");
   if (Object.keys(value.pending).length > PENDING_MAX) throw new Error("Invalid progress ledger checkpoint: pending over limit");
   rejectUnknown(value.unattributed, ALLOWED_UNATTR, "unattributed");
-  rejectUnknown(value.truncated, ALLOWED_TRUNC, "truncated");
+  rejectUnknown(value.cumulative, ALLOWED_CUMULATIVE, "cumulative");
   const pending = {};
   for (const [id, call] of Object.entries(value.pending)) {
     if (call && typeof call.name === "string" && isCount(call.seq) && Array.isArray(call.keys) && call.keys.every(isDigest) && Array.isArray(call.paths) && call.paths.every(isPath)) {
@@ -713,10 +730,7 @@ function parseState(value) {
       calls: isCount(value.unattributed.calls) ? value.unattributed.calls : 0,
       failures: isCount(value.unattributed.failures) ? value.unattributed.failures : 0
     },
-    truncated: {
-      items: isCount(value.truncated.items) ? value.truncated.items : 0,
-      lastSeq: isCount(value.truncated.lastSeq) ? value.truncated.lastSeq : 0
-    }
+    cumulative: Object.fromEntries([...ALLOWED_CUMULATIVE].map((key) => [key, isCount(value.cumulative[key]) ? value.cumulative[key] : 0]))
   };
 }
 var ALLOWED_STATE = /* @__PURE__ */ new Set([
@@ -732,7 +746,7 @@ var ALLOWED_STATE = /* @__PURE__ */ new Set([
   "pending",
   "approvals",
   "unattributed",
-  "truncated"
+  "cumulative"
 ]);
 var ALLOWED_ITEM_FULL = /* @__PURE__ */ new Set([
   "id",
@@ -745,6 +759,7 @@ var ALLOWED_ITEM_FULL = /* @__PURE__ */ new Set([
   "lastSeq",
   "calls",
   "failedCalls",
+  "recovered",
   "files",
   "failures",
   "tasks",
@@ -769,7 +784,7 @@ var ALLOWED_FAILURE = /* @__PURE__ */ new Set(["tool", "key", "path", "count", "
 var ALLOWED_FILE = /* @__PURE__ */ new Set(["path", "firstSeq", "lastSeq"]);
 var ALLOWED_TASK = /* @__PURE__ */ new Set(["content", "status", "firstSeq", "completedSeq", "completedAt"]);
 var ALLOWED_UNATTR = /* @__PURE__ */ new Set(["calls", "failures"]);
-var ALLOWED_TRUNC = /* @__PURE__ */ new Set(["items", "lastSeq"]);
+var ALLOWED_CUMULATIVE = /* @__PURE__ */ new Set(["items", "lastSeq", "calls", "failures", "files", "tasks", "unresolved"]);
 var ALLOWED_ITEM_TRUNC = /* @__PURE__ */ new Set(["files", "failures", "tasks"]);
 function rejectUnknown(value, allowed, what) {
   for (const key of Object.keys(value)) {
@@ -777,22 +792,14 @@ function rejectUnknown(value, allowed, what) {
   }
 }
 var itemViewCache = /* @__PURE__ */ new WeakMap();
+var currentViewCache = /* @__PURE__ */ new WeakMap();
 var stateViewCache = /* @__PURE__ */ new WeakMap();
 function cachedItemView(item, index, state) {
-  const key = index === 0 ? { item, isCurrent: true, turnOpen: state.turnOpen } : null;
-  if (index !== 0) {
-    let view3 = itemViewCache.get(item);
-    if (view3 === void 0) {
-      view3 = itemView(item, index, state);
-      itemViewCache.set(item, view3);
-    }
-    return view3;
-  }
-  if (key !== null && item.tier === "full") {
-    let slot = itemViewCache.get(item);
+  if (index === 0 && item.tier === "full") {
+    let slot = currentViewCache.get(item);
     if (slot === void 0 || slot.turnOpen !== state.turnOpen) {
       slot = { turnOpen: state.turnOpen, view: itemView(item, index, state) };
-      itemViewCache.set(item, slot);
+      currentViewCache.set(item, slot);
     }
     return slot.view;
   }
@@ -803,19 +810,33 @@ function cachedItemView(item, index, state) {
   }
   return view2;
 }
+var viewByItems = /* @__PURE__ */ new WeakMap();
 function view(state) {
   let v = stateViewCache.get(state);
   if (v !== void 0) return v;
-  v = {
-    v: 1,
-    asOfSeq: state.asOfSeq,
-    inherited: state.inherited,
-    coverage: { firstSeq: state.firstSeq, lastSeq: state.asOfSeq },
-    // cumulative layer coverage boundary: newest evicted item's lastSeq
-    unattributed: state.unattributed,
-    truncated: state.truncated,
-    items: state.items.map((item, index) => cachedItemView(item, index, state))
-  };
+  const prev = viewByItems.get(state.items);
+  if (prev !== void 0 && prev.asOfSeq === state.asOfSeq && prev.turnOpen === state.turnOpen && prev.firstSeq === state.firstSeq && prev.inherited === state.inherited && prev.unattributed === state.unattributed && prev.cumulative === state.cumulative) {
+    v = prev.view;
+  } else {
+    v = {
+      v: 1,
+      asOfSeq: state.asOfSeq,
+      inherited: state.inherited,
+      coverage: { firstSeq: state.firstSeq, lastSeq: state.asOfSeq },
+      unattributed: state.unattributed,
+      cumulative: state.cumulative,
+      items: state.items.map((item, index) => cachedItemView(item, index, state))
+    };
+    viewByItems.set(state.items, {
+      view: v,
+      asOfSeq: state.asOfSeq,
+      turnOpen: state.turnOpen,
+      firstSeq: state.firstSeq,
+      inherited: state.inherited,
+      unattributed: state.unattributed,
+      cumulative: state.cumulative
+    });
+  }
   stateViewCache.set(state, v);
   return v;
 }
@@ -844,7 +865,7 @@ var progressLedger = {
     pending: {},
     approvals: {},
     unattributed: { calls: 0, failures: 0 },
-    truncated: { items: 0, lastSeq: 0 }
+    cumulative: { items: 0, lastSeq: 0, calls: 0, failures: 0, files: 0, tasks: 0, unresolved: 0 }
   }),
   apply,
   wire: { viewSchema, view, summary: false }
@@ -860,21 +881,24 @@ var clip = (text) => {
 [truncated at 16 KiB]`;
 };
 var taskDone = (item) => item.tier === "full" ? item.tasks.filter((task) => task.status === "completed").length : 0;
+var unresolvedOf = (item) => item.counts?.unresolved ?? (item.tier === "full" ? item.failures.reduce((n, f) => n + (f.count ?? 1), 0) : 0);
+var EMPTY_CUMULATIVE = { items: 0, lastSeq: 0, calls: 0, failures: 0, files: 0, tasks: 0, unresolved: 0 };
 function overview(view2) {
   const items = view2.items ?? [];
   const full = items.filter((item) => item.tier === "full");
   const skeletons = items.filter((item) => item.tier === "skeleton");
+  const cum = { ...EMPTY_CUMULATIVE, ...view2.cumulative };
   const lines = [
-    `asOfSeq ${view2.asOfSeq} \xB7 ${items.length} work items (${full.length} full, ${skeletons.length} skeleton)`
+    `asOfSeq ${view2.asOfSeq} \xB7 ${items.length + cum.items} work items (${full.length} full, ${skeletons.length} skeleton, ${cum.items} cumulative)`
   ];
   for (const item of items.slice(0, OVERVIEW_MAX_LINES)) {
     const counts = item.counts ?? {};
     const tasks = item.tier === "full" ? `${taskDone(item)}/${item.tasks.length}` : `${counts.tasks ?? 0}`;
-    lines.push(`item ${item.firstSeq} \xB7 ${kindWord(item.kind)} \xB7 ${item.status} \xB7 tasks ${tasks} \xB7 files ${counts.files ?? 0} \xB7 unresolved failures ${counts.failures ?? 0}`);
+    lines.push(`item ${item.firstSeq} \xB7 ${kindWord(item.kind)} \xB7 ${item.status} \xB7 tasks ${tasks} \xB7 files ${counts.files ?? 0} \xB7 unresolved failures ${unresolvedOf(item)}`);
   }
   const un = view2.unattributed ?? { calls: 0, failures: 0 };
   const coverage = view2.coverage ?? { firstSeq: null, lastSeq: view2.asOfSeq };
-  lines.push(`cumulative \xB7 ${items.length} items (${full.length} full, ${skeletons.length} skeleton) \xB7 unattributed ${un.calls} calls, ${un.failures} failures \xB7 coverage seq ${coverage.firstSeq ?? "none"}\u2013${coverage.lastSeq}`);
+  lines.push(`cumulative \xB7 ${cum.items} items \xB7 calls ${cum.calls}, failures ${cum.failures}, files ${cum.files}, tasks ${cum.tasks}, unresolved failures ${cum.unresolved}` + (cum.items > 0 ? ` \xB7 through seq ${cum.lastSeq}` : "") + ` \xB7 unattributed ${un.calls} calls, ${un.failures} failures \xB7 coverage seq ${coverage.firstSeq ?? "none"}\u2013${coverage.lastSeq}`);
   return clip(lines.join("\n"));
 }
 function itemDetail(view2, itemId) {
@@ -898,8 +922,7 @@ function itemDetail(view2, itemId) {
     const seqs = failure.firstSeq === failure.lastSeq || failure.lastSeq === void 0 ? `${failure.firstSeq ?? failure.seq}` : `${failure.firstSeq ?? failure.seq}\u2013${failure.lastSeq}`;
     lines.push(`failure ${failure.tool} ${path} \xD7${failure.count ?? 1} seq ${seqs}`);
   }
-  const unresolved = item.failures.reduce((total, f) => total + (f.count ?? 1), 0);
-  const recovered = Math.max(0, (item.counts?.failures ?? unresolved) - unresolved);
+  const recovered = item.counts?.recovered ?? 0;
   if (recovered > 0) lines.push(`recovered failures: ${recovered}`);
   if (item.truncated !== void 0) {
     const extra = (item.truncated.files ?? 0) + (item.truncated.failures ?? 0) + (item.truncated.tasks ?? 0);

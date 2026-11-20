@@ -33,6 +33,15 @@ test('src/host + src/shared import no client modules, React, or browser globals'
   }
 })
 
+test('host exposes no provide, route, or exported error enum (T-O-6/T19)', () => {
+  for (const file of listJs(join(srcRoot, 'host'))) {
+    const text = readFileSync(file, 'utf8')
+    assert.doesNotMatch(text, /ctx\.provide|\.provide\(/, `${file} provides a service`)
+    assert.doesNotMatch(text, /ctx\.(server|router|http)|\.route\(/, `${file} registers a route`)
+    assert.doesNotMatch(text, /export\s+(const|class)\s+\w*Error/, `${file} exports an error type`)
+  }
+})
+
 test('host modules carry no JSX', () => {
   for (const file of listJs(join(srcRoot, 'host'))) {
     assert.equal(file.endsWith('.jsx'), false)

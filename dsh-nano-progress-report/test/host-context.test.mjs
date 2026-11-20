@@ -6,8 +6,9 @@ import { formatProgress } from '../src/host/context.js'
 import { inject } from '../src/host/index.js'
 
 const view = (over = {}) => ({
-  v: 1, asOfSeq: 9, items: [], unattributed: { calls: 0, failures: 0, jobs: 0 },
-  truncated: { items: 0 }, coverage: { firstSeq: 1, lastSeq: 9 }, ...over,
+  v: 1, asOfSeq: 9, items: [], unattributed: { calls: 0, failures: 0 },
+  cumulative: { items: 0, lastSeq: 0, calls: 0, failures: 0, files: 0, tasks: 0, unresolved: 0 },
+  coverage: { firstSeq: 1, lastSeq: 9 }, ...over,
 })
 const item = (over = {}) => ({
   tier: 'full', kind: 'user', status: 'in progress', failures: [], tasks: [], ...over,

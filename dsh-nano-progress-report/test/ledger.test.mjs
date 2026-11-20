@@ -86,7 +86,8 @@ test('demotion at 17 full; skeleton eviction past 16+64; asOfSeq tracks fact seq
   assert.equal(state.items.length, 80)
   assert.equal(state.items.filter(i => i.tier === 'skeleton').length, 64)
   assert.equal(state.items.at(-1).id, 101) // oldest retained skeleton
-  assert.equal(state.truncated.items, 1)
+  assert.equal(state.cumulative.items, 1)
+  assert.equal(state.cumulative.lastSeq, 100)
   // a no-fact event does not move asOfSeq backwards/forwards weirdly
   const before = state.asOfSeq
   state = ledger.apply(state, ev(500, 'user/message', { source: { kind: 'agent-message' }, content: 'x' }))
@@ -180,8 +181,8 @@ test('unattributed: results before any item count separately; jobs are not ledge
   const view = viewOf(state)
   assert.equal(view.unattributed.calls, 1)
   assert.equal(view.items.length, 0)
-  // the buffered call is itself an observed fact → coverage starts at seq 1
-  assert.equal(view.coverage.firstSeq, 1)
+  // a buffered call is not a fact until its result lands → coverage starts at 2
+  assert.equal(view.coverage.firstSeq, 2)
 })
 
 test('inherited prefix cut: events below inherited are skipped; checkpoint round-trip replays', () => {
@@ -217,11 +218,120 @@ test('wire view: reference stability for unchanged items + summary:false + shape
 })
 
 test('coverage seq + asOfSeq advances only on fact change', () => {
-  const state = fold([prompt(1, 't'), call(2, 'a', 'read', {})])
-  const v = viewOf(state)
-  assert.deepEqual(v.coverage, { firstSeq: 1, lastSeq: 2 })
-  assert.equal(v.asOfSeq, 2)
+  const opened = fold([prompt(1, 't')])
+  const v = viewOf(opened)
+  // a buffered call, a cwd change, an unknown event type: no fact moves, and
+  // the published view is the very same object (no rebuild, no republish)
+  const buffered = fold([call(2, 'a', 'read', {}), ev(3, 'working-directory/change', { cwd: '/q' })], opened)
+  assert.notStrictEqual(buffered, opened)
+  assert.strictEqual(viewOf(buffered), v)
+  assert.deepEqual(v.coverage, { firstSeq: 1, lastSeq: 1 })
+  assert.equal(v.asOfSeq, 1)
+  assert.strictEqual(ledger.apply(buffered, ev(4, 'model/usage', { tokens: 1 })), buffered)
   // dropped result for unknown callId does not advance asOfSeq
-  const after = ledger.apply(state, result(9, 'ghost'))
-  assert.equal(viewOf(after).asOfSeq, 2)
+  assert.equal(viewOf(ledger.apply(buffered, result(9, 'ghost'))).asOfSeq, 1)
+  // the paired result is a fact
+  const landed = ledger.apply(buffered, result(10, 'a', {}))
+  assert.equal(viewOf(landed).asOfSeq, 10)
+  // a turn with no work item yet changes no fact
+  const empty = fold([ev(1, 'turn/start'), ev(2, 'turn/end', { reason: 'completed' })])
+  assert.equal(viewOf(empty).asOfSeq, 0)
+  assert.equal(viewOf(empty).coverage.firstSeq, null)
+})
+
+test('tasks: a task left out of a later snapshot keeps its last status and history (T-O-15)', () => {
+  const state = fold([
+    prompt(1, 't'),
+    ev(2, 'todo/write', { todos: [{ content: 'a', status: 'completed' }, { content: 'b', status: 'in_progress' }] }, 5000),
+    ev(3, 'todo/write', { todos: [{ content: 'c', status: 'pending' }] }),
+    ev(4, 'turn/start'),                       // official todos clear here; the ledger keeps its rows
+    ev(5, 'todo/write', { todos: [{ content: 'b', status: 'completed' }] }, 9000),
+  ])
+  const tasks = state.items[0].tasks
+  assert.deepEqual(tasks.map(t => [t.content, t.status, t.firstSeq]),
+    [['a', 'completed', 2], ['b', 'completed', 2], ['c', 'pending', 3]])
+  // first listed already completed → the completion mark is that write
+  assert.equal(tasks[0].completedSeq, 2)
+  assert.equal(tasks[0].completedAt, 5000)
+  assert.equal(tasks[1].completedSeq, 5)
+  assert.equal(tasks[1].completedAt, 9000)
+  assert.equal(tasks[2].completedSeq, undefined)
+  // the view carries the same rows
+  assert.deepEqual(viewOf(state).items[0].tasks, tasks)
+})
+
+test('tasks: over-long content is stored at 200B on a codepoint boundary and still matches on re-list', () => {
+  const long = `${'x'.repeat(199)}汉字 tail`
+  const state = fold([
+    prompt(1, 't'),
+    ev(2, 'todo/write', { todos: [{ content: long, status: 'pending' }] }),
+    ev(3, 'todo/write', { todos: [{ content: long, status: 'completed' }] }),
+  ])
+  const tasks = state.items[0].tasks
+  assert.equal(tasks.length, 1)
+  assert.equal(tasks[0].content, 'x'.repeat(199))
+  assert.ok(!tasks[0].content.includes('\uFFFD'))
+  assert.equal(tasks[0].completedSeq, 3)
+  // the checkpoint round-trips without dropping the row
+  const restored = ledger.stateSchema.parse(JSON.parse(JSON.stringify(state)))
+  assert.deepEqual(restored.items[0].tasks, tasks)
+})
+
+test('tasks: the 32-cap keeps the newest listed rows and counts the rest', () => {
+  const todos = Array.from({ length: 40 }, (_, i) => ({ content: `t${i}`, status: 'pending' }))
+  const state = fold([prompt(1, 't'), ev(2, 'todo/write', { todos: todos.slice(0, 20) }), ev(3, 'todo/write', { todos: todos.slice(20) })])
+  const item = state.items[0]
+  assert.equal(item.tasks.length, 32)
+  assert.equal(item.truncated.tasks, 8)
+  assert.equal(item.tasks[0].content, 't8')
+  assert.equal(item.tasks.at(-1).content, 't39')
+})
+
+test('skeletons absorb no updates; the current item keeps its view when it shifts to index 1', () => {
+  let state = fold([ev(1, 'turn/start'), prompt(2, 'first')])
+  const firstView = viewOf(state).items[0]
+  state = fold([ev(3, 'turn/end', { reason: 'completed' }), ev(4, 'turn/start'), prompt(5, 'second')], state)
+  const shifted = viewOf(state).items[1]
+  assert.equal(shifted.tier, 'full')
+  assert.equal(shifted.firstSeq, 2)
+  assert.equal(shifted.status, 'completed')
+  assert.equal(shifted.turnOpen, undefined)
+  assert.equal(firstView.firstSeq, 2)
+  // demote the oldest, then keep working: the skeleton object never changes
+  state = fold([ev(6, 'turn/end', { reason: 'completed' }), ...Array.from({ length: 16 }, (_, i) => prompt(10 + i, `p${i}`))], state)
+  const skeleton = state.items.find(item => item.id === 2)
+  assert.equal(skeleton.tier, 'skeleton')
+  state = fold([call(40, 'c', 'read', {}), result(41, 'c', {}), ev(42, 'todo/write', { todos: [{ content: 'z', status: 'pending' }] })], state)
+  assert.strictEqual(state.items.find(item => item.id === 2), skeleton)
+})
+
+test('cumulative layer: evicted items fold into counts and the last covered seq (T-O-11)', () => {
+  const events = []
+  let seq = 0
+  for (let i = 0; i < 82; i += 1) {
+    events.push(prompt(++seq, `p${i}`))
+    events.push(call(++seq, `r${i}`, 'bash', { command: `c${i}` }), result(++seq, `r${i}`, { failed: true }))
+  }
+  const state = fold(events)
+  const view = viewOf(state)
+  assert.equal(view.items.length, 80)
+  assert.deepEqual(view.cumulative, { items: 2, lastSeq: 6, calls: 2, failures: 2, files: 0, tasks: 0, unresolved: 2 })
+  const restored = ledger.stateSchema.parse(JSON.parse(JSON.stringify(state)))
+  assert.deepEqual(restored.cumulative, state.cumulative)
+  assert.throws(() => ledger.stateSchema.parse({ ...restored, cumulative: { ...restored.cumulative, extra: 1 } }), /cumulative\.extra/)
+})
+
+test('recovered failures are counted per item; unresolved stays in the view counts', () => {
+  const cmd = { command: 'make' }
+  const state = fold([
+    prompt(1, 't'),
+    call(2, 'a', 'bash', cmd), result(3, 'a', { failed: true }),
+    call(4, 'b', 'bash', cmd), result(5, 'b', { failed: true }),
+    call(6, 'c', 'grep', { pattern: 'x' }), result(7, 'c', { failed: true }),
+    call(8, 'd', 'bash', cmd), result(9, 'd', bashOk),
+  ])
+  const counts = viewOf(state).items[0].counts
+  assert.equal(counts.failures, 3)
+  assert.equal(counts.unresolved, 1)
+  assert.equal(counts.recovered, 2)
 })

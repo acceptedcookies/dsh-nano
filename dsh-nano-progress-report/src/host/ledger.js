@@ -8,7 +8,7 @@
  *  opens the newest item; facts attribute to the item that is current when the
  *  fact arrives. At most 16 newest items stay full; older full items demote to
  *  skeletons, and the list is capped at 16 full + 64 skeleton — the 81st
- *  evicts the oldest skeleton.
+ *  evicts the oldest skeleton into the cumulative layer (counts only).
  *
  *  Failure discipline: entries are `{tool, key, seq, callId}`; `key` is the
  *  shared call fingerprint, computed at CALL time (pending rows carry only
@@ -40,9 +40,14 @@ const TEXT_MAX_BYTES = 200
 const PATH_MAX_BYTES = 192
 const FILE_TOOLS = new Set(['write', 'edit', 'apply_patch'])
 
+// Cut on a codepoint boundary: decoding a split multi-byte sequence would
+// yield U+FFFD and could push the text past maxBytes, which parseState rejects.
 const utf8Slice = (text, maxBytes) => {
   const buf = Buffer.from(String(text), 'utf8')
-  return buf.length <= maxBytes ? buf.toString('utf8') : buf.subarray(0, maxBytes).toString('utf8')
+  if (buf.length <= maxBytes) return buf.toString('utf8')
+  let end = maxBytes
+  while (end > 0 && (buf[end] & 0xc0) === 0x80) end -= 1
+  return buf.subarray(0, end).toString('utf8')
 }
 
 // Identity = opening seq (T-O-7); goal items additionally carry their goalId
@@ -52,7 +57,7 @@ const newItem = (seq, kind, goalId) => ({
   ...(kind === 'goal' && typeof goalId === 'string' ? { goalId } : {}),
   endReason: null, awaiting: 0,
   firstSeq: seq, lastSeq: seq,
-  calls: 0, failedCalls: 0,
+  calls: 0, failedCalls: 0, recovered: 0,
   files: [], failures: [], tasks: [],
   truncated: { files: 0, failures: 0, tasks: 0 },
 })
@@ -95,6 +100,22 @@ function rebalance(items) {
   return { items: next, evicted }
 }
 
+/** Fold evicted skeletons into the cumulative layer: item count, the last
+ *  seq they covered, and the sum of their counts. */
+function absorb(cumulative, evicted) {
+  const next = { ...cumulative }
+  for (const item of evicted) {
+    next.items += 1
+    next.lastSeq = Math.max(next.lastSeq, item.lastSeq)
+    next.calls += item.calls
+    next.failures += item.failedCalls
+    next.files += item.filesCount
+    next.tasks += item.tasksCount
+    next.unresolved += item.unresolvedCount
+  }
+  return next
+}
+
 function apply(state, event) {
   // Host-supplied prefix cut, not the firstLiveSeq on reopen.
   if (event.seq < state.inherited) return state
@@ -104,20 +125,22 @@ function apply(state, event) {
     case 'turn/start': {
       // Pending calls do not survive a turn boundary; their results, if they
       // ever arrive, are unpaired and dropped.
-      let next = {
-        ...touch(state, seq),
+      const next = {
+        ...state,
         turn: state.turn + 1, turnOpen: true, openedThisTurn: false, pending: {},
       }
       const current = next.items[0]
-      if (current !== undefined) {
-        next = patchItem(next, current, { ...current, lastSeq: seq })
-      }
-      return next
+      // Without a work item the turn changes no ledger fact (asOfSeq stays).
+      if (current === undefined) return next
+      return touch(patchItem(next, current, { ...current, lastSeq: seq }), seq)
     }
     case 'turn/end': {
       const reason = typeof data.reason === 'string' ? data.reason : (data.reason?.kind ?? 'completed')
+      const current = state.items[0]
+      if (current === undefined && Object.keys(state.approvals).length === 0) {
+        return { ...state, turnOpen: false }
+      }
       let next = touch({ ...state, turnOpen: false }, seq)
-      const current = next.items[0]
       if (current !== undefined) {
         next = patchItem(next, current, { ...current, endReason: reason, lastSeq: seq })
       }
@@ -134,7 +157,8 @@ function apply(state, event) {
     case 'working-directory/change': {
       if (typeof data.cwd !== 'string') return state
       const cwd = digest(data.cwd)
-      return cwd === state.cwd ? state : { ...touch(state, seq), cwd }
+      // cwd only feeds bash fingerprints; it is not a view fact.
+      return cwd === state.cwd ? state : { ...state, cwd }
     }
     case 'user/message': {
       const kind = openKind(data.source?.kind)
@@ -152,13 +176,10 @@ function apply(state, event) {
         }
         const goalId = kind === 'goal' ? data.source?.goalId : undefined
         const { items, evicted } = rebalance([newItem(seq, kind, goalId), ...state.items])
-        const evictedLast = evicted.reduce((max, item) => Math.max(max, item.lastSeq), state.truncated.lastSeq)
         return {
           ...touch(state, seq), items,
           openedThisTurn: state.turnOpen,
-          truncated: evicted.length > 0
-            ? { items: state.truncated.items + evicted.length, lastSeq: evictedLast }
-            : state.truncated,
+          cumulative: evicted.length > 0 ? absorb(state.cumulative, evicted) : state.cumulative,
         }
       }
       const current = state.items[0]
@@ -184,7 +205,8 @@ function apply(state, event) {
         entries.sort((a, b) => a[1].seq - b[1].seq)
         for (const [key] of entries.slice(0, entries.length - PENDING_MAX)) delete pending[key]
       }
-      return { ...touch(state, seq), pending }
+      // A buffered call is not a fact until its result arrives.
+      return { ...state, pending }
     }
     case 'tool/result': {
       const message = data.message
@@ -237,7 +259,10 @@ function apply(state, event) {
         if (clears.length > 0) {
           const cleared = new Set(clears)
           const kept = patch.failures.filter(f => f.key === null || !cleared.has(f.key))
-          if (kept.length !== patch.failures.length) patch = { ...patch, failures: kept }
+          if (kept.length !== patch.failures.length) {
+            const recovered = patch.failures.reduce((n, f) => (kept.includes(f) ? n : n + f.count), 0)
+            patch = { ...patch, failures: kept, recovered: patch.recovered + recovered }
+          }
         }
         if (FILE_TOOLS.has(call.name)) {
           const metaPaths = callPaths(null, data.meta)
@@ -266,31 +291,35 @@ function apply(state, event) {
       if (item === undefined || item.tier !== 'full') return state
       const todos = Array.isArray(data.todos) ? data.todos : []
       const now = event.time ?? 0
-      const byContent = new Map(item.tasks.map(task => [task.content, task]))
-      let tasks = []
+      // Identity is the stored (≤200B) content, so an over-long task re-listed
+      // later matches its own row. First occurrence wins inside one snapshot.
+      const listed = new Map()
       for (const todo of todos) {
-        if (todo === null || typeof todo.content !== 'string' || todo.content === '') continue
-        const status = todo.status === 'completed' || todo.status === 'in_progress' ? todo.status : 'pending'
-        const prev = byContent.get(todo.content)
-        if (prev === undefined) {
-          tasks.push({ content: utf8Slice(todo.content, TEXT_MAX_BYTES), status, firstSeq: seq })
-          byContent.set(todo.content, tasks[tasks.length - 1])
-          continue
-        }
-        // completed is sticky: a revert never clears it; re-completion never
-        // rewrites the first completion mark.
-        const next = { ...prev, status }
-        if (status === 'completed' && prev.completedSeq === undefined) {
-          next.completedSeq = seq
-          next.completedAt = now
-        }
-        tasks.push(next)
+        if (todo === null || typeof todo !== 'object' || typeof todo.content !== 'string' || todo.content === '') continue
+        const content = utf8Slice(todo.content, TEXT_MAX_BYTES)
+        if (listed.has(content)) continue
+        listed.set(content, todo.status === 'completed' || todo.status === 'in_progress' ? todo.status : 'pending')
       }
+      // completed is sticky: a revert never clears the mark; re-completion
+      // never rewrites the first one (T-O-15).
+      const mark = (task, status) => {
+        const next = task.status === status ? task : { ...task, status }
+        return status === 'completed' && next.completedSeq === undefined
+          ? { ...next, completedSeq: seq, completedAt: now } : next
+      }
+      // A task missing from this snapshot keeps its last status (T-O-15).
+      let tasks = item.tasks.map(task => {
+        const status = listed.get(task.content)
+        if (status === undefined) return task
+        listed.delete(task.content)
+        return mark(task, status)
+      })
+      for (const [content, status] of listed) tasks.push(mark({ content, status, firstSeq: seq }, status))
       let truncated = item.truncated.tasks
       if (tasks.length > TASKS_MAX) {
+        // Rows stay in first-listed order, so the oldest are at the front.
         truncated += tasks.length - TASKS_MAX
-        tasks = tasks.slice().sort((a, b) => b.firstSeq - a.firstSeq).slice(0, TASKS_MAX)
-          .sort((a, b) => a.firstSeq - b.firstSeq)
+        tasks = tasks.slice(tasks.length - TASKS_MAX)
       }
       return touch(patchItem(state, item, {
         ...item, tasks, lastSeq: seq,
@@ -301,12 +330,9 @@ function apply(state, event) {
       const id = data.id
       if (id === undefined || id === null) return state
       const approvals = { ...state.approvals, [String(id)]: state.items[0]?.id ?? null }
-      let next = { ...touch(state, seq), approvals }
-      const item = next.items[0]
-      if (item !== undefined && item.tier === 'full') {
-        next = patchItem(next, item, { ...item, awaiting: item.awaiting + 1, lastSeq: seq })
-      }
-      return next
+      const item = state.items[0]
+      if (item === undefined || item.tier !== 'full') return { ...state, approvals }
+      return touch(patchItem({ ...state, approvals }, item, { ...item, awaiting: item.awaiting + 1, lastSeq: seq }), seq)
     }
     case 'approval/decided': {
       const key = data.id === undefined || data.id === null ? null : String(data.id)
@@ -314,12 +340,9 @@ function apply(state, event) {
       const itemId = state.approvals[key]
       const approvals = { ...state.approvals }
       delete approvals[key]
-      let next = { ...touch(state, seq), approvals }
-      const item = next.items.find(entry => entry.id === itemId)
-      if (item !== undefined && item.tier === 'full' && item.awaiting > 0) {
-        next = patchItem(next, item, { ...item, awaiting: item.awaiting - 1, lastSeq: seq })
-      }
-      return next
+      const item = state.items.find(entry => entry.id === itemId)
+      if (item === undefined || item.tier !== 'full' || item.awaiting === 0) return { ...state, approvals }
+      return touch(patchItem({ ...state, approvals }, item, { ...item, awaiting: item.awaiting - 1, lastSeq: seq }), seq)
     }
     case 'goal/change': {
       const current = state.items[0]
@@ -367,6 +390,8 @@ function itemView(item, index, state) {
     counts: {
       calls: item.calls, failures: item.failedCalls,
       files: item.files.length, tasks: item.tasks.length,
+      unresolved: item.failures.reduce((n, f) => n + f.count, 0),
+      recovered: item.recovered,
     },
     truncated: item.truncated,
   }
@@ -411,6 +436,7 @@ function parseItem(value) {
   return {
     ...base,
     awaiting: isCount(value.awaiting) ? value.awaiting : 0,
+    recovered: isCount(value.recovered) ? value.recovered : 0,
     files: (value.files ?? []).filter(f => f && isPath(f.path) && isCount(f.firstSeq) && isCount(f.lastSeq))
       .map(f => ({ path: f.path, firstSeq: f.firstSeq, lastSeq: f.lastSeq })),
     failures: (value.failures ?? [])
@@ -443,13 +469,13 @@ function parseState(value) {
     || !value.pending || typeof value.pending !== 'object' || Array.isArray(value.pending)
     || !value.approvals || typeof value.approvals !== 'object' || Array.isArray(value.approvals)
     || !value.unattributed || typeof value.unattributed !== 'object'
-    || !value.truncated || typeof value.truncated !== 'object') {
+    || !value.cumulative || typeof value.cumulative !== 'object') {
     throw new Error('Invalid progress ledger checkpoint')
   }
   rejectUnknown(value, ALLOWED_STATE, 'state')
   if (Object.keys(value.pending).length > PENDING_MAX) throw new Error('Invalid progress ledger checkpoint: pending over limit')
   rejectUnknown(value.unattributed, ALLOWED_UNATTR, 'unattributed')
-  rejectUnknown(value.truncated, ALLOWED_TRUNC, 'truncated')
+  rejectUnknown(value.cumulative, ALLOWED_CUMULATIVE, 'cumulative')
   const pending = {}
   for (const [id, call] of Object.entries(value.pending)) {
     if (call && typeof call.name === 'string' && isCount(call.seq)
@@ -478,21 +504,18 @@ function parseState(value) {
     unattributed: {
       calls: isCount(value.unattributed.calls) ? value.unattributed.calls : 0,
       failures: isCount(value.unattributed.failures) ? value.unattributed.failures : 0,
-
     },
-    truncated: {
-      items: isCount(value.truncated.items) ? value.truncated.items : 0,
-      lastSeq: isCount(value.truncated.lastSeq) ? value.truncated.lastSeq : 0,
-    },
+    cumulative: Object.fromEntries([...ALLOWED_CUMULATIVE].map(key => (
+      [key, isCount(value.cumulative[key]) ? value.cumulative[key] : 0]))),
   }
 }
 
 // Whitelist rejection (P2-01 l): contraband fields and oversized collections
 // throw instead of being silently rebuilt away.
 const ALLOWED_STATE = new Set(['v', 'inherited', 'cwd', 'firstSeq', 'asOfSeq', 'turn',
-  'turnOpen', 'openedThisTurn', 'items', 'pending', 'approvals', 'unattributed', 'truncated'])
+  'turnOpen', 'openedThisTurn', 'items', 'pending', 'approvals', 'unattributed', 'cumulative'])
 const ALLOWED_ITEM_FULL = new Set(['id', 'tier', 'kind', 'goalId', 'endReason', 'awaiting',
-  'firstSeq', 'lastSeq', 'calls', 'failedCalls', 'files', 'failures', 'tasks', 'truncated'])
+  'firstSeq', 'lastSeq', 'calls', 'failedCalls', 'recovered', 'files', 'failures', 'tasks', 'truncated'])
 const ALLOWED_ITEM_SKEL = new Set(['id', 'tier', 'kind', 'goalId', 'endReason',
   'firstSeq', 'lastSeq', 'calls', 'failedCalls', 'filesCount', 'tasksCount', 'unresolvedCount'])
 const ALLOWED_PENDING = new Set(['name', 'keys', 'paths', 'seq'])
@@ -500,7 +523,7 @@ const ALLOWED_FAILURE = new Set(['tool', 'key', 'path', 'count', 'firstSeq', 'la
 const ALLOWED_FILE = new Set(['path', 'firstSeq', 'lastSeq'])
 const ALLOWED_TASK = new Set(['content', 'status', 'firstSeq', 'completedSeq', 'completedAt'])
 const ALLOWED_UNATTR = new Set(['calls', 'failures'])
-const ALLOWED_TRUNC = new Set(['items', 'lastSeq'])
+const ALLOWED_CUMULATIVE = new Set(['items', 'lastSeq', 'calls', 'failures', 'files', 'tasks', 'unresolved'])
 const ALLOWED_ITEM_TRUNC = new Set(['files', 'failures', 'tasks'])
 
 function rejectUnknown(value, allowed, what) {
@@ -514,25 +537,19 @@ function rejectUnknown(value, allowed, what) {
 // client and read_progress see no phantom churn. Items are immutable, so a
 // WeakMap keyed by the item object is exact.
 const itemViewCache = new WeakMap()
+const currentViewCache = new WeakMap()
 const stateViewCache = new WeakMap()
 
 function cachedItemView(item, index, state) {
-  const key = index === 0 ? { item, isCurrent: true, turnOpen: state.turnOpen } : null
-  // Current-item status depends on state.turnOpen; cache only non-current
-  // items by reference, and cache the current item per turnOpen value.
-  if (index !== 0) {
-    let view = itemViewCache.get(item)
-    if (view === undefined) {
-      view = itemView(item, index, state)
-      itemViewCache.set(item, view)
-    }
-    return view
-  }
-  if (key !== null && item.tier === 'full') {
-    let slot = itemViewCache.get(item)
+  // The current item's status also depends on state.turnOpen, so it gets its
+  // own cache slot per turnOpen value; every other item depends on the item
+  // object alone. Separate maps keep a slot from leaking out as a view when
+  // the current item shifts to index 1.
+  if (index === 0 && item.tier === 'full') {
+    let slot = currentViewCache.get(item)
     if (slot === undefined || slot.turnOpen !== state.turnOpen) {
       slot = { turnOpen: state.turnOpen, view: itemView(item, index, state) }
-      itemViewCache.set(item, slot)
+      currentViewCache.set(item, slot)
     }
     return slot.view
   }
@@ -544,18 +561,33 @@ function cachedItemView(item, index, state) {
   return view
 }
 
+// Events that change only internal buffers (pending calls, cwd, turn counter)
+// produce a new state with the same items; they must yield the same view so
+// nothing is republished (T-O-15: unrelated events do not rebuild).
+const viewByItems = new WeakMap()
+
 function view(state) {
   let v = stateViewCache.get(state)
   if (v !== undefined) return v
-  v = {
-    v: 1,
-    asOfSeq: state.asOfSeq,
-    inherited: state.inherited,
-    coverage: { firstSeq: state.firstSeq, lastSeq: state.asOfSeq },
-    // cumulative layer coverage boundary: newest evicted item's lastSeq
-    unattributed: state.unattributed,
-    truncated: state.truncated,
-    items: state.items.map((item, index) => cachedItemView(item, index, state)),
+  const prev = viewByItems.get(state.items)
+  if (prev !== undefined && prev.asOfSeq === state.asOfSeq && prev.turnOpen === state.turnOpen
+    && prev.firstSeq === state.firstSeq && prev.inherited === state.inherited
+    && prev.unattributed === state.unattributed && prev.cumulative === state.cumulative) {
+    v = prev.view
+  } else {
+    v = {
+      v: 1,
+      asOfSeq: state.asOfSeq,
+      inherited: state.inherited,
+      coverage: { firstSeq: state.firstSeq, lastSeq: state.asOfSeq },
+      unattributed: state.unattributed,
+      cumulative: state.cumulative,
+      items: state.items.map((item, index) => cachedItemView(item, index, state)),
+    }
+    viewByItems.set(state.items, {
+      view: v, asOfSeq: state.asOfSeq, turnOpen: state.turnOpen, firstSeq: state.firstSeq,
+      inherited: state.inherited, unattributed: state.unattributed, cumulative: state.cumulative,
+    })
   }
   stateViewCache.set(state, v)
   return v
@@ -581,7 +613,7 @@ export const progressLedger = {
     turn: 0, turnOpen: false, openedThisTurn: false,
     items: [], pending: {}, approvals: {},
     unattributed: { calls: 0, failures: 0 },
-    truncated: { items: 0, lastSeq: 0 },
+    cumulative: { items: 0, lastSeq: 0, calls: 0, failures: 0, files: 0, tasks: 0, unresolved: 0 },
   }),
   apply,
   wire: { viewSchema, view, summary: false },

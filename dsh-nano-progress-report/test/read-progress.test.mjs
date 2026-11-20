@@ -63,11 +63,33 @@ test('overview: first line asOfSeq + totals; six slots per item; cumulative tail
   const def = makeReadProgressDefinition(handleFor(state))
   const out = def.execute({}, { agent: { session: {} } })
   const lines = out.split('\n')
-  assert.match(lines[0], /^asOfSeq 8 · 2 work items \(2 full, 0 skeleton\)$/)
+  assert.match(lines[0], /^asOfSeq 8 · 2 work items \(2 full, 0 skeleton, 0 cumulative\)$/)
   assert.match(lines[1], /^item 2 · a user request · in progress · tasks 1\/2 · files 1 · unresolved failures 1$/)
   assert.match(lines[2], /^item 1 · a user request · in progress · tasks 0\/0 · files 0 · unresolved failures 0$/)
-  assert.match(lines.at(-1), /^cumulative · 2 items .* coverage seq 1–8$/)
+  assert.equal(lines.at(-1), 'cumulative · 0 items · calls 0, failures 0, files 0, tasks 0, unresolved failures 0'
+    + ' · unattributed 0 calls, 0 failures · coverage seq 1–8')
   assert.ok(out.length < 16 * 1024)
+})
+
+test('overview: unresolved counts exclude recovered failures; the tail reports the evicted layer', () => {
+  const cmd = { command: 'make' }
+  const events = [
+    prompt(1, 'a'),
+    call(2, 'x', 'bash', cmd), result(3, 'x', { failed: true }),
+    call(4, 'g', 'grep', { pattern: 'q' }), result(5, 'g', { failed: true }),
+    call(6, 'y', 'bash', cmd), result(7, 'y', { meta: { cwd: '/p' } }),
+  ]
+  let state = events.reduce(ledger.apply, ledger.init({ cwd: '/p' }, 0))
+  let out = makeReadProgressDefinition(handleFor(state)).execute({}, { agent: { session: {} } })
+  assert.match(out.split('\n')[1], /· unresolved failures 1$/)
+  // push the first item out past 16 + 64
+  state = Array.from({ length: 80 }, (_, i) => prompt(100 + i, `p${i}`)).reduce(ledger.apply, state)
+  out = makeReadProgressDefinition(handleFor(state)).execute({}, { agent: { session: {} } })
+  const lines = out.split('\n')
+  assert.equal(lines[0], 'asOfSeq 179 · 81 work items (16 full, 64 skeleton, 1 cumulative)')
+  assert.equal(lines.length, 82)
+  assert.equal(lines.at(-1), 'cumulative · 1 items · calls 3, failures 2, files 0, tasks 0, unresolved failures 1'
+    + ' · through seq 7 · unattributed 0 calls, 0 failures · coverage seq 1–179')
 })
 
 test('detail: tasks verbatim, file seqs, unresolved failures with seqs, recovered count, unknown id', () => {
@@ -119,11 +141,12 @@ test('16KiB cap clips with a marker line', () => {
       tier: 'full', kind: 'user', status: 'in progress', firstSeq: 1, lastSeq: 1,
       tasks: Array.from({ length: 32 }, (_, i) => ({ status: 'pending', content: `t${i}-${'x'.repeat(400)}`, firstSeq: 1 })),
       files: Array.from({ length: 32 }, (_, i) => ({ path: `/${'d'.repeat(380)}/${i}`, firstSeq: 1, lastSeq: 1 })),
-      failures: [], jobs: [],
-      counts: { calls: 0, failures: 0, files: 32, tasks: 32, jobs: 0 },
+      failures: [],
+      counts: { calls: 0, failures: 0, files: 32, tasks: 32, unresolved: 0, recovered: 0 },
       truncated: { files: 0, failures: 0, tasks: 0 },
     }],
-    unattributed: { calls: 0, failures: 0, jobs: 0 }, truncated: { items: 0 },
+    unattributed: { calls: 0, failures: 0 },
+    cumulative: { items: 0, lastSeq: 0, calls: 0, failures: 0, files: 0, tasks: 0, unresolved: 0 },
     coverage: { firstSeq: 1, lastSeq: 1 },
   }
   const def = makeReadProgressDefinition({ stateOf: () => ({}), wire: { view: () => bigView } })

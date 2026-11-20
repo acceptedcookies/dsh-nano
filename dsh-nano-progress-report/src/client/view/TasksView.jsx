@@ -3,11 +3,12 @@
  *  model), never a second source. Devin footer language: a leading state
  *  glyph, `#n` ordinal, one 12px line. Ledger tasks carry real completion
  *  marks (completedSeq/completedAt), files carry coverage seqs, failures
- *  carry seqs and a jump target into the timeline. */
+ *  carry seqs and the call id used to borrow the timeline's bash title. */
 import React from 'react'
 import {
   IconCheckCircleFillRegular, StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { failureLabel, filesNewestFirst } from '../panel.js'
 
 const { createElement: h } = React
 
@@ -64,7 +65,7 @@ export function FilesView({ files, truncated = 0, t }) {
     return h('div', { className: 'npr-empty', 'data-npr': 'files-empty' }, t('files.empty'))
   }
   // T-O-16: newest first, one path per row, nothing in the meta column.
-  const ordered = [...files].sort((a, b) => (b?.firstSeq ?? 0) - (a?.firstSeq ?? 0))
+  const ordered = filesNewestFirst(files)
   return h('div', { className: 'npr-task-list', 'data-npr': 'files' },
     ordered.map((file, index) => h('div', {
       key: `${String(index)}:${String(file?.path ?? '')}`,
@@ -77,22 +78,17 @@ export function FilesView({ files, truncated = 0, t }) {
 }
 
 /**
- * @param {{ failures: object[], onJump?: (callId: string) => void, t: Function }} props
+ * @param {{ failures: object[], truncated?: number,
+ *   titleOf?: (callId: string) => string|null, t: Function }} props
  */
-export function FailuresView({ failures, titleOf = () => null, t }) {
+export function FailuresView({ failures, truncated = 0, titleOf = () => null, t }) {
   if (failures.length === 0) {
     return h('div', { className: 'npr-empty', 'data-npr': 'failures-empty' }, t('failures.empty'))
   }
-  // T-O-16: file failures label the path; bash failures borrow the timeline's
-  // action title by callId (not a new args render); others show the tool only.
-  // Rows are display-only — list entries are not clickable.
+  // Rows are display-only — list entries are not clickable (T-O-16).
   return h('div', { className: 'npr-task-list', 'data-npr': 'failures' },
     failures.map((failure, index) => {
-      const borrowed = failure?.callId !== undefined ? titleOf(failure.callId) : null
-      const label = failure?.path !== null && failure?.path !== undefined && failure.path !== ''
-        ? String(failure.path)
-        : borrowed !== null && borrowed !== undefined ? String(borrowed)
-          : `${failure?.tool ?? 'tool'}${failure?.count > 1 ? ` ×${String(failure.count)}` : ''}`
+      const label = failureLabel(failure, titleOf)
       return h('div', {
         key: `${String(index)}:${String(failure?.key ?? 'none')}`,
         className: 'npr-task npr-failure',
@@ -101,5 +97,6 @@ export function FailuresView({ failures, titleOf = () => null, t }) {
       },
       h('span', { className: 'npr-task-glyph', 'aria-hidden': 'true' }, h(StateDot, { state: 'error' })),
       h('span', { className: 'npr-task-text', title: label }, label))
-    }))
+    }),
+    h(Truncated, { t, extra: truncated }))
 }

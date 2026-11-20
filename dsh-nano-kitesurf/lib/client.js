@@ -2535,6 +2535,9 @@ ${LAYER_CSS}
           colWaterfall: "\u7011\u5E03",
           hitlAgent: "Agent \u6B63\u5728\u63A7\u5236",
           hitlHeld: "\u4EBA\u5DE5\u63A5\u7BA1\u4E2D",
+          hitlRelay: "Agent \u7ECF relay \u5DF2\u63A5\u5165",
+          hitlRelayWrite: "Agent \u7ECF relay \u5199\u5165",
+          hitlRefused: "\u88AB\u63A5\u7BA1\u62E6\u4E0B",
           hitlTakeover: "\u63A5\u7BA1",
           hitlTakeoverTitle: "\u4EBA\u5DE5\u63A5\u7BA1\uFF1A\u6682\u505C Agent \u5BF9\u9875\u9762\u7684\u5199\u5165\uFF0C\u7531\u4F60\u64CD\u4F5C",
           hitlRelease: "\u505C\u6B62\u5199\u5165",
@@ -2754,6 +2757,9 @@ ${LAYER_CSS}
           colWaterfall: "Waterfall",
           hitlAgent: "Agent is controlling",
           hitlHeld: "Human override",
+          hitlRelay: "Agent on relay",
+          hitlRelayWrite: "Agent writing via relay",
+          hitlRefused: "Blocked by override",
           hitlTakeover: "Take over",
           hitlTakeoverTitle: "Human override: pause the agent\u2019s page writes while you drive",
           hitlRelease: "Stop writes",
@@ -4077,6 +4083,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const [toast, setToast] = React12.useState(null);
     const [toastFix, setToastFix] = React12.useState(false);
     const [control, setControl] = React12.useState(null);
+    const relayConns = control?.relay?.conns || 0;
+    const relayWriting = relayConns > 0 && control?.relay?.lastAt ? Date.now() - Date.parse(control.relay.lastAt) < 9e4 : false;
     const [actionToast, setActionToast] = React12.useState(null);
     const lastActionStamp = React12.useRef("");
     const actionToastTimer = React12.useRef(0);
@@ -5998,7 +6006,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       // an agent holds the bridge writer lock or the human holds the override.
       // "停止写入" is honest wording — the pane cannot kill the agent's run
       // (that lives in the host), it can only hold its page writes.
-      !beat && (control?.humanHold?.active || control?.writer) ? h7(
+      // T-O-2: relay presence is its OWN tier. conns>0 is a long-lived socket
+      // (the agent attached), while lastAt is a recent forwarded write — one
+      // boolean would have collapsed "connected" into "acting" and the bar
+      // would then claim an agent is writing when it is just listening.
+      !beat && (control?.humanHold?.active || control?.writer || relayConns > 0) ? h7(
         "div",
         {
           className: "nks-hitl",
@@ -6012,7 +6024,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "data-held": control?.humanHold?.active ? "true" : "false",
           "aria-hidden": true
         }),
-        control?.humanHold?.active ? h7("span", { className: "nks-hitl-label" }, copy.hitlHeld) : h7("span", { className: "nks-hitl-label" }, copy.hitlAgent, h7("b", null, control?.owner || "agent")),
+        control?.humanHold?.active ? h7("span", { className: "nks-hitl-label" }, copy.hitlHeld) : control?.writer ? h7("span", { className: "nks-hitl-label" }, copy.hitlAgent, h7("b", null, control?.owner || "agent")) : h7("span", { className: "nks-hitl-label" }, relayWriting ? copy.hitlRelayWrite : copy.hitlRelay),
         control?.humanHold?.active ? h7("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-release": "1", onClick: () => controlOp("release") }, copy.hitlRelease) : h7("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-takeover": "1", title: copy.hitlTakeoverTitle, onClick: () => controlOp("takeover") }, copy.hitlTakeover)
       ) : null,
       // ego's "Clicking element" tooltip: brief tool-name flash on each new
@@ -6022,7 +6034,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         "data-nks-act": "1",
         role: "status",
         "data-ok": actionToast.ok === false ? "false" : "true"
-      }, `${copy.hitlAction} ${actionToast.tool}`) : null,
+        // T-O-3 receipt: a relay write refused by the human's takeover shows as
+        // a blocked action, not as an anonymous agent action.
+      }, actionToast.ok === false && String(actionToast.tool || "").startsWith("relay:") ? `${copy.hitlRefused} \xB7 ${actionToast.tool}` : `${copy.hitlAction} ${actionToast.tool}`) : null,
       // One carrier for both toasts: the host Toast through nano-ui. A
       // recoverable failure adds its repair action to the same toast instead of
       // re-implementing the chrome.

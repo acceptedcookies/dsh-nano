@@ -951,6 +951,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   // HITL control state from /nano-local-sandbox/control (bridge proxy):
   // {writer,owner,ownerSince,lastWriteAt,humanHold,lastAction,lastCallAt}.
   const [control, setControl] = React.useState(null)
+  // T-O-2: two tiers, never one boolean. `relayConns > 0` means a /cdp socket
+  // is attached (the agent can see the page); `relayWriting` means a write was
+  // forwarded in the last 90s. Collapsing them would make the bar claim an
+  // agent is writing whenever it merely listens — a long-lived socket makes
+  // "connected" permanently true.
+  const relayConns = control?.relay?.conns || 0
+  const relayWriting = relayConns > 0 && control?.relay?.lastAt
+    ? Date.now() - Date.parse(control.relay.lastAt) < 90_000
+    : false
   const [actionToast, setActionToast] = React.useState(null)
   const lastActionStamp = React.useRef('')
   const actionToastTimer = React.useRef(0)
@@ -2785,7 +2794,11 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       // an agent holds the bridge writer lock or the human holds the override.
       // "停止写入" is honest wording — the pane cannot kill the agent's run
       // (that lives in the host), it can only hold its page writes.
-      !beat && (control?.humanHold?.active || control?.writer) ? h('div', {
+      // T-O-2: relay presence is its OWN tier. conns>0 is a long-lived socket
+      // (the agent attached), while lastAt is a recent forwarded write — one
+      // boolean would have collapsed "connected" into "acting" and the bar
+      // would then claim an agent is writing when it is just listening.
+      !beat && (control?.humanHold?.active || control?.writer || relayConns > 0) ? h('div', {
         className: 'nks-hitl',
         'data-nks-hitl': '1',
         role: 'status',
@@ -2799,7 +2812,9 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         }),
         control?.humanHold?.active
           ? h('span', { className: 'nks-hitl-label' }, copy.hitlHeld)
-          : h('span', { className: 'nks-hitl-label' }, copy.hitlAgent, h('b', null, control?.owner || 'agent')),
+          : control?.writer
+            ? h('span', { className: 'nks-hitl-label' }, copy.hitlAgent, h('b', null, control?.owner || 'agent'))
+            : h('span', { className: 'nks-hitl-label' }, relayWriting ? copy.hitlRelayWrite : copy.hitlRelay),
         control?.humanHold?.active
           ? h('button', { type: 'button', className: 'nks-hitl-btn nks-hitl-primary', 'data-nks-hitl-release': '1', onClick: () => controlOp('release') }, copy.hitlRelease)
           : h('button', { type: 'button', className: 'nks-hitl-btn nks-hitl-primary', 'data-nks-hitl-takeover': '1', title: copy.hitlTakeoverTitle, onClick: () => controlOp('takeover') }, copy.hitlTakeover),
@@ -2811,7 +2826,11 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         'data-nks-act': '1',
         role: 'status',
         'data-ok': actionToast.ok === false ? 'false' : 'true',
-      }, `${copy.hitlAction} ${actionToast.tool}`) : null,
+      // T-O-3 receipt: a relay write refused by the human's takeover shows as
+      // a blocked action, not as an anonymous agent action.
+      }, actionToast.ok === false && String(actionToast.tool || '').startsWith('relay:')
+        ? `${copy.hitlRefused} · ${actionToast.tool}`
+        : `${copy.hitlAction} ${actionToast.tool}`) : null,
     // One carrier for both toasts: the host Toast through nano-ui. A
     // recoverable failure adds its repair action to the same toast instead of
     // re-implementing the chrome.

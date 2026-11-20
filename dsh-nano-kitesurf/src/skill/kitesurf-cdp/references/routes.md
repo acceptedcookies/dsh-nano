@@ -27,7 +27,7 @@
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| POST | `/nano-local-sandbox/open` | `{url}` 导航，仅 http(s) 无凭证 |
+| POST | `/nano-local-sandbox/open` | `{url}` 导航，仅 http(s) 无凭证。**写级鉴权**：要 GUI cookie，agent 直连 401 —— agent 的打开面是 relay `/cdp` 的 `Page.navigate` |
 | POST | `/nano-local-sandbox/shot` | `{scroll?,format?,quality?,fit?}` 截图 base64 |
 | POST | `/nano-local-sandbox/pick` | `{x,y}`/`{selector|@N}`/`{preview:true}` 点选元素包；最近一次点选由 pane 从应答自行持有 |
 | POST | `/nano-local-sandbox/edit` | `{selector|@N,text}` 写回元素文本 |

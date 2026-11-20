@@ -54,8 +54,9 @@ GET /nano-local-sandbox/diagnostics        # hints 已把「页面加载但应�
 **渲染面：非 https 站的样式由插件负责，不要推给使用者**
 
 - 面板默认走**引擎渲染**（`/shot` 的像素）：引擎在容器内自己加载页面，`http://<hostGateway>:<port>` 的 CSS/图片正常——**打开本地站就看到完整样式是默认结果**，不需要任何前置动作。
-- 「HTML 原生渲染」（底部 `HTML` 按钮）是 `iframe srcdoc`，继承宿主的 **https** origin；它直连 `http:` 子资源会被浏览器按混合内容**静默拦掉**，只剩骨架。DNLS 已为此内置同源资源代理：srcdoc 的 `<base>` 与所有绝对 `http(s)` 子资源都改写为 `/nano-local-sandbox/res/<scheme>/<host>/<path>`，由宿主取回并以 dsh 源流回。**所以不要为它做任何「把 http 变成 https」的准备。**
-- 代理边界（越界即显式错误，不会静默降级）：只收 `http`/`https` → 其余 400 `res.scheme`；带凭据主机 400 `res.host`；>24MiB 413 `res.size`；上游不可达 502 `res.upstream`（body 带 `upstreamStatus`）；15s 超时 504 `res.timeout`。
+- 「HTML 原生渲染」（底部 `HTML` 按钮）是**静态投影**：脚本已剥离，且 `iframe srcdoc` 继承宿主 https origin，直连 `http:` 子资源会被浏览器按混合内容**静默拦掉**，只剩骨架。它要好看，只能靠宿主侧的同源资源代理（把 `<base>` 与绝对子资源改写到 dsh 源）。宿主没提供这条代理时，HTML 模式就是无样式骨架——**这是已知降级，不是要你解决的问题**：切回默认引擎渲染即可。
+- 所以：**看到无样式骨架，先确认当前是哪个渲染面**（底部 `HTML` 是否被按下），再决定。不要因为骨架去做 http→https、装证书、开隧道——那是把插件该解决的事推给使用者，见下表。
+- 代理存在时，越界是显式错误、不静默降级：只收 `http`/`https` → 400 `res.scheme`；带凭据主机 400 `res.host`；>24MiB 413 `res.size`；上游不可达 502 `res.upstream`；15s 超时 504 `res.timeout`。代理不存在时这些路由直接 404 —— 那就是「宿主没有这个能力」，回引擎渲染。
 
 **明令禁止（做了就是错，不是"另一种可行方案"）**
 
@@ -68,6 +69,28 @@ GET /nano-local-sandbox/diagnostics        # hints 已把「页面加载但应�
 
 ### 6. 写反馈报告（结构化回执）
 排障完成后按 `templates/feedback-report.md` 填：元信息（buildId/phase）→ 路由调用序列（/operations 摘，错误行带 `incidentId` 可与响应体回执互查）→ 观察到的现象 → 诊断摘录（hints/console/errorsOnly）→ 元素上下文（`/pick` 应答 + `/refs?ref=@N` 反查）→ errorId 对照 `/diagnostics` 的 `errorCatalog` → 下一步命令。结构化报告是可归档数据，不是散文。
+
+**谁有资格打开页面**
+
+`POST /nano-local-sandbox/open` 是**写级鉴权**：它要 dsh 的 GUI 会话 cookie，而 agent 没有。agent 用 curl 打它会得到 `401`（JSON 拒绝，请求到不了路由处理器）——这是设计，不是你少带了什么 header。
+
+| 谁 | 打开页面的正确做法 |
+|---|---|
+| 人（在 pane 里） | 地址栏，或 `POST /open`（浏览器自动带 cookie） |
+| agent | 走 relay：`ws://<host>:<status.lifecycle.mcpPort>/cdp` 发 `Page.navigate {url}`；或用 `agent-browser --cdp <status.cdp> open <url>` |
+
+agent 为什么不用 `/open`：它拿不到 cookie；就算借到人的 cookie，也等于**冒用人身份**写宿主状态，违反 [不得侧载]。relay 是宿主自己发布给 agent 的通道（loopback publish），复用的同一条上游引擎连接，看到的就是人那一页。
+
+```bash
+# 正例：agent 打开宿主上的 dev 站
+GW=$(curl -s .../nano-local-sandbox/status | jq -r '.networking.hostGateway')
+agent-browser --cdp "$(curl -s .../status | jq -r .cdp)" open "http://$GW:5173/"
+```
+
+```bash
+# 负例：agent 直接 curl /open —— 401；不要用人的 token 去补
+curl -sX POST .../nano-local-sandbox/open -d '{"url":"http://…"}'
+```
 
 ## 正例
 

@@ -102,7 +102,10 @@ export function kitesurfSkill() {
     content: KITESURF_CDP,
     // Progressive disclosure: the entry is a ≤90-line index; the topic bodies
     // live in the skill directory under references/ and templates/.
-    resourceBase: { kind: 'directory' },
+    // The host requires resourceBase to carry BOTH kind and path (or url, or a
+    // description); a kind-only value fails its oneOf and the whole skill is
+    // refused. index.js supplies the absolute directory because only it knows
+    // the installed package root, so this body stays path-free on purpose.
   }
 }
 

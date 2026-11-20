@@ -1551,6 +1551,14 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     setDraftKind(null)
   }
 
+  /** One toggle for every activation path (mouse press, keyboard, script). */
+  function toggleAnnotate() {
+    setAnnotate((value) => {
+      if (value) { setHover(null); endDrag() }
+      return !value
+    })
+  }
+
   async function onPointerUp(event) {
     const start = dragRef.current
     if (!start) return
@@ -2211,20 +2219,13 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       if (el) { el.classList.add('__nks_hover'); hovered = el }
     }, true)
     doc.addEventListener('click', (e) => {
-      const dbg = { fired: 0 }
-      dbg.fired += 1
-      dbg.mode = annotateRef.current
       if (!annotateRef.current) return
       e.preventDefault(); e.stopPropagation()
       const el = doc.elementFromPoint(e.clientX, e.clientY)
-      dbg.hit = el ? el.tagName : null
-      dbg.coords = [Math.round(e.clientX), Math.round(e.clientY)]
       if (!el) return
       clearHover()
       const packet = packetFromDom(el, doc, e.clientX, e.clientY)
-      dbg.packet = !!packet
       setPick({ elements: [packet], anchor: { x: packet.box.x + packet.box.width / 2, y: packet.box.y + packet.box.height } })
-      dbg.picked = true
       setEditing(false)
     }, true)
     doc.addEventListener('mouseleave', clearHover, true)
@@ -2520,10 +2521,13 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           title: copy.annotateTitle,
           onPointerDown: (event) => {
             event.preventDefault(); event.stopPropagation()
-            setAnnotate((value) => {
-              if (value) { setHover(null); endDrag() }
-              return !value
-            })
+            toggleAnnotate()
+          },
+          // pointerdown covers a mouse press; click covers keyboard activation
+          // (Space/Enter fire click only, with detail 0) and programmatic
+          // callers. Guarding on detail keeps a real press from toggling twice.
+          onClick: (event) => {
+            if (event.detail === 0) toggleAnnotate()
           },
         }, glyph('annotate')),
         h('button', { type: 'button', className: 'nks-tool', 'data-nks-settings': '1', 'aria-label': copy.settings, title: copy.settings, onClick: openSettings }, glyph('settings')))),

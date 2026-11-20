@@ -629,11 +629,10 @@ function DnlsPane({ sessionId, copy, host }) {
         ' ',
         h(Button, { variant: 'ghost', size: 'sm', disabled: phase === 'loading', onClick: refresh }, copy.refresh)),
     },
-      h(FactGrid, { items: [
-        { label: copy.stateRunning, value: stats.running },
-        { label: copy.stateStopped, value: stats.stopped },
-        { label: copy.fleetAttention, value: stats.attention },
-      ] }),
+      h('div', null,
+        h(primitives.Tag, { tone: 'success' }, `${copy.stateRunning} ${stats.running}`), ' ',
+        h(primitives.Tag, { tone: 'neutral' }, `${copy.stateStopped} ${stats.stopped}`), ' ',
+        stats.attention > 0 ? h(primitives.Tag, { tone: 'warning' }, `${copy.fleetAttention} ${stats.attention}`) : null),
       h(Toolbar, { label: copy.searchPlaceholder },
         h(primitives.Input, {
           type: 'search',
@@ -668,17 +667,12 @@ function DnlsPane({ sessionId, copy, host }) {
           key: group.key,
           title: `${group.profileId} · ${group.envId}${groupCap != null ? ` · ${fill(copy.profileSeats, { count: group.rows.length, limit: groupCap })}` : ''}`,
         },
-          h(FactGrid, { items: cards.map((entry) => {
-            const running = entry.observedState === 'running'
-            return {
-              label: ' ',
-              value: h(React.Fragment, null,
-                h(DeviceFace, { entry, copy, stateLabel: (s) => stateLabel(copy, s) }),
-                h(CardBody, { entry, copy, running, Tag: primitives.Tag,
-                  formatBytes, stateLabel: (s) => stateLabel(copy, s),
-                  disabled: busy, onSelect: choose })),
-            }
-          }) }))
+          h(Toolbar, { label: group.profileId }, cards.map(entry =>
+            h('article', { key: entry.sandboxId },
+              h(DeviceFace, { entry, copy, stateLabel: s => stateLabel(copy, s) }),
+              h('div', null, h(CardBody, { entry, copy, running: entry.observedState === 'running',
+                Tag: primitives.Tag, formatBytes, stateLabel: s => stateLabel(copy, s),
+                disabled: busy, onSelect: choose }))))))
       }),
       receiptBlock)
   }

@@ -39,7 +39,7 @@ function DeviceFace({ entry, copy, stateLabel: labelOf }) {
             fill: 'var(--dsw-alias-state-done-primary)' })
         : null)
   return h('svg', {
-    viewBox: '0 0 252 126', width: '100%', role: 'img', focusable: 'false',
+    viewBox: '0 0 252 126', width: 252, height: 126, role: 'img', focusable: 'false',
     'aria-label': running ? `${title} · ${copy.lastMinute} · CPU ${cpu ?? '—'} / ${alloc.cpus ?? '—'} ${copy.coresUnit} · RAM ${mib(mem) ?? '—'} / ${mib(alloc.memoryBytes) ?? '—'} MiB` : title,
   },
     h('title', null, title),
@@ -132,9 +132,9 @@ function CardBody({ entry, copy, running, onSelect, disabled, Tag, formatBytes, 
       h('strong', null, entry.name ?? entry.sandboxId)),
     ' ',
     h(Tag, { tone: running ? 'success' : entry.observedState === 'stopped' ? 'neutral' : 'warning' }, stateLabel(entry.observedState)),
-    pending ? h('p', null, copy.pendingConfig) : null,
-    running && services > 0 ? h('p', null, `${copy.servicesVerified} ${services}`) : null,
-    allocText ? h('p', null, allocText) : null)
+    h('div', null, pending ? h(Tag, { tone: 'warning' }, copy.pendingConfig) : null,
+      running && services > 0 ? h('small', null, `${copy.servicesVerified} ${services}`) : null),
+    allocText ? h('small', null, allocText) : null)
 }
 
 export { DeviceFace, MetricChart, CardBody }

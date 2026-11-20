@@ -2064,7 +2064,8 @@ ${LAYER_CSS}
       "svg",
       {
         viewBox: "0 0 252 126",
-        width: "100%",
+        width: 252,
+        height: 126,
         role: "img",
         focusable: "false",
         "aria-label": running ? `${title} \xB7 ${copy.lastMinute} \xB7 CPU ${cpu ?? "\u2014"} / ${alloc.cpus ?? "\u2014"} ${copy.coresUnit} \xB7 RAM ${mib(mem) ?? "\u2014"} / ${mib(alloc.memoryBytes) ?? "\u2014"} MiB` : title
@@ -2207,9 +2208,13 @@ ${LAYER_CSS}
       ),
       " ",
       h8(Tag, { tone: running ? "success" : entry.observedState === "stopped" ? "neutral" : "warning" }, stateLabel2(entry.observedState)),
-      pending ? h8("p", null, copy.pendingConfig) : null,
-      running && services > 0 ? h8("p", null, `${copy.servicesVerified} ${services}`) : null,
-      allocText ? h8("p", null, allocText) : null
+      h8(
+        "div",
+        null,
+        pending ? h8(Tag, { tone: "warning" }, copy.pendingConfig) : null,
+        running && services > 0 ? h8("small", null, `${copy.servicesVerified} ${services}`) : null
+      ),
+      allocText ? h8("small", null, allocText) : null
     );
   }
   var React13, primitives2, h8, Button4, ratio, num, mib;
@@ -2840,11 +2845,15 @@ ${LAYER_CSS}
             h9(Button5, { variant: "ghost", size: "sm", disabled: phase === "loading", onClick: refresh }, copy.refresh)
           )
         },
-        h9(FactGrid2, { items: [
-          { label: copy.stateRunning, value: stats.running },
-          { label: copy.stateStopped, value: stats.stopped },
-          { label: copy.fleetAttention, value: stats.attention }
-        ] }),
+        h9(
+          "div",
+          null,
+          h9(primitives3.Tag, { tone: "success" }, `${copy.stateRunning} ${stats.running}`),
+          " ",
+          h9(primitives3.Tag, { tone: "neutral" }, `${copy.stateStopped} ${stats.stopped}`),
+          " ",
+          stats.attention > 0 ? h9(primitives3.Tag, { tone: "warning" }, `${copy.fleetAttention} ${stats.attention}`) : null
+        ),
         h9(
           Toolbar2,
           { label: copy.searchPlaceholder },
@@ -2878,27 +2887,21 @@ ${LAYER_CSS}
               key: group.key,
               title: `${group.profileId} \xB7 ${group.envId}${groupCap != null ? ` \xB7 ${fill2(copy.profileSeats, { count: group.rows.length, limit: groupCap })}` : ""}`
             },
-            h9(FactGrid2, { items: cards.map((entry) => {
-              const running = entry.observedState === "running";
-              return {
-                label: " ",
-                value: h9(
-                  React14.Fragment,
-                  null,
-                  h9(DeviceFace2, { entry, copy, stateLabel: (s) => stateLabel(copy, s) }),
-                  h9(CardBody2, {
-                    entry,
-                    copy,
-                    running,
-                    Tag: primitives3.Tag,
-                    formatBytes: formatBytes2,
-                    stateLabel: (s) => stateLabel(copy, s),
-                    disabled: busy,
-                    onSelect: choose
-                  })
-                )
-              };
-            }) })
+            h9(Toolbar2, { label: group.profileId }, cards.map((entry) => h9(
+              "article",
+              { key: entry.sandboxId },
+              h9(DeviceFace2, { entry, copy, stateLabel: (s) => stateLabel(copy, s) }),
+              h9("div", null, h9(CardBody2, {
+                entry,
+                copy,
+                running: entry.observedState === "running",
+                Tag: primitives3.Tag,
+                formatBytes: formatBytes2,
+                stateLabel: (s) => stateLabel(copy, s),
+                disabled: busy,
+                onSelect: choose
+              }))
+            )))
           );
         }),
         receiptBlock

@@ -213,21 +213,21 @@ S1-01 并入 main
 
 ### 8.3 工作项清单
 
-- [ ] `S1-01` — 并入 main 并重建三个 security 账本
+- [x] `S1-01` — 并入 main 并重建三个 security 账本
   - **落点 / 对象**：本工作树；`security/route-sensitivity.json`、`security/feature-contract.json`、`security/perf-binding-ids.md`
   - **完成判据**：`git merge --no-ff main` 只做一次；冲突只出现在三个账本并经仓内脚本重建；两条 check 0 漂移；无 rebase；这一笔不带问答与本计划
   - **验证映射**：`DNLS03X-T01` · **依赖**：无（S1 首项）
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-20T15:16Z` · **证据 / 备注**：并入 `805df28`，三账本无冲突；`check-route-sensitivity` 100 路由 0 漂移、`check-feature-contract` 101 路由；三包 468/52/272 全绿；并入提交不含 `qna/` 与补充计划
 - [ ] `S1-02` — 跟踪节、旧文档指针、closure 两段横幅
   - **落点 / 对象**：`plan/todo.DNLS03.md:4`、`plan/todo.DNLS03-control-redesign.md` 文首、`closure/DNLS03-closure.md:1` 与 `:7`、`docs/specs/dsh-nano-kitesurf/` 七份旧文档、DNK01 台账状态行与部署快照
   - **完成判据**：唯一的跟踪节存在，`todo.DNLS03.md:4` 指向本节；closure 两段横幅都换成一行且 §0 未改；七份旧文档只有文首指针；DNK01 只追加 `T-O-63/64/66/68` 的指针
   - **验证映射**：`DNLS03X-T02` · **依赖**：`S1-01`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `S1-03` — owner 可持有自己的沙箱终端
+- [x] `S1-03` — owner 可持有自己的沙箱终端
   - **落点 / 对象**：`src/host/object-authz.js:49-57`、`AGENTS.md:96`、`test/dnls03-journey.mega.test.mjs:117-123`、`src/client/i18n.js:329`
   - **完成判据**：`principalKey` 为 `owner` 且代次匹配时可 create/attach；非 owner kind 仍 403；journey 断言改为同代次允许并另留一条非 owner 拒绝；AGENTS 写明两个浏览器标签不是跨用户证明
   - **验证映射**：`DNLS03X-T03` · **依赖**：`S1-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-20T15:26Z` · **证据 / 备注**：改 `object-authz.js` 的 `resolveOwnerPrincipal`：owner 的 `canUse` 放行 `terminal.*`，归属与代次仍由 `authorize` 逐条校验；journey T80 增「owner 自持终端可 attach」「他人终端仍拒」「非 owner kind 仍拒」；`object-authz.test` 断言同步；`AGENTS.md` 改口；DNLS 468/468
 - [ ] `S1-04` — 代次凭据、读白名单、relay 记账
   - **落点 / 对象**：`profiles/kitesurf/mcp-bridge.mjs:731-797,933,1045-1076`、`src/host/backend-apple.js:484-498`
   - **完成判据**：每代次随机凭据经 root/stdin/`env -i` 投放；宿主类接管中写成功；agent 类被拒且 `lastAt` 不变；无凭据 `POST /control` 403；换代后旧凭据失效；凭据不入任何响应；`relay.conns` 只计 agent 类；`:79` 的 `originAllowed` 不改

@@ -233,21 +233,21 @@ S1-01 并入 main
   - **完成判据**：每代次随机凭据经 root/stdin/`env -i` 投放；宿主类接管中写成功；agent 类被拒且 `lastAt` 不变；无凭据 `POST /control` 403；换代后旧凭据失效；凭据不入任何响应；`relay.conns` 只计 agent 类；`:79` 的 `originAllowed` 不改
   - **验证映射**：`DNLS03X-T04` · **依赖**：`S1-01`
   - **执行状态**：`complete` · **执行时间**：`2026-11-20T16:05Z` · **证据 / 备注**：代次随机凭据：`src/host/bridge-credential.js` 生成、`backend-apple.js` 经 root+stdin+`env -i` 投放、桥 `isHostConnection` 逐次比对、guest helper `profiles/terminal/relay-credential.mjs` 经 `PACKAGE_RECIPE` 入镜像配方；agent 写被拒不动 `lastAt`；无凭据 `POST /control` 403；DNLS 469/469
-- [ ] `S1-05` — 四个模型工具与打开前拒绝
+- [x] `S1-05` — 四个模型工具与打开前拒绝
   - **落点 / 对象**：`index.js:19-35`（inject 增加 `tools`）、`src/host/routes.js:2`、`dsh-nano-kitesurf/lib/skill.js:38,82-83`、`src/skill/kitesurf-cdp/references/observability.md:26`
   - **完成判据**：四个工具经 `tools.register` 注册、主体走组合层适配器、缺 `sandboxId` 拒绝、结果经同一 `redact`；接管中模型工具与 `/mcp` 在 [DNLS] 分派器以 `kitesurf.control.held` 拒绝且只有 `errorId`；HTTP `/open` 不受此闸；卸载即注销；skill 改真源后经构建生成 `skills/`
   - **验证映射**：`DNLS03X-T05` · **依赖**：`S1-03`、`S1-04`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-21T00:39Z` · **证据 / 备注**：`index.js` 的 inject 增 `tools`，四个工具经 `tools.register` 注册并与 HTTP/`/mcp` 共用同一 `execute`；接管中工具与 `/mcp` 打开在分派器以 `kitesurf.control.held` 拒绝（派发前、只有 `errorId`），HTTP `/open` 仍达内核；缺 `sandboxId`、不可见与不存在一致、`redact`、卸载注销均有断言；DNLS 487/487
 - [x] `S1-06` — 公开对象引用硬切
   - **落点 / 对象**：`src/client/index.jsx:393-394,835-838`、`src/client/i18n.js:102-103,319-320`、`src/host/terminal-resource.js:1-13`、[DNK] `src/client/index.js` 的 `patterns`/`canOpen` 注册处
   - **完成判据**：`kitesurf()`、`openKitesurf`、`openWorkspaceHint`、`workspaceMissing`、`'dnt-sandbox-terminal'` 判断都消失；`dsh-resource://sandbox/<envId>/<sandboxId>` 校验与 `terminal-resource.js` 同组；地址不编码 URL、session、token；零/一/多候选与核实失败都有断言
   - **验证映射**：`DNLS03X-T06` · **依赖**：`S1-01`
   - **执行状态**：`complete` · **执行时间**：`2026-11-21T00:02Z` · **证据 / 备注**：删 `kitesurf()`/`openKitesurf`/`openWorkspaceHint`/`workspaceMissing`/私有 kind；新增 `dsh-resource://sandbox/<envId>/<sandboxId>`（复用同一组正则）；`candidates`→`openResource` 交接；[DNK] 先 `contract` 再定向 `inspect`，失败不改投；DNLS 480/480、DNK 60/60
-- [ ] `S1-07` — 引用页签、`drivers`、隐藏即停
+- [x] `S1-07` — 引用页签、`drivers`、隐藏即停
   - **落点 / 对象**：`profiles/kitesurf/profile.yaml:84-86`、`src/host/fleet-projection.js:222`、[DNK] `src/client/index.js:608-611,2030-2110,3058`
   - **完成判据**：一引用一页签且同一引用复用；`drivers` 只读投影到 `sandbox.list`/`inspect` 与列表工具；不含 `cdp` 时显示原因且不发对象请求；`tab.visible` 为假时 `/status`、`/shot`、`/dom`、`/control` 全停，恢复可见刷新一次；`keepMounted` 保留；「两个引用两个页签」只作软件回归
   - **验证映射**：`DNLS03X-T07` · **依赖**：`S1-06`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-21T00:39Z` · **证据 / 备注**：`drivers` 由 `managed-profile` 投影进 `fleet-projection`，list/inspect/工具同源；引用页签锁定对象且同一引用复用；`tab.visible` 假时 `/status`/`/shot`/`/dom`/`/control` 全停、恢复刷一次；无 `cdp` 灰显且零对象请求；DNK 73/73
 - [x] `S1-08` — 退役 `/res` 与 HTML 代理改写
   - **落点 / 对象**：`src/host/res-proxy.js`、`test/res-proxy.test.mjs`、`src/host/routes.js:39,57,1081,1493`、`src/host/dom-srcdoc.js:23,76-117`、`src/host/object-pages.js:9-13`、`src/host/error-catalog.js:46-54`、账本五处、[DNK] `src/client/index.js:1533`、`src/client/i18n.js:106,338`、`src/skill/**/routes.md:19`、`recovery-playbook.md:18`
   - **完成判据**：路径与 `res.*` 九行消失且不留别名、开关或墓碑；srcdoc 只有真实地址；隧道域命中时 `/open` 成功体与失败体都带 hint 且状态码不变；账本少一行且 0 漂移；`proxied` 推断删除；HTML 提示改为静态投影说明；diagnostics 不再写「+ `/res`」

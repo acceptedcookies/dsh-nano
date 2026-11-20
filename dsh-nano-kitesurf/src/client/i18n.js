@@ -230,8 +230,12 @@ const COPY = {
     sandboxEmpty: '没有可见的托管沙箱',
     sandboxLoading: '正在发现托管沙箱…',
     sandboxFailed: '沙箱发现失败',
+    sandboxNoDriver: '未声明浏览器驱动',
     referenceVerifying: '正在核实引用的沙箱…',
     referenceFailed: '无法打开引用的沙箱',
+    referenceReasonMissing: '该对象不存在或对当前主体不可见',
+    referenceReasonEnv: '该对象不在此环境中',
+    referenceReasonDriver: '该对象未声明浏览器驱动',
   },
   en: {
     typeLabel: 'Kitesurf',
@@ -462,8 +466,12 @@ const COPY = {
     sandboxEmpty: 'No managed sandboxes are visible',
     sandboxLoading: 'Discovering managed sandboxes…',
     sandboxFailed: 'Sandbox discovery failed',
+    sandboxNoDriver: 'No browser driver declared',
     referenceVerifying: 'Verifying the referenced sandbox…',
     referenceFailed: 'The referenced sandbox could not be opened',
+    referenceReasonMissing: 'The object does not exist or is not visible to this principal',
+    referenceReasonEnv: 'The object lives in a different environment',
+    referenceReasonDriver: 'The object declares no browser driver',
   },
 }
 

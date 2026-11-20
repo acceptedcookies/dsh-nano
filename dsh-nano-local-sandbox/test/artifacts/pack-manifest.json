@@ -1,5 +1,5 @@
 {
-  "commit": "55b5b6e04115671623d80f14c4823308f3b6a37e",
+  "commit": "7b0551f3157056ee8bdbe11eb60f9138b9d766a4",
   "packs": {
     "dsh-nano-local-sandbox": [
       "AGENTS.md",
@@ -26,6 +26,7 @@
       "profiles/terminal/pty-worker.py",
       "profiles/terminal/public-health.mjs",
       "profiles/terminal/relay-credential.mjs",
+      "src/host/agent-tools.js",
       "src/host/apple-evidence.js",
       "src/host/backend-apple.js",
       "src/host/backend-nvx.js",

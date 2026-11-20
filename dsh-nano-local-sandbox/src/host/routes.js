@@ -1185,7 +1185,7 @@ function publicationFor(info, containerPort) {
 
 const unavailable = (message) => Object.assign(new Error(message), { errorId: errorCode('control.bridge'), status: 502 })
 
-async function bridgeFetch(session, deps, pathname, { method = 'GET', body = null, timeoutMs = 2500 } = {}) {
+export async function bridgeFetch(session, deps, pathname, { method = 'GET', body = null, timeoutMs = 2500 } = {}) {
   // Every dispatch re-inspects: the bridge URL is the CURRENT verified
   // publication of this exact container, never a remembered or derived one.
   const host = envHostPorts(deps.env || process.env, session.__profile?.profile)

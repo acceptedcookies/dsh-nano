@@ -290,7 +290,10 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
 
   /* ---- restricted dispatch: admit → version → target → execute ---- */
 
-  async function restricted(capabilityId, def, req, args, { versionOk, select }) {
+  // `via` stamps which entry reached the shared dispatcher: 'http' here,
+  // 'mcp' below, 'tool' for session agent tools. The human-hold gate (R-11)
+  // exempts only the pane's HTTP entry — every other caller fails closed.
+  async function restricted(capabilityId, def, req, args, { versionOk, select, via }) {
     const admitted = await admitPeer(req)
     if (admitted.failure) return admitted.failure
     if (!versionOk()) return contractFail()
@@ -304,6 +307,7 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
         peer: admitted.peer,
         req,
         args,
+        via,
       })
     } catch (error) {
       return exceptionFail(error)
@@ -351,6 +355,7 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
       const answer = await restricted(capabilityId, def, req, body, {
         versionOk: () => headerValue(req, CONTRACT_HEADER) === CONTRACT_VERSION,
         select: () => selectHttpTarget(def, req, url.searchParams, body),
+        via: 'http',
       })
       return respond(res, answer.status, answer.body, { head, contractHeader: true })
     }
@@ -448,6 +453,7 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
           if (!isPlainObject(args)) return { failure: paramsFail('shape') }
           return selectMcpTarget(found.def, req, args, url.searchParams)
         },
+        via: 'mcp',
       })
       return mcpResult(answer.status, answer.body)
     }

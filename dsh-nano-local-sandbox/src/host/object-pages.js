@@ -1,7 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { BINDING_TABLE } from '../../lib/bindings.js'
 import { connectCdp, resetClient } from './cdp-elements.js'
-import { ensureBridgeCredential } from './routes.js'
+import { ensureBridgeCredential, bridgeFetch } from './routes.js'
+import { errorCode, statusOf } from './error-catalog.js'
 import { serviceMappings } from './managed-profile.js'
 import { authorize } from './object-authz.js'
 import { routeSpecs } from './routes.js'
@@ -14,10 +15,41 @@ const otherOwners = new Set(['dnls.contract', 'dnls.mcp', 'dnls.lifecycle', 'dnl
 const fail = status => Object.assign(new Error('object page unavailable'), { status })
 const deniedKeys = new Set(['cookies', 'cookiesApplied', 'extraHeaders', 'authorization', 'token', 'storePath', 'relayToken',
   'containerName', 'mounts', 'stateVolume', 'argv', 'env', 'engineUrl', 'stateSource', 'runtimeSource'])
-function redact(value) {
+export function redact(value) {
   if (Array.isArray(value)) return value.map(redact)
   if (!value || typeof value !== 'object') return value
   return Object.fromEntries(Object.entries(value).filter(([k]) => !deniedKeys.has(k)).map(([k, v]) => [k, redact(v)]))
+}
+
+/**
+ * T-O-64: the three object capabilities the agent surfaces share — one def,
+ * advertised on /mcp tools/list AND carried into the session agent tools
+ * (agent-tools.js projects the four model tools off this same capability
+ * set). The 列表 entry is fleet's own `sandbox.list`; 状态 rides
+ * `dnls.diagnostics` because the agent contract needs `hints`, which only
+ * the diagnostics document carries.
+ */
+const OBJECT_TOOL_DEFS = new Map([
+  ['dnls.diagnostics', {
+    name: 'sandbox.status',
+    description: 'Managed status of one sandbox object: lifecycle phase, the relay CDP endpoint (cdp), navigation state and recovery hints.',
+    inputSchema: { type: 'object', properties: { sandboxId: { type: 'string' } }, required: ['sandboxId'], additionalProperties: false },
+  }],
+  ['dnls.open', {
+    name: 'sandbox.open',
+    description: 'Open (navigate) the shared page of one sandbox object to an http(s) URL inside the container. Counts as a write; refused while a human holds control.',
+    inputSchema: { type: 'object', properties: { sandboxId: { type: 'string' }, url: { type: 'string' } }, required: ['sandboxId', 'url'], additionalProperties: false },
+  }],
+  ['dnls.control', {
+    name: 'sandbox.control.status',
+    description: 'Read-only control state of one sandbox object: humanHold (takeover) and relay stats. No action argument — writes stay with the human.',
+    inputSchema: { type: 'object', properties: { sandboxId: { type: 'string' } }, required: ['sandboxId'], additionalProperties: false },
+  }],
+])
+
+/** A pre-dispatch refusal body: status + errorId and nothing else (R-11). */
+function refusal(errorId, status) {
+  return { status: status ?? statusOf(errorId), body: { ok: false, errorId } }
 }
 
 /** Each page context owns one verified generation's socket, history and pending page operations. */
@@ -26,13 +58,17 @@ export function createObjectPages({ registry, envId, resolvePrincipal, connectio
   const grants = new AsyncLocalStorage()
   let closed = false
   const rows = new Map(BINDING_TABLE.filter(r => !otherOwners.has(r.id)).map(r => [r.id, r]))
-  const capabilities = new Map([...rows].map(([name, row]) => [name, { http: { path: row.path, methods: row.methods }, target: 'object' }]))
+  const capabilities = new Map([...rows].map(([name, row]) => [name, {
+    http: { path: row.path, methods: row.methods },
+    target: 'object',
+    ...(OBJECT_TOOL_DEFS.has(name) ? { tool: OBJECT_TOOL_DEFS.get(name) } : {}),
+  }]))
   function retire(sandboxId) {
     const session = contexts.get(sandboxId)
     contexts.delete(sandboxId)
     if (session?.cdp) resetClient(session)
   }
-  async function execute({ capability, sandboxId, req, args, peer }) {
+  async function execute({ capability, sandboxId, req, args, peer, via }) {
     if (closed) throw fail(503)
     const route = rows.get(capability)
     if (!route) throw fail(404)
@@ -48,6 +84,14 @@ export function createObjectPages({ registry, envId, resolvePrincipal, connectio
     }
     const principal = auth(peer)
     const recheck = async () => {
+      // Session agent tools carry no host request: the composition-supplied
+      // peer (T-O-59) IS the admission proof — re-verify it instead of asking
+      // connection.admit to re-admit a synthetic request. HTTP and /mcp
+      // callers keep the original re-admission path.
+      if (via === 'tool') {
+        if (closed || auth(peer).key !== principal.key) throw fail(403)
+        return
+      }
       const admitted = await connection.admit(req)
       if (closed || !admitted?.peer || auth(admitted.peer).key !== principal.key) throw fail(403)
     }
@@ -101,6 +145,30 @@ export function createObjectPages({ registry, envId, resolvePrincipal, connectio
     }
     // Narrow adapter: a page action cannot create, replace, remove or implicitly adopt a container.
     const pageBackend = { inspect, async logs(locator, options) { await inspect(locator); return backend.logs(locator, options) } }
+    // R-11 / T-O-64: every non-HTTP entry (model tool, /mcp) opens through the
+    // same kernel — but only AFTER the dispatcher reads humanHold from this
+    // object's own bridge. Active → the profile's own control.held id (the
+    // driver-declared namespace) as a
+    // pre-dispatch refusal: status + errorId only, kernel never called; a
+    // failed read → the existing control.bridge refusal. The pane's own
+    // HTTP /open is exempt, and the gate lives here, never on the bridge.
+    if (route.id === 'dnls.open' && via !== 'http') {
+      const ns = typeof profile.context?.driver?.errors?.namespace === 'string' && profile.context.driver.errors.namespace
+        ? profile.context.driver.errors.namespace : null
+      const code = (suffix) => (ns ? `${ns}.${suffix}` : errorCode(suffix))
+      let data = null
+      try {
+        // `managed: true` — pageBackend.inspect already returns the decoded
+        // neutral projection (mappings joined above), not raw provider JSON.
+        data = (await bridgeFetch(session, { ...deps, managed: true, backend: pageBackend }, '/control')).data
+      } catch (error) {
+        return refusal(typeof error?.errorId === 'string' ? error.errorId : code('control.bridge'),
+          Number.isInteger(error?.status) ? error.status : 502)
+      }
+      if (data?.control?.humanHold?.active === true) {
+        return refusal(code('control.held'), 409)
+      }
+    }
     // The cached socket belongs to the object, not to its first opener.
     // Each command uses the grant of the request issuing that command.
     const connect = async base => {
@@ -128,7 +196,20 @@ export function createObjectPages({ registry, envId, resolvePrincipal, connectio
     const page = routeSpecs({ ...deps, session, managed: true, backend: pageBackend, connect }).find(r => r.path === route.path)
     let text
     const res = { statusCode: 500, setHeader() {}, end(v) { text = v } }
-    const pageReq = { method: req.method, url: req.url, headers: {}, body: args }
+    // HTTP keeps the caller's own method/url verbatim. /mcp and tool calls
+    // carry a POST transport that the per-route kernel must never see, so
+    // the dispatcher derives the declared kernel method: GET when the route
+    // declares it, else the first declared method. (If a POST-only tool is
+    // ever declared, this falls back to POST.)
+    const kernelMethod = req?.method && route.methods.includes(req.method)
+      ? req.method
+      : route.methods.includes('GET') ? 'GET' : route.methods[0]
+    const pageReq = {
+      method: kernelMethod,
+      url: req?.url ?? `${route.path}?sandboxId=${encodeURIComponent(sandboxId)}`,
+      headers: {},
+      body: kernelMethod === 'GET' ? {} : args,
+    }
     let active = true
     try {
       await grants.run(async () => {

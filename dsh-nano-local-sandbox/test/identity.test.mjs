@@ -29,8 +29,8 @@ test('package id, engine range, and file whitelist', () => {
   ])
 })
 
-test('inject is exactly the five host services', () => {
-  assert.deepEqual(inject, ['webServer', 'connection', 'sandboxPolicy', 'sandbox', 'sessions'])
+test('inject is exactly the six host services', () => {
+  assert.deepEqual(inject, ['webServer', 'connection', 'sandboxPolicy', 'sandbox', 'sessions', 'tools'])
   const source = readFileSync(join(root, 'index.js'), 'utf8')
   assert.equal(source.includes('ctx.webServer.register'), false)
   assert.equal(typeof apply, 'function')

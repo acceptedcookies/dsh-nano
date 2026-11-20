@@ -99,6 +99,10 @@ test('T80: shipped plugin registers a single managed control surface from discov
   const detail = await http(`inspect?${q}`)
   assert.equal(detail.envId, 'dev')
   assert.equal(detail.observedState, 'running')
+  // T-O-67: the readonly drivers projection equals the profile manifest's
+  // own capabilities.drivers on the same row list/inspect share.
+  assert.deepEqual(detail.drivers, ['cdp', 'mcp'])
+  assert.deepEqual((await http('sandboxes')).rows[0].drivers, ['cdp', 'mcp'])
   assert.ok(detail.services.some(s => s.published && s.hostPort > 0))
   assert.equal((await tool('sandbox.usage', { sandboxId, window: '24h' })).sandboxId, sandboxId)
   const ref = await tool('term.session.create', { sandboxId, paneId: 'pane', openId: 'gesture' })

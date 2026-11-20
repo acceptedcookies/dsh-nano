@@ -10,7 +10,8 @@ const { batchNote, designNote, multiNote } = require('../shared/note.js')
 const { contentFrame, shotPoint } = require('../shared/shot-point.js')
 const { captureNavigation, requestTimeout } = require('../shared/navigation.js')
 const { createManagedDesignClient, listSandboxRows } = require('../shared/managed-client.js')
-const { parseSandboxReference, verifySandboxReference } = require('../shared/sandbox-reference.js')
+const { parseSandboxReference, verifySandboxReference, noteVerifiedSandboxName, verifiedSandboxName, subscribeVerifiedSandboxNames } = require('../shared/sandbox-reference.js')
+const { armPanePoll } = require('../shared/pane-poll.js')
 const h = React.createElement
 
 const STATUS = '/nano-local-sandbox/status'
@@ -524,7 +525,12 @@ function elementMatches(row, text) {
   return `${row.tag || ''} ${row.id || ''} ${row.cls || ''}`.toLowerCase().includes(needle)
 }
 
-function DevTools({ copy, open, onClose, fetch }) {
+function DevTools({ copy, open, onClose, fetch, visible = true }) {
+  // T-O-67: the host's tab-visible flag, mirrored into a ref so the poll
+  // gate always reads the latest value without re-binding its listener.
+  const visRef = React.useRef(true)
+  visRef.current = visible !== false
+
   const [tab, setTab] = React.useState('console')
   const [rows, setRows] = React.useState([])
   const [failedOnly, setFailedOnly] = React.useState(false)
@@ -605,18 +611,18 @@ function DevTools({ copy, open, onClose, fetch }) {
         }
       } catch { /* endpoint may be briefly unavailable */ }
     }
-    load()
-    // Poll fast while the pane is visible; back off hard when the whole tab
-    // is backgrounded — the devtools buffer is ring-shaped on the host so
-    // nothing is lost while we idle.
-    const period = () => (document.visibilityState === 'hidden' ? 15000 : 1500)
-    let timer = 0
-    const arm = () => { clearInterval(timer); timer = window.setInterval(load, period()) }
-    const onVis = () => { arm(); if (document.visibilityState !== 'hidden') load() }
-    document.addEventListener('visibilitychange', onVis)
-    arm()
-    return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVis) }
-  }, [open, tab])
+    // T-O-67: a hidden pane neither loads nor schedules — the host's
+    // tab-visible flag gates every timed request. While visible the
+    // browser-wide document back-off still applies; regaining visibility
+    // re-arms and the immediate pass is the single refresh.
+    const disarm = armPanePoll(load, {
+      periodMs: 1500,
+      hiddenPeriodMs: 15000,
+      immediate: true,
+      isVisible: () => visRef.current,
+    })
+    return () => { alive = false; disarm() }
+  }, [open, tab, visible])
   if (!open) return null
   const visibleRows = rows.filter((row) => {
     if (tab === 'network') {
@@ -899,8 +905,15 @@ function wfBar(row, rows) {
   return h('i', { style: { left: `${left}%`, width: `${width}%` }, 'data-bad': row.failed || (row.status || 0) >= 400 ? 'true' : 'false', 'data-pending': pending ? 'true' : 'false' })
 }
 
-function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId }) {
+function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId, visible = true }) {
   const post = (path, body) => postRequest(fetch, path, body)
+  // T-O-67: the host's tab-visible flag. While false the pane issues no
+  // timed request at all; regaining visibility refreshes each ambient loop
+  // exactly once. Mirrors into a ref so timers and async continuations
+  // always read the latest value.
+  const paneVisible = visible !== false
+  const visibleRef = React.useRef(true)
+  visibleRef.current = paneVisible
   // Per-object scratch notes live and die with the selected sandbox's mount.
   const localNotes = React.useRef([]).current
   const [status, setStatus] = React.useState(null)
@@ -1080,21 +1093,25 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
     // Mount only probes and mirrors: never Page.navigate without the user
     // asking (AGENTS.md). If an engine page exists, screenshot it; the engine
     // decides what is on screen.
+    // T-O-67: a hidden pane probes nothing. Regaining visibility re-runs
+    // this probe — exactly one status refresh and one shot refresh, which
+    // is the "refresh once" those two request kinds owe on regain.
+    if (!paneVisible) return undefined
     refreshStatus().then(async (statusPayload) => {
-      if (!statusPayload?.ok) return
+      if (!statusPayload?.ok || !visibleRef.current) return
       try {
         const fit = frameSize()
         const shotPayload = await post(SHOT, { format: 'webp', ...(fit ? { fit } : {}) })
         setShot(shotPayload.data)
         setShotMime(shotPayload.mimeType || 'image/webp')
-        loadDom().catch(() => {})
         setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
         // pageUrl mirrors whatever the engine reports — pages opened behind
         // the pane (agent /open) still name the right url in notes.
         if (shotPayload.url && shotPayload.url !== 'about:blank') setPageUrl(shotPayload.url)
       } catch { /* engine up but page not shootable yet — fine */ }
     })
-  }, [])
+    return undefined
+  }, [paneVisible])
 
   // Letterbox geometry reacts to layout, not to render timing: observe the
   // frame and the image's own load so the box is right on first pick, after
@@ -1165,18 +1182,18 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
       setBeatSec(Math.max(1, Math.floor((Date.now() - started) / 1000)))
       // 等 /open 回复的窗口里顺便盯 navigation.outcome：心跳只能报
       // 「本地等了 N 秒」，是否还在导航是引擎才答得出的问题。
-      if (ticks % 2 === 0) refreshStatus().catch(() => {})
+      if (visibleRef.current && ticks % 2 === 0) refreshStatus().catch(() => {})
     }, 1000)
     return () => window.clearInterval(timer)
-  }, [beat])
+  }, [beat, paneVisible])
 
   // 引擎自己说还在导航（/open 已超时返回，但 navigation.outcome 仍是
   // in-flight）：保持低频轮询，让「引擎仍在执行」标记能如实消失。
   React.useEffect(() => {
     if (!engineNavigating) return undefined
-    const timer = window.setInterval(() => { refreshStatus().catch(() => {}) }, 3000)
+    const timer = window.setInterval(() => { if (visibleRef.current) refreshStatus().catch(() => {}) }, 3000)
     return () => window.clearInterval(timer)
-  }, [engineNavigating])
+  }, [engineNavigating, paneVisible])
 
   // An agent can /open a page behind the pane. Re-shoot on focus so the
   // human is never staring at a stale frame with a disabled refresh button.
@@ -1187,10 +1204,9 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
   // after a host restart, or when an agent opens a page behind the pane),
   // keep trying until a frame exists instead of sitting on the empty state.
   // If the pane started while the engine was blank it falls back to the
-  // screenshot; once a frame exists, upgrade to native HTML.
-  React.useEffect(() => {
-    if (nativeHtml && shot && !domDoc) loadDom().catch(() => {})
-  }, [shot, nativeHtml])
+  // screenshot; once a frame exists, upgrade to native HTML. The DOM poll's
+  // immediate pass covers the "shot landed, no domDoc yet" gap, so a
+  // hidden pane never pre-loads DOM it cannot show.
 
   // DOM 预览是静态快照，但页面自己会异步变化（SPA 挂载、agent edit、延时
   // 脚本）。打开页面且启用原生 HTML 时每 3s 拉一次 /dom：只有 domSeq /
@@ -1204,17 +1220,25 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
     const poll = () => {
       loadDom().then((ok) => { fails = ok ? 0 : fails + 1 }).catch(() => { fails += 1 })
     }
-    const timer = window.setInterval(() => { if (alive && fails < 3) poll() }, 3000)
-    return () => { alive = false; clearInterval(timer) }
-  }, [shot, nativeHtml])
+    // T-O-67: the poll arms only while the pane is visible — hiding disarms
+    // mid-flight state survives in `fails` — and regaining it issues one
+    // immediate refresh. The browser-wide document back-off is unchanged.
+    const disarm = armPanePoll(poll, {
+      periodMs: 3000,
+      immediate: true,
+      shouldTick: () => alive && fails < 3,
+      isVisible: () => visibleRef.current,
+    })
+    return () => { alive = false; disarm() }
+  }, [shot, nativeHtml, paneVisible])
 
   React.useEffect(() => {
-    if (shot) return undefined
+    if (shot || !paneVisible) return undefined
     const timer = window.setInterval(() => {
-      if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {})
+      if (visibleRef.current && !busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {})
     }, 2000)
     return () => clearInterval(timer)
-  }, [shot])
+  }, [shot, paneVisible])
 
   React.useEffect(() => {
     let armed = 0
@@ -1268,14 +1292,14 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
       last = key
       if (!previous) return // first measurement is the mount shot
       clearTimeout(timer)
-      timer = window.setTimeout(() => { if (!busyRef.current) reloadShot(0, { keepPick: true, fromResize: true }).catch(() => {}) }, 320)
+      timer = window.setTimeout(() => { if (visibleRef.current && !busyRef.current) reloadShot(0, { keepPick: true, fromResize: true }).catch(() => {}) }, 320)
     })
     observer.observe(element)
     return () => { clearTimeout(timer); observer.disconnect() }
   }, [])
 
   React.useEffect(() => {
-    const onFocus = () => { if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {}) }
+    const onFocus = () => { if (visibleRef.current && !busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {}) }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [])
@@ -1924,6 +1948,10 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
     return awaitOperation(operationId)
   }
 
+  // Operation-scoped polling, not an ambient loop: a gesture already
+  // committed the restart/recreate, and hiding the tab mid-operation must
+  // not leave the receipt unobserved — the T-O-67 silence covers only the
+  // pane's timed ambient requests.
   async function awaitOperation(operationId) {
     const deadline = Date.now() + 30000
     while (Date.now() < deadline) {
@@ -2014,12 +2042,16 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
         }
       } catch { /* bridge unreachable — hide the badge quietly */ }
     }
-    load()
-    let timer = window.setInterval(load, document.visibilityState === 'hidden' ? 12000 : 1500)
-    const onVis = () => { clearInterval(timer); timer = window.setInterval(load, document.visibilityState === 'hidden' ? 12000 : 1500); if (document.visibilityState !== 'hidden') load() }
-    document.addEventListener('visibilitychange', onVis)
-    return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVis); clearTimeout(actionToastTimer.current) }
-  }, [engineHasPage])
+    // T-O-67: arms only while the pane is visible; hiding disarms the
+    // interval and the listener, regaining issues exactly one refresh.
+    const disarm = armPanePoll(load, {
+      periodMs: 1500,
+      hiddenPeriodMs: 12000,
+      immediate: true,
+      isVisible: () => visibleRef.current,
+    })
+    return () => { alive = false; disarm(); clearTimeout(actionToastTimer.current) }
+  }, [engineHasPage, paneVisible])
 
   const controlOp = React.useCallback(async (action) => {
     try {
@@ -2092,13 +2124,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
         seen = sig
         setSnap(data)
       }).catch(() => { if (alive) setProbeMisses((n) => n + 1) })
-      load()
-      const period = () => (document.visibilityState === 'hidden' ? 12000 : 1500)
-      let timer = window.setInterval(load, period())
-      const onVis = () => { clearInterval(timer); timer = window.setInterval(load, period()); if (document.visibilityState !== 'hidden') load() }
-      document.addEventListener('visibilitychange', onVis)
-      return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVis) }
-    }, [])
+      // T-O-67: hidden pane never schedules /ports — regain refreshes once.
+      const disarm = armPanePoll(load, {
+        periodMs: 1500,
+        hiddenPeriodMs: 12000,
+        immediate: true,
+        isVisible: () => visibleRef.current,
+      })
+      return () => { alive = false; disarm() }
+    }, [paneVisible])
     function prepare() {
       // The one-click env button is a confirmed restart of the selected
       // sandbox — the old implicit POST /recover repair is gone.
@@ -2696,7 +2730,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
       h('span', { style: { flex: 'auto' } })),
 
     h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
-    h(DevTools, { copy, fetch, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
+    h(DevTools, { copy, fetch, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false), visible: paneVisible }),
     h('div', {
       ref: frameRef,
       className: 'nks-frame',
@@ -2947,7 +2981,16 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
  * per-object state (notes, endpoints, URLs) cannot leak between sandboxes.
  * There is no default and no auto-pick of the first row.
  */
-function SandboxPicker({ copy, languageOf, theme, onThemeChange, address }) {
+/**
+ * T-O-67: the row's readonly `drivers` projection decides whether the
+ * pane may bind to it — a list missing the `cdp` browser driver is a
+ * declared fact, shown with its reason and never selectable.
+ */
+function rowDrivable(row) {
+  return Array.isArray(row?.drivers) && row.drivers.includes('cdp')
+}
+
+function SandboxPicker({ copy, languageOf, theme, onThemeChange, address, visible }) {
   const [client, setClient] = React.useState(null)
   const [rows, setRows] = React.useState(null)
   const [error, setError] = React.useState(null)
@@ -2969,6 +3012,8 @@ function SandboxPicker({ copy, languageOf, theme, onThemeChange, address }) {
         try {
           const verified = await verifySandboxReference(address, impl, location.origin, { createManagedDesignClient })
           if (!alive) return
+          // Verification passed — the tab title may show the object name.
+          noteVerifiedSandboxName(address, verified.name)
           setClient(verified.client)
           setError(null)
           setReference({ state: 'ok' })
@@ -3017,6 +3062,10 @@ function SandboxPicker({ copy, languageOf, theme, onThemeChange, address }) {
   }
 
   function choose(sandboxId) {
+    // The selector's own guard: an undrivable row stays unselected even if
+    // a programmatic change event reaches it — no bind, no object request.
+    const row = (rows ?? []).find((entry) => entry.sandboxId === sandboxId)
+    if (!rowDrivable(row)) return
     selectWith(client, sandboxId)
   }
 
@@ -3028,15 +3077,33 @@ function SandboxPicker({ copy, languageOf, theme, onThemeChange, address }) {
       onChange: (event) => { if (event.target.value) choose(event.target.value) },
     },
       h('option', { value: '', disabled: true }, copy.sandboxPick),
-      (rows ?? []).map((row) => h('option', { key: row.sandboxId, value: row.sandboxId },
-        `${row.name || row.sandboxId.slice(0, 8)} · ${row.envId ?? ''} · ${row.observedState ?? 'unknown'}`))))
+      (rows ?? []).map((row) => {
+        const drivable = rowDrivable(row)
+        const label = `${row.name || row.sandboxId.slice(0, 8)} · ${row.envId ?? ''} · ${row.observedState ?? 'unknown'}`
+        return h('option', {
+          key: row.sandboxId,
+          value: row.sandboxId,
+          disabled: !drivable || undefined,
+          title: drivable ? undefined : copy.sandboxNoDriver,
+        }, drivable ? label : `${label} · ${copy.sandboxNoDriver}`)
+      })))
 
   // Reference tabs never fall back to the selector: a failed verification is
   // shown as its own reason, and a pending one only ever shows "verifying".
   if (address) {
     if (reference?.state === 'error') {
+      // T-O-67's three reason classes, in the host's own order: the object
+      // does not exist or is not visible to this principal; it lives in a
+      // different environment; its profile declares no browser driver.
+      const reasonId = String(reference.cause?.errorId ?? '')
+      const reason = reasonId.endsWith('.env') ? copy.referenceReasonEnv
+        : reasonId.endsWith('.driver') ? copy.referenceReasonDriver
+        : (reasonId.endsWith('.missing') || reference.cause?.status === 404 || reference.cause?.status === 403)
+          ? copy.referenceReasonMissing
+          : null
       return h('div', { className: 'nks-empty', 'data-nks-reference-error': '1' },
         h('div', { className: 'nks-empty-title' }, copy.referenceFailed),
+        reason ? h('div', { className: 'nks-empty-body', 'data-nks-reference-reason': '1' }, reason) : null,
         h('div', { className: 'nks-empty-body' }, String(reference.cause?.message || reference.cause)),
         h('div', { className: 'nks-empty-actions' },
           h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: () => setRetrySeq((n) => n + 1) }, copy.refresh)))
@@ -3044,7 +3111,7 @@ function SandboxPicker({ copy, languageOf, theme, onThemeChange, address }) {
     if (!selection) {
       return h('div', { className: 'nks-empty', 'data-nks-reference-verify': '1' }, copy.referenceVerifying)
     }
-    return h(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId })
+    return h(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId, visible })
   }
 
   if (error) {
@@ -3058,7 +3125,7 @@ function SandboxPicker({ copy, languageOf, theme, onThemeChange, address }) {
   if (rows.length === 0) return h('div', { className: 'nks-empty', 'data-nks-sandbox-empty': '1' }, copy.sandboxEmpty)
   if (!selection) return h('div', { className: 'nks-empty', 'data-nks-sandbox-pick': '1' }, picker)
   return h(React.Fragment, null, picker,
-    h(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId }))
+    h(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId, visible }))
 }
 
 export const inject = ['slots', 'sidebarRightTabs', 'locale', 'theme']
@@ -3080,6 +3147,7 @@ export function apply(ctx) {
     theme: ctx.theme,
     onThemeChange: (listener) => ctx.on('theme/change', listener),
     address: props?.useTabInfo?.().tab?.navigation?.address,
+    visible: props?.useTabInfo?.().tab?.visible,
   })
 
   ctx.effect(() => ctx.sidebarRightTabs.register({
@@ -3118,7 +3186,20 @@ export function apply(ctx) {
     Pane)))
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
     { name: 'sidebar.right.pane.tab.title', key: 'dnk-sandbox' },
-    function DnkSandboxTitle() { return copy().typeLabel })))
+    // T-O-67: the host bakes title() once at open — the slot component is
+    // where a verified object name replaces the short id. It subscribes to
+    // the name registry the body's verification pass writes.
+    function DnkSandboxTitle(props) {
+      const address = props?.useTabInfo?.().tab?.navigation?.address
+      const ref = parseSandboxReference(address)
+      const [name, setName] = React.useState(() => verifiedSandboxName(address))
+      React.useEffect(() => {
+        setName(verifiedSandboxName(address))
+        return subscribeVerifiedSandboxNames(() => setName(verifiedSandboxName(address)))
+      }, [address])
+      if (name) return name
+      return ref ? `sandbox ${ref.sandboxId.slice(0, 8)}` : copy().typeLabel
+    })))
 
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab',

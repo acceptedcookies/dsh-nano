@@ -220,6 +220,11 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
       sandboxId: fresh.sandboxId,
       name: fresh.name,
       profileId: fresh.profileId,
+      // T-O-67: readonly projection of the object profile manifest's
+      // capabilities.drivers — a declaration, never authorization or a
+      // statement that the object is currently usable. An unresolvable
+      // profile fails closed to an empty list, not a guessed driver.
+      drivers: Array.isArray(profile?.drivers) ? [...profile.drivers] : [],
       generation: ok ? obs.generation : null,
       observedAt: ok ? (obs.observedAt ?? null) : null,
       observedState: ok ? obs.state : gone ? 'missing' : 'unknown',

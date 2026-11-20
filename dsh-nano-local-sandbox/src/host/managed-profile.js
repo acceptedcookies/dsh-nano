@@ -185,6 +185,11 @@ export function createManagedProfileSource(deps = {}) {
       profileId: id,
       context: { id, dir: profileDir, profile: manifest, driver: result.driver, digest: result.digest, resources: bounds.defaults },
       recipeRef: `${manifest.build.image}@${result.digest}`,
+      // T-O-67: read-only manifest capability list projected onto fleet rows.
+      // A declaration, never a grant or a liveness verdict.
+      drivers: Array.isArray(manifest.capabilities?.drivers)
+        ? [...new Set(manifest.capabilities.drivers.filter((driver) => typeof driver === 'string' && driver.length > 0))]
+        : [],
       services,
       portPool: [...pool],
       maxInstances: manifest.lifecycle.maxInstances,

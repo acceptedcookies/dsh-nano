@@ -7,7 +7,9 @@
  * ManagedContainer JSON.
  */
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
 import { cpSync, existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,6 +17,7 @@ import test from 'node:test'
 import { openEnvironmentOwner } from '../src/host/environment-owner.js'
 import { capabilityReport } from '../src/host/backend.js'
 import { resolveOwnerPrincipal } from '../src/host/object-authz.js'
+import { makeAgentToolDefinitions } from '../src/host/agent-tools.js'
 import { createManagedRoutes } from '../src/host/managed-routes.js'
 import { loadProfileDriver } from '../src/host/profile-drivers.js'
 import { BINDING_TABLE } from '../lib/bindings.js'
@@ -64,9 +67,29 @@ async function setup(t, scoped = false, backendOverride = null, extraDeps = {}) 
     // (unref'd) so backend call counts stay exact for the whole test.
     clock: () => 0,
   })
-  const specs = createManagedRoutes({ capabilities: owner.capabilities, execute: owner.execute, connection, table: BINDING_TABLE })
+  // Observable shared-owner proof: every capability dispatch — HTTP, /mcp
+  // and the agent tools — goes through this one execute function, so the
+  // recording wrapper counts all three entrances on a single ledger. The
+  // wrapped fn is what index.js would hand both consumers verbatim.
+  const execCalls = []
+  const rawExecute = owner.execute.bind(owner)
+  const countedExecute = async (call_) => { execCalls.push({ capability: call_.capability, via: call_.via }); return rawExecute(call_) }
+  const specs = createManagedRoutes({ capabilities: owner.capabilities, execute: countedExecute, connection, table: BINDING_TABLE })
   const mcp = specs.find((spec) => spec.path === MCP_PATH)
   assert.ok(mcp, 'managed mcp route spec')
+  // T-O-64: the four session-agent tools are the same composition point the
+  // shipped plugin uses — index.js calls this builder with the same owner —
+  // so a call through them lands on the very same `execute` the HTTP and
+  // /mcp routes above are wired to (asserted via `execCalls`).
+  const peerFor = extraDeps.toolPeer ?? ((exec) => (exec?.agent?.session != null ? peer : null))
+  const tools = makeAgentToolDefinitions({ owner: { ...owner, execute: countedExecute }, peerFor })
+  const agentExec = () => ({ agent: { session: {} }, signal: new AbortController().signal, callId: 't' })
+  const toolByName = (name) => tools.find((d) => d.name === name)
+  async function toolCall(name, args, exec = agentExec()) {
+    const def = toolByName(name)
+    assert.ok(def, `agent tool ${name} registered`)
+    return def.execute(args, exec)
+  }
   let id = 0
   async function call(name, args) {
     const req = {
@@ -96,7 +119,7 @@ async function setup(t, scoped = false, backendOverride = null, extraDeps = {}) 
     await owner.close()
     rmSync(home, { recursive: true, force: true })
   })
-  return { home, env, backend, audits, owner, call, create, setPeer, specs, manifest: ready.manifest }
+  return { home, env, backend, audits, owner, call, create, setPeer, specs, manifest: ready.manifest, execCalls, tools, toolByName, toolCall, agentExec }
 }
 
 test('environment-owner create: real registry row, bound generation, actual spec evidence', async (t) => {
@@ -552,12 +575,15 @@ function fakePageClient(respond = {}) {
   return client
 }
 
-async function pageRequest(owner, capability, sandboxId, { method = 'POST', args = {} } = {}) {
+// A page request as the pane's HTTP entry would make it — the human-hold
+// gate (R-11) exempts only 'http'; /mcp and model-tool calls stay gated.
+async function pageRequest(owner, capability, sandboxId, { method = 'POST', args = {}, via = 'http' } = {}) {
   return owner.execute({
     capability,
     sandboxId,
     peer: ownerPeer(),
     args,
+    via,
     req: { method, url: `/nano-local-sandbox/${capability.slice('dnls.'.length)}?sandboxId=${sandboxId}`, headers: {}, body: args },
   })
 }
@@ -645,4 +671,302 @@ test('T-O-68 pre-dispatch refusal returns status + errorId only — no error, no
   assert.equal('error' in body, false, 'pre-dispatch bodies never carry the kernel reason')
   assert.equal('hint' in body, false, 'pre-dispatch bodies never carry a hint')
   assert.equal('incidentId' in body, false)
+})
+
+/* ── T-O-64 / R-11: the session agent's four managed tools ──────────────
+ *
+ * The shipped plugin registers them through index.js (`inject: [...'tools']`
+ * → `ctx.tools.register` inside the same `ctx.effect` that owns the route
+ * specs, disposed in reverse with everything else). The fixture below builds
+ * the same definitions the plugin builds — `makeAgentToolDefinitions` gets
+ * the very owner `createManagedRoutes` was given — so the counted `execute`
+ * wrapper is the observable proof that tool, /mcp and HTTP reach ONE
+ * capability owner + dispatcher, not a second object executor.
+ */
+
+const AGENT_TOOL_NAMES = ['sandbox.list', 'sandbox.status', 'sandbox.open', 'sandbox.control.status']
+
+/**
+ * A guaranteed-free port pool for one test: probes `size` consecutive
+ * loopback ports and returns them as a `[lo, hi]` range for the
+ * `portPools` dep. This host may have a real managed container holding the
+ * declared dev pool (8940+); fixtures that must bind — or must prove dead —
+ * the reserved tuple need a pool the environment cannot be occupying.
+ */
+async function freePool(size = 4) {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const probe = createServer()
+    probe.listen(0, '127.0.0.1')
+    await once(probe, 'listening')
+    const lo = probe.address().port
+    await new Promise((resolve) => probe.close(resolve))
+    let ok = lo + size - 1 <= 65535
+    for (let p = lo + 1; ok && p <= lo + size - 1; p += 1) {
+      const next = createServer()
+      try {
+        next.listen(p, '127.0.0.1')
+        await once(next, 'listening')
+      } catch {
+        ok = false
+      }
+      await new Promise((resolve) => next.close(resolve))
+    }
+    if (ok) return [lo, lo + size - 1]
+  }
+  assert.fail('no free consecutive loopback pool found')
+}
+
+/** A loopback stand-in for the object bridge: /control truth, nothing else. */
+async function fakeBridge(t, control, port = 0) {
+  const server = createServer((req, res) => {
+    if (req.url === '/control' && (req.method === 'GET' || req.method === 'HEAD')) {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: true, control }))
+      return
+    }
+    res.writeHead(404).end()
+  })
+  const listening = once(server, 'listening')
+  server.listen(port, '127.0.0.1')
+  await listening
+  t.after(async () => new Promise(resolve => server.close(resolve)))
+  return `http://127.0.0.1:${server.address().port}`
+}
+
+/**
+ * The host tuple this row reserves for one service — the only place an
+ * honest bridge may listen. The registry row read here is authoritative
+ * read-model only: `registry.get` clones, so nothing can repoint a live
+ * reservation; the fixture listens on the reserved port instead, and the
+ * inspect evidence (created with the same spec.ports) still proves the
+ * publication to `serviceMappings`.
+ */
+function reservedPort(row, serviceId) {
+  const port = row.ports.find((p) => p.serviceId === serviceId)
+  assert.ok(port, `row reserves ${serviceId}`)
+  assert.equal(port.hostAddress, '127.0.0.1')
+  return port.hostPort
+}
+
+test('T-O-64: the four agent tools are the same owner + dispatcher the /mcp and HTTP entries use', async (t) => {
+  const { tools, execCalls, call, create, setPeer } = await setup(t)
+  // Four tools, the four contract names, nothing else.
+  assert.deepEqual(tools.map((d) => d.name).sort(), AGENT_TOOL_NAMES.slice().sort())
+  assert.equal(tools.length, 4)
+  for (const def of tools) {
+    assert.equal(typeof def.execute, 'function')
+    assert.equal(typeof def.parameters, 'object')
+    assert.equal(def.parameters.type, 'object')
+    assert.equal(def.parameters.additionalProperties, false)
+    assert.equal(typeof def.output?.render, 'function')
+  }
+  // Schemas are the capability's own tool declarations — the same def that
+  // /mcp tools/list advertises, not a second copy.
+  const mcp = (await call('sandbox.list', {})).result
+  assert.equal(mcp.isError, false)
+
+  const row = await create('shared')
+  setPeer(ownerPeer())
+  const callsBefore = execCalls.length
+  // Same capability, three entrances, one counted dispatcher call each.
+  const viaTool = await tools.find((d) => d.name === 'sandbox.list').execute({}, { agent: { session: {} }, signal: new AbortController().signal })
+  assert.equal(viaTool.status, 200, JSON.stringify(viaTool))
+  assert.ok(viaTool.rows.some((r) => r.sandboxId === row.sandboxId), 'tool sees the same ledger')
+  const toolDispatches = execCalls.slice(callsBefore).filter((c) => c.capability === 'sandbox.list' && c.via === 'tool')
+  assert.equal(toolDispatches.length, 1, 'tool call landed on owner.execute exactly once')
+
+  const mcpBefore = execCalls.length
+  await call('sandbox.list', {})
+  const mcpDispatches = execCalls.slice(mcpBefore).filter((c) => c.capability === 'sandbox.list' && c.via === 'mcp')
+  assert.equal(mcpDispatches.length, 1, '/mcp tools/call landed on the same owner.execute')
+  // Same visible object through both envelopes: tool rows === /mcp rows.
+  const mcpRows = (await call('sandbox.list', {})).result.structuredContent.rows
+  assert.deepEqual(viaTool.rows.map((r) => r.sandboxId).sort(), mcpRows.map((r) => r.sandboxId).sort())
+})
+
+test('T-O-64: object tools refuse a missing sandboxId before any dispatch', async (t) => {
+  const { tools, execCalls } = await setup(t)
+  for (const name of ['sandbox.status', 'sandbox.open', 'sandbox.control.status']) {
+    const before = execCalls.length
+    const answer = await tools.find((d) => d.name === name).execute({}, { agent: { session: {} }, signal: new AbortController().signal })
+    assert.equal(answer.status, 400, `${name}`)
+    assert.equal(answer.ok, false)
+    assert.equal(answer.errorId, 'sandbox.params.sandboxId')
+    assert.equal(execCalls.length, before, `${name} dispatched without a selector`)
+    // Selector shape is the dispatcher's own rule — junk segments refuse too.
+    for (const bad of ['../x', 'a b', 'a/b', '']) {
+      const refused = await tools.find((d) => d.name === name).execute({ sandboxId: bad, url: 'https://e.net/' }, { agent: { session: {} }, signal: new AbortController().signal })
+      assert.equal(refused.errorId, 'sandbox.params.sandboxId', `${name} sandboxId=${JSON.stringify(bad)}`)
+    }
+  }
+  // No session context → the composition adapter yields no peer: pre-dispatch.
+  const refused = await tools.find((d) => d.name === 'sandbox.list').execute({}, {})
+  assert.equal(refused.status, 401)
+  assert.equal(refused.ok, false)
+})
+
+test('T-O-64: invisible and nonexistent objects refuse identically on every entry', async (t) => {
+  // An owner-shaped peer whose env-visibility predicate excludes this row —
+  // the scoped resolvePrincipal adapter the composition supplies (T-O-59),
+  // carrying the peer's own blindTo set into canSee.
+  const { tools, call, create, setPeer } = await setup(t, false, null, {
+    resolvePrincipal: ({ peer } = {}) => {
+      const owner = resolveOwnerPrincipal({ peer })
+      if (!owner) return null
+      return peer?.blindTo instanceof Set
+        ? { ...owner, canSee: (row) => !peer.blindTo.has(row?.sandboxId) }
+        : owner
+    },
+  })
+  const row = await create('hidden')
+  const blind = { principal: { kind: 'owner' }, signal: new AbortController().signal, blindTo: new Set([row.sandboxId]) }
+  setPeer(blind)
+  const mcpInvisible = await call('sandbox.inspect', { sandboxId: row.sandboxId })
+  const mcpMissing = await call('sandbox.inspect', { sandboxId: 'sb-no-such-row' })
+  assert.equal(mcpInvisible.res.statusCode, mcpMissing.res.statusCode)
+  assert.equal(mcpInvisible.res.statusCode, 404)
+  assert.equal(mcpInvisible.result.structuredContent.ok, false)
+  assert.deepEqual(mcpInvisible.result.structuredContent, mcpMissing.result.structuredContent,
+    'invisible and missing answer with the identical body')
+
+  const status = tools.find((d) => d.name === 'sandbox.status')
+  const exec = { agent: { session: {} }, signal: blind.signal }
+  const toolInvisible = await status.execute({ sandboxId: row.sandboxId }, exec)
+  const toolMissing = await status.execute({ sandboxId: 'sb-no-such-row' }, exec)
+  // peerFor maps the exec's live signal onto the same blind peer here —
+  // same status, same body, indistinguishable to the caller.
+  assert.equal(toolInvisible.status, toolMissing.status)
+  assert.equal(toolInvisible.ok, false)
+  assert.equal(toolMissing.ok, false)
+  assert.deepEqual(toolInvisible, toolMissing)
+})
+
+test('R-11: human hold refuses tool + /mcp opens pre-dispatch while the pane HTTP /open still reaches the kernel', async (t) => {
+  const connects = []
+  const client = fakePageClient()
+  // Kernel-work proof: Page.navigate sends on the object's owned CDP socket.
+  const navs = []
+  const rawSend = client.send.bind(client)
+  client.send = async (method, ...rest) => {
+    if (method === 'Page.navigate') navs.push(method)
+    return rawSend(method, ...rest)
+  }
+  // Private port pool: the declared dev pool can be held by a real container
+  // on this host; the fake bridge must own the reserved mcp-bridge tuple.
+  const { tools, call, create, specs } = await setup(t, false, null, {
+    connect: async (base) => { connects.push(base); return client },
+    portPools: { dev: await freePool() },
+  })
+  const row = await create('held')
+  // The fake bridge listens on the row's own reserved mcp-bridge tuple —
+  // registry.get() clones, so the fixture binds the port the ledger and the
+  // inspect evidence already agree on instead of rewriting either.
+  let hold = { active: true, owner: 'human', since: '2026-01-01T00:00:00Z', note: 'operator' }
+  await fakeBridge(t, { get humanHold() { return hold } }, reservedPort(row, 'mcp-bridge'))
+
+  const kernelBefore = connects.length
+  // (a) agent tool open: refused, dispatcher envelope, kernel untouched.
+  const opened = tools.find((d) => d.name === 'sandbox.open')
+  const refusal = await opened.execute({ sandboxId: row.sandboxId, url: 'https://example.net/' },
+    { agent: { session: {} }, signal: new AbortController().signal })
+  assert.equal(refusal.status, 409)
+  assert.equal(refusal.ok, false)
+  assert.equal(refusal.errorId, 'kitesurf.control.held')
+  for (const key of ['error', 'hint', 'incidentId']) assert.equal(key in refusal, false, `pre-dispatch body carries ${key}`)
+  assert.equal(connects.length, kernelBefore, 'tool open never reached the open kernel')
+  assert.equal(navs.length, 0, 'tool open issued no navigation while held')
+
+  // (b) /mcp open: same refusal — identical status + errorId, still no kernel.
+  const mcpRefusal = await call('sandbox.open', { sandboxId: row.sandboxId, url: 'https://example.net/' })
+  assert.equal(mcpRefusal.res.statusCode, 409)
+  assert.equal(mcpRefusal.result.structuredContent.ok, false)
+  assert.equal(mcpRefusal.result.structuredContent.errorId, 'kitesurf.control.held')
+  assert.equal(connects.length, kernelBefore, '/mcp open never reached the open kernel')
+  assert.equal(navs.length, 0, '/mcp open issued no navigation while held')
+
+  // (c) the pane's own HTTP /open is exempt: hold active, kernel still runs.
+  const httpOpen = specs.find((s) => s.path === '/nano-local-sandbox/open')
+  const res = { statusCode: 0, headers: {}, setHeader(k, v) { this.headers[k] = v }, end(text) { this.text = text } }
+  await httpOpen.handler({
+    method: 'POST',
+    url: `/nano-local-sandbox/open?sandboxId=${row.sandboxId}`,
+    headers: { 'x-dnls-contract': 'dnls.control/1' },
+    body: { url: 'https://example.net/' },
+  }, res)
+  assert.equal(res.statusCode, 200, res.text)
+  assert.equal(JSON.parse(res.text).ok, true)
+  assert.equal(connects.length, kernelBefore + 1, 'HTTP pane entry reached the kernel once')
+  assert.equal(navs.length, 1, 'pane HTTP /open navigated once')
+
+  // (d) hold released → the tool opens through the SAME kernel now: the
+  // object-owned CDP socket the pane connected in (c) carries this
+  // navigation too — one kernel, one socket, no second dial.
+  hold = { active: false, owner: null, since: null, note: null }
+  const okTool = await opened.execute({ sandboxId: row.sandboxId, url: 'https://example.org/' },
+    { agent: { session: {} }, signal: new AbortController().signal })
+  assert.equal(okTool.status, 200, JSON.stringify(okTool))
+  assert.equal(okTool.ok, true)
+  assert.equal(navs.length, 2, 'tool open reached the same kernel once released')
+  assert.equal(connects.length, kernelBefore + 1, 'tool reuses the object-owned kernel socket')
+})
+
+test('T-O-64: tool results pass the dispatcher redaction — denied keys never surface', async (t) => {
+  const client = fakePageClient()
+  const { tools, create } = await setup(t, false, null, {
+    connect: async () => client,
+    portPools: { dev: await freePool() },
+  })
+  const row = await create('redacted')
+  // The control document itself carries fields the agent must never read;
+  // the fake bridge answers them verbatim on the row's own bridge tuple,
+  // redaction strips them.
+  const control = {
+    humanHold: { active: false, owner: null },
+    relay: { writer: 'agent', connections: 0 },
+    cookies: [{ name: 'sess' }],
+    relayToken: 'secret-relay-token',
+    authorization: 'Bearer xyz',
+    argv: ['--dangerous'],
+    env: { SECRET: 'v' },
+  }
+  await fakeBridge(t, control, reservedPort(row, 'mcp-bridge'))
+  const answer = await tools.find((d) => d.name === 'sandbox.control.status')
+    .execute({ sandboxId: row.sandboxId }, { agent: { session: {} }, signal: new AbortController().signal })
+  assert.equal(answer.status, 200, JSON.stringify(answer))
+  assert.equal(answer.ok, true)
+  // Two-slot read: only humanHold + relay, already narrowed — plus every
+  // denied key absent at any depth (redact still ran over the projection).
+  assert.deepEqual(answer.humanHold, control.humanHold)
+  assert.deepEqual(answer.relay, control.relay)
+  const raw = JSON.stringify(answer)
+  for (const denied of ['cookies', 'relayToken', 'authorization', 'argv', 'env', 'secret']) {
+    assert.equal(raw.includes(denied), false, `${denied} surfaced in tool result`)
+  }
+})
+
+test('R-11: a failed humanHold read refuses with control.bridge before any kernel work', async (t) => {
+  const connects = []
+  const client = fakePageClient()
+  const { tools, call, create } = await setup(t, false, null, {
+    connect: async (base) => { connects.push(base); return client },
+    // A private pool also proves the reserved tuple is dead: nothing on
+    // this host can be holding the port the row reserves for mcp-bridge.
+    portPools: { dev: await freePool() },
+  })
+  const row = await create('bridge-down')
+  // The reserved mcp-bridge tuple is honestly published by the fixture
+  // inspect evidence, but nothing listens on it — the control read fails.
+  const kernelBefore = connects.length
+
+  const opened = tools.find((d) => d.name === 'sandbox.open')
+  const refused = await opened.execute({ sandboxId: row.sandboxId, url: 'https://example.net/' },
+    { agent: { session: {} }, signal: new AbortController().signal })
+  assert.equal(refused.ok, false)
+  assert.equal(refused.errorId, 'kitesurf.control.bridge')
+  assert.equal(connects.length, kernelBefore, 'failed read never reached the kernel')
+
+  const mcpRefused = await call('sandbox.open', { sandboxId: row.sandboxId, url: 'https://example.net/' })
+  assert.equal(mcpRefused.result.structuredContent.ok, false)
+  assert.equal(mcpRefused.result.structuredContent.errorId, 'kitesurf.control.bridge')
+  assert.equal(connects.length, kernelBefore)
 })

@@ -80,7 +80,11 @@ function makeSource(envId, rows, { visibleTo, observe, backend, usage, registryT
     observe: observe ?? (async (row) => { calls.observe += 1; return liveObs(row) }),
     profileFor: async () => {
       calls.profileFor += 1
-      return { services: [{ id: 'engine', port: 8787, protocol: 'tcp', cwd: '/opt/kitesurf', role: 'engine' }] }
+      return {
+        services: [{ id: 'engine', port: 8787, protocol: 'tcp', cwd: '/opt/kitesurf', role: 'engine' }],
+        // T-O-67: the readonly manifest capability list projected onto rows.
+        drivers: ['cdp', 'mcp'],
+      }
     },
     usage: usage ?? { summary: async () => { calls.usage += 1; return { window: '24h', minutes: 0 } } },
     backend: backend ?? {
@@ -463,6 +467,36 @@ test('T60 processes: peer revoked before probe makes zero guest calls', async ()
   assert.equal(res.result.isError, true)
   assert.equal(local.calls.observe, 0, 'revoked peer still probed')
   assert.equal(local.calls.processes, 0, 'revoked peer reached the guest')
+})
+
+test('T-O-67: list and inspect rows carry the readonly drivers projection from the same source', async () => {
+  const row = makeRow()
+  const local = makeSource('dev', [row])
+  const { http, tool } = setup({ sources: [local] })
+  // HTTP read and the T-O-64 list tool read one projection — the value is
+  // exactly what the profile source declares.
+  const list = await http('/nano-local-sandbox/sandboxes')
+  assert.equal(list.status, 200)
+  const listed = list.body.rows.find((entry) => entry.sandboxId === row.sandboxId)
+  assert.deepEqual(listed.drivers, ['cdp', 'mcp'])
+  const viaTool = await tool('sandbox.list', {})
+  assert.equal(viaTool.result.isError, false)
+  const toolListed = viaTool.result.structuredContent.rows.find((entry) => entry.sandboxId === row.sandboxId)
+  assert.deepEqual(toolListed.drivers, listed.drivers, 'tool list is the same-source projection')
+  const detail = await http('/nano-local-sandbox/inspect', { query: `?sandboxId=${row.sandboxId}` })
+  assert.equal(detail.status, 200)
+  assert.deepEqual(detail.body.drivers, ['cdp', 'mcp'])
+  const toolDetail = await tool('sandbox.inspect', { sandboxId: row.sandboxId })
+  assert.deepEqual(toolDetail.result.structuredContent.drivers, ['cdp', 'mcp'])
+  // fleet uses the same row projection.
+  const fleet = await http('/nano-local-sandbox/fleet')
+  assert.deepEqual(fleet.body.envs[0].rows[0].drivers, ['cdp', 'mcp'])
+  // An unresolvable profile fails closed to an empty list, never a guess.
+  const noProfile = makeSource('dev', [row])
+  noProfile.profileFor = async () => { throw new Error('profile unavailable') }
+  const second = setup({ sources: [noProfile] })
+  const degraded = await second.http('/nano-local-sandbox/sandboxes')
+  assert.deepEqual(degraded.body.rows[0].drivers, [])
 })
 
 test('T60 fleet: only this principal own live terminals are counted', async () => {

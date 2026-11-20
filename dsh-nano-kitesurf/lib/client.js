@@ -3015,8 +3015,12 @@ ${LAYER_CSS}
           sandboxEmpty: "\u6CA1\u6709\u53EF\u89C1\u7684\u6258\u7BA1\u6C99\u7BB1",
           sandboxLoading: "\u6B63\u5728\u53D1\u73B0\u6258\u7BA1\u6C99\u7BB1\u2026",
           sandboxFailed: "\u6C99\u7BB1\u53D1\u73B0\u5931\u8D25",
+          sandboxNoDriver: "\u672A\u58F0\u660E\u6D4F\u89C8\u5668\u9A71\u52A8",
           referenceVerifying: "\u6B63\u5728\u6838\u5B9E\u5F15\u7528\u7684\u6C99\u7BB1\u2026",
-          referenceFailed: "\u65E0\u6CD5\u6253\u5F00\u5F15\u7528\u7684\u6C99\u7BB1"
+          referenceFailed: "\u65E0\u6CD5\u6253\u5F00\u5F15\u7528\u7684\u6C99\u7BB1",
+          referenceReasonMissing: "\u8BE5\u5BF9\u8C61\u4E0D\u5B58\u5728\u6216\u5BF9\u5F53\u524D\u4E3B\u4F53\u4E0D\u53EF\u89C1",
+          referenceReasonEnv: "\u8BE5\u5BF9\u8C61\u4E0D\u5728\u6B64\u73AF\u5883\u4E2D",
+          referenceReasonDriver: "\u8BE5\u5BF9\u8C61\u672A\u58F0\u660E\u6D4F\u89C8\u5668\u9A71\u52A8"
         },
         en: {
           typeLabel: "Kitesurf",
@@ -3247,8 +3251,12 @@ ${LAYER_CSS}
           sandboxEmpty: "No managed sandboxes are visible",
           sandboxLoading: "Discovering managed sandboxes\u2026",
           sandboxFailed: "Sandbox discovery failed",
+          sandboxNoDriver: "No browser driver declared",
           referenceVerifying: "Verifying the referenced sandbox\u2026",
-          referenceFailed: "The referenced sandbox could not be opened"
+          referenceFailed: "The referenced sandbox could not be opened",
+          referenceReasonMissing: "The object does not exist or is not visible to this principal",
+          referenceReasonEnv: "The object lives in a different environment",
+          referenceReasonDriver: "The object declares no browser driver"
         }
       };
     }
@@ -3596,7 +3604,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   // src/shared/sandbox-reference.js
   var sandbox_reference_exports = {};
   __export(sandbox_reference_exports, {
+    noteVerifiedSandboxName: () => noteVerifiedSandboxName,
     parseSandboxReference: () => parseSandboxReference,
+    subscribeVerifiedSandboxNames: () => subscribeVerifiedSandboxNames,
+    verifiedSandboxName: () => verifiedSandboxName,
     verifySandboxReference: () => verifySandboxReference
   });
   function refuse2(code, message) {
@@ -3621,21 +3632,105 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       const error = new Error(body?.error ?? `inspect failed (${res.status})`);
-      error.errorId = body?.errorId ?? "kitesurf.sandbox.object";
+      error.errorId = body?.errorId ?? "kitesurf.sandbox.missing";
       error.status = res.status;
       throw error;
     }
     const detail = await res.json().catch(() => null);
     if (detail?.sandboxId !== parsed.sandboxId) refuse2("object", "inspect names a different sandbox");
     if (detail?.envId !== parsed.envId) refuse2("env", "sandbox lives in a different environment");
-    return { client: managed, envId: parsed.envId, sandboxId: parsed.sandboxId, name: detail.name };
+    const drivers = Array.isArray(detail?.drivers) ? detail.drivers.filter((driver) => typeof driver === "string" && driver.length > 0) : [];
+    if (!drivers.includes(BROWSER_DRIVER)) {
+      refuse2("driver", "sandbox profile declares no browser driver");
+    }
+    return { client: managed, envId: parsed.envId, sandboxId: parsed.sandboxId, name: detail.name, drivers };
   }
-  var ENV_ID, UUID, ADDRESS;
+  function noteVerifiedSandboxName(address, name) {
+    if (typeof name !== "string" || name.length === 0) return;
+    const parsed = parseSandboxReference(address);
+    if (!parsed) return;
+    verifiedNames.set(address, name);
+    for (const listener of nameListeners) {
+      try {
+        listener();
+      } catch {
+      }
+    }
+  }
+  function verifiedSandboxName(address) {
+    return verifiedNames.get(address) ?? null;
+  }
+  function subscribeVerifiedSandboxNames(listener) {
+    if (typeof listener !== "function") return () => {
+    };
+    nameListeners.add(listener);
+    return () => nameListeners.delete(listener);
+  }
+  var ENV_ID, UUID, ADDRESS, BROWSER_DRIVER, verifiedNames, nameListeners;
   var init_sandbox_reference = __esm({
     "src/shared/sandbox-reference.js"() {
       ENV_ID = "[a-z][a-z0-9-]{0,15}";
       UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
       ADDRESS = new RegExp(`^dsh-resource://sandbox/(${ENV_ID})/(${UUID})$`);
+      BROWSER_DRIVER = "cdp";
+      verifiedNames = /* @__PURE__ */ new Map();
+      nameListeners = /* @__PURE__ */ new Set();
+    }
+  });
+
+  // src/shared/pane-poll.js
+  var pane_poll_exports = {};
+  __export(pane_poll_exports, {
+    armPanePoll: () => armPanePoll
+  });
+  function armPanePoll(load, {
+    periodMs,
+    hiddenPeriodMs = null,
+    immediate = false,
+    shouldTick = () => true,
+    isVisible = () => true,
+    window: window2 = globalThis.window,
+    document: document2 = globalThis.document
+  } = {}) {
+    if (typeof load !== "function") throw new TypeError("armPanePoll requires a load function");
+    if (!Number.isFinite(periodMs) || periodMs <= 0) throw new TypeError("armPanePoll requires a positive periodMs");
+    if (typeof window2?.setInterval !== "function") return () => {
+    };
+    if (isVisible() !== true) return () => {
+    };
+    if (immediate === true) {
+      try {
+        load();
+      } catch {
+      }
+    }
+    let timer = null;
+    const period = () => hiddenPeriodMs !== null && document2?.visibilityState === "hidden" ? hiddenPeriodMs : periodMs;
+    const tick = () => {
+      if (isVisible() !== true || shouldTick() !== true) return;
+      try {
+        load();
+      } catch {
+      }
+    };
+    const arm = () => {
+      if (timer !== null) window2.clearInterval(timer);
+      timer = window2.setInterval(tick, period());
+    };
+    const onVis = () => {
+      arm();
+      if (document2?.visibilityState !== "hidden") tick();
+    };
+    if (hiddenPeriodMs !== null) document2?.addEventListener?.("visibilitychange", onVis);
+    arm();
+    return () => {
+      if (timer !== null) window2.clearInterval(timer);
+      timer = null;
+      if (hiddenPeriodMs !== null) document2?.removeEventListener?.("visibilitychange", onVis);
+    };
+  }
+  var init_pane_poll = __esm({
+    "src/shared/pane-poll.js"() {
     }
   });
 
@@ -3655,7 +3750,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
   var { captureNavigation: captureNavigation2, requestTimeout: requestTimeout2 } = (init_navigation(), __toCommonJS(navigation_exports));
   var { createManagedDesignClient: createManagedDesignClient2, listSandboxRows: listSandboxRows2 } = (init_managed_client(), __toCommonJS(managed_client_exports));
-  var { parseSandboxReference: parseSandboxReference2, verifySandboxReference: verifySandboxReference2 } = (init_sandbox_reference(), __toCommonJS(sandbox_reference_exports));
+  var { parseSandboxReference: parseSandboxReference2, verifySandboxReference: verifySandboxReference2, noteVerifiedSandboxName: noteVerifiedSandboxName2, verifiedSandboxName: verifiedSandboxName2, subscribeVerifiedSandboxNames: subscribeVerifiedSandboxNames2 } = (init_sandbox_reference(), __toCommonJS(sandbox_reference_exports));
+  var { armPanePoll: armPanePoll2 } = (init_pane_poll(), __toCommonJS(pane_poll_exports));
   var h9 = React14.createElement;
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
@@ -4149,7 +4245,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     if (!needle) return true;
     return `${row.tag || ""} ${row.id || ""} ${row.cls || ""}`.toLowerCase().includes(needle);
   }
-  function DevTools({ copy, open, onClose, fetch: fetch2 }) {
+  function DevTools({ copy, open, onClose, fetch: fetch2, visible = true }) {
+    const visRef = React14.useRef(true);
+    visRef.current = visible !== false;
     const [tab, setTab] = React14.useState("console");
     const [rows, setRows] = React14.useState([]);
     const [failedOnly, setFailedOnly] = React14.useState(false);
@@ -4222,25 +4320,17 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         } catch {
         }
       };
-      load();
-      const period = () => document.visibilityState === "hidden" ? 15e3 : 1500;
-      let timer = 0;
-      const arm = () => {
-        clearInterval(timer);
-        timer = window.setInterval(load, period());
-      };
-      const onVis = () => {
-        arm();
-        if (document.visibilityState !== "hidden") load();
-      };
-      document.addEventListener("visibilitychange", onVis);
-      arm();
+      const disarm = armPanePoll2(load, {
+        periodMs: 1500,
+        hiddenPeriodMs: 15e3,
+        immediate: true,
+        isVisible: () => visRef.current
+      });
       return () => {
         alive = false;
-        clearInterval(timer);
-        document.removeEventListener("visibilitychange", onVis);
+        disarm();
       };
-    }, [open, tab]);
+    }, [open, tab, visible]);
     if (!open) return null;
     const visibleRows = rows.filter((row) => {
       if (tab === "network") {
@@ -4614,8 +4704,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const pending = row.durationMs == null && !row.failed;
     return h9("i", { style: { left: `${left}%`, width: `${width}%` }, "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false", "data-pending": pending ? "true" : "false" });
   }
-  function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch: fetch2, sandboxId }) {
+  function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch: fetch2, sandboxId, visible = true }) {
     const post = (path, body) => postRequest(fetch2, path, body);
+    const paneVisible = visible !== false;
+    const visibleRef = React14.useRef(true);
+    visibleRef.current = paneVisible;
     const localNotes = React14.useRef([]).current;
     const [status, setStatus] = React14.useState(null);
     const engine = engineEndpoint(status);
@@ -4731,21 +4824,21 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       setNavTabs((current) => current.filter((row) => row.url !== url));
     };
     React14.useEffect(() => {
+      if (!paneVisible) return void 0;
       refreshStatus().then(async (statusPayload) => {
-        if (!statusPayload?.ok) return;
+        if (!statusPayload?.ok || !visibleRef.current) return;
         try {
           const fit = frameSize();
           const shotPayload = await post(SHOT, { format: "webp", ...fit ? { fit } : {} });
           setShot(shotPayload.data);
           setShotMime(shotPayload.mimeType || "image/webp");
-          loadDom().catch(() => {
-          });
           setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
           if (shotPayload.url && shotPayload.url !== "about:blank") setPageUrl(shotPayload.url);
         } catch {
         }
       });
-    }, []);
+      return void 0;
+    }, [paneVisible]);
     React14.useEffect(() => {
       const onKey = (event) => {
         if (dialogOpenRef.current) return;
@@ -4814,23 +4907,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const timer = window.setInterval(() => {
         ticks += 1;
         setBeatSec(Math.max(1, Math.floor((Date.now() - started) / 1e3)));
-        if (ticks % 2 === 0) refreshStatus().catch(() => {
+        if (visibleRef.current && ticks % 2 === 0) refreshStatus().catch(() => {
         });
       }, 1e3);
       return () => window.clearInterval(timer);
-    }, [beat]);
+    }, [beat, paneVisible]);
     React14.useEffect(() => {
       if (!engineNavigating) return void 0;
       const timer = window.setInterval(() => {
-        refreshStatus().catch(() => {
+        if (visibleRef.current) refreshStatus().catch(() => {
         });
       }, 3e3);
       return () => window.clearInterval(timer);
-    }, [engineNavigating]);
-    React14.useEffect(() => {
-      if (nativeHtml && shot && !domDoc) loadDom().catch(() => {
-      });
-    }, [shot, nativeHtml]);
+    }, [engineNavigating, paneVisible]);
     React14.useEffect(() => {
       if (!nativeHtml || !shot) return void 0;
       let alive = true;
@@ -4842,22 +4931,25 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           fails += 1;
         });
       };
-      const timer = window.setInterval(() => {
-        if (alive && fails < 3) poll();
-      }, 3e3);
+      const disarm = armPanePoll2(poll, {
+        periodMs: 3e3,
+        immediate: true,
+        shouldTick: () => alive && fails < 3,
+        isVisible: () => visibleRef.current
+      });
       return () => {
         alive = false;
-        clearInterval(timer);
+        disarm();
       };
-    }, [shot, nativeHtml]);
+    }, [shot, nativeHtml, paneVisible]);
     React14.useEffect(() => {
-      if (shot) return void 0;
+      if (shot || !paneVisible) return void 0;
       const timer = window.setInterval(() => {
-        if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
+        if (visibleRef.current && !busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
         });
       }, 2e3);
       return () => clearInterval(timer);
-    }, [shot]);
+    }, [shot, paneVisible]);
     React14.useEffect(() => {
       let armed = 0;
       const onKey = (event) => {
@@ -4919,7 +5011,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         if (!previous) return;
         clearTimeout(timer);
         timer = window.setTimeout(() => {
-          if (!busyRef.current) reloadShot(0, { keepPick: true, fromResize: true }).catch(() => {
+          if (visibleRef.current && !busyRef.current) reloadShot(0, { keepPick: true, fromResize: true }).catch(() => {
           });
         }, 320);
       });
@@ -4931,7 +5023,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }, []);
     React14.useEffect(() => {
       const onFocus = () => {
-        if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
+        if (visibleRef.current && !busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
         });
       };
       window.addEventListener("focus", onFocus);
@@ -5561,21 +5653,18 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         } catch {
         }
       };
-      load();
-      let timer = window.setInterval(load, document.visibilityState === "hidden" ? 12e3 : 1500);
-      const onVis = () => {
-        clearInterval(timer);
-        timer = window.setInterval(load, document.visibilityState === "hidden" ? 12e3 : 1500);
-        if (document.visibilityState !== "hidden") load();
-      };
-      document.addEventListener("visibilitychange", onVis);
+      const disarm = armPanePoll2(load, {
+        periodMs: 1500,
+        hiddenPeriodMs: 12e3,
+        immediate: true,
+        isVisible: () => visibleRef.current
+      });
       return () => {
         alive = false;
-        clearInterval(timer);
-        document.removeEventListener("visibilitychange", onVis);
+        disarm();
         clearTimeout(actionToastTimer.current);
       };
-    }, [engineHasPage]);
+    }, [engineHasPage, paneVisible]);
     const controlOp = React14.useCallback(async (action) => {
       try {
         const data = await fetch2(CONTROL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, owner: "kitesurf-pane" }) }).then((r) => r.json());
@@ -5632,21 +5721,17 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }).catch(() => {
           if (alive) setProbeMisses((n) => n + 1);
         });
-        load();
-        const period = () => document.visibilityState === "hidden" ? 12e3 : 1500;
-        let timer = window.setInterval(load, period());
-        const onVis = () => {
-          clearInterval(timer);
-          timer = window.setInterval(load, period());
-          if (document.visibilityState !== "hidden") load();
-        };
-        document.addEventListener("visibilitychange", onVis);
+        const disarm = armPanePoll2(load, {
+          periodMs: 1500,
+          hiddenPeriodMs: 12e3,
+          immediate: true,
+          isVisible: () => visibleRef.current
+        });
         return () => {
           alive = false;
-          clearInterval(timer);
-          document.removeEventListener("visibilitychange", onVis);
+          disarm();
         };
-      }, []);
+      }, [paneVisible]);
       function prepare() {
         confirmRestart(() => {
           setBusyLocal(true);
@@ -6394,7 +6479,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h9("span", { style: { flex: "auto" } })
       ),
       h9(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
-      h9(DevTools, { copy, fetch: fetch2, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
+      h9(DevTools, { copy, fetch: fetch2, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false), visible: paneVisible }),
       h9(
         "div",
         {
@@ -6686,7 +6771,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }, pick.elements.length > 1 ? multiNote2(pick.elements, { url: pageUrl, comment }) : designNote2(pick.elements[0], { url: pageUrl, comment })) : null
     );
   }
-  function SandboxPicker({ copy, languageOf, theme, onThemeChange, address }) {
+  function rowDrivable(row) {
+    return Array.isArray(row?.drivers) && row.drivers.includes("cdp");
+  }
+  function SandboxPicker({ copy, languageOf, theme, onThemeChange, address, visible }) {
     const [client, setClient] = React14.useState(null);
     const [rows, setRows] = React14.useState(null);
     const [error, setError] = React14.useState(null);
@@ -6704,6 +6792,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           try {
             const verified = await verifySandboxReference2(address, impl, location.origin, { createManagedDesignClient: createManagedDesignClient2 });
             if (!alive) return;
+            noteVerifiedSandboxName2(address, verified.name);
             setClient(verified.client);
             setError(null);
             setReference({ state: "ok" });
@@ -6756,6 +6845,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       setSelection({ sandboxId, fetch: boundFetch });
     }
     function choose(sandboxId) {
+      const row = (rows ?? []).find((entry) => entry.sandboxId === sandboxId);
+      if (!rowDrivable(row)) return;
       selectWith(client, sandboxId);
     }
     const picker = h9(
@@ -6772,19 +6863,27 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           }
         },
         h9("option", { value: "", disabled: true }, copy.sandboxPick),
-        (rows ?? []).map((row) => h9(
-          "option",
-          { key: row.sandboxId, value: row.sandboxId },
-          `${row.name || row.sandboxId.slice(0, 8)} \xB7 ${row.envId ?? ""} \xB7 ${row.observedState ?? "unknown"}`
-        ))
+        (rows ?? []).map((row) => {
+          const drivable = rowDrivable(row);
+          const label = `${row.name || row.sandboxId.slice(0, 8)} \xB7 ${row.envId ?? ""} \xB7 ${row.observedState ?? "unknown"}`;
+          return h9("option", {
+            key: row.sandboxId,
+            value: row.sandboxId,
+            disabled: !drivable || void 0,
+            title: drivable ? void 0 : copy.sandboxNoDriver
+          }, drivable ? label : `${label} \xB7 ${copy.sandboxNoDriver}`);
+        })
       )
     );
     if (address) {
       if (reference?.state === "error") {
+        const reasonId = String(reference.cause?.errorId ?? "");
+        const reason = reasonId.endsWith(".env") ? copy.referenceReasonEnv : reasonId.endsWith(".driver") ? copy.referenceReasonDriver : reasonId.endsWith(".missing") || reference.cause?.status === 404 || reference.cause?.status === 403 ? copy.referenceReasonMissing : null;
         return h9(
           "div",
           { className: "nks-empty", "data-nks-reference-error": "1" },
           h9("div", { className: "nks-empty-title" }, copy.referenceFailed),
+          reason ? h9("div", { className: "nks-empty-body", "data-nks-reference-reason": "1" }, reason) : null,
           h9("div", { className: "nks-empty-body" }, String(reference.cause?.message || reference.cause)),
           h9(
             "div",
@@ -6796,7 +6895,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       if (!selection) {
         return h9("div", { className: "nks-empty", "data-nks-reference-verify": "1" }, copy.referenceVerifying);
       }
-      return h9(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId });
+      return h9(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId, visible });
     }
     if (error) {
       return h9(
@@ -6818,7 +6917,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       React14.Fragment,
       null,
       picker,
-      h9(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId })
+      h9(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId, visible })
     );
   }
   var inject = ["slots", "sidebarRightTabs", "locale", "theme"];
@@ -6835,7 +6934,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       languageOf,
       theme: ctx.theme,
       onThemeChange: (listener) => ctx.on("theme/change", listener),
-      address: props?.useTabInfo?.().tab?.navigation?.address
+      address: props?.useTabInfo?.().tab?.navigation?.address,
+      visible: props?.useTabInfo?.().tab?.visible
     });
     ctx.effect(() => ctx.sidebarRightTabs.register({
       id: OWN_ID,
@@ -6869,8 +6969,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     )));
     ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register(
       { name: "sidebar.right.pane.tab.title", key: "dnk-sandbox" },
-      function DnkSandboxTitle() {
-        return copy().typeLabel;
+      // T-O-67: the host bakes title() once at open — the slot component is
+      // where a verified object name replaces the short id. It subscribes to
+      // the name registry the body's verification pass writes.
+      function DnkSandboxTitle(props) {
+        const address = props?.useTabInfo?.().tab?.navigation?.address;
+        const ref = parseSandboxReference2(address);
+        const [name, setName] = React14.useState(() => verifiedSandboxName2(address));
+        React14.useEffect(() => {
+          setName(verifiedSandboxName2(address));
+          return subscribeVerifiedSandboxNames2(() => setName(verifiedSandboxName2(address)));
+        }, [address]);
+        if (name) return name;
+        return ref ? `sandbox ${ref.sandboxId.slice(0, 8)}` : copy().typeLabel;
       }
     )));
     ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({

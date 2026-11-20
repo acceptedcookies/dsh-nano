@@ -2,7 +2,7 @@
 name: nano-kite
 description: Start, resume, suspend, or restart the Kitesurf engine through the sandbox host. Use when the user types /nano-kite.
 version: 0.1.0
-date: 2026-11-19
+date: 2026-11-20
 user-invocable: true
 ---
 

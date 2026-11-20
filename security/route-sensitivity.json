@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "purpose": "Per-route sensitivity ledger for dsh-host-route-guard (T-O-2 / T-O-7). One row per registered path (43 total). sensitivity = validation strength required when a same-origin page script calls the route: L0 read-only/no-secret, L1 bounded workspace write, L2 host-level capability, L3 operator config. bodyLimit is the route-level cap (max over methods; GET/HEAD carry no body). sessionBinding records whether the route takes a sessionId; it is metadata, not a runtime assertion (M8).",
+  "purpose": "Per-route sensitivity ledger for dsh-host-route-guard (T-O-2 / T-O-7). One row per registered path (44 total). sensitivity = validation strength required when a same-origin page script calls the route: L0 read-only/no-secret, L1 bounded workspace write, L2 host-level capability, L3 operator config. bodyLimit is the route-level cap (max over methods; GET/HEAD carry no body). sessionBinding records whether the route takes a sessionId; it is metadata, not a runtime assertion (M8).",
   "generatedBy": "scripts/gen-route-sensitivity.mjs (paths/methods/bodyLimit from code; sensitivity/capability/justification/id/channel/match hand-reviewed and preserved on merge)",
   "routes": [
     {
@@ -1432,6 +1432,22 @@
       "id": "dnms.perf-review.host",
       "channel": "http",
       "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/res",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "RES_ROUTE (prefix) — same-origin resource proxy for the pane’s native-HTML preview. The pane is an https page, so a srcdoc iframe cannot load the http: subresources of a local dev server (mixed content is blocked silently, leaving an unstyled skeleton). This route fetches <scheme>/<host>/<path> on the host and streams it back under the dsh origin, so the browser never crosses schemes and no certificate or public tunnel is involved. Only http/https are accepted (file:/data:/javascript: are rejected with a named errorId); Set-Cookie is stripped so a proxied page cannot write dsh cookies. Read-only passthrough, no engine or container mutation.",
+      "id": "dnls.res",
+      "channel": "http",
+      "match": "prefix"
     }
   ]
 }

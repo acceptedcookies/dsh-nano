@@ -15,6 +15,8 @@
 
 桥健康：`GET http://<host>:<lifecycle.mcpPort>/health`。
 
+11. **本地 http 站在「HTML 原生渲染」下只有骨架、没有样式** → 这是预览层的混合内容，不是站点坏了，也不是要你给 dev server 加 https。面板默认的**引擎渲染**会正常显示样式；HTML 原生模式则由 DNLS 的同源代理（`/nano-local-sandbox/res/<scheme>/<host>/<path>`）取子资源。若仍缺样式：先 `GET /network?failedOnly=true` 看是否有 `/res/` 行报错（`res.scheme`/`res.host`/`res.size`/`res.upstream`/`res.timeout`），按 errorId 处理；**不要**改用公网隧道或自签证书——那会绕开部署拓扑，属明令禁止。
+
 ## `/selftest`
 
 `GET /nano-local-sandbox/selftest` 返回 `{ok,total,failed,checks[]}`，每行 `{id,ok,detail}`。失败行看 `detail` 定位哪一 plane/探针挂了，再回决策树对应步骤；不要在本包重建容器或改端口。

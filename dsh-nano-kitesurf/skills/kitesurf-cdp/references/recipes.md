@@ -51,6 +51,21 @@ GET /nano-local-sandbox/diagnostics        # hints 已把「页面加载但应�
 - **cookie 域**：`Set-Cookie` 写 host-only 域——`localhost:3000` 与 `<hostGateway>:3000` 是**两个域**。容器内打开的是后者，宿主浏览器里的登录态 cookie **不会**跟过来；需要登录态用 `POST /settings {cookies:[…]}` 显式种。
 - **地址写法**：`localhost:3000` 不带 scheme 时 `navigationUrl` 会补 `https://` 变 `https://localhost:3000`——容器内既错主机又错协议。**永远写全 `http://<hostGateway>:<port>`**。
 
+**渲染面：非 https 站的样式由插件负责，不要推给使用者**
+
+- 面板默认走**引擎渲染**（`/shot` 的像素）：引擎在容器内自己加载页面，`http://<hostGateway>:<port>` 的 CSS/图片正常——**打开本地站就看到完整样式是默认结果**，不需要任何前置动作。
+- 「HTML 原生渲染」（底部 `HTML` 按钮）是 `iframe srcdoc`，继承宿主的 **https** origin；它直连 `http:` 子资源会被浏览器按混合内容**静默拦掉**，只剩骨架。DNLS 已为此内置同源资源代理：srcdoc 的 `<base>` 与所有绝对 `http(s)` 子资源都改写为 `/nano-local-sandbox/res/<scheme>/<host>/<path>`，由宿主取回并以 dsh 源流回。**所以不要为它做任何「把 http 变成 https」的准备。**
+- 代理边界（越界即显式错误，不会静默降级）：只收 `http`/`https` → 其余 400 `res.scheme`；带凭据主机 400 `res.host`；>24MiB 413 `res.size`；上游不可达 502 `res.upstream`（body 带 `upstreamStatus`）；15s 超时 504 `res.timeout`。
+
+**明令禁止（做了就是错，不是"另一种可行方案"）**
+
+| 禁止的做法 | 为什么禁止 | 做了会看到什么 |
+|---|---|---|
+| 让使用者的 dev server 上 TLS / 装自签证书 | 把插件该解决的问题推给使用者；pane 在宿主 Keychain、引擎在容器信任域，两端都得装 CA | 负担没消失只是换位置；引擎对自签证书直接 `internal error` |
+| `cloudflared` / `ngrok` / `localtunnel` 暴露本地站 | 完整绕过部署拓扑，把私网 dev 站搬到公网 | 违反仓库 [不得侧载]；即便渲染通了也是错误方案，**不得作为建议提出** |
+| 在 skill / hint / 代码里写死网关 IP | 拓扑随 backend 变（vz NAT、docker、cloud 各不相同） | 换环境即失效；只引 `networking.hostGateway` 字段名，永不引值 |
+| 用 `http://localhost:<port>` 直连 | 容器内 `localhost` 是容器自己 | 502 `navigate.failed` + `net::ERR_CONNECTION_REFUSED` |
+
 ### 6. 写反馈报告（结构化回执）
 排障完成后按 `templates/feedback-report.md` 填：元信息（buildId/phase）→ 路由调用序列（/operations 摘，错误行带 `incidentId` 可与响应体回执互查）→ 观察到的现象 → 诊断摘录（hints/console/errorsOnly）→ 元素上下文（`/pick` 应答 + `/refs?ref=@N` 反查）→ errorId 对照 `/diagnostics` 的 `errorCatalog` → 下一步命令。结构化报告是可归档数据，不是散文。
 

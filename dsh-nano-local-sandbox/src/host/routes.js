@@ -28,6 +28,10 @@ export const HAR_ROUTE = '/nano-local-sandbox/har'
 export const SNAPSHOT_ROUTE = '/nano-local-sandbox/snapshot'
 export const REFS_ROUTE = '/nano-local-sandbox/refs'
 export const CONTROL_ROUTE = '/nano-local-sandbox/control'
+// Same-origin resource proxy (implementation in res-proxy.js). Declared here so
+// every DNLS path lives in one scanner-visible place; a drift test keeps this
+// literal and RES_PREFIX identical.
+export const RES_ROUTE = '/nano-local-sandbox/res'
 
 import { request as httpRequest } from 'node:http'
 import { createHash } from 'node:crypto'
@@ -35,6 +39,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { basename, dirname, join } from 'node:path'
 import { BINDING_TABLE } from '../../lib/bindings.js'
+
 import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
 import { ensureClient, evaluatePage, navigate, navigationLedger, queueNavigation, readElements, resetClient, withPage } from './cdp-elements.js'
@@ -45,6 +50,7 @@ import { createInstanceRegistry } from './instance-registry.js'
 import { policyFingerprint, tupleFromPolicy } from './policy-adapter.js'
 import { errorCatalog, errorCode, statusOf } from './error-catalog.js'
 import { buildSrcDoc } from './dom-srcdoc.js'
+import { RES_PREFIX, serveRes } from './res-proxy.js'
 import { bumpEpoch, projectSnapshot } from './observe.js'
 import { closeTermSession, listTermSessions, openTermSession, readTermSession, resizeTermSession, termStateFor, writeTermSession } from './term-bridge.js'
 import { TERM_TOOLS } from './terminal-driver.js'
@@ -1469,6 +1475,13 @@ export function routeSpecs(deps = {}) {
       res.on?.('close', () => {
         if (op.status === null && res.destroyed) op.status = 'cancelled'
       })
+      // The resource proxy owns its whole subtree and does its own fetch; it
+      // must run before any engine-facing branch (it never touches the engine)
+      // and before the profile binding, which it does not need.
+      if (row.path === RES_PREFIX || row.path.startsWith(`${RES_PREFIX}/`)) {
+        await serveRes(req, res)
+        return
+      }
       if (row.path.endsWith('/shot')) {
         // Real implementation: the page-ready stub (deps.pageReady) was a
         // scaffold nobody ever wired — shot has a route row but no body. Drive

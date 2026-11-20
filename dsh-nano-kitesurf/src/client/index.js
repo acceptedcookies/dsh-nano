@@ -925,9 +925,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   const [devtoolsOpen, setDevtoolsOpen] = React.useState(false)
   const [navOpen, setNavOpen] = React.useState(false)
   const [navTabs, setNavTabs] = React.useState([])
-  // Native HTML is the default surface: the iframe gets real DOM/CSS and the
-  // picker is bound after document.write (which wipes listeners).
-  const [nativeHtml, setNativeHtml] = React.useState(true)
+  // The engine's own render is the default surface, NOT the srcdoc iframe.
+  // A srcdoc document inherits the HOST page's origin (https://<dsh host>),
+  // so every http: subresource inside it is mixed content and Chrome blocks
+  // it silently — the pane then shows an unstyled skeleton while the engine
+  // (which loads the page in its own container) renders perfectly. Local dev
+  // servers are http:, so "native HTML by default" made the common case the
+  // broken one. Native HTML is an explicit opt-in; DNLS proxies its
+  // subresources (/res/...) so that opting in does not reintroduce the block.
+  const [nativeHtml, setNativeHtml] = React.useState(false)
   const [domDoc, setDomDoc] = React.useState(null)
   // last-good 标记：导航/刷新失败时保留上一帧画面，并在画面上叠加
   // 「显示上次成功画面 …」提示；新导航成功后清除。

@@ -23,6 +23,9 @@ export function apply(ctx, deps = {}) {
   // The bridge's sandbox.* tools read this pushed document; without the loop
   // every one of them reports the profile's diag.stale code.
   startDiagnosticsPush(deps.session, finalDeps)
+  // Every row — exact and prefix alike — goes through the one guard call: the
+  // ledger decides the scope (see the guard's kind selection), so a prefix
+  // route cannot be registered behind the ledger's back.
   return registerRoutes(ctx, routeSpecs(finalDeps), {
     table: BINDING_TABLE,
     plugin: 'dsh-nano-local-sandbox',

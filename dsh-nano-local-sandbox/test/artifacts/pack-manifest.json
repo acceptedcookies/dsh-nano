@@ -1,5 +1,5 @@
 {
-  "commit": "55b5b6e04115671623d80f14c4823308f3b6a37e",
+  "commit": "0dd99aba50cefb000c4351f92a7f48d0b0ee150a",
   "packs": {
     "dsh-nano-local-sandbox": [
       "AGENTS.md",
@@ -36,6 +36,7 @@
       "src/host/policy-adapter.js",
       "src/host/profile-drivers.js",
       "src/host/profile-registry.js",
+      "src/host/res-proxy.js",
       "src/host/routes.js",
       "src/host/state-service.js",
       "src/host/term-bridge.js",

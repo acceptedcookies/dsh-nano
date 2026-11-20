@@ -2643,7 +2643,7 @@ ${LAYER_CSS}
           historyDelete: "\u5220\u9664",
           historyTimes: " \xB7 {n} \u6B21",
           navCloseTab: "\u5173\u95ED\u6807\u7B7E\u9875",
-          nativeHtmlTitle: "\u7528\u9875\u9762\u81EA\u5DF1\u7684 HTML \u6E32\u67D3",
+          nativeHtmlTitle: "\u7528\u9875\u9762\u81EA\u5DF1\u7684 HTML \u6E32\u67D3\uFF08\u9759\u6001\u6295\u5F71\uFF0C\u811A\u672C\u5DF2\u5265\u79BB\uFF09",
           devtoolsToggleTitle: "\u5F00\u53D1\u8005\u5DE5\u5177\uFF08\u2318E\uFF0C\u7136\u540E\u6309 2\uFF09",
           viewportTitle: "\u9875\u9762\u89C6\u53E3",
           viewportFit: "\u81EA\u9002\u5E94",
@@ -2651,7 +2651,7 @@ ${LAYER_CSS}
           viewportWidthPh: "\u5BBD",
           viewportHeightPh: "\u9AD8",
           modeHtml: "HTML \u539F\u751F\u6E32\u67D3",
-          modeShot: "\u622A\u56FE\u56DE\u9000",
+          modeShot: "\u5F15\u64CE\u6E32\u67D3",
           modeEmpty: "\u672A\u6253\u5F00\u9875\u9762",
           geoInvalid: "\u7ECF\u7EAC\u5EA6\u9700\u8981\u540C\u65F6\u586B\u5199\uFF0C\u4E14\u7EAC\u5EA6 -90..90\u3001\u7ECF\u5EA6 -180..180"
         },
@@ -2862,7 +2862,7 @@ ${LAYER_CSS}
           historyDelete: "Delete",
           historyTimes: " \xB7 {n}\xD7",
           navCloseTab: "Close tab",
-          nativeHtmlTitle: "Render the page\u2019s own HTML",
+          nativeHtmlTitle: "Render the page\u2019s own HTML (static projection, scripts stripped)",
           devtoolsToggleTitle: "DevTools (\u2318E, then 2)",
           viewportTitle: "Page viewport",
           viewportFit: "Fit",
@@ -2870,7 +2870,7 @@ ${LAYER_CSS}
           viewportWidthPh: "W",
           viewportHeightPh: "H",
           modeHtml: "Native HTML",
-          modeShot: "Screenshot fallback",
+          modeShot: "Engine render",
           modeEmpty: "No page open",
           geoInvalid: "Enter both latitude (\u221290..90) and longitude (\u2212180..180)"
         }
@@ -4067,7 +4067,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const [devtoolsOpen, setDevtoolsOpen] = React12.useState(false);
     const [navOpen, setNavOpen] = React12.useState(false);
     const [navTabs, setNavTabs] = React12.useState([]);
-    const [nativeHtml, setNativeHtml] = React12.useState(true);
+    const [nativeHtml, setNativeHtml] = React12.useState(false);
     const [domDoc, setDomDoc] = React12.useState(null);
     const [staleNav, setStaleNav] = React12.useState(false);
     const domVersionRef = React12.useRef("");

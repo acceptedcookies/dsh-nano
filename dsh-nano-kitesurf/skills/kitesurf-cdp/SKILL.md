@@ -2,7 +2,7 @@
 name: kitesurf-cdp
 description: Collaborate on a frontend through the Kitesurf CDP endpoint. Use when the user points at a page, or asks to inspect or change what Kitesurf is rendering — including debugging a site the sandbox container must reach (local dev servers included, addressed via the container host gateway). Do not launch Chrome.
 version: 0.1.0
-date: 2026-11-19
+date: 2026-11-20
 user-invocable: true
 ---
 

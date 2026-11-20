@@ -1672,7 +1672,8 @@ ${LAYER_CSS}
         faceUnverifiedHint: "Observation pending \u2014 state unverified",
         revPending: "Saved revision {rev} awaits deployment verification.",
         saveNoChange: "Saving does not change the running configuration.",
-        servicePublication: "Publication",
+        profileSeats: "{count} visible / {limit} profile slots",
+        guestProcesses: "Guest processes",
         draftInvalid: "Enter a whole number",
         serviceColumn: "Service",
         workbenchTitle: "Sandbox workbench",
@@ -1863,7 +1864,8 @@ ${LAYER_CSS}
         faceUnverifiedHint: "\u7B49\u5F85\u89C2\u6D4B\u2014\u2014\u72B6\u6001\u672A\u9A8C\u8BC1",
         revPending: "\u5DF2\u4FDD\u5B58\u4FEE\u8BA2 {rev} \u7B49\u5F85\u90E8\u7F72\u9A8C\u8BC1\u3002",
         saveNoChange: "\u4FDD\u5B58\u4E0D\u6539\u53D8\u5F53\u524D\u8FD0\u884C\u914D\u7F6E\u3002",
-        servicePublication: "\u53D1\u5E03",
+        profileSeats: "\u53EF\u89C1 {count} \u4E2A\uFF0C\u4E0A\u9650 {limit} \u4E2A",
+        guestProcesses: "\u6765\u5BBE\u8FDB\u7A0B",
         draftInvalid: "\u8BF7\u8F93\u5165\u6574\u6570",
         serviceColumn: "\u670D\u52A1",
         workbenchTitle: "\u6C99\u7BB1\u5DE5\u4F5C\u53F0",
@@ -2133,7 +2135,7 @@ ${LAYER_CSS}
       React13.Fragment,
       null,
       h8(
-        "p",
+        "div",
         null,
         h8("strong", null, title),
         " ",
@@ -2145,7 +2147,7 @@ ${LAYER_CSS}
       bins.length === 0 || span == null || !bins.some((b) => num(b.value) !== null) ? h8("p", null, copy.noSamples) : h8(
         React13.Fragment,
         null,
-        h8("p", null, `0 \u2013 ${fmt(scale)} ${unit}`),
+        h8("small", null, `0 \u2013 ${fmt(scale)} ${unit}`),
         h8(
           "svg",
           {
@@ -2170,14 +2172,14 @@ ${LAYER_CSS}
               key: at ?? i,
               x,
               y: v === 0 ? H - 2 : H - 1 - height,
-              width: w,
+              width: Math.max(1, w - 1),
               height: v === 0 ? 1 : height,
               // a real zero is a baseline hairline
               fill: tone
             });
           })
         ),
-        h8("p", null, `${copy.chartFrom} ${fmtTime(start)} \xB7 ${copy.chartTo} ${fmtTime(end)}`)
+        h8("small", null, `${fmtTime(start)} \u2013 ${fmtTime(end)}`)
       )
     );
   }
@@ -2234,7 +2236,7 @@ ${LAYER_CSS}
   var { Toolbar: Toolbar2, EmptyState: EmptyState2, NanoTabs: NanoTabs2, NanoDialog: NanoDialog2, NANO_STYLES: NANO_STYLES2, PanelLayout: PanelLayout2, PanelSection: PanelSection2, FactGrid: FactGrid2 } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
   var { createDnlsClient: createDnlsClient2, createTicket: createTicket2 } = (init_managed(), __toCommonJS(managed_exports));
   var { copyFor: copyFor2, fill: fill2 } = (init_i18n(), __toCommonJS(i18n_exports));
-  var { formatBytes: formatBytes2, formatCores: formatCores2, serviceLine: serviceLine2, serviceSummary: serviceSummary2 } = (init_format(), __toCommonJS(format_exports));
+  var { formatBytes: formatBytes2, serviceAddress: serviceAddress2 } = (init_format(), __toCommonJS(format_exports));
   var { terminalAddress: terminalAddress2 } = (init_terminal_resource(), __toCommonJS(terminal_resource_exports));
   var { DeviceFace: DeviceFace2, MetricChart: MetricChart2, CardBody: CardBody2 } = (init_instruments(), __toCommonJS(instruments_exports));
   var h9 = React14.createElement;
@@ -2252,7 +2254,6 @@ ${LAYER_CSS}
     starting: "stateStarting"
   };
   var stateLabel = (copy, state) => copy[STATE_KEYS[state]] ?? copy.stateUnknown;
-  var serviceAddress2 = (service, copy) => service.published === true ? `${service.hostAddress ?? "\u2014"}:${service.hostPort ?? "\u2014"}` : copy.unpublished;
   function DnlsPane({ sessionId, copy, host }) {
     const [view, setView] = React14.useState("overview");
     const [phase, setPhase] = React14.useState("loading");
@@ -2814,7 +2815,6 @@ ${LAYER_CSS}
           })
         );
       }
-      const capacity = (entry) => profileCaps.get(entry.profileId);
       const groups = [];
       for (const entry of rows ?? []) {
         const key = `${entry.envId}\xB7${entry.profileId}`;
@@ -2876,7 +2876,7 @@ ${LAYER_CSS}
             PanelSection2,
             {
               key: group.key,
-              title: `${group.envId} \xB7 ${group.profileId}${groupCap != null ? ` \xB7 ${copy.capacity} ${groupCap}` : ""}`
+              title: `${group.profileId} \xB7 ${group.envId}${groupCap != null ? ` \xB7 ${fill2(copy.profileSeats, { count: group.rows.length, limit: groupCap })}` : ""}`
             },
             h9(FactGrid2, { items: cards.map((entry) => {
               const running = entry.observedState === "running";
@@ -2949,10 +2949,8 @@ ${LAYER_CSS}
             if (!busy) setUsageWindow(w);
           }
         }),
-        Array.isArray(detail.usage.history) && detail.usage.history.length > 0 ? h9(
-          React14.Fragment,
-          null,
-          h9(MetricChart2, {
+        Array.isArray(detail.usage.history) && detail.usage.history.length > 0 ? h9(FactGrid2, { items: [
+          { label: copy.usageCpu, value: h9(MetricChart2, {
             title: copy.usageCpu,
             unit: copy.coresUnit,
             range: usageWindow,
@@ -2961,8 +2959,8 @@ ${LAYER_CSS}
             copy,
             fmtTime,
             bins: detail.usage.history.map((b) => ({ at: b.at, minutes: b.minutes, value: b.cpuCores ?? null }))
-          }),
-          h9(MetricChart2, {
+          }) },
+          { label: copy.usageMemory, value: h9(MetricChart2, {
             title: copy.usageMemory,
             unit: "MiB",
             range: usageWindow,
@@ -2980,18 +2978,18 @@ ${LAYER_CSS}
               minutes: b.minutes,
               value: b.memoryBytes != null ? b.memoryBytes / 1048576 : null
             }))
-          })
-        ) : null,
+          }) }
+        ] }) : h9("div", null, copy.noSamples),
         h9(
-          "p",
+          "small",
           null,
-          `${copy.usageStates} ${copy.stateRunning} ${detail.usage.states?.running ?? "\u2014"} \xB7 ${copy.stateStopped} ${detail.usage.states?.stopped ?? "\u2014"} \xB7 ${copy.stateFailed} ${detail.usage.states?.failed ?? "\u2014"} \xB7 ${copy.stateMissing} ${detail.usage.states?.missing ?? "\u2014"} \u2014 ${copy.usageCpu} ${detail.usage.cpu?.valid ?? "\u2014"}/${detail.usage.cpu?.expected ?? "\u2014"} \xB7 ${copy.usageMemory} ${detail.usage.memory?.valid ?? "\u2014"}/${detail.usage.memory?.expected ?? "\u2014"}`
+          `${copy.usageStates} ${copy.stateRunning} ${detail.usage.states?.running ?? "\u2014"} \xB7 ${copy.stateStopped} ${detail.usage.states?.stopped ?? "\u2014"} \xB7 ${copy.stateFailed} ${detail.usage.states?.failed ?? "\u2014"} \xB7 ${copy.stateMissing} ${detail.usage.states?.missing ?? "\u2014"}`
         )
       ) : null,
       // Guest process read — running + authorized only.
       supports("sandbox.processes") ? h9(
         PanelSection2,
-        { title: copy.processes },
+        { title: copy.guestProcesses },
         detail && canManage !== true ? h9("p", null, copy.configNotAuthorized) : detail && observedState !== "running" ? h9("p", null, stateLabel(copy, observedState)) : null,
         h9(
           "p",
@@ -3106,7 +3104,7 @@ ${LAYER_CSS}
                 "tr",
                 { key: service.serviceId },
                 h9("td", null, service.serviceId),
-                h9("td", null, serviceAddress2(service, copy)),
+                h9("td", null, serviceAddress2(service) ?? copy.unpublished),
                 h9("td", null, `${service.protocol ?? "\u2014"}:${service.containerPort ?? "\u2014"}`)
               ))
             )

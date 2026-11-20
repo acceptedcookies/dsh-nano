@@ -83,7 +83,7 @@ function MetricChart({ title, bins, unit, range, summary, tone, copy, fmtTime })
   const fmt = (v) => (unit === 'MiB' ? `${Math.round(v)}` : Number(v).toFixed(2))
   const aria = `${title} ${range}: ${valid}/${expected} ${copy.samplesWord}`
   return h(React.Fragment, null,
-    h('p', null,
+    h('div', null,
       h('strong', null, title), ' ',
       mean != null ? h('span', null, `${copy.chartMean} ${fmt(mean)} ${unit}`) : null,
       peak != null ? h('span', null, ` · ${copy.chartPeak} ${fmt(peak)} ${unit}`) : null,
@@ -91,7 +91,7 @@ function MetricChart({ title, bins, unit, range, summary, tone, copy, fmtTime })
     bins.length === 0 || span == null || !bins.some(b => num(b.value) !== null)
       ? h('p', null, copy.noSamples)
       : h(React.Fragment, null,
-          h('p', null, `0 – ${fmt(scale)} ${unit}`),
+          h('small', null, `0 – ${fmt(scale)} ${unit}`),
           h('svg', { width: '100%', height: H, viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none',
             role: 'img', 'aria-label': aria },
             h('line', { x1: 0, y1: H - 1, x2: W, y2: H - 1, stroke: 'var(--dsw-alias-border-l2)' }),
@@ -105,12 +105,12 @@ function MetricChart({ title, bins, unit, range, summary, tone, copy, fmtTime })
               if (v == null) return null // a hole stays a hole
               const height = Math.max(2, Math.round((v / scale) * (H - 14)))
               return h('rect', {
-                key: at ?? i, x, y: v === 0 ? H - 2 : H - 1 - height, width: w,
+                key: at ?? i, x, y: v === 0 ? H - 2 : H - 1 - height, width: Math.max(1, w - 1),
                 height: v === 0 ? 1 : height, // a real zero is a baseline hairline
                 fill: tone,
               })
             })),
-          h('p', null, `${copy.chartFrom} ${fmtTime(start)} · ${copy.chartTo} ${fmtTime(end)}`)))
+          h('small', null, `${fmtTime(start)} – ${fmtTime(end)}`)))
 }
 
 /** Card caption under the device: name once, lifecycle state, pending

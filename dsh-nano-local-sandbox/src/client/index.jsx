@@ -17,7 +17,7 @@ const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
 const { Toolbar, EmptyState, NanoTabs, NanoDialog, NANO_STYLES, PanelLayout, PanelSection, FactGrid } = require('dsh-nano-ui')
 const { createDnlsClient, createTicket } = require('./managed.js')
 const { copyFor, fill } = require('./i18n.js')
-const { formatBytes, formatCores, serviceLine, serviceSummary } = require('./format.js')
+const { formatBytes, serviceAddress } = require('./format.js')
 const { terminalAddress } = require('../host/terminal-resource.js')
 const { DeviceFace, MetricChart, CardBody } = require('./instruments.jsx')
 const h = React.createElement
@@ -38,10 +38,6 @@ const STATE_KEYS = {
 }
 
 const stateLabel = (copy, state) => copy[STATE_KEYS[state]] ?? copy.stateUnknown
-
-/** Verified publication address, or the localized unpublished marker. */
-const serviceAddress = (service, copy) =>
-  service.published === true ? `${service.hostAddress ?? '—'}:${service.hostPort ?? '—'}` : copy.unpublished
 
 function DnlsPane({ sessionId, copy, host }) {
   const [view, setView] = React.useState('overview')
@@ -613,7 +609,6 @@ function DnlsPane({ sessionId, copy, host }) {
         h(EmptyState, { title: copy.failed, description: error?.message ?? copy.failed,
           action: h(Button, { variant: 'primary', size: 'sm', onClick: () => setBootSeq((n) => n + 1) }, copy.retry) }))
     }
-    const capacity = (entry) => profileCaps.get(entry.profileId)
     // Groups keep unfiltered status counts; only cards are filtered.
     const groups = []
     for (const entry of rows ?? []) {
@@ -671,7 +666,7 @@ function DnlsPane({ sessionId, copy, host }) {
         const groupCap = (envIds ?? []).length === 1 ? profileCaps.get(group.profileId) : undefined
         return h(PanelSection, {
           key: group.key,
-          title: `${group.envId} · ${group.profileId}${groupCap != null ? ` · ${copy.capacity} ${groupCap}` : ''}`,
+          title: `${group.profileId} · ${group.envId}${groupCap != null ? ` · ${fill(copy.profileSeats, { count: group.rows.length, limit: groupCap })}` : ''}`,
         },
           h(FactGrid, { items: cards.map((entry) => {
             const running = entry.observedState === 'running'
@@ -726,14 +721,14 @@ function DnlsPane({ sessionId, copy, host }) {
         onChange: (w) => { if (!busy) setUsageWindow(w) },
       }),
       Array.isArray(detail.usage.history) && detail.usage.history.length > 0
-        ? h(React.Fragment, null,
-            h(MetricChart, {
+        ? h(FactGrid, { items: [
+            { label: copy.usageCpu, value: h(MetricChart, {
               title: copy.usageCpu, unit: copy.coresUnit, range: usageWindow,
               tone: 'var(--dsw-alias-state-business-primary)',
               summary: detail.usage.cpu ? { ...detail.usage.cpu, end: detail.usage.end } : { end: detail.usage.end }, copy, fmtTime,
               bins: detail.usage.history.map((b) => ({ at: b.at, minutes: b.minutes, value: b.cpuCores ?? null })),
-            }),
-            h(MetricChart, {
+            }) },
+            { label: copy.usageMemory, value: h(MetricChart, {
               title: copy.usageMemory, unit: 'MiB', range: usageWindow,
               tone: 'var(--dsw-alias-state-success-primary)',
               summary: detail.usage.memory
@@ -745,17 +740,16 @@ function DnlsPane({ sessionId, copy, host }) {
               bins: detail.usage.history.map((b) => ({
                 at: b.at, minutes: b.minutes,
                 value: b.memoryBytes != null ? b.memoryBytes / 1048576 : null })),
-            }))
-        : null,
-      h('p', null,
+            }) },
+          ] })
+        : h('div', null, copy.noSamples),
+      h('small', null,
         `${copy.usageStates} ${copy.stateRunning} ${detail.usage.states?.running ?? '—'} · ` +
         `${copy.stateStopped} ${detail.usage.states?.stopped ?? '—'} · ` +
         `${copy.stateFailed} ${detail.usage.states?.failed ?? '—'} · ` +
-        `${copy.stateMissing} ${detail.usage.states?.missing ?? '—'} — ` +
-        `${copy.usageCpu} ${detail.usage.cpu?.valid ?? '—'}/${detail.usage.cpu?.expected ?? '—'} · ` +
-        `${copy.usageMemory} ${detail.usage.memory?.valid ?? '—'}/${detail.usage.memory?.expected ?? '—'}`)) : null,
+        `${copy.stateMissing} ${detail.usage.states?.missing ?? '—'}`)) : null,
     // Guest process read — running + authorized only.
-    supports('sandbox.processes') ? h(PanelSection, { title: copy.processes },
+    supports('sandbox.processes') ? h(PanelSection, { title: copy.guestProcesses },
       detail && canManage !== true ? h('p', null, copy.configNotAuthorized)
         : detail && observedState !== 'running' ? h('p', null, stateLabel(copy, observedState))
         : null,
@@ -833,7 +827,7 @@ function DnlsPane({ sessionId, copy, host }) {
               h('tbody', null,
                 services.map((service) => h('tr', { key: service.serviceId },
                   h('td', null, service.serviceId),
-                  h('td', null, serviceAddress(service, copy)),
+                  h('td', null, serviceAddress(service) ?? copy.unpublished),
                   h('td', null, `${service.protocol ?? '—'}:${service.containerPort ?? '—'}`))))),
             services.map((service) => h(DisclosureRow, {
               key: service.serviceId,

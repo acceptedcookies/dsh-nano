@@ -253,11 +253,11 @@ S1-01 并入 main
   - **完成判据**：路径与 `res.*` 九行消失且不留别名、开关或墓碑；srcdoc 只有真实地址；隧道域命中时 `/open` 成功体与失败体都带 hint 且状态码不变；账本少一行且 0 漂移；`proxied` 推断删除；HTML 提示改为静态投影说明；diagnostics 不再写「+ `/res`」
   - **验证映射**：`DNLS03X-T08` · **依赖**：`S1-01`
   - **执行状态**：`complete` · **执行时间**：`2026-11-20T16:05Z` · **证据 / 备注**：删 `res-proxy.js` 与单测、`RES_ROUTE`/`serveRes`/`proxy` 选项、`res.*` 九行、`dnls.res` 账本行；隧道 hint 常量在 `profiles/kitesurf/driver/index.js`，成功体与失败体同 hint 且不改状态码；[DNK] 删 `proxied`、改 `hintUnproxiedHtml` 与 skill refs；99 路由 0 漂移
-- [ ] `S1-09` — 失败投影收口
+- [x] `S1-09` — 失败投影收口
   - **落点 / 对象**：`src/host/object-pages.js:137`、`src/host/routes.js:1122-1128`、[DNK] `src/client/index.js:1436-1439`
   - **完成判据**：至少一例内核失败同时带 `error` 与 `hint`，键只有 `ok`/`errorId`/`error`/`hint`；`error` 按 240 字截断；另有一例派发前失败只有 `errorId` 且无 `hint`；失败体无 `incidentId`、操作行仍有；[DNK] 的 `engineLog` 死分支与 `openErrorLoopback` 删除
   - **验证映射**：`DNLS03X-T09` · **依赖**：`S1-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-21T00:41Z` · **证据 / 备注**：内核失败投影四键 `ok/errorId/error/hint`、`error` 240 截断、派发前只有 `errorId`、失败体无 `incidentId` 而操作行保留；[DNK] 删 `engineLog` 死分支与 `openErrorLoopback`；DNLS 487/487
 - [ ] `S1-10` — 外壳退回 [DNLS]
   - **落点 / 对象**：`packages/dsh-nano-ui/src/shell.js:9,103`、`packages/dsh-nano-ui/index.js:18`、`src/client/index.jsx:12,762`、`docs/specs/dsh-nano-ui/DESIGN.md:153,210-216`
   - **完成判据**：`WorkbenchShell`、`StatusDock` 移回 [DNLS] client；nano-ui 入口不再导出；DESIGN §6 删该行、§10 为自绘控件登记 `nano-ui-exempt`；U10 计数等于 §10 行数；不去凑第二个使用方

@@ -93,23 +93,31 @@ function scanNanoNotepad() {
 /* --------------------------------------------------------------- *
  * dsh-nano-explorer-extra — src/host/routes.js                     *
  * `routes` map: '<suffix>': { method: 'X', ... } then PREFIX join. *
- * Every POST runs jsonBody() → MAX_BODY_BYTES (64 KiB); GETs = 0.  *
+ * POST runs jsonBody() → MAX_BODY_BYTES (64 KiB), except           *
+ * /paste-image, whose cap is PASTE_IMAGE_BODY_BYTES. GETs = 0.     *
  * --------------------------------------------------------------- */
 function scanExplorerExtra() {
   const file = 'dsh-nano-explorer-extra/src/host/routes.js'
   const text = src(file)
   const prefixMatch = text.match(/export const PREFIX = '([^']+)'/)
   const bodyMatch = text.match(/const MAX_BODY_BYTES = ([^\n]+)/)
+  const pasteText = src('dsh-nano-explorer-extra/src/host/paste-image.js')
+  const pasteMatch = pasteText.match(/export const PASTE_IMAGE_BODY_BYTES = ([^\n]+)/)
   const prefix = prefixMatch?.[1] ?? ''
   const cap = bodyMatch ? evalBytesExpr(bodyMatch[1]) : undefined
+  const pasteCap = pasteMatch ? evalBytesExpr(pasteMatch[1]) : undefined
   const rows = []
   for (const match of text.matchAll(/^\s*'(\/[^']+)':\s*\{\s*method:\s*'([A-Z]+)'/gm)) {
     const [, suffix, method] = match
+    const isPaste = suffix === '/paste-image'
+    if (isPaste && pasteCap === undefined) {
+      throw new Error('route-scan: /paste-image is registered but PASTE_IMAGE_BODY_BYTES is missing')
+    }
     rows.push({
       plugin: 'dsh-nano-explorer-extra',
       path: `${prefix}${suffix}`,
       methods: [method],
-      bodyLimit: { [method]: method === 'GET' ? 0 : cap },
+      bodyLimit: { [method]: method === 'GET' ? 0 : (isPaste ? pasteCap : cap) },
       source: { file, line: lineOf(text, `'${suffix}':`) },
     })
   }

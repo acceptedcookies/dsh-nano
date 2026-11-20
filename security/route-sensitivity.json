@@ -366,6 +366,21 @@
     },
     {
       "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/paste-image",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L1",
+      "capability": "write:workspace",
+      "bodyLimit": 12582912,
+      "sessionBinding": true,
+      "justification": "Writes one sniffed image (png/jpeg/gif/webp, decoded at most 8MB) into the session workspace. Same realpath fence as create-file; refuses .git and symlink escape; exclusive create, never overwrite. bodyLimit is the base64 envelope (12MB), not the shared 64KB cap.",
+      "id": "dnee.paste-image",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/create-folder",
       "methods": [
         "POST"

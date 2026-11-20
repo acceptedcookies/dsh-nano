@@ -15,6 +15,7 @@ import { getWorkspaceStore } from './workspace-store.js'
 import { request as hostRequest } from './jsonClient.js'
 import { absoluteOf, basenameOf, parentOf, relativeTo, treeKeyOf } from './paths.js'
 import { checkName, nextName } from './names.js'
+import { bytesToBase64, clipboardImage, PASTE_IMAGE_MAX_BYTES, pasteTargetIsEditable, preferredPasteName } from './paste.js'
 
 const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React
 
@@ -493,6 +494,127 @@ export function ExplorerBody(props) {
     queueStats()
   }, [createRequest, copy, cwd, sessionId, request, tree, queueStats])
 
+  /**
+   * Write the clipboard bitmap into the folder the selection already points at.
+   * A dialog that is asking for a name owns the keyboard, so a paste there is ignored.
+   * Text on the clipboard is not a file.
+   */
+  const pasteClipboardImage = useCallback(async file => {
+    if (cwd === undefined) return
+    let bytes
+    try { bytes = new Uint8Array(await file.arrayBuffer()) }
+    catch { setLinkNote(copy.pasteFailed); return }
+    if (bytes.byteLength === 0) { setLinkNote(copy.pasteEmpty); return }
+    if (bytes.byteLength > PASTE_IMAGE_MAX_BYTES) { setLinkNote(copy.pasteTooLarge); return }
+    const directory = directoryForCreate(tree, cwd)
+    setBusy(true)
+    setLinkNote(undefined)
+    const result = await request('/paste-image', {
+      sessionId,
+      directory,
+      name: preferredPasteName(file.name),
+      data: bytesToBase64(bytes),
+    })
+    setBusy(false)
+    if (!result.ok) { setLinkNote(result.message); return }
+    await tree.refreshLevel(directory)
+    if (typeof result.path === 'string') tree.setSelected(result.path)
+    queueStats()
+  }, [copy, cwd, sessionId, request, tree, queueStats])
+
+  const onTreePaste = useCallback(event => {
+    if (pasteTargetIsEditable(event.target)) return
+    if (dialog !== null || createRequest !== null || deleteRequest !== null || moveRequest !== null) return
+    const file = clipboardImage(event.clipboardData)
+    if (file == null) return
+    event.preventDefault()
+    event.stopPropagation()
+    void pasteClipboardImage(file)
+  }, [dialog, createRequest, deleteRequest, moveRequest, pasteClipboardImage])
+
+  const treeFocusRef = useRef(null)
+  /**
+   * A row click focuses its button and then re-renders that button away, so
+   * focus falls on `document.body`. The shell's document paste listener treats
+   * that as "not an editor" and files the image into the composer. While the
+   * pointer is down the tree takes focus; if the click then drops it on the
+   * blank document, the tree takes it back. A click that lands in the composer
+   * or another control names that element and is left alone.
+   */
+  const [pasteActive, setPasteActive] = useState(false)
+  const selectRowRef = useRef(tree.setSelected)
+  selectRowRef.current = tree.setSelected
+  const claimTreeFocus = useCallback(event => {
+    if (event.button != null && event.button !== 0) return
+    if (pasteTargetIsEditable(event.target)) return
+    setPasteActive(true)
+    const row = event.target instanceof Element ? event.target.closest('[data-files-entry]') : null
+    const path = row?.getAttribute('data-files-path')
+    if (typeof path === 'string' && path !== '') selectRowRef.current?.(path)
+    const node = event.currentTarget
+    if (!(node instanceof HTMLElement)) return
+    const take = () => {
+      if (node.contains(document.activeElement)) return
+      node.focus({ preventScroll: true })
+    }
+    take()
+    queueMicrotask(take)
+  }, [])
+  const keepTreeFocus = useCallback(event => {
+    const node = event.currentTarget
+    if (!(node instanceof HTMLElement)) return
+    const next = event.relatedTarget
+    if (next instanceof Node && node.contains(next)) return
+    if (next instanceof Element) return
+    queueMicrotask(() => {
+      const active = document.activeElement
+      if (node.isConnected && (active === document.body || active === document.documentElement)) node.focus({ preventScroll: true })
+    })
+  }, [])
+  useEffect(() => {
+    const node = treeFocusRef.current
+    if (!(node instanceof HTMLElement)) return undefined
+    const onFocusOut = event => keepTreeFocus(event)
+    node.addEventListener('focusout', onFocusOut)
+    return () => node.removeEventListener('focusout', onFocusOut)
+  }, [cwd, keepTreeFocus])
+  useEffect(() => {
+    if (!pasteActive) return undefined
+    const onPointerDown = event => {
+      const pane = rootEl.current
+      const target = event.target
+      if (pane instanceof HTMLElement && target instanceof Node && pane.contains(target)) return
+      setPasteActive(false)
+    }
+    // Capture runs before the composer and the shell's document paste listener.
+    // A row click does not keep DOM focus, so the image would otherwise be filed
+    // into the composer. While the tree is armed, an image paste is ours.
+    const onPaste = event => {
+      if (dialog !== null || createRequest !== null || deleteRequest !== null || moveRequest !== null) return
+      const tree = treeFocusRef.current
+      if (pasteTargetIsEditable(event.target) && tree instanceof HTMLElement && tree.contains(event.target)) return
+      const file = clipboardImage(event.clipboardData)
+      if (file == null) return
+      event.preventDefault()
+      event.stopPropagation()
+      void pasteClipboardImage(file)
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('paste', onPaste, true)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('paste', onPaste, true)
+    }
+  }, [pasteActive, dialog, createRequest, deleteRequest, moveRequest, pasteClipboardImage])
+  useEffect(() => {
+    const root = treeFocusRef.current
+    if (!(root instanceof HTMLElement)) return undefined
+    root.querySelectorAll('[data-nxe-paste-target]').forEach(el => el.removeAttribute('data-nxe-paste-target'))
+    if (!pasteActive || tree.selected == null) return undefined
+    const row = root.querySelector(`[data-files-path="${CSS.escape(tree.selected)}"]`)
+    row?.setAttribute('data-nxe-paste-target', 'true')
+    return undefined
+  }, [pasteActive, tree.selected, tree.entries, tree.expanded])
 
   /** Rename one entry. */
   const doRename = useCallback(async (entry, name) => {
@@ -1061,7 +1183,9 @@ export function ExplorerBody(props) {
         onCancel: () => { setCreateRequest(null); setLinkNote(undefined) },
       }),
       React.createElement('div', {
-        className: 'nxe-tree', 'data-nxe-tree': 'true', onKeyDown: onTreeKeyDown,
+        ref: treeFocusRef, className: 'nxe-tree', 'data-nxe-tree': 'true', 'data-nxe-paste': 'tree',
+        'data-paste-active': pasteActive ? 'true' : 'false', tabIndex: 0,
+        onKeyDown: onTreeKeyDown, onPaste: onTreePaste, onMouseDown: claimTreeFocus, onMouseUp: claimTreeFocus, onBlur: keepTreeFocus,
         // Empty space below the rows is the workspace root: a drop landing there moves the entry to
         // the top level, the same destination a root-level folder row offers.
         onDragOver: event => {

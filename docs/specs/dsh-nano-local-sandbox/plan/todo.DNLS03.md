@@ -119,6 +119,21 @@ Phase 7 提交 `b33a2a8`。Phase 8 的真实入口只注册 managed 分派器。
 - [x] 实测调试并再部署：修复已确认操作后详情和进程表过期、失败的 inspect 无法手动重试，以及窄屏中刷新/重查按钮超出可视区。构建通过，`node --test dsh-nano-local-sandbox/test/client-pane.test.mjs` 15/15；部署的新 [DNLS] tarball SHA-256 `8544969be5c1131832aa662deabb8334fbc0436f00446f143894336c6e842e05`，三包实际加载的 client 字节与 worktree 再次核对一致。
 - [x] 重启开发 Web 后原对象仍在。新版页面加载进程表，stop `677f3273-e5f2-4503-a937-a14e87af04e3` 成功后仅点击重查，页面即变为 stopped 且旧进程区消失。390 CSS px 下页面宽度 390；刷新、重查、启停及重启按钮最右边界均不超过 188 px。start `fd431676-6dad-41fe-a728-3d78e67784da` 成功，页面回到 running；最后 `/status` 的 `engineAlive=true`，原 UUID 和代次未变。没有因修复而重新建卷或再创建沙箱。
 
+## 7. [DNK01] 并线：`kitesurf-http-render` 合入
+
+[业主] 2026-11-20 裁决把 kitesurf 线合入本分支、在此共同收口，并按并线评估的推荐执行。合并方式为 `--no-ff`（父提交 `77e217e` 与 `c1d7c9c`），保留 [DNK01 问答](../../dsh-nano-kitesurf/qna/DNK01-1120-qna.md)引用的提交号；kitesurf 的分出点比本分支晚 5 个 [DNPR] 纯文档提交，随合并一并进入。kitesurf 工作树与分支在合并后退役。
+
+**`/res` 的本次处置（[业主] 裁决，唯一登记处）。** `DNK01 T-O-5` 的代理不是对象动作：iframe 子资源请求带不上 `X-DNLS-Contract` 与 `sandboxId`，响应也不是 JSON。合并时：`object-pages.js` 不把 `dnls.res` 收为对象能力，台账行由 `managed-routes` 以 `sandbox.provider_unsupported` 失败关闭；受管 `/dom` 以 `buildSrcDoc(..., { proxy: false })` 保留真实地址，不把文档改写到不可用的代理上。`res-proxy.js` 及其单测保留，未接入受管宿主。
+
+- [ ] **K-01** `/res` 归属 — 待 [业主] 在两者中裁决后，于 `DNK01` 或 `DNLS03` 问答一处追加：(a) `dnls.control/1` 之外的宿主路由，仅准入，同时决定是否拒绝宿主回环地址；(b) 按对象经沙箱网络取资源（与 `DNLS03 T-O-41` 及 `DNK01 T-O-4` 的路径形态冲突，需改约）。注意引擎在容器内解析 `localhost`，宿主侧代理解析的是另一台机器
+- [ ] **K-02** `DNK01 T-O-1` `sandbox.open` — 作为对象能力实现：`arguments.sandboxId` 选目标、计入写调用；台账所引 `routes.js:1679` 是旧行号，以 `/open` 页面路由与 `object-pages.js` 为准
+- [ ] **K-03** `DNK01 T-O-2`/`T-O-3` — 在 `profiles/kitesurf/mcp-bridge.mjs` 实现 `/control.relay` 与 relay 写拒绝；桥属镜像配方，改动后须重建镜像并对开发对象换代
+- [ ] **K-04** `DNK01 T-O-6` 隧道 hint 与 `networking` 字段 — `/open`（及 K-01 落地后的 `/res`）附 hint，不改状态码
+- [ ] **K-05** 受管模式下 `object-pages.js` 失败体只保留 `errorId`，[DNK] 打开失败对话框收不到 `engineLog`；决定接受降级或放宽 `redact`
+- [ ] **K-06** 开发站复验 — kitesurf 证据册 E1–E15 取自生产旧版 [DNLS]，不移用于合并态；在 `dsh-dev` 经显式对象选择重放仍适用的项
+- [ ] **K-07** 发布配对 — 合并后的 [DNK] 依赖 `dnls.control/1` 提供方；生产当前是 kitesurf 版 [DNK] 加旧 [DNLS]，两者须同批升级
+
+合并态软件回归（2026-11-20，本分支工作树）：[DNLS] 468/468、[DNK] 52/52、[DNT] 272/272、`dsh-host-route-guard` 15/15；`check-route-sensitivity`（99 路由 0 漂移）、`check-feature-contract`、`check-clean-lib`、`check-client-rules` 通过，`check-ui-rules` 仅告警（新增 1 条来自 [DNK] 打开失败对话框的修复按钮）。新增断言：受管能力不含 `dnls.res` 且其路由返回 `sandbox.provider_unsupported`；`proxy: false` 时 https 与 http 引用保持原地址。未部署开发站。
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。
 

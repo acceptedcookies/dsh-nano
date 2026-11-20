@@ -73,7 +73,7 @@ T31 是真实本地 PTY 进程测试，不是截图恢复；T40/T42 分别验证
 
 ## 7. 不变量
 
-没有更改官方 pin、依赖清单、`vendor/`、包版本或 `engines.dsh`；未把 [DNPR] 并行工作并入分支。当前配方清单的 digest 为 `sha256:6c62ed8a7153ab40bc59ba2434c83cac667e2c27391502b7a381e337bcba7f4b`，不是已构建镜像的 digest。T42 只按[业主]确认的「仅保护既有协议」解释。
+没有更改官方 pin、依赖清单、`vendor/`、包版本或 `engines.dsh`；未把 [DNPR] 并行工作并入分支（2026-11-20 合入 kitesurf 线时随其分出点带入 5 个 [DNPR] 纯文档提交，不含代码；见 [todo §7](../plan/todo.DNLS03.md)）。当前配方清单的 digest 为 `sha256:6c62ed8a7153ab40bc59ba2434c83cac667e2c27391502b7a381e337bcba7f4b`，不是已构建镜像的 digest。T42 只按[业主]确认的「仅保护既有协议」解释。
 
 ## 8. 价值与负债
 

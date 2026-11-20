@@ -41,7 +41,9 @@ test('generated SKILL.md files exactly match the single source of truth', () => 
 test('kitesurf-cdp is a directory skill: entry ≤90 lines + resourceBase directory + references on disk', () => {
   const entry = SKILL_BODIES['kitesurf-cdp']
   assert.ok(entry.split('\n').length <= 90, `entry ${entry.split('\n').length} lines > 90`)
-  assert.deepEqual(kitesurfSkill().resourceBase, { kind: 'directory' })
+  // The authored body stays path-free: only index.js knows the installed
+  // package root, and the host schema requires kind+path together.
+  assert.equal(kitesurfSkill().resourceBase, undefined)
   const refs = readdirSync(join(root, 'skills', 'kitesurf-cdp', 'references')).filter((f) => f.endsWith('.md'))
   assert.ok(refs.length >= 7, `expected ≥7 references, got ${refs.length}`)
   assert.ok(statSync(join(root, 'skills', 'kitesurf-cdp', 'templates', 'probe.sh')).isFile())
@@ -75,7 +77,7 @@ test('skill bodies carry the hard agentic constraints', () => {
     assert.ok(all.includes(phrase), `missing constraint: ${phrase}`)
   }
   assert.ok(nanoKiteSkill().content.includes('each text frame'))
-  assert.equal(kitesurfSkill().resourceBase?.kind, 'directory')
+  assert.equal(nanoKiteSkill().name, 'nano-kite')
 })
 
 // Route-doc drift guard: every `/nano-local-sandbox/<path>` the skill's
@@ -93,4 +95,25 @@ test('routes.md documents only routes DNLS routeSpecs registers (drift guard)', 
   const documented = new Set([...doc.matchAll(/`(\/nano-local-sandbox\/[a-z-]+)`/g)].map((m) => m[1]))
   const ghost = [...documented].filter((p) => !registered.has(p))
   assert.deepEqual(ghost, [], `routes.md teaches routes DNLS never registers: ${ghost}`)
+})
+
+test('kitesurf-cdp declares a schema-valid directory resourceBase', async () => {
+  // The host validates resourceBase against a three-branch oneOf where every
+  // branch requires its second field (directory→path, url→url, opaque→
+  // description). A kind-only value fails all three and the skill tool then
+  // refuses the entry outright, which is how the relay instructions once
+  // became unreachable.
+  const host = await import('../index.js')
+  const registered = []
+  const ctx = {
+    skills: { register: (skill) => { registered.push(skill); return () => {} } },
+    effect: (fn) => { fn(); return () => {} },
+  }
+  host.apply(ctx)
+  const kite = registered.find((skill) => skill.name === 'kitesurf-cdp')
+  assert.ok(kite, 'kitesurf-cdp must be registered')
+  assert.equal(kite.resourceBase?.kind, 'directory')
+  assert.equal(typeof kite.resourceBase?.path, 'string')
+  assert.equal(kite.resourceBase.path.length > 0, true)
+  assert.equal(kite.resourceBase.path.endsWith('skills/kitesurf-cdp'), true)
 })

@@ -2,7 +2,7 @@
 name: kitesurf-cdp
 description: Collaborate on a frontend through the Kitesurf CDP endpoint. Use when the user points at a page, or asks to inspect or change what Kitesurf is rendering — including debugging a site the sandbox container must reach (local dev servers included, addressed via the container host gateway). Do not launch Chrome.
 version: 0.1.0
-date: 2026-11-19
+date: 2026-11-20
 user-invocable: true
 ---
 
@@ -37,7 +37,7 @@ agent-browser --cdp "$(curl -s .../nano-local-sandbox/status | jq -r .cdp)" snap
 - 坐标/box/截图假定 deviceScaleFactor 1，viewport 只支持 `deviceScaleFactor:1` 与 `mobile:false`；其他值被拒（400）。viewport 仿真改过就从 note 的 box 重导。
 - `<img>` 是 object-fit:contain：letterbox 带内点击合法地打空，先 `/console?level=navigation` 或重 `/shot` 再怪引擎。
 - **one MCP writer**：`sandbox.control` 的 `writer`/`humanHold` 锁只约束 MCP/桥写者；pane（人）的 REST 写不受写锁约束。`humanHold.active:true` 时 agent 写被拒 `kitesurf.control.held`——看到 held **立刻停写**，别 retry 别 `claim`；把控制权交还人，等 `humanHold.active:false` 再写。
-- **容器地址空间 ≠ 宿主地址空间**：`/open` 的 URL 在**容器内**解析。容器里的 `localhost`/`127.*`/`::1` 指**容器自己**，不是跑本插件的宿主。要调试跑在宿主机上的 dev 服务（`next dev`/`vite`/`npm run dev` 之类监听某端口的 localhost 站点），导航地址要用**容器宿主网关**：`GET /status` → `networking.hostGateway`（backend 按自身拓扑发现的运行时值——**绝不字面量化**，不同后端/机器值不同）。典型流程：`/open http://<hostGateway>:<devPort>/<path>`。宿主服务必须绑到容器可路由的地址（dev server 默认 `*:port` 即可；仅绑 `127.0.0.1` 时容器仍够不到，须让 dev server 绑 `0.0.0.0` 或走端口转发）。本地 dev 站的 http/HMR/secure-context 细节见 `references/recipes.md` 的「本地 dev 调试」节。
+- **容器地址空间 ≠ 宿主地址空间**：`/open` 的 URL 在**容器内**解析。容器里的 `localhost`/`127.*`/`::1` 指**容器自己**，不是跑本插件的宿主。要调试跑在宿主机上的 dev 服务（`next dev`/`vite`/`npm run dev` 之类监听某端口的 localhost 站点），导航地址要用**容器宿主网关**：`GET /status` → `networking.hostGateway`（backend 按自身拓扑发现的运行时值——**绝不字面量化**，不同后端/机器值不同）。典型流程：`/open http://<hostGateway>:<devPort>/<path>`。**该字段缺失时（宿主旧版）不要停在这里**：`container inspect <容器名>` 的 `status.networks[].ipv4Gateway` 是同一个值，容器名取 `/status` 的 `subject.containerName`；两条都拿不到就让人在 pane 地址栏直接打开——那是人的动作，agent 不要猜一个 IP 去试。宿主服务必须绑到容器可路由的地址（dev server 默认 `*:port` 即可；仅绑 `127.0.0.1` 时容器仍够不到，须让 dev server 绑 `0.0.0.0` 或走端口转发）。本地 dev 站的 http/HMR/secure-context 细节见 `references/recipes.md` 的「本地 dev 调试」节。
 
 ## 4. 元素 ref @N — 人=agent 同一语言
 `GET /nano-local-sandbox/snapshot` 的 a11y walker 给可交互元素 `@N` + selector；`GET /refs?ref=@N` 反查。**人点选 `/pick` 的 `element.ref:"@N"`** 与 agent 的 `@N` 指同一节点。`@N` 可直接作 `wait`/`pick`/`edit` 的 selector；不在表=404 `kitesurf.ref.miss`（先 `/snapshot`）。别字符串比较 pick 的 `html > body > a` 与 walker 的 `a`——用 `element.ref`。

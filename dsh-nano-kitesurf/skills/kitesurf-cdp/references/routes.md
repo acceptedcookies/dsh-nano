@@ -16,6 +16,7 @@
 | GET | `/nano-local-sandbox/browse-history` | 持久浏览历史（DELETE `?id=`/POST `{clear:true}` 改） |
 | GET | `/nano-local-sandbox/elements?selector=…&depth=N` | 引擎 DOM.getDocument 元素列表（depth NaN→400） |
 | GET | `/nano-local-sandbox/dom` | 页面 DOM 文本 |
+| GET | `/nano-local-sandbox/res/<scheme>/<host>/<path>` | 同源资源代理（前缀路由）：为 HTML 原生预览取回 `http:` 子资源，仅 http/https；越界回 `res.scheme`/`res.host`/`res.path`/`res.url`/`res.size`/`res.timeout`/`res.upstream`/`res.redirect` |
 | GET | `/nano-local-sandbox/snapshot?maxNodes=1..500` | a11y-lite 树 + `@N` ref 表（人=agent 同一语言；默认 120） |
 | GET | `/nano-local-sandbox/refs?ref=@N` | `@N`→selector 反查；`?` 无参=整表 summary |
 | GET | `/nano-local-sandbox/logs?tail=20..2000` | 容器引擎输出（tail NaN→400） |
@@ -26,7 +27,7 @@
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| POST | `/nano-local-sandbox/open` | `{url}` 导航，仅 http(s) 无凭证 |
+| POST | `/nano-local-sandbox/open` | `{url}` 导航，仅 http(s) 无凭证。**写级鉴权**：要 GUI cookie，agent 直连 401 —— agent 的打开面是 relay `/cdp` 的 `Page.navigate` |
 | POST | `/nano-local-sandbox/shot` | `{scroll?,format?,quality?,fit?}` 截图 base64 |
 | POST | `/nano-local-sandbox/pick` | `{x,y}`/`{selector|@N}`/`{preview:true}` 点选元素包；最近一次点选由 pane 从应答自行持有 |
 | POST | `/nano-local-sandbox/edit` | `{selector|@N,text}` 写回元素文本 |

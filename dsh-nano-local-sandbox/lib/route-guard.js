@@ -100,6 +100,7 @@ function indexTable(table, plugin) {
     }
     byPath.set(row.path, {
       path: row.path,
+      match: row.match === 'prefix' ? 'prefix' : 'exact',
       methods,
       sensitivity: row.sensitivity,
       capability: row.capability,
@@ -294,7 +295,8 @@ export function createGuard({ table, plugin, observe } = {}) {
        * every POST 405'd while ctx.webServer.match() claimed a hit).
        * `ctx.get('webServer')` is the explicit service-read path that resolves
        * the injected, bound instance. Always use it for service resolution. */
-      const register = () => ctx.get('webServer').register({ kind: ROUTE_KIND, path: spec.path, handler })
+      const kind = row.match === 'prefix' ? 'prefix' : ROUTE_KIND
+      const register = () => ctx.get('webServer').register({ kind, path: spec.path, handler })
       if (typeof ctx.effect === 'function') {
         disposers.push(ctx.effect(register, `route-guard: ${spec.path}`))
       } else {

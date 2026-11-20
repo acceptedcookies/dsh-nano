@@ -500,3 +500,18 @@ test('environment-owner partially capable provider: stop survives while unannoun
   assert.equal(fresh.operations.find((op) => op.action === 'stop').state, 'succeeded')
   assert.equal((await owner.observe(fresh)).state, 'stopped')
 })
+
+test('environment-owner keeps the resource proxy out of object dispatch and serves its row fail-closed', async (t) => {
+  const { owner } = await setup(t, true)
+  assert.equal(owner.capabilities.has('dnls.dom'), true)
+  assert.equal(owner.capabilities.has('dnls.res'), false)
+  const connection = { admit: async () => ({ peer: ownerPeer() }) }
+  const specs = createManagedRoutes({ capabilities: owner.capabilities, execute: owner.execute, connection, table: BINDING_TABLE })
+  const route = specs.find((spec) => spec.path === '/nano-local-sandbox/res')
+  assert.ok(route, 'the ledger row still owns a registered spec')
+  const res = { statusCode: 0, setHeader() {}, end(text) { this.text = text } }
+  await route.handler({ method: 'GET', url: '/nano-local-sandbox/res/http/127.0.0.1:4321/styles.css', headers: {} }, res)
+  const body = JSON.parse(res.text)
+  assert.equal(body.errorId, 'sandbox.provider_unsupported')
+  assert.equal(res.statusCode, body.status)
+})

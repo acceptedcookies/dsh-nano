@@ -1512,6 +1512,22 @@
       "id": "dnls.processes",
       "channel": "http",
       "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/res",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "RES_ROUTE (prefix) — same-origin resource proxy for the pane’s native-HTML preview. The pane is an https page, so a srcdoc iframe cannot load the http: subresources of a local dev server (mixed content is blocked silently, leaving an unstyled skeleton). This route fetches <scheme>/<host>/<path> on the host and streams it back under the dsh origin, so the browser never crosses schemes and no certificate or public tunnel is involved. Only http/https are accepted (file:/data:/javascript: are rejected with a named errorId); Set-Cookie is stripped so a proxied page cannot write dsh cookies. Read-only passthrough, no engine or container mutation. Under dnls.control/1 the row is registered fail-closed (sandbox.provider_unsupported) and managed /dom does not rewrite onto it, until the owner places this non-object route.",
+      "id": "dnls.res",
+      "channel": "http",
+      "match": "prefix"
     }
   ]
 }

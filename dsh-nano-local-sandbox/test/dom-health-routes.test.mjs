@@ -72,7 +72,10 @@ test('/dom returns a sanitized srcdoc, not just a url', async () => {
   assert.equal(typeof result.body.srcdoc, 'string')
   assert.equal(result.body.srcdoc.includes('<script'), false)
   assert.equal(result.body.srcdoc.includes('onclick'), false)
-  assert.equal(result.body.srcdoc.includes('<base href="https://example.com/p">'), true)
+  // Base is the proxy form of the page URL — see dom-srcdoc's rationale: a
+  // direct https base is fine here, but the same code path must also carry an
+  // http dev server without producing mixed content.
+  assert.equal(result.body.srcdoc.includes('<base href="/nano-local-sandbox/res/https/example.com/">'), true)
   assert.equal(result.body.stripped.scripts, 1)
   assert.equal(result.body.stripped.handlers, 1)
   assert.equal(result.body.bytes > 0, true)

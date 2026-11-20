@@ -40,6 +40,18 @@ const KERNEL_CODES = [
   { code: 'network.query', status: 400, cause: 'network 查询参数非法', next: 'GET /network?limit=1..200' },
   { code: 'dom.empty', status: 502, cause: '没有可序列化的文档', next: '先 POST /open' },
   { code: 'dom.blank', status: 502, cause: '页面仍是 about:blank', next: 'GET /status 看 phase' },
+  // /res/* — the same-origin resource proxy behind the pane's native-HTML
+  // preview. These ids are the "this is forbidden, not broken" face: a caller
+  // must be able to tell a policy refusal from an unreachable upstream.
+  { code: 'res.scheme', status: 400, cause: '资源代理只接受 http/https；file:/data:/javascript: 等一律拒绝', next: '把页面地址改成 http(s)；不要试图用 res 面读本地文件' },
+  { code: 'res.host', status: 400, cause: '目标主机不合法或带了凭据（user:pass@）', next: '用纯 <host[:port]>；凭据不进代理' },
+  { code: 'res.path', status: 400, cause: 'res 路径缺 <scheme>/<host>/<path>', next: 'GET /nano-local-sandbox/res/<http|https>/<host>/<path>' },
+  { code: 'res.url', status: 400, cause: '无法组成合法的目标 URL', next: '检查 host/port 拼写' },
+  { code: 'res.redirect', status: 502, cause: '上游 3xx 指向了不可代理的目标（非 http(s)）', next: '直接打开最终地址，不要依赖该跳转' },
+  { code: 'res.size', status: 413, cause: '上游响应超过预览上限（24MiB）', next: '这不是下载面；换小资源或直接看引擎截图' },
+  { code: 'res.timeout', status: 504, cause: '宿主侧取资源超时（15s）', next: '确认目标在宿主可达；不要用隧道把公网地址塞进来' },
+  { code: 'res.upstream', status: 502, cause: '上游不可达或返回了错误状态', next: '先在宿主确认该地址可访问；body 里的 upstreamStatus 是上游真实状态' },
+  { code: 'res.', wildcard: true, status: 502, cause: '资源代理失败', next: '看 errorId 细分：scheme/host/size/timeout/upstream' },
   { code: 'elements.empty', status: 502, cause: 'DOM.getDocument 没有文档根', next: '先 POST /open' },
   { code: 'body.toolarge', status: 413, cause: '请求体超过该路由上限', next: '拆小请求' },
   { code: 'body.', wildcard: true, status: 400, cause: 'body 不是 JSON 对象', next: '发送 JSON 对象' },

@@ -6,8 +6,11 @@ import { authorize } from './object-authz.js'
 import { routeSpecs } from './routes.js'
 import { supportsAction } from './backend.js'
 
+// dnls.res is not a page action: iframe subresource fetches carry neither the
+// contract header nor a sandboxId, and its body is raw bytes, not JSON. Left out
+// here, managed-routes registers its row fail-closed until it gets its own owner.
 const otherOwners = new Set(['dnls.contract', 'dnls.mcp', 'dnls.lifecycle', 'dnls.operations', 'dnls.sandboxes',
-  'dnls.fleet', 'dnls.inspect', 'dnls.processes'])
+  'dnls.fleet', 'dnls.inspect', 'dnls.processes', 'dnls.res'])
 const fail = status => Object.assign(new Error('object page unavailable'), { status })
 const deniedKeys = new Set(['cookies', 'cookiesApplied', 'extraHeaders', 'authorization', 'token', 'storePath',
   'containerName', 'mounts', 'stateVolume', 'argv', 'env', 'engineUrl', 'stateSource', 'runtimeSource'])

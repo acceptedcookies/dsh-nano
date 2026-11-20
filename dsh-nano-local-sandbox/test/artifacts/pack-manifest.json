@@ -51,6 +51,7 @@
       "src/host/policy-adapter.js",
       "src/host/profile-drivers.js",
       "src/host/profile-registry.js",
+      "src/host/res-proxy.js",
       "src/host/routes.js",
       "src/host/state-service.js",
       "src/host/term-bridge.js",

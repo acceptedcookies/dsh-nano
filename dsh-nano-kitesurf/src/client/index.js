@@ -201,6 +201,8 @@ const STYLE = `
 @keyframes nks-spin{to{transform:rotate(360deg)}}
 .nks-open-error{margin:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);line-height:1.55;word-break:break-word}
 .nks-open-url{color:var(--dsw-alias-label-tertiary);unicode-bidi:plaintext}
+.nks-open-repair{margin-top:10px;height:28px;padding:0 12px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);cursor:pointer}
+.nks-open-repair:hover{background:var(--dsw-alias-bg-layer-3)}
 .nks-open-log{margin:6px 0 0;max-height:140px;overflow:auto;padding:6px 8px;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
 .nks-simulation-body{min-height:0}
@@ -929,9 +931,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
   const [devtoolsOpen, setDevtoolsOpen] = React.useState(false)
   const [navOpen, setNavOpen] = React.useState(false)
   const [navTabs, setNavTabs] = React.useState([])
-  // Native HTML is the default surface: the iframe gets real DOM/CSS and the
-  // picker is bound after document.write (which wipes listeners).
-  const [nativeHtml, setNativeHtml] = React.useState(true)
+  // The engine's own render is the default surface, NOT the srcdoc iframe.
+  // A srcdoc document inherits the HOST page's origin (https://<dsh host>),
+  // so every http: subresource inside it is mixed content and Chrome blocks
+  // it silently — the pane then shows an unstyled skeleton while the engine
+  // (which loads the page in its own container) renders perfectly. Local dev
+  // servers are http:, so "native HTML by default" made the common case the
+  // broken one. Native HTML is an explicit opt-in; DNLS proxies its
+  // subresources (/res/...) so that opting in does not reintroduce the block.
+  const [nativeHtml, setNativeHtml] = React.useState(false)
   const [domDoc, setDomDoc] = React.useState(null)
   // last-good 标记：导航/刷新失败时保留上一帧画面，并在画面上叠加
   // 「显示上次成功画面 …」提示；新导航成功后清除。
@@ -949,6 +957,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
   // HITL control state from /nano-local-sandbox/control (bridge proxy):
   // {writer,owner,ownerSince,lastWriteAt,humanHold,lastAction,lastCallAt}.
   const [control, setControl] = React.useState(null)
+  // T-O-2: two tiers, never one boolean. `relayConns > 0` means a /cdp socket
+  // is attached (the agent can see the page); `relayWriting` means a write was
+  // forwarded in the last 90s. Collapsing them would make the bar claim an
+  // agent is writing whenever it merely listens — a long-lived socket makes
+  // "connected" permanently true.
+  const relayConns = control?.relay?.conns || 0
+  const relayWriting = relayConns > 0 && control?.relay?.lastAt
+    ? Date.now() - Date.parse(control.relay.lastAt) < 90_000
+    : false
   const [actionToast, setActionToast] = React.useState(null)
   const lastActionStamp = React.useRef('')
   const actionToastTimer = React.useRef(0)
@@ -1388,6 +1405,19 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
     dialogOpenRef.current = true
     let dialog = null
     const finish = () => { dialogOpenRef.current = false }
+    // A refused connection to a loopback host is the single most common
+    // "nothing opens" report, and the raw `net::ERR_CONNECTION_REFUSED` in
+    // this dialog never said why: the URL is resolved INSIDE the container, so
+    // `localhost` is the container, not the machine the dev server runs on.
+    // Say that here instead of letting the message imply the pane is broken.
+    const loopback = (() => {
+      try {
+        const host = new URL(url || '').hostname.toLowerCase()
+        return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0'
+          || host === '::1' || host === '[::1]' || host.endsWith('.localhost')
+      } catch { return false }
+    })()
+    const canRepair = RECOVERABLE.test(errorId)
     dialog = openNanoDialog({
       copy: { cancel: copy.close, confirm: url ? copy.retry : copy.close, close: copy.close },
       title: copy.openFailed,
@@ -1403,10 +1433,25 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
       },
       children: h('div', { 'data-nks-open-error': '1' },
         h('p', { className: 'nks-open-error' }, message),
+        loopback ? h('p', { className: 'nks-open-error', 'data-nks-open-loopback': '1' }, copy.openErrorLoopback) : null,
         url ? h('p', { className: 'nks-open-error nks-open-url' }, url) : null,
         cause?.detail?.engineLog
           ? h('pre', { className: 'nks-open-log', 'data-nks-open-log': '1' }, cause.detail.engineLog)
-          : null),
+          : null,
+        // The toast has had a repair shortcut all along; the dialog did not,
+        // so a navigation failure was a dead end with only "retry". The engine
+        // can die mid-navigate (workerd terminates the page script), and then
+        // every retry fails the same way until something restarts it.
+        canRepair ? h('button', {
+          type: 'button',
+          className: 'nks-open-repair',
+          'data-nks-open-repair': '1',
+          onClick: () => {
+            finish()
+            dialog?.close()
+            repairNow()
+          },
+        }, copy.openRepairRetry) : null),
     })
   }
 
@@ -1479,6 +1524,13 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
           capturedAt: data.capturedAt ?? null,
           domSeq: data.domSeq ?? null,
           generation: data.generation ?? null,
+          // `base` is the host's own statement that it rewrote the document
+          // onto a same-origin proxy. An older host omits it, and then whether
+          // a subresource survives is up to the browser's mixed-content policy
+          // — measured: a local http site still rendered styled in this
+          // browser, so the hint below must stay conditional. It reports the
+          // MISSING DECLARATION, never a guaranteed breakage.
+          proxied: typeof data.base === 'string' && data.base !== '',
         })
         if (data.url && data.url !== 'about:blank') setPageUrl(data.url)
         return true
@@ -1572,6 +1624,14 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
     dragRef.current = null
     setDraftBox(null)
     setDraftKind(null)
+  }
+
+  /** One toggle for every activation path (mouse press, keyboard, script). */
+  function toggleAnnotate() {
+    setAnnotate((value) => {
+      if (value) { setHover(null); endDrag() }
+      return !value
+    })
   }
 
   async function onPointerUp(event) {
@@ -2262,20 +2322,13 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
       if (el) { el.classList.add('__nks_hover'); hovered = el }
     }, true)
     doc.addEventListener('click', (e) => {
-      const dbg = { fired: 0 }
-      dbg.fired += 1
-      dbg.mode = annotateRef.current
       if (!annotateRef.current) return
       e.preventDefault(); e.stopPropagation()
       const el = doc.elementFromPoint(e.clientX, e.clientY)
-      dbg.hit = el ? el.tagName : null
-      dbg.coords = [Math.round(e.clientX), Math.round(e.clientY)]
       if (!el) return
       clearHover()
       const packet = packetFromDom(el, doc, e.clientX, e.clientY)
-      dbg.packet = !!packet
       setPick({ elements: [packet], anchor: { x: packet.box.x + packet.box.width / 2, y: packet.box.y + packet.box.height } })
-      dbg.picked = true
       setEditing(false)
     }, true)
     doc.addEventListener('mouseleave', clearHover, true)
@@ -2571,10 +2624,13 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
           title: copy.annotateTitle,
           onPointerDown: (event) => {
             event.preventDefault(); event.stopPropagation()
-            setAnnotate((value) => {
-              if (value) { setHover(null); endDrag() }
-              return !value
-            })
+            toggleAnnotate()
+          },
+          // pointerdown covers a mouse press; click covers keyboard activation
+          // (Space/Enter fire click only, with detail 0) and programmatic
+          // callers. Guarding on detail keeps a real press from toggling twice.
+          onClick: (event) => {
+            if (event.detail === 0) toggleAnnotate()
           },
         }, glyph('annotate')),
         h('button', { type: 'button', className: 'nks-tool', 'data-nks-settings': '1', 'aria-label': copy.settings, title: copy.settings, onClick: openSettings }, glyph('settings')))),
@@ -2665,6 +2721,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
       onWheel,
       style: { cursor: annotate ? 'crosshair' : 'default' },
     },
+      // Independent of pins/annotate: this one is about the RENDER SURFACE, so
+      // it must be visible the moment HTML mode is on and the host is old.
+      nativeHtml && domDoc && domDoc.proxied === false ? h('div', {
+        className: 'nks-hint nks-float-top',
+        'data-nks-hint-unproxied': '1',
+        role: 'status',
+        onPointerDown: (event) => event.stopPropagation(),
+        onClick: (event) => event.stopPropagation(),
+      }, h('span', { className: 'nks-hint-text' }, copy.hintUnproxiedHtml)) : null,
       (pins.length || (annotate && hasPage)) ? h('div', {
         className: 'nks-float-top',
         'data-nks-float-top': '1',
@@ -2832,7 +2897,11 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
       // an agent holds the bridge writer lock or the human holds the override.
       // "停止写入" is honest wording — the pane cannot kill the agent's run
       // (that lives in the host), it can only hold its page writes.
-      !beat && (control?.humanHold?.active || control?.writer) ? h('div', {
+      // T-O-2: relay presence is its OWN tier. conns>0 is a long-lived socket
+      // (the agent attached), while lastAt is a recent forwarded write — one
+      // boolean would have collapsed "connected" into "acting" and the bar
+      // would then claim an agent is writing when it is just listening.
+      !beat && (control?.humanHold?.active || control?.writer || relayConns > 0) ? h('div', {
         className: 'nks-hitl',
         'data-nks-hitl': '1',
         role: 'status',
@@ -2846,7 +2915,9 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
         }),
         control?.humanHold?.active
           ? h('span', { className: 'nks-hitl-label' }, copy.hitlHeld)
-          : h('span', { className: 'nks-hitl-label' }, copy.hitlAgent, h('b', null, control?.owner || 'agent')),
+          : control?.writer
+            ? h('span', { className: 'nks-hitl-label' }, copy.hitlAgent, h('b', null, control?.owner || 'agent'))
+            : h('span', { className: 'nks-hitl-label' }, relayWriting ? copy.hitlRelayWrite : copy.hitlRelay),
         control?.humanHold?.active
           ? h('button', { type: 'button', className: 'nks-hitl-btn nks-hitl-primary', 'data-nks-hitl-release': '1', onClick: () => controlOp('release') }, copy.hitlRelease)
           : h('button', { type: 'button', className: 'nks-hitl-btn nks-hitl-primary', 'data-nks-hitl-takeover': '1', title: copy.hitlTakeoverTitle, onClick: () => controlOp('takeover') }, copy.hitlTakeover),
@@ -2858,7 +2929,11 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId 
         'data-nks-act': '1',
         role: 'status',
         'data-ok': actionToast.ok === false ? 'false' : 'true',
-      }, `${copy.hitlAction} ${actionToast.tool}`) : null,
+      // T-O-3 receipt: a relay write refused by the human's takeover shows as
+      // a blocked action, not as an anonymous agent action.
+      }, actionToast.ok === false && String(actionToast.tool || '').startsWith('relay:')
+        ? `${copy.hitlRefused} · ${actionToast.tool}`
+        : `${copy.hitlAction} ${actionToast.tool}`) : null,
     // One carrier for both toasts: the host Toast through nano-ui. A
     // recoverable failure adds its repair action to the same toast instead of
     // re-implementing the chrome.

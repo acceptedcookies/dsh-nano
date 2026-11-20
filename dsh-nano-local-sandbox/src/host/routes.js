@@ -33,6 +33,10 @@ export const FLEET_ROUTE = '/nano-local-sandbox/fleet'
 export const SANDBOXES_ROUTE = '/nano-local-sandbox/sandboxes'
 export const INSPECT_ROUTE = '/nano-local-sandbox/inspect'
 export const PROCESSES_ROUTE = '/nano-local-sandbox/processes'
+// Same-origin resource proxy (implementation in res-proxy.js). Declared here so
+// every DNLS path lives in one scanner-visible place; a drift test keeps this
+// literal and RES_PREFIX identical.
+export const RES_ROUTE = '/nano-local-sandbox/res'
 
 import { request as httpRequest } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
@@ -40,6 +44,7 @@ import { closeSync, constants, fstatSync, mkdirSync, openSync, readFileSync, ren
 import { fileURLToPath } from 'node:url'
 import { basename, dirname, join } from 'node:path'
 import { BINDING_TABLE } from '../../lib/bindings.js'
+
 import { createCdpKeeper } from './cdp-keeper.js'
 import { ensureClient, evaluatePage, navigate, navigationLedger, queueNavigation, readElements, resetClient, withPage } from './cdp-elements.js'
 import { answerNativeTool, toolsList } from './mcp-sandbox.js'
@@ -49,6 +54,7 @@ import { createInstanceRegistry } from './instance-registry.js'
 import { policyFingerprint, tupleFromPolicy } from './policy-adapter.js'
 import { errorCatalog, errorCode, statusOf } from './error-catalog.js'
 import { buildSrcDoc } from './dom-srcdoc.js'
+import { RES_PREFIX, serveRes } from './res-proxy.js'
 import { bumpEpoch, projectSnapshot } from './observe.js'
 import { TERM_TOOLS } from './terminal-driver.js'
 
@@ -1070,7 +1076,9 @@ async function captureDom(session, base, deps) {
   })
   if (!page?.html) return { error: 'empty' }
   if (page.url === 'about:blank') return { error: 'blank' }
-  const built = buildSrcDoc({ url: page.url, html: page.html })
+  // Managed hosts do not dispatch /res (see object-pages), so only the
+  // unmanaged route set may rewrite the document onto the proxy.
+  const built = buildSrcDoc({ url: page.url, html: page.html }, { proxy: !deps.managed })
   // domSeq is the pane's staleness cursor: it must only advance when the
   // captured document actually changed — bumping it on every read makes the
   // pane's "same-version" guard never hit and rewrites the iframe
@@ -1478,6 +1486,13 @@ export function routeSpecs(deps = {}) {
         // stays 'disconnected'; only pre-dispatch cancellation is 'cancelled'.
         if (op.status === null && res.destroyed) op.status = 'disconnected'
       })
+      // The resource proxy owns its whole subtree and does its own fetch; it
+      // must run before any engine-facing branch (it never touches the engine)
+      // and before the profile binding, which it does not need.
+      if (row.path === RES_PREFIX || row.path.startsWith(`${RES_PREFIX}/`)) {
+        await serveRes(req, res)
+        return
+      }
       if (row.path.endsWith('/shot')) {
         // Real implementation: the page-ready stub (deps.pageReady) was a
         // scaffold nobody ever wired — shot has a route row but no body. Drive

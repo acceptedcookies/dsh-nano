@@ -199,65 +199,6 @@ ${LAYER_CSS}
   .nano-facts dd { font-size: max(1em, 16px); }
   .nano-facts dd { font-weight: 500; }
 }
-
-/* Workbench shell. Heights match the measured design-mode pane: bar 38px,
-   drawer 216px, status 26px. Tokens only; no card fill on the body. */
-.nano-shell { position: relative; box-sizing: border-box; display: flex; flex-direction: column; height: 100%; min-height: 0;
-  color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); font: var(--dsw-font-xxs-12); }
-.nano-shell-bar { position: relative; z-index: var(--nano-layer-local3); box-sizing: border-box; display: flex; flex: none; align-items: center;
-  gap: var(--nano-space-2); height: 38px; padding: 5px 6px; border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3); }
-/* DNK .nks-nav-toggle: one 28px pill, icon+label, markdown-tag fill, 4px inset so the left edge meets the host tab. */
-.nano-shell-toggle { display: inline-flex; flex: none; align-items: center; gap: 5px; height: 28px; margin-left: 4px; padding: 0 10px;
-  border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-markdown-tag); color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-xxs-12); font-size: var(--dsh-content-font-size-secondary, 13px); white-space: nowrap; cursor: pointer; }
-.nano-shell-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.nano-shell-toggle[aria-pressed="true"] { background: color-mix(in srgb, var(--dsw-alias-link) 14%, var(--dsw-alias-markdown-tag)); }
-/* DNK .nks-toolbar-tail / .nks-tool: 28\xD728 seats, 8px pitch, under the host \u5206\u680F/\u5168\u5C4F/\u6536\u8D77 cluster. */
-.nano-shell-tail { display: flex; flex: none; align-items: center; gap: 8px; }
-.nano-shell-tool { width: 28px; height: 28px; display: inline-flex; flex: none; align-items: center; justify-content: center; padding: 0;
-  border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
-.nano-shell-tool:hover:not(:disabled) { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
-.nano-shell-tool[aria-pressed="true"] { color: var(--dsw-alias-label-primary); background: color-mix(in srgb, var(--dsw-alias-link) 18%, transparent); }
-.nano-shell-tool:disabled { opacity: .45; cursor: default; }
-.nano-shell-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--dsw-font-xs-13); }
-.nano-shell-gap { flex: auto; }
-.nano-shell-body { flex: auto; min-height: 0; overflow: auto; }
-.nano-drawer { position: absolute; z-index: var(--nano-layer-local4); top: 44px; left: 10px; bottom: 36px; width: 216px; box-sizing: border-box;
-  display: flex; flex-direction: column; min-height: 0; background: var(--dsw-alias-bg-layer-2);
-  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg);
-  box-shadow: var(--dsw-elevation-prominent); transform: translateX(calc(-100% - 12px)); visibility: hidden;
-  transition: transform var(--ds-transition-duration-slow, .32s) var(--ds-ease-in-out, ease), visibility 0s linear var(--ds-transition-duration-slow, .32s); }
-.nano-drawer[data-nano-drawer-state="open"] { transform: none; visibility: visible; transition: transform var(--ds-transition-duration-slow, .32s) var(--ds-ease-in-out, ease); }
-@starting-style { .nano-drawer[data-nano-drawer-state="open"] { transform: translateX(calc(-100% - 12px)); } }
-@media (prefers-reduced-motion: reduce) { .nano-drawer, .nano-drawer[data-nano-drawer-state="open"] { transition: none; } }
-/* DNK .nks-nav-head: 30px, hairline under it, so the title is not the first row. */
-.nano-drawer-head { display: flex; flex: none; align-items: center; height: 30px; padding: 0 10px; border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
-  color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-11); }
-.nano-drawer-list { flex: auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--nano-space-1); }
-/* DNK .nks-nav-tab: one row, name ellipsizes, current row is its own markdown-tag plate. */
-.nano-drawer-row { display: flex; align-items: center; gap: 7px; width: 100%; box-sizing: border-box; min-height: 30px; margin: 0; padding: 4px 8px;
-  border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); text-align: left; cursor: pointer; }
-.nano-drawer-row:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.nano-drawer-row[aria-current="page"] { background: var(--dsw-alias-markdown-tag); color: var(--dsw-alias-label-primary); }
-.nano-drawer-mark { display: inline-flex; flex: none; }
-.nano-drawer-copy { display: flex; flex-direction: column; flex: auto; min-width: 0; }
-.nano-drawer-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nano-drawer-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
-.nano-status { position: relative; z-index: var(--nano-layer-local3); flex: none; display: flex; align-items: center; gap: var(--nano-space-2);
-  height: 26px; padding: 0 10px; border-top: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
-  font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-tertiary); }
-.nano-status-text { flex: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nano-status-actions { flex: none; display: flex; align-items: center; gap: var(--nano-space-1); }
-.nano-status-btn { height: 20px; padding: 0 8px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent;
-  color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-11); cursor: pointer; }
-.nano-status-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
-.nano-status-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--dsw-alias-link) 22%, transparent); color: var(--dsw-alias-label-primary); }
-.nano-status-btn:disabled { opacity: .45; cursor: default; }
-.nano-dock { position: relative; z-index: var(--nano-layer-local6); flex: none; display: flex; flex-direction: column; min-height: 88px;
-  box-sizing: border-box; background: var(--dsw-alias-bg-base); border-top: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); }
-.nano-dock-grip { position: absolute; left: 0; right: 0; top: -3px; height: 7px; cursor: row-resize; touch-action: none; }
-.nano-dock-grip:hover { background: color-mix(in srgb, var(--dsw-alias-link) 35%, transparent); }
-.nano-dock-body { flex: auto; min-height: 0; overflow: auto; padding: var(--nano-space-2); }
 `;
     }
   });
@@ -1261,166 +1202,10 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/src/shell.js
-  function WorkbenchShell({ label, bar, drawer, dock, shellRef, children, ...rest }) {
-    return h8(
-      "section",
-      { ...rest, ref: shellRef, className: "nano-shell" },
-      h8("div", { className: "nano-shell-bar", role: "toolbar", "aria-label": label }, bar),
-      h8("div", { className: "nano-shell-body" }, children),
-      drawer ?? null,
-      dock ?? null
-    );
-  }
-  function ShellTitle({ children }) {
-    return h8("span", { className: "nano-shell-title" }, children);
-  }
-  function ShellGap() {
-    return h8("span", { className: "nano-shell-gap" });
-  }
-  function TabDrawer({ open, label, onClose, children }) {
-    const ref = import_react13.default.useRef(null);
-    import_react13.default.useEffect(() => {
-      if (!open) return void 0;
-      const onKey = (event) => {
-        if (event.key === "Escape") onClose?.();
-      };
-      const onDown = (event) => {
-        const target = event.target;
-        if (ref.current?.contains(target)) return;
-        if (typeof target?.closest === "function" && target.closest("[data-nano-drawer-toggle]")) return;
-        onClose?.();
-      };
-      document.addEventListener("keydown", onKey);
-      document.addEventListener("pointerdown", onDown);
-      return () => {
-        document.removeEventListener("keydown", onKey);
-        document.removeEventListener("pointerdown", onDown);
-      };
-    }, [open, onClose]);
-    return h8("nav", {
-      ref,
-      className: "nano-drawer",
-      "data-nano-drawer-state": open ? "open" : "closed",
-      "aria-label": label,
-      "aria-hidden": open ? void 0 : true
-    }, h8("div", { className: "nano-drawer-list" }, children));
-  }
-  function DrawerHead({ children }) {
-    return h8("div", { className: "nano-drawer-head" }, children);
-  }
-  function DrawerRow({ current, onClick, mark, label, meta }) {
-    return h8(
-      "button",
-      {
-        type: "button",
-        className: "nano-drawer-row",
-        "aria-current": current ? "page" : void 0,
-        onClick
-      },
-      mark ? h8("span", { className: "nano-drawer-mark" }, mark) : null,
-      h8(
-        "span",
-        { className: "nano-drawer-copy" },
-        h8("span", { className: "nano-drawer-label" }, label),
-        meta ? h8("span", { className: "nano-drawer-meta" }, meta) : null
-      )
-    );
-  }
-  function ShellToggle({ icon: icon2, label, pressed, onClick }) {
-    return h8("button", {
-      type: "button",
-      className: "nano-shell-toggle",
-      "data-nano-drawer-toggle": "1",
-      "aria-pressed": pressed ? "true" : "false",
-      "aria-label": label,
-      onClick
-    }, icon2, h8("span", null, label));
-  }
-  function ShellIcon({ icon: icon2, label, pressed, disabled, onClick }) {
-    return h8("button", {
-      type: "button",
-      className: "nano-shell-tool",
-      "aria-label": label,
-      title: label,
-      "aria-pressed": pressed ? "true" : "false",
-      disabled: disabled === true,
-      onClick
-    }, icon2);
-  }
-  function ShellTail({ children }) {
-    return h8("span", { className: "nano-shell-tail" }, children);
-  }
-  function clampHeight(shell, height) {
-    const limit = Math.max(88, Math.floor((shell?.clientHeight ?? 480) * 0.6));
-    return Math.min(limit, Math.max(88, Math.round(height)));
-  }
-  function StatusDock({ label, text, actions = [], height = 0, onHeight, onCommit, children }) {
-    const open = height > 0;
-    const drag = (event) => {
-      if (event.button != null && event.button !== 0) return;
-      event.preventDefault();
-      const shell = event.currentTarget.closest(".nano-shell");
-      const startY = event.clientY;
-      const startH = height;
-      const move = (ev) => onHeight?.(clampHeight(shell, startH + (startY - ev.clientY)));
-      const up = (ev) => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
-        const next = clampHeight(shell, startH + (startY - ev.clientY));
-        onHeight?.(next);
-        onCommit?.(next);
-      };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
-    };
-    return h8(
-      import_react13.default.Fragment,
-      null,
-      open ? h8(
-        "div",
-        { className: "nano-dock", style: { height: `${height}px` } },
-        h8("div", {
-          className: "nano-dock-grip",
-          role: "separator",
-          "aria-orientation": "horizontal",
-          "aria-label": label,
-          onPointerDown: drag
-        }),
-        h8("div", { className: "nano-dock-body" }, children)
-      ) : null,
-      h8(
-        "footer",
-        { className: "nano-status" },
-        h8("span", { className: "nano-status-text" }, text),
-        h8("span", { className: "nano-status-actions" }, actions.map((action) => (
-          /* nano-ui-exempt: 宿主 Button 最小档 28px，26px 状态条里的 20px 文字按钮没有对应档。 */
-          h8("button", {
-            key: action.id,
-            type: "button",
-            className: "nano-status-btn",
-            "aria-pressed": action.pressed ? "true" : "false",
-            disabled: action.disabled === true,
-            onClick: action.onClick
-          }, action.label)
-        )))
-      )
-    );
-  }
-  var import_react13, h8;
-  var init_shell = __esm({
-    "../packages/dsh-nano-ui/src/shell.js"() {
-      import_react13 = __toESM(__require("react"), 1);
-      h8 = import_react13.default.createElement;
-    }
-  });
-
   // ../packages/dsh-nano-ui/index.js
   var dsh_nano_ui_exports = {};
   __export(dsh_nano_ui_exports, {
     Card: () => Card,
-    DrawerHead: () => DrawerHead,
-    DrawerRow: () => DrawerRow,
     EmptyState: () => EmptyState,
     FactGrid: () => FactGrid,
     FloatingWindow: () => FloatingWindow,
@@ -1437,17 +1222,9 @@ ${LAYER_CSS}
     PanelLayout: () => PanelLayout,
     PanelSection: () => PanelSection,
     PlainTable: () => PlainTable,
-    ShellGap: () => ShellGap,
-    ShellIcon: () => ShellIcon,
-    ShellTail: () => ShellTail,
-    ShellTitle: () => ShellTitle,
-    ShellToggle: () => ShellToggle,
     SplitRow: () => SplitRow,
-    StatusDock: () => StatusDock,
-    TabDrawer: () => TabDrawer,
     Toolbar: () => Toolbar,
     VERSION: () => VERSION,
-    WorkbenchShell: () => WorkbenchShell,
     createThemeScope: () => createThemeScope,
     icon: () => icon,
     iconMarkup: () => iconMarkup,
@@ -1478,7 +1255,6 @@ ${LAYER_CSS}
       init_empty();
       init_window();
       init_panel();
-      init_shell();
     }
   });
 
@@ -1921,7 +1697,9 @@ ${LAYER_CSS}
         engineState: "Engine state",
         bridgeState: "Bridge",
         engineUnavailable: "Engine status is not announced for this sandbox.",
+        drivers: "Drivers",
         openWorkspace: "Open design workspace",
+        openIn: "Open in {name}",
         workspaceUnavailable: "No tab type is registered to open this sandbox.",
         humanHold: "Manual control",
         humanHoldActive: "held by an operator",
@@ -2136,7 +1914,9 @@ ${LAYER_CSS}
         engineState: "\u5F15\u64CE\u72B6\u6001",
         bridgeState: "\u6865\u63A5",
         engineUnavailable: "\u6B64\u6C99\u7BB1\u672A\u5BA3\u544A\u5F15\u64CE\u72B6\u6001\u9762\u3002",
+        drivers: "\u9A71\u52A8",
         openWorkspace: "\u6253\u5F00\u8BBE\u8BA1\u5DE5\u4F5C\u533A",
+        openIn: "\u5728 {name} \u4E2D\u6253\u5F00",
         workspaceUnavailable: "\u6CA1\u6709\u53EF\u6253\u5F00\u8FD9\u4E2A\u6C99\u7BB1\u7684\u9875\u7B7E\u7C7B\u578B\u3002",
         humanHold: "\u4EBA\u5DE5\u63A5\u7BA1",
         humanHoldActive: "\u5DF2\u7531\u64CD\u4F5C\u8005\u63A5\u7BA1",
@@ -2408,12 +2188,12 @@ ${LAYER_CSS}
       const y = 46 - (point.value - min) / span * 40;
       return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(" ")).join(" ");
-    return h9("svg", {
+    return h8("svg", {
       className: "dnls-history",
       viewBox: "0 0 240 48",
       preserveAspectRatio: "none",
       "aria-hidden": "true"
-    }, h9("path", {
+    }, h8("path", {
       d,
       fill: "none",
       stroke: "currentColor",
@@ -2421,11 +2201,237 @@ ${LAYER_CSS}
       vectorEffect: "non-scaling-stroke"
     }));
   }
-  var import_react14, h9;
+  var import_react13, h8;
   var init_history = __esm({
     "src/client/history.jsx"() {
+      import_react13 = __toESM(__require("react"), 1);
+      h8 = import_react13.default.createElement;
+    }
+  });
+
+  // src/client/shell.jsx
+  var shell_exports = {};
+  __export(shell_exports, {
+    DrawerHead: () => DrawerHead,
+    DrawerRow: () => DrawerRow,
+    SHELL_STYLES: () => SHELL_STYLES,
+    ShellGap: () => ShellGap,
+    ShellIcon: () => ShellIcon,
+    ShellTail: () => ShellTail,
+    ShellTitle: () => ShellTitle,
+    ShellToggle: () => ShellToggle,
+    StatusDock: () => StatusDock,
+    TabDrawer: () => TabDrawer,
+    WorkbenchShell: () => WorkbenchShell
+  });
+  function WorkbenchShell({ label, bar, drawer, dock, shellRef, children, ...rest }) {
+    return h9(
+      "section",
+      { ...rest, ref: shellRef, className: "dnls-shell" },
+      h9("div", { className: "dnls-shell-bar", role: "toolbar", "aria-label": label }, bar),
+      h9("div", { className: "dnls-shell-body" }, children),
+      drawer ?? null,
+      dock ?? null
+    );
+  }
+  function ShellTitle({ children }) {
+    return h9("span", { className: "dnls-shell-title" }, children);
+  }
+  function ShellGap() {
+    return h9("span", { className: "dnls-shell-gap" });
+  }
+  function TabDrawer({ open, label, onClose, children }) {
+    const ref = import_react14.default.useRef(null);
+    import_react14.default.useEffect(() => {
+      if (!open) return void 0;
+      const onKey = (event) => {
+        if (event.key === "Escape") onClose?.();
+      };
+      const onDown = (event) => {
+        const target = event.target;
+        if (ref.current?.contains(target)) return;
+        if (typeof target?.closest === "function" && target.closest("[data-dnls-drawer-toggle]")) return;
+        onClose?.();
+      };
+      document.addEventListener("keydown", onKey);
+      document.addEventListener("pointerdown", onDown);
+      return () => {
+        document.removeEventListener("keydown", onKey);
+        document.removeEventListener("pointerdown", onDown);
+      };
+    }, [open, onClose]);
+    return h9("nav", {
+      ref,
+      className: "dnls-drawer",
+      "data-dnls-drawer-state": open ? "open" : "closed",
+      "aria-label": label,
+      "aria-hidden": open ? void 0 : true
+    }, h9("div", { className: "dnls-drawer-list" }, children));
+  }
+  function DrawerHead({ children }) {
+    return h9("div", { className: "dnls-drawer-head" }, children);
+  }
+  function DrawerRow({ current, onClick, mark, label, meta }) {
+    return h9(
+      "button",
+      {
+        type: "button",
+        className: "dnls-drawer-row",
+        "aria-current": current ? "page" : void 0,
+        onClick
+      },
+      mark ? h9("span", { className: "dnls-drawer-mark" }, mark) : null,
+      h9(
+        "span",
+        { className: "dnls-drawer-copy" },
+        h9("span", { className: "dnls-drawer-label" }, label),
+        meta ? h9("span", { className: "dnls-drawer-meta" }, meta) : null
+      )
+    );
+  }
+  function ShellToggle({ icon: icon2, label, pressed, onClick }) {
+    return h9("button", {
+      type: "button",
+      className: "dnls-shell-toggle",
+      "data-dnls-drawer-toggle": "1",
+      "aria-pressed": pressed ? "true" : "false",
+      "aria-label": label,
+      onClick
+    }, icon2, h9("span", null, label));
+  }
+  function ShellIcon({ icon: icon2, label, pressed, disabled, onClick }) {
+    return h9("button", {
+      type: "button",
+      className: "dnls-shell-tool",
+      "aria-label": label,
+      title: label,
+      "aria-pressed": pressed ? "true" : "false",
+      disabled: disabled === true,
+      onClick
+    }, icon2);
+  }
+  function ShellTail({ children }) {
+    return h9("span", { className: "dnls-shell-tail" }, children);
+  }
+  function clampHeight(shell, height) {
+    const limit = Math.max(88, Math.floor((shell?.clientHeight ?? 480) * 0.6));
+    return Math.min(limit, Math.max(88, Math.round(height)));
+  }
+  function StatusDock({ label, text, actions = [], height = 0, onHeight, onCommit, children }) {
+    const open = height > 0;
+    const drag = (event) => {
+      if (event.button != null && event.button !== 0) return;
+      event.preventDefault();
+      const shell = event.currentTarget.closest(".dnls-shell");
+      const startY = event.clientY;
+      const startH = height;
+      const move = (ev) => onHeight?.(clampHeight(shell, startH + (startY - ev.clientY)));
+      const up = (ev) => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        const next = clampHeight(shell, startH + (startY - ev.clientY));
+        onHeight?.(next);
+        onCommit?.(next);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    };
+    return h9(
+      import_react14.default.Fragment,
+      null,
+      open ? h9(
+        "div",
+        { className: "dnls-dock", style: { height: `${height}px` } },
+        h9("div", {
+          className: "dnls-dock-grip",
+          role: "separator",
+          "aria-orientation": "horizontal",
+          "aria-label": label,
+          onPointerDown: drag
+        }),
+        h9("div", { className: "dnls-dock-body" }, children)
+      ) : null,
+      h9(
+        "footer",
+        { className: "dnls-status" },
+        h9("span", { className: "dnls-status-text" }, text),
+        h9("span", { className: "dnls-status-actions" }, actions.map((action) => (
+          /* nano-ui-exempt: 宿主 Button 最小档 28px，26px 状态条里的 20px 文字按钮没有对应档。 */
+          h9("button", {
+            key: action.id,
+            type: "button",
+            className: "dnls-status-btn",
+            "aria-pressed": action.pressed ? "true" : "false",
+            disabled: action.disabled === true,
+            onClick: action.onClick
+          }, action.label)
+        )))
+      )
+    );
+  }
+  var import_react14, h9, SHELL_STYLES;
+  var init_shell = __esm({
+    "src/client/shell.jsx"() {
       import_react14 = __toESM(__require("react"), 1);
       h9 = import_react14.default.createElement;
+      SHELL_STYLES = `
+.dnls-shell { position: relative; box-sizing: border-box; display: flex; flex-direction: column; height: 100%; min-height: 0;
+  color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); font: var(--dsw-font-xxs-12); }
+.dnls-shell-bar { position: relative; z-index: var(--nano-layer-local3); box-sizing: border-box; display: flex; flex: none; align-items: center;
+  gap: var(--nano-space-2); height: 38px; padding: 5px 6px; border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3); }
+/* DNK .nks-nav-toggle: one 28px pill, icon+label, markdown-tag fill, 4px inset so the left edge meets the host tab. */
+.dnls-shell-toggle { display: inline-flex; flex: none; align-items: center; gap: 5px; height: 28px; margin-left: 4px; padding: 0 10px;
+  border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-markdown-tag); color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12); font-size: var(--dsh-content-font-size-secondary, 13px); white-space: nowrap; cursor: pointer; }
+.dnls-shell-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dnls-shell-toggle[aria-pressed="true"] { background: color-mix(in srgb, var(--dsw-alias-link) 14%, var(--dsw-alias-markdown-tag)); }
+/* DNK .nks-toolbar-tail / .nks-tool: 28\xD728 seats, 8px pitch, under the host \u5206\u680F/\u5168\u5C4F/\u6536\u8D77 cluster. */
+.dnls-shell-tail { display: flex; flex: none; align-items: center; gap: 8px; }
+.dnls-shell-tool { width: 28px; height: 28px; display: inline-flex; flex: none; align-items: center; justify-content: center; padding: 0;
+  border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.dnls-shell-tool:hover:not(:disabled) { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.dnls-shell-tool[aria-pressed="true"] { color: var(--dsw-alias-label-primary); background: color-mix(in srgb, var(--dsw-alias-link) 18%, transparent); }
+.dnls-shell-tool:disabled { opacity: .45; cursor: default; }
+.dnls-shell-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--dsw-font-xs-13); }
+.dnls-shell-gap { flex: auto; }
+.dnls-shell-body { flex: auto; min-height: 0; overflow: auto; }
+.dnls-drawer { position: absolute; z-index: var(--nano-layer-local4); top: 44px; left: 10px; bottom: 36px; width: 216px; box-sizing: border-box;
+  display: flex; flex-direction: column; min-height: 0; background: var(--dsw-alias-bg-layer-2);
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg);
+  box-shadow: var(--dsw-elevation-prominent); transform: translateX(calc(-100% - 12px)); visibility: hidden;
+  transition: transform var(--ds-transition-duration-slow, .32s) var(--ds-ease-in-out, ease), visibility 0s linear var(--ds-transition-duration-slow, .32s); }
+.dnls-drawer[data-dnls-drawer-state="open"] { transform: none; visibility: visible; transition: transform var(--ds-transition-duration-slow, .32s) var(--ds-ease-in-out, ease); }
+@starting-style { .dnls-drawer[data-dnls-drawer-state="open"] { transform: translateX(calc(-100% - 12px)); } }
+@media (prefers-reduced-motion: reduce) { .dnls-drawer, .dnls-drawer[data-dnls-drawer-state="open"] { transition: none; } }
+/* DNK .nks-nav-head: 30px, hairline under it, so the title is not the first row. */
+.dnls-drawer-head { display: flex; flex: none; align-items: center; height: 30px; padding: 0 10px; border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-11); }
+.dnls-drawer-list { flex: auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--nano-space-1); }
+/* DNK .nks-nav-tab: one row, name ellipsizes, current row is its own markdown-tag plate. */
+.dnls-drawer-row { display: flex; align-items: center; gap: 7px; width: 100%; box-sizing: border-box; min-height: 30px; margin: 0; padding: 4px 8px;
+  border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); text-align: left; cursor: pointer; }
+.dnls-drawer-row:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.dnls-drawer-row[aria-current="page"] { background: var(--dsw-alias-markdown-tag); color: var(--dsw-alias-label-primary); }
+.dnls-drawer-mark { display: inline-flex; flex: none; }
+.dnls-drawer-copy { display: flex; flex-direction: column; flex: auto; min-width: 0; }
+.dnls-drawer-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dnls-drawer-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+.dnls-status { position: relative; z-index: var(--nano-layer-local3); flex: none; display: flex; align-items: center; gap: var(--nano-space-2);
+  height: 26px; padding: 0 10px; border-top: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
+  font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-tertiary); }
+.dnls-status-text { flex: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dnls-status-actions { flex: none; display: flex; align-items: center; gap: var(--nano-space-1); }
+.dnls-status-btn { height: 20px; padding: 0 8px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent;
+  color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-11); cursor: pointer; }
+.dnls-status-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.dnls-status-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--dsw-alias-link) 22%, transparent); color: var(--dsw-alias-label-primary); }
+.dnls-status-btn:disabled { opacity: .45; cursor: default; }
+.dnls-dock { position: relative; z-index: var(--nano-layer-local6); flex: none; display: flex; flex-direction: column; min-height: 88px;
+  box-sizing: border-box; background: var(--dsw-alias-bg-base); border-top: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); }
+.dnls-dock-grip { position: absolute; left: 0; right: 0; top: -3px; height: 7px; cursor: row-resize; touch-action: none; }
+.dnls-dock-grip:hover { background: color-mix(in srgb, var(--dsw-alias-link) 35%, transparent); }
+.dnls-dock-body { flex: auto; min-height: 0; overflow: auto; padding: var(--nano-space-2); }
+`;
     }
   });
 
@@ -2447,7 +2453,14 @@ ${LAYER_CSS}
     SplitRow: SplitRow2,
     Meter: Meter2,
     PlainTable: PlainTable2,
-    openNanoMenu: openNanoMenu2,
+    openNanoMenu: openNanoMenu2
+  } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
+  var { createDnlsClient: createDnlsClient2, createTicket: createTicket2 } = (init_managed(), __toCommonJS(managed_exports));
+  var { copyFor: copyFor2, fill: fill2 } = (init_i18n(), __toCommonJS(i18n_exports));
+  var { formatBytes: formatBytes2, serviceAddress: serviceAddress2 } = (init_format(), __toCommonJS(format_exports));
+  var { terminalAddress: terminalAddress2, sandboxAddress: sandboxAddress2, openResourceAddress: openResourceAddress2 } = (init_terminal_resource(), __toCommonJS(terminal_resource_exports));
+  var { HistoryLine: HistoryLine2 } = (init_history(), __toCommonJS(history_exports));
+  var {
     WorkbenchShell: WorkbenchShell2,
     ShellGap: ShellGap2,
     ShellToggle: ShellToggle2,
@@ -2456,13 +2469,9 @@ ${LAYER_CSS}
     TabDrawer: TabDrawer2,
     DrawerHead: DrawerHead2,
     DrawerRow: DrawerRow2,
-    StatusDock: StatusDock2
-  } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
-  var { createDnlsClient: createDnlsClient2, createTicket: createTicket2 } = (init_managed(), __toCommonJS(managed_exports));
-  var { copyFor: copyFor2, fill: fill2 } = (init_i18n(), __toCommonJS(i18n_exports));
-  var { formatBytes: formatBytes2, serviceAddress: serviceAddress2 } = (init_format(), __toCommonJS(format_exports));
-  var { terminalAddress: terminalAddress2, sandboxAddress: sandboxAddress2, openResourceAddress: openResourceAddress2 } = (init_terminal_resource(), __toCommonJS(terminal_resource_exports));
-  var { HistoryLine: HistoryLine2 } = (init_history(), __toCommonJS(history_exports));
+    StatusDock: StatusDock2,
+    SHELL_STYLES: SHELL_STYLES2
+  } = (init_shell(), __toCommonJS(shell_exports));
   var h10 = React15.createElement;
   var KIND = "dnls-sandbox";
   var {
@@ -2523,7 +2532,7 @@ ${LAYER_CSS}
 .dnls-field{gap:4px;color:var(--dsw-alias-label-secondary)}
 /* Box for the exempt history polyline. The path lives in history.jsx. */
 .dnls-history{display:block;width:100%;height:48px;color:var(--dsw-alias-label-secondary)}
-/* Native select. Host and nano-ui have no Select. 28px matches the tool seat; tokens only. */
+/* nano-ui-exempt: \u5BBF\u4E3B\u4E0E nano-ui \u90FD\u6CA1\u6709 Select\uFF1B\u539F\u751F select \u53EA\u505A\u9009\u62E9\u4E0D\u627F\u8F7D\u63A7\u4EF6\uFF0C28px \u5BF9\u9F50\u5DE5\u5177\u5EA7\u4F4D\uFF0C\u53EA\u7528\u4EE4\u724C\u3002 */
 .dnls-select{height:28px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border:var(--dsh-hairline-width) solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxs-12)}
 `;
   var stateLabel = (copy, state) => copy[STATE_KEY[state]] ?? copy.stateUnknown;
@@ -2821,26 +2830,42 @@ ${LAYER_CSS}
         setBusy(false);
       }
     }
+    function handlersFor(address) {
+      try {
+        return host.handlers(address) ?? [];
+      } catch {
+        return [];
+      }
+    }
+    function handlerTitle(candidate, address, fallback) {
+      try {
+        const title2 = typeof candidate?.title === "function" ? candidate.title(address) : candidate?.title;
+        return typeof title2 === "string" && title2 !== "" ? title2 : fallback;
+      } catch {
+        return fallback;
+      }
+    }
+    function sandboxRef(target) {
+      try {
+        return sandboxAddress2({ envId: target?.envId, sandboxId: target?.sandboxId });
+      } catch {
+        return null;
+      }
+    }
     function openDesign(row) {
       const target = row ?? current;
-      let address;
-      try {
-        address = sandboxAddress2({ envId: target?.envId, sandboxId: target?.sandboxId });
-      } catch {
-        setError(new Error(copy.workspaceUnavailable));
-        return;
-      }
-      if (host.openResource(address) !== true) setError(new Error(copy.workspaceUnavailable));
+      const address = sandboxRef(target);
+      if (!address || host.openResource(address) !== true) setError(new Error(copy.workspaceUnavailable));
     }
     function openTerm(term) {
-      let address;
-      try {
-        address = terminalAddress2({ envId: selection.envId, sandboxId: selection.sandboxId, terminalId: term.terminalId });
-      } catch {
-        setError(new Error(copy.terminalUnavailable));
-        return;
-      }
-      if (host.openTerminal(address) !== true) setError(new Error(copy.terminalUnavailable));
+      const address = typeof term?.address === "string" ? term.address : (() => {
+        try {
+          return terminalAddress2({ envId: selection.envId, sandboxId: selection.sandboxId, terminalId: term.terminalId });
+        } catch {
+          return null;
+        }
+      })();
+      if (!address || host.openResource(address) !== true) setError(new Error(copy.terminalUnavailable));
       else setFocused(term.terminalId);
     }
     async function createTerm() {
@@ -3057,6 +3082,15 @@ ${LAYER_CSS}
       const usage = detail?.usage;
       const cpuText = minute ? `${typeof minute.cpuCores === "number" ? Number(minute.cpuCores).toFixed(2) : "\u2014"} / ${(detail ?? current)?.resources?.cpus ?? "\u2014"}` : copy.samplingStopped;
       const memoryText = minute ? `${formatBytes2(minute.memoryBytes) ?? "\u2014"} / ${formatBytes2((detail ?? current)?.resources?.memoryBytes) ?? "\u2014"}` : copy.samplingStopped;
+      const drivers = (detail ?? current)?.drivers;
+      const driverText = Array.isArray(drivers) && drivers.length > 0 ? drivers.join(" \xB7 ") : copy.none;
+      const objectAddress = sandboxRef(current);
+      const objectHandlers = objectAddress ? handlersFor(objectAddress) : [];
+      const openActions = objectHandlers.map((handler, index) => h10(Button4, {
+        key: `handler-${index}`,
+        variant: index === 0 ? "primary" : "ghost",
+        onClick: openDesign
+      }, index === 0 ? copy.openWorkspace : fill2(copy.openIn, { name: handlerTitle(handler, objectAddress, copy.none) })));
       return h10(
         "div",
         { className: "dnls-stack", "data-dnls-view": "sandbox" },
@@ -3069,14 +3103,11 @@ ${LAYER_CSS}
             { label: copy.health, value: shownHealth(copy, (detail ?? current)?.health) },
             { label: copy.usageCpu, value: cpuText },
             { label: copy.usageMemory, value: memoryText },
-            { label: copy.fieldRevision, value: pending(detail ?? current) ? copy.notYetApplied : String((detail ?? current)?.appliedRevision ?? copy.none) }
+            { label: copy.fieldRevision, value: pending(detail ?? current) ? copy.notYetApplied : String((detail ?? current)?.appliedRevision ?? copy.none) },
+            { label: copy.drivers, value: driverText }
           ] })
         ),
-        h10(
-          "div",
-          { className: "dnls-primary" },
-          h10(Button4, { variant: "primary", onClick: openDesign }, copy.openWorkspace)
-        ),
+        openActions.length === 0 ? h10("p", { className: "dnls-muted" }, copy.workspaceUnavailable) : h10("div", { className: "dnls-primary" }, openActions),
         h10(
           PanelSection2,
           { title: copy.control },
@@ -3195,12 +3226,20 @@ ${LAYER_CSS}
       { className: "dnls-section" },
       h10("p", { className: "dnls-muted" }, copy.dockHint),
       terms?.error ? h10("p", { className: "dnls-error", role: "alert" }, terms.error) : null,
-      termList.length === 0 ? h10("p", { className: "dnls-muted" }, copy.terminalsEmpty) : termList.map((term) => h10(
-        "div",
-        { key: term.terminalId, className: "dnls-actions" },
-        h10("span", { className: "dnls-muted" }, `${term.terminalId.slice(0, 8)} ${term.state ?? ""}`),
-        h10(Button4, { variant: "ghost", size: "sm", onClick: () => openTerm(term) }, copy.terminalOpen)
-      )),
+      termList.length === 0 ? h10("p", { className: "dnls-muted" }, copy.terminalsEmpty) : termList.map((term) => {
+        const termHandlers = typeof term.address === "string" ? handlersFor(term.address) : [];
+        return h10(
+          "div",
+          { key: term.terminalId, className: "dnls-actions" },
+          h10("span", { className: "dnls-muted" }, `${term.terminalId.slice(0, 8)} ${term.state ?? ""}`),
+          termHandlers.length === 0 ? h10("span", { className: "dnls-muted" }, copy.terminalUnavailable) : termHandlers.map((handler, index) => h10(Button4, {
+            key: `handler-${index}`,
+            variant: "ghost",
+            size: "sm",
+            onClick: () => openTerm(term)
+          }, index === 0 && termHandlers.length === 1 ? copy.terminalOpen : fill2(copy.openIn, { name: handlerTitle(handler, term.address, copy.none) })))
+        );
+      }),
       supports("term.session.create") && !terms?.denied ? h10(Button4, { variant: "ghost", size: "sm", disabled: termBusy, onClick: createTerm }, copy.terminalCreate) : null
     );
     const confirmCopy = confirm ? CONFIRM[confirm.kind] : null;
@@ -3303,7 +3342,7 @@ ${LAYER_CSS}
     return h10(
       React15.Fragment,
       null,
-      h10("style", null, NANO_STYLES2, STYLE),
+      h10("style", null, NANO_STYLES2, SHELL_STYLES2, STYLE),
       h10(WorkbenchShell2, {
         "data-dnls-pane": "1",
         label: copy.workbenchTitle,
@@ -3376,11 +3415,7 @@ ${LAYER_CSS}
     const zh = () => ctx.locale?.getSnapshot?.().active?.startsWith("zh") === true;
     const copy = () => copyFor2(zh() ? "zh" : "en");
     const host = {
-      openTerminal: (address) => openResourceAddress2({
-        candidates: (value) => ctx.sidebarRightTabs?.candidates?.(value),
-        openResource: (value) => ctx.sidebarRight?.openResource?.(value),
-        address
-      }),
+      handlers: (address) => ctx.sidebarRightTabs?.candidates?.(address),
       openResource: (address) => openResourceAddress2({
         candidates: (value) => ctx.sidebarRightTabs?.candidates?.(value),
         openResource: (value) => ctx.sidebarRight?.openResource?.(value),

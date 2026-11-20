@@ -258,21 +258,21 @@ S1-01 并入 main
   - **完成判据**：至少一例内核失败同时带 `error` 与 `hint`，键只有 `ok`/`errorId`/`error`/`hint`；`error` 按 240 字截断；另有一例派发前失败只有 `errorId` 且无 `hint`；失败体无 `incidentId`、操作行仍有；[DNK] 的 `engineLog` 死分支与 `openErrorLoopback` 删除
   - **验证映射**：`DNLS03X-T09` · **依赖**：`S1-01`
   - **执行状态**：`complete` · **执行时间**：`2026-11-21T00:41Z` · **证据 / 备注**：内核失败投影四键 `ok/errorId/error/hint`、`error` 240 截断、派发前只有 `errorId`、失败体无 `incidentId` 而操作行保留；[DNK] 删 `engineLog` 死分支与 `openErrorLoopback`；DNLS 487/487
-- [ ] `S1-10` — 外壳退回 [DNLS]
+- [x] `S1-10` — 外壳退回 [DNLS]
   - **落点 / 对象**：`packages/dsh-nano-ui/src/shell.js:9,103`、`packages/dsh-nano-ui/index.js:18`、`src/client/index.jsx:12,762`、`docs/specs/dsh-nano-ui/DESIGN.md:153,210-216`
   - **完成判据**：`WorkbenchShell`、`StatusDock` 移回 [DNLS] client；nano-ui 入口不再导出；DESIGN §6 删该行、§10 为自绘控件登记 `nano-ui-exempt`；U10 计数等于 §10 行数；不去凑第二个使用方
   - **验证映射**：`DNLS03X-T10` · **依赖**：`S1-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-21T00:52Z` · **证据 / 备注**：外壳件从 nano-ui 移到 `src/client/shell.jsx`；`packages/dsh-nano-ui/index.js` 删外壳导出；DESIGN §6 删行、§10 18 行与全仓 U10 18 相等；管理页接上终端可用行、`candidates` 打开动作与 `drivers`；DNLS 487/487、DNK 73/73
 - [x] `S1-11` — 旧验收脚本整批删除
   - **落点 / 对象**：[DNK] `scripts/e2e-ego.mjs`、`eval-design-mode.mjs`、`eval-ego-vs-dnk.mjs`、`eval-proto-mcp.mjs`、`test/e2e-script.test.mjs`、仓根 `scripts/gui-smoke-kitesurf.sh`、`package.json:11`、`RELEASE.md:97`
   - **完成判据**：六条路径都不存在；`test:e2e` 消失；`RELEASE.md:97` 改写且不新增必跑项；不留别名；历史文档里的脚本名不回改
   - **验证映射**：`DNLS03X-T11` · **依赖**：`S1-01`
   - **执行状态**：`complete` · **执行时间**：`2026-11-20T15:52Z` · **证据 / 备注**：删六条路径（四份 `scripts/*.mjs`、`test/e2e-script.test.mjs`、仓根 `gui-smoke-kitesurf.sh`）；`package.json` 删 `test:e2e`；`RELEASE.md` 删该句且未新增必跑项；[DNK] 51/51；两条 check 0 漂移
-- [ ] `S1-12` — 收口台账终态初值
+- [x] `S1-12` — 收口台账终态初值
   - **落点 / 对象**：本节下方的终态表；`plan/todo.DNLS03.md:126` 的旧 `/res` 句不改，由新节取代
   - **完成判据**：点名行（含 `K-02`）都有终态且属于四种允许值；普查行逐行复核后不留「开放」；可见行的证据栏写「待 S4」或「待 S6」
   - **验证映射**：`DNLS03X-T12` · **依赖**：`S1-02` 与 `S1-03`–`S1-11`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-21T00:52Z` · **证据 / 备注**：§8.8 台账 131 行：已完成 25 / 已作废 46 / 本期实现 37 / [业主] 推迟 23，空终态 0；点名行 18 行齐；普查 G/L/V/E/F/X/D 逐类复核，无「开放」单元格
 - [ ] `S1-13` — S1 出口，仍不部署
   - **落点 / 对象**：三包 `npm test` 与 `check-*`
   - **完成判据**：三包全绿且 `check-*` 通过；开发站未被写、未被重启、未发模型消息；`S1-13 c)` 的文档提交已在分支上（见本节开头的偏差记录）
@@ -422,6 +422,190 @@ S1-01 并入 main
 - **本任务最低要求**：S1 只换文首两段横幅；§0 留到 S6 之后一次改写；其余各节保留 `b3ad7e5` 快照。
 - **实际记录**：未开始。
 - **证据 / 状态 / handoff**：`S6-02`。
+
+### 8.8 [DNK] 收口台账（`T-O-60`）
+
+> 本表是 [DNK] 收口的唯一现状真源（`T-O-60`）。行 = 原编号（`G`/`L`/`V`/`E`/`F`/`X`/`D` 各系列）+ `DNK01 T-O-1`–`T-O-6` + K-01–K-07 + 普查新发现；列 = 执行方、终态、证据。终态只允许四种：`已完成`、`已作废（引 T-O-xx）`、`本期实现`、`[业主] 推迟`；任何行不得停在「开放」。普查分类只是初值，本表已逐行复核。
+>
+> 分类映射（初值）：`G`/`V` = `1119-delivery-gaps.md` 的缺口台账 G01–G32 与实测验收 V01–V18；`D` = `1119-loop3-closure.md` 的五个 D 闸口；`L` = `1119-local-dev-review.md` 的主题 A–G；`X` = `ego-vs-dnk-gap-analysis.md` 的演化台账（P0/P1/P2 与 a1–a10）；`F` = `final-eval.md`（本册无独立编号，类别级复核）；`E` = `e2e/DNK01-1120-e2e.md` 的证据项 E1–E15。七份旧文档已冻结为历史（文首指针，S1-02 落）；受管前取证（E1–E15、`final-eval`、e2e-ego 27/27）不移用于合并态；用户或 agent 可见的行为（pane、skill、bridge 写闸、错误展示）证据栏只写「待 S4」，不写成已通过。
+
+**点名行**
+
+| 行 | 执行方 | 终态 | 证据 |
+|---|---|---|---|
+| `DNK01 T-O-5`（`/res` 取资源面整条） | [DNLS] | 已作废（引 `T-O-66`） | S1 单测 `DNLS03X-T08`：`res-proxy.js`、`RES_ROUTE`/`serveRes`、`res.*` 九行与 `dnls.res` 账本行全部删除，无别名墓碑 |
+| `DNK01 T-O-4`「绝对引用改写到 `/res` 代理」句 | [DNLS] | 已作废（引 `T-O-66`） | 同上：`dom-srcdoc.js` 的 `proxy` 与 `rewriteAbsoluteUrls` 已删 |
+| `DNK01 T-O-4`「path 镜像」句 | [DNLS] | 已作废（引 `T-O-66`） | 同上：代理空间不复存在，path 镜像随之失效 |
+| `DNK01 T-O-4` 其余保留句（默认引擎渲染、HTML 为 opt-in 静态投影、`domSeq` 签名） | [DNK] | 本期实现 | S1 单测 `DNLS03X-T08`：`proxy:false` 保留真实地址、`hintUnproxiedHtml` 改静态投影说明；HTML 模式 pane 行为待 S4（U8） |
+| `DNK01 T-O-6`「`/res` 命中隧道域附 hint」句 | [DNLS] | 已作废（引 `T-O-66`） | 同 `T-O-5` 行：`/res` 面已删 |
+| `DNK01 T-O-6`「`res.public-tunnel` hint code」句 | [DNLS] | 已作废（引 `T-O-66`） | `res.*` 错误码九行随 catalog 删除（`DNLS03X-T08`） |
+| `DNK01 T-O-6`「`/open` 隧道 hint + `networking` 提示」句 | [DNLS]·[DNK] | 本期实现 | S1 单测 `DNLS03X-T08`：成功体与失败体同 hint、状态码不变；pane/agent 看到的提示文本待 S4（U9、A3） |
+| `DNK01 T-O-1`（agent 不依赖 GUI cookie 的打开面 + 失败投影） | [DNLS] | 本期实现 | agent 侧落点 `T-O-64`（四工具之「打开」）、失败投影 `T-O-68`；S1 单测 `DNLS03X-T05`、`DNLS03X-T09`；真机待 S4（A1、A3） |
+| `DNK01 T-O-2`（`controlSnapshot.relay` 只读记账） | [DNLS] | 本期实现 | 凭据语义按 `T-O-63`；S1 单测 `DNLS03X-T04`：`conns` 只计 agent 类、被拒写不更新 `lastAt`；pane 两档显示待 S4 |
+| `DNK01 T-O-3`（humanHold 下 agent 写拒） | [DNLS] | 本期实现 | 写闸落点 `T-O-63`；S1 单测 `DNLS03X-T04`：代次凭据、读白名单放行、`kitesurf.control.held`；真机待 S4（A2） |
+| `K-01` `/res` 归属 | [DNLS] | 本期实现 | 原二选一被 `T-O-66` 取代：整条删除不留别名；S1 单测 `DNLS03X-T08` |
+| `K-02` `sandbox.open` 作对象能力 | [DNLS] | 本期实现 | 与 `DNK01 T-O-1` 同一落点（`T-O-64` 打开工具、显式 `sandboxId`、计写调用）；S1 单测 `DNLS03X-T05`；真机待 S4（A1） |
+| `K-03` relay 写闸随镜像换代 | [DNLS] | 本期实现 | 凭据经镜像配方投放，证据在 S2 镜像重建与 S3 新对象；S1 只登记执行方与单测 `DNLS03X-T04` |
+| `K-04` 隧道 hint 与 `networking` 字段 | [DNLS]·[DNK] | 本期实现 | 同 `DNK01 T-O-6` hint 行；S1 单测 `DNLS03X-T08`；真机 hint 待 S4（U9） |
+| `K-05` 受管失败体降级 | [DNLS]·[DNK] | 本期实现 | `T-O-68` 四键白名单 + [DNK] `hint` 挂错误对象、`engineLog` 死分支删除；S1 单测 `DNLS03X-T09`；真机同 hint 待 S4（U5、A3） |
+| `K-06` 开发站复验 | S4 真机 | 本期实现 | 证据只在 S4：U1–U9、A1–A3 逐条四元组（操作号、对象 ID、session、UTC） |
+| `K-07 web` 生产同批切换 | S6 | 本期实现 | 证据只在 S6：`T-O-70` 六步、三包 SHA-256 比对；待 S6 |
+| `K-07 桌面` | [业主] | [业主] 推迟 | `T-O-70`：桌面 `~/.dsh-desktop` 与 `kitesurf-desktop` 不执行；以后同一约束（三包同批、状态根先清） |
+
+**普查行 · `G`（`1119-delivery-gaps.md` G01–G32）**
+
+| 行 | 执行方 | 终态 | 证据 |
+|---|---|---|---|
+| `G01` 同页所有权 | [DNLS] | 已作废（引 `T-O-63`） | 「writer 锁域」问题面被代次凭据写闸取代；S1 单测 `DNLS03X-T04` |
+| `G02` evaluate 唯一 owner | [DNLS] | 已完成 | 受管 `dnls.evaluate` 经宿主内核执行；合并态既有断言（合法/语法错/超长分类） |
+| `G03` `@N` ref 统一 | [DNLS]·[DNK] | 本期实现 | 受管 `/snapshot`+`/refs` 在册；ref↔selector 往返为既有断言；pane 点选与 agent 反查一致待 S4（K-06） |
+| `G04` DOM 预览静态标记 | [DNK] | 本期实现 | `T-O-66` 静态投影定义；S1 单测 `DNLS03X-T08`；pane HTML 模式行为待 S4（U8） |
+| `G05` 导航回复/错误分层 | [DNLS] | 本期实现 | `T-O-68` 失败投影四键、操作行留 `incidentId`；S1 单测 `DNLS03X-T09`；失败现场待 S4（U5、U9） |
+| `G06` 观测/故障分层显示 | [DNK]·[DNLS] | 本期实现 | 不可见/不可选/不存在在受管投影分开；S1 单测 `DNLS03X-T07`；pane 展示待 S4 |
+| `G07` Console 数据真源 | [DNLS]·[DNK] | 本期实现 | 受管 `dnls.console` 在册，seq/去重为既有断言；Console 面板实时性待 S4（K-06） |
+| `G08` Network 增量游标 | [DNLS]·[DNK] | 本期实现 | 受管 `dnls.network` 在册，`?since=` 更新语义为既有断言；Network 面板待 S4（K-06） |
+| `G09` 地址栏阶段/心跳 | [DNK] | 本期实现 | 受管 pane 重写展示层、隐藏即停轮询（`DNLS03X-T07`）；展示待 S4 |
+| `G10` last-good 帧归属 | [DNK] | 本期实现 | 引用页签锁定对象（`T-O-67`），跨对象竞态面消失；展示待 S4 |
+| `G11` HTTP MCP 传输完整性 | [DNLS] | 已作废（引 `T-O-64`） | 独立 HTTP MCP 传输面被受管 `/mcp` + 四模型工具取代，不恢复 |
+| `G12` REST/MCP 同页同答 | [DNLS] | 本期实现 | HTTP、`/mcp`、四工具共用同一 `execute` 内核；S1 单测 `DNLS03X-T05`（三入口差异断言） |
+| `G13` 诊断生产归 owner | [DNLS] | 已完成 | 诊断归宿主 inspect/diagnostics 投影，[DNK] `connectLive` 死路径已删；合并态既有断言 |
+| `G14` bodyLimit/JSON 边界 | [DNLS] | 已完成 | 受管绑定表逐行生效、坏 JSON 400；既有断言（0/4096/8192 边界） |
+| `G15` configure 归属 | [DNK]·[业主] | 本期实现 | 由 `T-O-69` 接管：管理页设置弹窗属 W3；S4 U7 截图后交 [业主] P2 裁决；待 S4 |
+| `G16` operations 记录与 errorsOnly | [DNLS] | 已完成 | 受管 `/operations` 行含 status/errorId/duration/incidentId；errorsOnly 过滤既有断言 |
+| `G17` locale/GPS/媒体能力 | [DNLS] | 已完成 | 适配层能力与限制如实报 capabilities；既有断言 |
+| `G18` cookie 作用域 | [DNLS] | 已完成 | `/storage` 既有 name=value 写删清断言；domain/path/secure/HttpOnly 扩面记 `X-P1-2` 行 |
+| `G19` DPR/mobile 支持面 | [DNLS] | 已完成 | DNLS02 `T-O-26`：`settings.unsupported` 拒绝；受管 `/settings` 沿用断言 |
+| `G20` 冷交付矩阵 | [业主] | [业主] 推迟 | 空 home/缺产物矩阵未获本期排期；S2 只覆盖一次镜像构建 |
+| `G21` daemon 错误分级 | [DNLS] | 已完成 | unavailable/inspect failed/missing 分开为受管 backend 既有断言 |
+| `G22` history/settings 持久真源 | [DNLS] | 已完成 | durable 真源为受管台账 + `dnls.browse-history`；单一真源原则下不另立恢复读源；既有断言 |
+| `G23` wait/state 真实语义 | [DNLS] | 已完成 | 受管 `dnls.wait` 有界等待、`dnls.state` 命名/inline 按合同；既有断言 |
+| `G24` env 共享/session 隔离 | [DNLS] | 已作废（引 `T-O-64`） | `ensure{sessionId}` 语义面被「显式 `sandboxId` 选对象」取代；DNLS02 `T-O-27` 登记面不再适用 |
+| `G25` repin 对照 | [业主] | [业主] 推迟 | 上游 pin 不可改写，repin 不在本期授权；Axtra 对照未决 |
+| `G26` 验收脚本防假绿 | [DNLS] | 本期实现 | 受管前脚本整批删除；S1 单测 `DNLS03X-T11`（六路径不存在、`test:e2e` 消失） |
+| `G27` e2e 双入口合并 | [DNLS] | 本期实现 | `e2e-ego.mjs` 已删（`DNLS03X-T11`），双入口问题随删除消失；新 e2e 在 S4 |
+| `G28` 两项基线失败归属 | [DNLS] | 已完成 | 已归属修复；S1 后 DNLS 487/487、route-sensitivity/feature-contract 0 漂移 |
+| `G29` HAR 声明校准 | [DNLS] | 已完成 | DNLS02 `T-O-28` 已裁；受管 `/har` 自声明 `body:null reason:'engine'`，不冒充标准全量 |
+| `G30` i18n 行为 | [DNK] | 本期实现 | S1-05 重写 skill 文案后 i18n 断言仍绿（DNK 73/73）；文案行为面待 S4（K-06） |
+| `G31` 超时公共语义 | [DNLS] | 已完成 | DNLS02 `T-O-29` 已裁「超时不是取消」；目录与 skill 真源随 S1-05 更新，断言沿用 |
+| `G32` `/shot` 错误传播 | [DNLS] | 本期实现 | 受管 `/shot` 失败按 `T-O-68` 四键投影；S1 单测 `DNLS03X-T09` |
+
+**普查行 · `D`（`1119-loop3-closure.md` 五闸，编号沿用被闸的 G 项）**
+
+| 行 | 执行方 | 终态 | 证据 |
+|---|---|---|---|
+| `D-G01` 同页所有权闸 | [业主] | 已作废（引 `T-O-63`） | DNLS02 `T-O-25` 的「one MCP writer」登记被代次凭据取代，闸口问题面消失 |
+| `D-G19` viewport 支持面闸 | [业主] | 已完成 | DNLS02 `T-O-26` 已裁并落地（`settings.unsupported`） |
+| `D-G24` session 隔离闸 | [业主] | 已作废（引 `T-O-64`） | DNLS02 `T-O-27` 的 env/session 语义面被四工具取代 |
+| `D-G29` HAR 声明闸 | [业主] | 已完成 | DNLS02 `T-O-28` 已裁并落地（lite 如实声明） |
+| `D-G31` 超时语义闸 | [业主] | 已完成 | DNLS02 `T-O-29` 已裁并落地（超时非取消） |
+
+**普查行 · `V`（`1119-delivery-gaps.md` V01–V18，受管前实测验收项）**
+
+| 行 | 执行方 | 终态 | 证据 |
+|---|---|---|---|
+| `V01` stopped→`/recover` | [DNLS] | 已作废（引 `T-O-60`） | 受管前实测不移用；recover 行为以合并态单测重覆盖 |
+| `V02` UI/CDP/桥健康 | [DNLS]·[DNK] | 已作废（引 `T-O-60`） | 受管前实测不移用；对应面待 S4（K-06） |
+| `V03` 未鉴权 401 | [DNLS] | 已作废（引 `T-O-60`） | 受管前实测不移用；准入语义以合并态断言为准 |
+| `V04` method/输入校验 | [DNLS] | 已作废（引 `T-O-60`） | 受管前实测不移用；绑定表校验以合并态断言为准 |
+| `V05` 跨文档后退/前进 | [DNLS] | 已作废（引 `T-O-60`） | 受管前实测不移用；`browse-history` 以合并态断言为准 |
+| `V06` suspend/resume、容器停启 | [DNLS] | 已作废（引 `T-O-60`） | 受管前实测不移用；lifecycle 以合并态断言为准 |
+| `V07` 宿主重启恢复 | [DNLS] | 已作废（引 `T-O-60`） | 受管前实测不移用；durable 台账以合并态断言为准 |
+| `V08` storage/interact/edit | [DNLS] | 已作废（引 `T-O-60`） | 受管前实测不移用；`/storage`/`/interact`/`/edit` 以合并态断言为准 |
+| `V09` 截图/样式/自检 | [DNLS]·[DNK] | 已作废（引 `T-O-60`） | 受管前实测不移用；`/shot`、`/selftest` 以合并态断言与 S4 为准 |
+| `V10` static 可控页 | [DNLS] | 已作废（引 `T-O-60`） | 受管前实测不移用；待 S4（K-06） |
+| `V11` SPA 延迟 root | [DNLS]·[DNK] | 已作废（引 `T-O-60`） | 受管前实测不移用；live `/dom` 一致性待 S4 |
+| `V12` 入口模块 404 | [DNLS] | 已作废（引 `T-O-60`） | 受管前实测不移用；失败提示待 S4（U5/U9） |
+| `V13` 慢模块头 | [DNLS]·[DNK] | 已作废（引 `T-O-60`） | 受管前实测不移用；network 增量待 S4（K-06） |
+| `V14` 加载中打开设置 | [DNK] | 已作废（引 `T-O-60`） | 受管前实测不移用；管理页分层待 S4（U7） |
+| `V15` Console 持续到达 | [DNLS]·[DNK] | 已作废（引 `T-O-60`） | 受管前实测不移用；待 S4（K-06） |
+| `V16` preview vs `/interact` | [DNLS]·[DNK] | 已作废（引 `T-O-60`） | 受管前实测不移用；静态投影定义改由 `T-O-66` 登记 |
+| `V17` POST 详情可读 | [DNLS] | 已作废（引 `T-O-60`） | 受管前实测不移用；network 详情待 S4（K-06） |
+| `V18` snapshot/ref/pick 链 | [DNLS]·[DNK] | 已作废（引 `T-O-60`） | 受管前实测不移用；`@N` 链待 S4（K-06） |
+
+**普查行 · `E`（`e2e/DNK01-1120-e2e.md` E1–E15，受管前 e2e 证据项）**
+
+| 行 | 执行方 | 终态 | 证据 |
+|---|---|---|---|
+| `E1` pane 打开本地站默认完整样式 | [DNK] | 已作废（引 `T-O-60`） | 受管前取证不移用；S4 U3/U8 重取证 |
+| `E2` 外链 CSS 引擎渲染生效 | [DNK] | 已作废（引 `T-O-60`） | 受管前取证不移用；S4 U8 重取证 |
+| `E3` 坐标点选 | [DNLS]·[DNK] | 已作废（引 `T-O-60`） | 受管前取证不移用；待 S4（K-06 适用项） |
+| `E4` pane 内真实鼠标点选 | [DNK] | 已作废（引 `T-O-60`） | 受管前取证不移用；待 S4 |
+| `E5` design mode 写回 | [DNLS]·[DNK] | 已作废（引 `T-O-60`） | 受管前取证不移用；待 S4 |
+| `E6` Network 面板完整 | [DNK] | 已作废（引 `T-O-60`） | 受管前取证不移用；待 S4（K-06） |
+| `E7` Console 面板含 agent 探针 | [DNK] | 已作废（引 `T-O-60`） | 受管前取证不移用；待 S4（K-06） |
+| `E8` skill 可加载 | [DNK] | 已作废（引 `T-O-60`） | 旧 skill 已由 S1-05 重写；agent 实操待 S4（A1） |
+| `E9` skill 缺 `networking` 韧性 | [DNK] | 已作废（引 `T-O-60`） | 新 skill 改经对象选择与 `inspect`；待 S4（A1） |
+| `E10` relay 驱动同一页 | [DNLS] | 已作废（引 `T-O-60`） | 受管前取证不移用；relay 写闸换代后待 S4（A1、A3） |
+| `E11` HITL 控制条可见 | [DNK] | 已作废（引 `T-O-60`） | 受管前取证不移用；待 S4（A2） |
+| `E12` 人工接管拒 agent 写 | [DNLS]·[DNK] | 已作废（引 `T-O-60`） | 受管前取证不移用；代次凭据写闸待 S4（A2） |
+| `E13` 默认渲染面 = 引擎渲染 | [DNK] | 已作废（引 `T-O-60`） | 定义由 `T-O-66` 保留句承接；待 S4（U8） |
+| `E14` HTML 模式条件提示 | [DNK] | 已作废（引 `T-O-60`） | 提示文案已由 S1-08 改为静态投影说明；待 S4（U8） |
+| `E15` HTML 不丢样式反证 | [DNK] | 已作废（引 `T-O-60`） | 受管前取证不移用；待 S4（U8） |
+
+**普查行 · `L`（`1119-local-dev-review.md` 主题 A–G）**
+
+| 行 | 执行方 | 终态 | 证据 |
+|---|---|---|---|
+| `L-A` localhost 拓扑事实 | [DNLS] | 本期实现 | `networking{hostGateway,containerAddress,network}` 投到 status/diagnostics/ports、`navigateHint` 拓扑中立；既有断言 + 真机 hint 待 S4（U5、A3） |
+| `L-B` egress 谎报 | [DNLS] | 本期实现 | `navigate.egress`/`navigate.failed` + `T-O-68` 投影；S1 单测 `DNLS03X-T09`；展示待 S4 |
+| `L-C` 源站活性维度 | [业主] | [业主] 推迟 | 属扩约清单未裁；受管 `/status` plane 为既有边界 |
+| `L-D` SKILL 本地 dev 内容与漂移 | [DNK] | 本期实现 | S1-05 重写 skill 真源（显式对象选择、删 session 记录与 suspend 旧语义、recipes 修订）并经构建生成；`DNLS03X-T05` + skill.test；agent 实操待 S4（A1） |
+| `L-E` 链路观测两层耗时 | [DNLS] | 已完成 | `phases`、`cdpCalls`、桥 per-call 计时在受管沿用；既有断言 |
+| `L-F` 审计上下文断点 | [DNLS] | 已完成 | `argSummary`、`incidentId`、ops 行既有；S1-09 后失败体不带 `incidentId`、操作行保留（`DNLS03X-T09`） |
+| `L-G` writer 锁半覆盖 | [DNLS] | 已作废（引 `T-O-63`） | 与 `G01` 同闸：代次凭据取代锁域问题面 |
+
+**普查行 · `F`（`final-eval.md`，本册无独立编号，按章节类别级复核）**
+
+| 行 | 执行方 | 终态 | 证据 |
+|---|---|---|---|
+| `F`（交付口径：§一五轴、§二交付清单、§三测试规模） | [DNK] | 已作废（引 `T-O-60`） | 类别级结论：59/59、e2e-ego 27/27、eval-* 等计数随受管前脚本删除，不移用于合并态；具体能力逐项以 `G`/`X` 行复核 |
+| `F`（剩余待裁决：§五 P1-3 残部、P2 全族、§四定位声明） | [业主] | [业主] 推迟 | 类别级结论：扩约冻结项继续冻结；已落地子项（P1-1/P1-2 等）在 `X` 行单列复核 |
+
+**普查行 · `X`（`ego-vs-dnk-gap-analysis.md` 演化台账 P0–P2 与 a1–a10）**
+
+| 行 | 执行方 | 终态 | 证据 |
+|---|---|---|---|
+| `X-P0-1` 错误目录对账 | [DNLS] | 已完成 | ERROR_CATALOG 扫描断言在受管沿用；`res.*` 九行随 S1-08 删（`DNLS03X-T08`） |
+| `X-P0-2` perfReview 真开关 | [DNLS] | 已完成 | perf 声明烘焙入账本，`check-perf` 0 漂移；既有断言 |
+| `X-P0-3` `/wait` 等待原语 | [DNLS] | 已完成 | 受管 `dnls.wait` 在册；agent 侧经 relay 自轮询，不另立工具（`T-O-64` 四工具面） |
+| `X-P0-4` 所有权+写互斥 | [DNLS] | 已作废（引 `T-O-63`） | owner/handOff 设计被代次凭据 + `humanHold` 取代；S1 单测 `DNLS03X-T04` |
+| `X-P0-5` `@N` ref 统一语言 | [DNLS]·[DNK] | 本期实现 | `/snapshot`+`/refs` 在册；人点选与 agent ref 一致性待 S4（K-06） |
+| `X-P0-6` skill 分层包化 | [DNK] | 本期实现 | S1-05 重写 skill 真源并重建 `skills/`；`DNLS03X-T05` + skill.test；agent 实操待 S4（A1） |
+| `X-P1-1` interact-lite | [DNLS] | 已完成 | 受管 `dnls.interact` 在册；agent 侧动作走 relay（`T-O-63`）；既有断言 |
+| `X-P1-2` evaluate 分段+状态读写 lite | [DNLS] | 已完成 | 受管 `dnls.storage`、`dnls.state` 在册；HttpOnly 如实标注；既有断言 |
+| `X-P1-3` network body+HAR+快照归档 | [DNLS]·[业主] | [业主] 推迟 | 受管 `/har` 在册但 `body:null`（pin 不缓存响应体）；网络体与快照归档面属扩约未裁 |
+| `X-P1-4` perf 统计+瀑布 | [DNLS]·[DNK] | 本期实现 | perf 声明在受管烘焙、S1-08 同步删 `dnls.res` 行；瀑布列可见面待 S4（K-06） |
+| `X-P1-5` 容器监督+取证+自愈 | [DNLS] | 已完成 | 受管 backend/entrypoint 沿用；既有断言 |
+| `X-P1-6` feedback-report+chip | [DNK] | 本期实现 | note/chip 单测既有；composer 可见面待 S4（K-06） |
+| `X-P1-7` selftest agent-first | [DNLS] | 已完成 | 受管 `dnls.selftest` 在册；既有断言 |
+| `X-P2-1` 引擎 CDP 域扩展 | [业主] | [业主] 推迟 | 引擎侧排期项，扩约冻结 |
+| `X-P2-2` 多 session/context 隔离 | [业主] | [业主] 推迟 | 平台扩约项；受管模型为显式对象选择 |
+| `X-P2-3` 页面级指标 | [业主] | [业主] 推迟 | 依赖 P1-4 之后的观测扩约，未裁 |
+| `X-P2-4` 录制→回放→断言原语 | [业主] | [业主] 推迟 | 平台扩约项，未裁 |
+| `X-P2-5` 场景化 learnings 沉淀 | [业主] | [业主] 推迟 | 记忆面扩约项，未裁 |
+| `X-P2-6` 远程/多引擎管理 | [业主] | [业主] 推迟 | nano-platform 对接需业主裁决扩约 |
+| `X-a1` workerd 无重启循环 | [业主] | [业主] 推迟 | 镜像配方内可靠性缺口，未获本期排期；S2 重建不换配方 |
+| `X-a2` 每连接一进程 | [业主] | [业主] 推迟 | 桥作用域缺口，未获本期排期 |
+| `X-a3` 推送含 `container inspect` | [业主] | [业主] 推迟 | 载荷瘦身未获本期排期 |
+| `X-a4` 桥无反查 | [业主] | [业主] 推迟 | 快照 TTL/反拉未获本期排期 |
+| `X-a5` 无崩溃取证管道 | [业主] | [业主] 推迟 | 重启事件落状态文件未获本期排期 |
+| `X-a6` 镜像 343MB/未 pin digest | [业主] | [业主] 推迟 | linux-prefix 剪枝与 `FROM @sha256:` 未获本期排期；S2 按现配方构建 |
+| `X-a7` `-c 4 -m 4G` 硬编码 | [业主] | [业主] 推迟 | 参数化未获本期排期 |
+| `X-a8` 引擎死被动感知 | [业主] | [业主] 推迟 | watchdog 未获本期排期 |
+| `X-a9` CDP 单 socket 串行 | [业主] | [业主] 推迟 | re-attach/page handle 恢复未获本期排期 |
+| `X-a10` navigate 挂起全排队 | [业主] | [业主] 推迟 | `Page.stopLoading` 逃生门未获本期排期 |
+
+**普查新发现**
+
+| 行 | 执行方 | 终态 | 证据 |
+|---|---|---|---|
+| `NF-1` design-mode-feedback 落地对照（进输入框、换页保稿、短笔记、无组件栈、背景不写） | [DNK] | 本期实现 | `note.test`/`shot-point.test` 既有断言；批注/chip/Into composer 可见面待 S4（K-06） |
+| `NF-2` design-mode-feedback「先试样式」 | [业主] | [业主] 推迟 | 原文结论「不实现」（Kitesurf 无可视化改 CSS）；若改判需另裁 |
+| `NF-3` 受管前验收脚本（XB-9/XB-16） | [DNLS]·[DNK] | 本期实现 | S1-11 整批删除六路径、`RELEASE.md` 改写；`DNLS03X-T11` |
+| `NF-4` 隐藏页签仍定时请求（XB-25） | [DNK] | 本期实现 | `T-O-67` 隐藏即停、恢复刷一次；S1 单测 `DNLS03X-T07`；真机待 S4（U3） |
+| `NF-5` 无 `cdp` driver 对象不可区分（XB-26） | [DNLS]·[DNK] | 本期实现 | `drivers` 只读投影 + 灰显不发对象请求；S1 单测 `DNLS03X-T07`；真机待 S4（U3） |
+
+台账是 todo，不是闸门，不新增 release-gate（T-O-60）。
 
 ### 8.7 Todo 自检
 

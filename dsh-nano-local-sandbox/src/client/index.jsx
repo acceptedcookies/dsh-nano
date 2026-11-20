@@ -1,6 +1,7 @@
 /**
  * Sandbox workbench. One right-sidebar tab. The shell (bar, drawer, status
- * sheet) comes from dsh-nano-ui; rows and actions are host primitives.
+ * sheet) is this client's own chrome (T-O-69: shells belong to the consumer,
+ * nano-ui keeps only shared primitives); rows and actions are host primitives.
  * A real sessionId only gates rendering. It is never sent as a selector.
  * Search and refresh never choose a sandbox.
  */
@@ -9,14 +10,16 @@ const React = require('react')
 const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
 const {
   EmptyState, NanoDialog, NANO_STYLES, FactGrid, PanelSection, Card, SplitRow, Meter, PlainTable, openNanoMenu,
-  WorkbenchShell, ShellGap, ShellToggle, ShellIcon, ShellTail,
-  TabDrawer, DrawerHead, DrawerRow, StatusDock,
 } = require('dsh-nano-ui')
 const { createDnlsClient, createTicket } = require('./managed.js')
 const { copyFor, fill } = require('./i18n.js')
 const { formatBytes, serviceAddress } = require('./format.js')
 const { terminalAddress, sandboxAddress, openResourceAddress } = require('../host/terminal-resource.js')
 const { HistoryLine } = require('./history.jsx')
+const {
+  WorkbenchShell, ShellGap, ShellToggle, ShellIcon, ShellTail,
+  TabDrawer, DrawerHead, DrawerRow, StatusDock, SHELL_STYLES,
+} = require('./shell.jsx')
 
 const h = React.createElement
 const KIND = 'dnls-sandbox'
@@ -64,7 +67,7 @@ const STYLE = `
 .dnls-field{gap:4px;color:var(--dsw-alias-label-secondary)}
 /* Box for the exempt history polyline. The path lives in history.jsx. */
 .dnls-history{display:block;width:100%;height:48px;color:var(--dsw-alias-label-secondary)}
-/* Native select. Host and nano-ui have no Select. 28px matches the tool seat; tokens only. */
+/* nano-ui-exempt: 宿主与 nano-ui 都没有 Select；原生 select 只做选择不承载控件，28px 对齐工具座位，只用令牌。 */
 .dnls-select{height:28px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border:var(--dsh-hairline-width) solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxs-12)}
 `
 
@@ -389,27 +392,40 @@ function DnlsPane({ sessionId, copy, host }) {
     }
   }
 
+  // T-O-61: an address's open actions are its ranked handler definitions,
+  // never kinds. `host.openResource` re-runs the same handoff and lets the
+  // host pick the handler.
+  function handlersFor(address) {
+    try { return host.handlers(address) ?? [] } catch { return [] }
+  }
+
+  function handlerTitle(candidate, address, fallback) {
+    try {
+      const title = typeof candidate?.title === 'function' ? candidate.title(address) : candidate?.title
+      return typeof title === 'string' && title !== '' ? title : fallback
+    } catch { return fallback }
+  }
+
+  function sandboxRef(target) {
+    try { return sandboxAddress({ envId: target?.envId, sandboxId: target?.sandboxId }) } catch { return null }
+  }
+
   function openDesign(row) {
     const target = row ?? current
-    let address
-    try {
-      address = sandboxAddress({ envId: target?.envId, sandboxId: target?.sandboxId })
-    } catch {
-      setError(new Error(copy.workspaceUnavailable))
-      return
-    }
-    if (host.openResource(address) !== true) setError(new Error(copy.workspaceUnavailable))
+    const address = sandboxRef(target)
+    if (!address || host.openResource(address) !== true) setError(new Error(copy.workspaceUnavailable))
   }
 
   function openTerm(term) {
-    let address
-    try {
-      address = terminalAddress({ envId: selection.envId, sandboxId: selection.sandboxId, terminalId: term.terminalId })
-    } catch {
-      setError(new Error(copy.terminalUnavailable))
-      return
-    }
-    if (host.openTerminal(address) !== true) setError(new Error(copy.terminalUnavailable))
+    // The server issues `address` only while the terminal is live; the local
+    // constructor is the fallback for a just-created row.
+    const address = typeof term?.address === 'string'
+      ? term.address
+      : (() => {
+        try { return terminalAddress({ envId: selection.envId, sandboxId: selection.sandboxId, terminalId: term.terminalId }) }
+        catch { return null }
+      })()
+    if (!address || host.openResource(address) !== true) setError(new Error(copy.terminalUnavailable))
     else setFocused(term.terminalId)
   }
 
@@ -581,6 +597,21 @@ function DnlsPane({ sessionId, copy, host }) {
     const memoryText = minute
       ? `${formatBytes(minute.memoryBytes) ?? '—'} / ${formatBytes((detail ?? current)?.resources?.memoryBytes) ?? '—'}`
       : copy.samplingStopped
+    // T-O-67: `drivers` is the profile manifest's readonly declaration on the
+    // same row; it authorizes nothing and says nothing about liveness.
+    const drivers = (detail ?? current)?.drivers
+    const driverText = Array.isArray(drivers) && drivers.length > 0 ? drivers.join(' · ') : copy.none
+    // T-O-61: open actions come from the address's ranked handler list; each
+    // button names its handler's title and the open still goes through the
+    // same handoff with no kind written here.
+    const objectAddress = sandboxRef(current)
+    const objectHandlers = objectAddress ? handlersFor(objectAddress) : []
+    const openActions = objectHandlers.map((handler, index) =>
+      h(Button, {
+        key: `handler-${index}`,
+        variant: index === 0 ? 'primary' : 'ghost',
+        onClick: openDesign,
+      }, index === 0 ? copy.openWorkspace : fill(copy.openIn, { name: handlerTitle(handler, objectAddress, copy.none) })))
     return h('div', { className: 'dnls-stack', 'data-dnls-view': 'sandbox' },
       error ? h('p', { className: 'dnls-error', role: 'alert' }, error.message) : null,
       h(Card, null,
@@ -590,9 +621,11 @@ function DnlsPane({ sessionId, copy, host }) {
           { label: copy.usageCpu, value: cpuText },
           { label: copy.usageMemory, value: memoryText },
           { label: copy.fieldRevision, value: pending(detail ?? current) ? copy.notYetApplied : String((detail ?? current)?.appliedRevision ?? copy.none) },
+          { label: copy.drivers, value: driverText },
         ] })),
-      h('div', { className: 'dnls-primary' },
-        h(Button, { variant: 'primary', onClick: openDesign }, copy.openWorkspace)),
+      openActions.length === 0
+        ? h('p', { className: 'dnls-muted' }, copy.workspaceUnavailable)
+        : h('div', { className: 'dnls-primary' }, openActions),
       h(PanelSection, { title: copy.control },
         h('div', { className: 'dnls-actions' },
           h(Button, { variant: 'ghost', size: 'sm', disabled: busy || !supports('sandbox.instance.start'), onClick: () => ask('start') }, copy.start),
@@ -685,6 +718,10 @@ function DnlsPane({ sessionId, copy, host }) {
     })))
 
   const termList = terms?.list ?? []
+  // T-O-59/T-O-61: each terminal row carries its own availability — the
+  // server-issued address is the availability line, and its open actions are
+  // the host handlers for that address. No handlers means the row is shown
+  // unavailable instead of offering a dead Open.
   const dockBody = !selection
     ? h('p', { className: 'dnls-muted' }, copy.dockNeed)
     : terms?.denied
@@ -692,9 +729,20 @@ function DnlsPane({ sessionId, copy, host }) {
       : h('div', { className: 'dnls-section' },
         h('p', { className: 'dnls-muted' }, copy.dockHint),
         terms?.error ? h('p', { className: 'dnls-error', role: 'alert' }, terms.error) : null,
-        termList.length === 0 ? h('p', { className: 'dnls-muted' }, copy.terminalsEmpty) : termList.map((term) => h('div', { key: term.terminalId, className: 'dnls-actions' },
-          h('span', { className: 'dnls-muted' }, `${term.terminalId.slice(0, 8)} ${term.state ?? ''}`),
-          h(Button, { variant: 'ghost', size: 'sm', onClick: () => openTerm(term) }, copy.terminalOpen))),
+        termList.length === 0 ? h('p', { className: 'dnls-muted' }, copy.terminalsEmpty) : termList.map((term) => {
+          const termHandlers = typeof term.address === 'string' ? handlersFor(term.address) : []
+          return h('div', { key: term.terminalId, className: 'dnls-actions' },
+            h('span', { className: 'dnls-muted' }, `${term.terminalId.slice(0, 8)} ${term.state ?? ''}`),
+            termHandlers.length === 0
+              ? h('span', { className: 'dnls-muted' }, copy.terminalUnavailable)
+              : termHandlers.map((handler, index) => h(Button, {
+                key: `handler-${index}`,
+                variant: 'ghost', size: 'sm',
+                onClick: () => openTerm(term),
+              }, index === 0 && termHandlers.length === 1
+                ? copy.terminalOpen
+                : fill(copy.openIn, { name: handlerTitle(handler, term.address, copy.none) }))))
+        }),
         supports('term.session.create') && !terms?.denied
           ? h(Button, { variant: 'ghost', size: 'sm', disabled: termBusy, onClick: createTerm }, copy.terminalCreate)
           : null)
@@ -765,7 +813,7 @@ function DnlsPane({ sessionId, copy, host }) {
     : h('p', { className: 'dnls-muted' }, copy.configNotAuthorized)) : null
 
   return h(React.Fragment, null,
-    h('style', null, NANO_STYLES, STYLE),
+    h('style', null, NANO_STYLES, SHELL_STYLES, STYLE),
     h(WorkbenchShell, {
       'data-dnls-pane': '1',
       label: copy.workbenchTitle,
@@ -838,11 +886,7 @@ export function apply(ctx) {
   const zh = () => ctx.locale?.getSnapshot?.().active?.startsWith('zh') === true
   const copy = () => copyFor(zh() ? 'zh' : 'en')
   const host = {
-    openTerminal: (address) => openResourceAddress({
-      candidates: (value) => ctx.sidebarRightTabs?.candidates?.(value),
-      openResource: (value) => ctx.sidebarRight?.openResource?.(value),
-      address,
-    }),
+    handlers: (address) => ctx.sidebarRightTabs?.candidates?.(address),
     openResource: (address) => openResourceAddress({
       candidates: (value) => ctx.sidebarRightTabs?.candidates?.(value),
       openResource: (value) => ctx.sidebarRight?.openResource?.(value),

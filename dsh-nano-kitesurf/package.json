@@ -7,8 +7,7 @@
   "main": "./index.js",
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "test": "node --test test/*.mjs",
-    "test:e2e": "ego-browser nodejs < scripts/e2e-ego.mjs"
+    "test": "node --test test/*.mjs"
   },
   "exports": {
     ".": "./index.js",

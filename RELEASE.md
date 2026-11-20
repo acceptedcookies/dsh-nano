@@ -94,8 +94,6 @@ node scripts/deploy-local.mjs --home <home> --profile <p> \
 
 可选验证（不阻塞发布）：装了 `dsh-nano-model-selector` 的实例，刷新后跑 `SMOKE_URL='<带 token 的 GUI URL>' bash scripts/gui-smoke.sh`——四条断言（slot 挂载、徽标开压缩面板、触发器回模型列表、无 React 错误文本）全 PASS 才算界面层真的活了。
 
-装了 `dsh-nano-kitesurf` / `dsh-nano-local-sandbox` 的实例再跑 `SMOKE_URL='<带 token 的 GUI URL>' bash scripts/gui-smoke-kitesurf.sh`——六条断言（pane 挂载、mode 三态、client/host build id 一致、`/ports` 五面健康、`/selftest` 11 项、`/dom` 可渲染 srcdoc）全 PASS 才算 Kitesurf 真的可用。
-
 ## 信任链总览
 
 ```

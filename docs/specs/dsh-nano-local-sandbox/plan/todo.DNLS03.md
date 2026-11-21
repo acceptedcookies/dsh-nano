@@ -297,7 +297,7 @@ S1-01 并入 main
   - **落点 / 对象**：`.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；场景 U1–U9、A1–A3 与 U7
   - **完成判据**：每条真机行各自有通过结论，带操作号、对象 ID 或截图名、session 标识、UTC；模型消息至多 6 条；加载字节与 tarball 一致
   - **验证映射**：`DNLS03X-T40` · **依赖**：`S3-02`
-  - **执行状态**：`partial` · **执行时间**：`2026-11-20T17:00Z`–`17:30Z` · **证据 / 备注**：U1（终端跨宿主重启同一 terminalId）与 U4（stop `883b2f0f…`、start `35e5b160…` 均 `succeeded/verify`）已通过；U3 失败——DNLS 对象页显示「没有可打开这个沙箱的页签类型」，右侧 Kitesurf 页签显示「无法打开引用的沙箱 / not a canonical sandbox resource」，两包均已装新代码；U5/U8/U9 因依赖 Kitesurf 页签未能执行；U6 只证到「tarball=已安装」，服务端合并包无法切出单包字节。详见 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/s4-evidence.md`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-20T17:00Z`–`17:30Z` · **证据 / 备注**：U1（终端跨宿主重启同一 terminalId）与 U4（stop `883b2f0f…`、start `35e5b160…` 均 `succeeded/verify`）已通过；U3 失败——DNLS 对象页显示「没有可打开这个沙箱的页签类型」，右侧 Kitesurf 页签显示「无法打开引用的沙箱 / not a canonical sandbox resource」，两包均已装新代码；U5/U8/U9 因依赖 Kitesurf 页签未能执行；U6 只证到「tarball=已安装」，服务端合并包无法切出单包字节。复跑阶段修掉一个真 bug（`openDesign` 两处 `onClick` 把 DOM 事件当对象行，已重装 [DNLS] `266a660d…`），交接链路已通、引用页签能打开；但仍卡在 `cdp connect failed`（`/open` 与 `/dom` 同因），而引擎 8942 与桥 8943 的 `/cdp` 握手都返回 101、端口映射与 `/status` 一致，故 U3 仍不通过、U5/U8/U9 未能执行。另取得一例派发前失败 `{"ok":false,"error":"conflict"}`（无 `errorId`），记入 `T-O-68` 待裁决。详见 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/s4-evidence.md`
 - [ ] `S4-02` — 八张设计截图
   - **落点 / 对象**：同上目录，`p2-<视图>-<dark|light|390>.png`
   - **完成判据**：八张齐、每张带参考行与 client SHA；不截会话内容；[业主] 的结论只写在 P2 行

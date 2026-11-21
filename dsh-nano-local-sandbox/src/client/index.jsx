@@ -610,7 +610,7 @@ function DnlsPane({ sessionId, copy, host }) {
       h(Button, {
         key: `handler-${index}`,
         variant: index === 0 ? 'primary' : 'ghost',
-        onClick: openDesign,
+        onClick: () => openDesign(),
       }, index === 0 ? copy.openWorkspace : fill(copy.openIn, { name: handlerTitle(handler, objectAddress, copy.none) })))
     return h('div', { className: 'dnls-stack', 'data-dnls-view': 'sandbox' },
       error ? h('p', { className: 'dnls-error', role: 'alert' }, error.message) : null,
@@ -856,7 +856,7 @@ function DnlsPane({ sessionId, copy, host }) {
           selection ? h(ShellIcon, {
             icon: h(IconPanelLeftOutlineRegular, { size: 16 }),
             label: copy.openWorkspace,
-            onClick: openDesign,
+            onClick: () => openDesign(),
           }) : null),
       ],
       drawer,

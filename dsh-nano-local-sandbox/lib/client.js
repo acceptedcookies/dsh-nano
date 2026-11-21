@@ -3089,7 +3089,7 @@ ${LAYER_CSS}
       const openActions = objectHandlers.map((handler, index) => h10(Button4, {
         key: `handler-${index}`,
         variant: index === 0 ? "primary" : "ghost",
-        onClick: openDesign
+        onClick: () => openDesign()
       }, index === 0 ? copy.openWorkspace : fill2(copy.openIn, { name: handlerTitle(handler, objectAddress, copy.none) })));
       return h10(
         "div",
@@ -3385,7 +3385,7 @@ ${LAYER_CSS}
             selection ? h10(ShellIcon2, {
               icon: h10(IconPanelLeftOutlineRegular, { size: 16 }),
               label: copy.openWorkspace,
-              onClick: openDesign
+              onClick: () => openDesign()
             }) : null
           )
         ],

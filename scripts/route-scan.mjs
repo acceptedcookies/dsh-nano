@@ -151,6 +151,7 @@ function scanModelSelector() {
   const asyncCompactSwitch = consts.ASYNC_COMPACT_SWITCH_ROUTE
   const perfReviewHost = consts.PERF_REVIEW_HOST_ROUTE
   const subagentDefault = consts.SUBAGENT_DEFAULT_ROUTE
+  const accountPin = consts.ACCOUNT_PIN_ROUTE
   // PUT body cap is the literal in readBody(req, 16384) inside mediaHandler /
   // asyncCompactHandlers (the same helper, same literal).
   const putCap = (() => {
@@ -216,6 +217,13 @@ function scanModelSelector() {
       methods: ['GET', 'HEAD', 'PUT'],
       bodyLimit: { GET: 0, HEAD: 0, PUT: putCap },
       source: { file, line: lineOf(text, 'const SUBAGENT_DEFAULT_ROUTE =') },
+    },
+    {
+      plugin: 'dsh-nano-model-selector',
+      path: accountPin,
+      methods: ['GET', 'HEAD', 'PUT'],
+      bodyLimit: { GET: 0, HEAD: 0, PUT: putCap },
+      source: { file, line: lineOf(text, 'const ACCOUNT_PIN_ROUTE =') },
     },
   ]
   return rows

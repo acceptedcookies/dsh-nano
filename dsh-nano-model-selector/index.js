@@ -17,6 +17,9 @@ import { promptText } from './lib/compact-prompt.js'
 import {
   readPolicy, resetPolicy, routeOfAgent, selectionOf, shouldApplyDefault, writePolicy,
 } from './lib/subagent-default.js'
+import {
+  assignPin, discoverAccounts, headersForCall, loadPins, magpieTargetFromSettings, savePins, SESSION_ID,
+} from './lib/account-pin.js'
 
 export const name = 'nano-model-selector'
 
@@ -52,6 +55,8 @@ const ASYNC_COMPACT_BUNDLE_ROUTE = '/nano-model-selector/async-compact/bundle'
 const ASYNC_COMPACT_SWITCH_ROUTE = '/nano-model-selector/async-compact/switch'
 const PERF_REVIEW_HOST_ROUTE = '/nano-model-selector/perf-review/host'
 const SUBAGENT_DEFAULT_ROUTE = '/nano-model-selector/subagent-default'
+/** Per-session magpie account pin. GET reads; PUT sets or clears one upstream. */
+const ACCOUNT_PIN_ROUTE = '/nano-model-selector/account-pin'
 
 /** Plugin-private state file holding the chosen media engine. */
 const STATE_PATH = join(
@@ -78,6 +83,8 @@ const ASYNC_HISTORY_DIR = join(dirname(ASYNC_COMPACT_PATH), 'async-history')
 
 /** Chosen default route for a subagent that does not name its own model. */
 const SUBAGENT_DEFAULT_PATH = join(dirname(ASYNC_COMPACT_PATH), 'subagent-default.json')
+/** Chosen magpie display name per session and upstream. Absent means magpie's own pool. */
+const ACCOUNT_PIN_PATH = join(dirname(ASYNC_COMPACT_PATH), 'account-pins.json')
 
 /** Ledger read cap: the newest N records are enough for one dialog. */
 const ASYNC_HISTORY_LIMIT = 200
@@ -692,6 +699,90 @@ function subagentDefaultHandler(ctx) {
   }
 }
 
+function pinsOrEmpty() {
+  try { return loadPins(ACCOUNT_PIN_PATH) }
+  catch { return null }
+}
+
+function accountPinHandler(ctx) {
+  return async (req, res) => {
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      const sessionId = url.searchParams.get('sessionId') ?? ''
+      if (!SESSION_ID.test(sessionId)) { sendJson(res, 400, { ok: false, error: 'invalid-session' }); return }
+      const pins = pinsOrEmpty()
+      if (pins === null) { sendJson(res, 200, { ok: true, sessionId, pins: {}, accounts: [], degraded: 'state-read-failed' }); return }
+      const models = (url.searchParams.get('models') ?? '').split(',').map(item => item.trim()).filter(Boolean).slice(0, 8)
+      let accounts = []
+      if (url.searchParams.get('discover') === '1' && models.length > 0) {
+        const target = magpieProbeTarget()
+        if (target === null) accounts = models.map(model => ({ model, names: [], error: 'magpie-not-configured' }))
+        else accounts = await Promise.all(models.map(model => discoverAccounts({ ...target, model })))
+      }
+      sendJson(res, 200, { ok: true, sessionId, pins: pins[sessionId] ?? {}, accounts })
+      return
+    }
+    try {
+      const body = await readBody(req, 16384)
+      const sessionId = typeof body.sessionId === 'string' ? body.sessionId : ''
+      const upstream = typeof body.upstream === 'string' ? body.upstream : ''
+      const account = body.account === null || body.account === '' ? null : body.account
+      const current = loadPins(ACCOUNT_PIN_PATH)
+      const next = assignPin(current, sessionId, upstream, account)
+      savePins(ACCOUNT_PIN_PATH, next)
+      sendJson(res, 200, { ok: true, sessionId, pins: next[sessionId] ?? {} })
+    } catch (error) {
+      const reason = messageOf(error)
+      sendJson(res, 400, { ok: false, error: reason })
+    }
+  }
+  void ctx
+}
+
+function activeProfileName() {
+  const at = process.argv.indexOf('--profile')
+  const name = at >= 0 ? process.argv[at + 1] : ''
+  return typeof name === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(name) ? name : null
+}
+
+function magpieProbeTarget() {
+  const home = process.env.DSH_DATA_DIR ?? process.env.DSH_HOME ?? join(homedir(), '.dsh')
+  const profile = activeProfileName()
+  const files = [
+    ...(profile === null ? [] : [join(home, 'profiles', profile, 'cordis.patch.yml')]),
+    join(home, 'settings.yaml'),
+  ]
+  for (const file of files) {
+    try {
+      const target = magpieTargetFromSettings(readFileSync(file, 'utf8'))
+      if (target === null) continue
+      const apiKey = target.apiKeyEnv ? process.env[target.apiKeyEnv] : undefined
+      return { baseURL: target.baseURL, ...(typeof apiKey === 'string' && apiKey.length > 0 ? { apiKey } : {}) }
+    } catch {
+      /* this file is absent or unreadable; the next candidate may still name the gateway */
+    }
+  }
+  return null
+}
+
+/** Stamp the session, and the saved display name, onto every magpie call of that session. */
+function installAccountPin(ctx) {
+  return ctx.on('llm-pi-ai/request-headers', (request, headers, next) => {
+    try {
+      const pins = pinsOrEmpty() ?? {}
+      for (const [name, value] of Object.entries(headersForCall({
+        provider: request?.provider,
+        model: request?.model,
+        sessionId: request?.sessionId,
+        pins,
+      }))) headers.set(name, value)
+    } catch (error) {
+      ctx.logger?.warn?.(`account pin skipped: ${messageOf(error)}`)
+    }
+    return next()
+  })
+}
+
 /**
  * Stamp the saved route onto a fresh subagent that still carries its parent route.
  * A throw here fails agent creation, so every failure is swallowed after a warning.
@@ -730,6 +821,7 @@ export function apply(ctx) {
   // real change — the TTL only guards against a missed event.
   const bundleInventory = createBundleInventory(ctx)
   ctx.effect(() => installSubagentDefault(ctx), 'nano-model-selector: subagent default')
+  ctx.effect(() => installAccountPin(ctx), 'nano-model-selector: magpie account pin')
   ctx.effect(
     () => ctx.on('plugin-manager/changed', () => bundleInventory.invalidate()),
     'nano-model-selector: bundle inventory invalidation',
@@ -743,5 +835,6 @@ export function apply(ctx) {
     { path: ASYNC_COMPACT_SWITCH_ROUTE, methods: ['POST'], handler: (req, res) => asyncCompactSwitchHandler(ctx, req, res, bundleInventory) },
     { path: PERF_REVIEW_HOST_ROUTE, methods: ['GET'], handler: (req, res) => handleHostRead(req, res, ensurePerfReviewHost()) },
     { path: SUBAGENT_DEFAULT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: subagentDefaultHandler(ctx) },
+    { path: ACCOUNT_PIN_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: accountPinHandler(ctx) },
   ], { table: BINDING_TABLE, plugin: PLUGIN, observe: event => ensurePerfReviewHost().observe(event) })
 }

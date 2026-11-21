@@ -321,14 +321,15 @@ test('T17 strict order client gate rejects H>=B and B>=S; i18n key sets are equa
   assert.match(detail[15] ?? '', /低于 B/, 'line 16 keeps the H<B chain')
 })
 
-test('T17 topbar placement: compact button sits between search and close, never on the rail', () => {
+test('T17 topbar placement: account button sits between search and compact, never on the rail', () => {
   const src = read('src/client/ModelSelector.jsx')
   const top = src.slice(src.indexOf('className="nms-top"'), src.indexOf('className="nms-body"'))
   const searchAt = top.indexOf('nms-search"')
+  const accountAt = top.indexOf("filter === 'accounts'")
   const compactAt = top.indexOf('compactInstalled &&')
   const closeAt = top.indexOf('onClick={() => close(true)}')
-  assert.ok(searchAt > -1 && compactAt > searchAt && closeAt > compactAt,
-    'search < compactInstalled-button < close must hold in the topbar slice')
+  assert.ok(searchAt > -1 && accountAt > searchAt && compactAt > accountAt && closeAt > compactAt,
+    'search < account pin < compactInstalled-button < close must hold in the topbar slice')
   // Rail slice: no compact entry.
   const rail = src.slice(src.indexOf('className="nms-rail"'), src.indexOf('nms-body-list') > -1 ? src.indexOf('nms-body-list') : src.length)
   assert.equal(/compactInstalled|CompactionIcon|compactTitle/.test(rail), false,

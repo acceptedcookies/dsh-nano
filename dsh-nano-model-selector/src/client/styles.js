@@ -56,6 +56,7 @@ export const STYLE = `${NANO_STYLES}
 .nms-icon-button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .nms-icon-button:disabled { color: var(--dsw-alias-label-dimmed); cursor: default; }
 .nms-icon-button[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-brand-primary); }
+.nms-top-actions { display: flex; align-items: center; gap: 10px; flex: none; }
 .nms-body { display: flex; flex: 1; min-height: 0; }
 .nms-rail { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; flex: none; width: 54px; box-sizing: border-box; padding: 8px 4px; border-right: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); overflow: hidden; }
 .nms-rail-brands { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-height: 0; width: 100%; overflow-y: auto; scrollbar-width: none; }

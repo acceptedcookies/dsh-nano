@@ -215,6 +215,21 @@
       "match": "prefix"
     },
     {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/perf-review/host",
+      "methods": [
+        "GET"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "只读全进程视图。不排空，只接受 since。",
+      "id": "dnn.perf-review.host",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/status",
       "methods": [
@@ -226,6 +241,21 @@
       "sessionBinding": true,
       "justification": "dsh-nano-explorer-extra/src/host/routes.js:226 — read-only git status/stats for one session workspace; returns no secrets. scopeOf resolves caller-supplied sessionId (finding scopeof-cross-session, harden) — session-scoped read by design.",
       "id": "dnee.status",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/diff",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 65536,
+      "sessionBinding": true,
+      "justification": "Read-only unified diff of one workspace path against HEAD. Rejects paths that leave the checkout. No allowOutsideWorkspace.",
+      "id": "dnee.diff",
       "channel": "http",
       "match": "exact"
     },
@@ -500,21 +530,6 @@
       "match": "exact"
     },
     {
-      "plugin": "dsh-nano-explorer-extra",
-      "path": "/nano-explorer-extra/diff",
-      "methods": [
-        "POST"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 65536,
-      "sessionBinding": true,
-      "justification": "Read-only unified diff of one workspace path against HEAD. Rejects paths that leave the checkout. No allowOutsideWorkspace.",
-      "id": "dnee.diff",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
       "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/catalog",
       "methods": [
@@ -565,23 +580,6 @@
     },
     {
       "plugin": "dsh-nano-model-selector",
-      "path": "/nano-model-selector/subagent-default",
-      "methods": [
-        "GET",
-        "HEAD",
-        "PUT"
-      ],
-      "sensitivity": "L2",
-      "capability": "write:host",
-      "bodyLimit": 16384,
-      "sessionBinding": false,
-      "justification": "dsh-nano-model-selector/index.js — GET reads plugins/nano-model-selector/subagent-default.json; PUT enable/disable/reset writes that file (16384-byte cap). The host applies it on agent/created for a new subagent that did not name its own model. No secret.",
-      "id": "dnms.subagent-default",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/async-compact",
       "methods": [
         "GET",
@@ -625,6 +623,55 @@
       "sessionBinding": false,
       "justification": "dsh-nano-model-selector/index.js — DNMS01/-20⑦. POST {\"enabled\":boolean} (1024-byte cap) forwards to ctx.get('pluginManager').setBundleEnabled('dsh-nano-model-selector-compaction') — the panel's single write entry to the takeover toggle; same sanctioned writer, not a second truth source.",
       "id": "dnms.async-compact.switch",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/perf-review/host",
+      "methods": [
+        "GET"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "只读全进程视图。不排空，只接受 since。",
+      "id": "dnms.perf-review.host",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/subagent-default",
+      "methods": [
+        "GET",
+        "HEAD",
+        "PUT"
+      ],
+      "sensitivity": "L2",
+      "capability": "write:host",
+      "bodyLimit": 16384,
+      "sessionBinding": false,
+      "justification": "dsh-nano-model-selector/index.js — GET reads plugins/nano-model-selector/subagent-default.json; PUT enable/disable/reset writes that file (16384-byte cap). The host applies it on agent/created for a new subagent that did not name its own model. No secret.",
+      "id": "dnms.subagent-default",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/account-pin",
+      "methods": [
+        "GET",
+        "HEAD",
+        "PUT"
+      ],
+      "sensitivity": "L2",
+      "capability": "write:host",
+      "bodyLimit": 16384,
+      "sessionBinding": true,
+      "justification": "dsh-nano-model-selector/index.js — GET reads plugins/nano-model-selector/account-pins.json for one session and, when discover=1, asks the configured magpie gateway which display names serve the named models. PUT sets or clears one upstream pin for that session. No login secret is stored or returned.",
+      "id": "dnms.account-pin",
       "channel": "http",
       "match": "exact"
     },
@@ -1415,36 +1462,6 @@
       "sessionBinding": false,
       "justification": "dsh-nano-cloud-session/src/host/assemble.js — 投影 workspace family 资源操作（fs/process）到已验证 scope；不开放 /mcp。",
       "id": "dncs.resources",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/perf-review/host",
-      "methods": [
-        "GET"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 0,
-      "sessionBinding": false,
-      "justification": "只读全进程视图。不排空，只接受 since。",
-      "id": "dnn.perf-review.host",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-model-selector",
-      "path": "/nano-model-selector/perf-review/host",
-      "methods": [
-        "GET"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 0,
-      "sessionBinding": false,
-      "justification": "只读全进程视图。不排空，只接受 since。",
-      "id": "dnms.perf-review.host",
       "channel": "http",
       "match": "exact"
     }

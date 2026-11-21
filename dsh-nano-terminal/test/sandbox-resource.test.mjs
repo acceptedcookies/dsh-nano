@@ -2,6 +2,7 @@
 // Hermetic — a recorded fetch answers contract+inspect; no wire, no lane.
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 import { parseSandboxResource, resolveSandboxResource } from '../src/client/sandbox-resource.js'
 import { makeLane, McpLane } from '../src/client/lanes.js'
 
@@ -130,4 +131,14 @@ test('makeLane: a recovered managed spec rebuilds the endpoint, never a legacy l
   assert.equal(lane.sandbox.sandboxId, SB)
   assert.equal(lane.sandbox.terminalId, TM)
   assert.equal(lane.url, `${ORIGIN}/nano-local-sandbox/mcp`)
+})
+
+test('resource pane loads the wasm core and stylesheet itself', () => {
+  // The tab can open while the Nano 终端 view (their usual owner) is unmounted;
+  // a TermPane before loadCore() throws "dnt-core not loaded".
+  const src = readFileSync(new URL('../src/client/NanoTerm.jsx', import.meta.url), 'utf8')
+  const pane = src.slice(src.indexOf('export function SandboxResourcePane'))
+  assert.match(pane, /Promise\.all\(\[resolveSandboxResource\([^)]*\), loadCore\(\)\]\)/)
+  assert.match(pane, /style\.textContent = STYLE/)
+  assert.ok(pane.indexOf('loadCore()') < pane.indexOf('<TermPane'))
 })

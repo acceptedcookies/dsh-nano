@@ -1553,6 +1553,16 @@ export function SandboxResourcePane({ address, sessionId, zh }) {
   const [closed, setClosed] = useState(false)
   const settings = useMemo(() => loadSettings(), [])
 
+  // This tab can mount without the Nano 终端 view, which otherwise owns the
+  // stylesheet and the wasm core load; TermPane needs both.
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.dataset.dntStyles = '1'
+    style.textContent = STYLE
+    document.head.appendChild(style)
+    return () => style.remove()
+  }, [])
+
   useEffect(() => {
     setLaneSpec(null)
     setProblem(null)
@@ -1564,8 +1574,8 @@ export function SandboxResourcePane({ address, sessionId, zh }) {
     let alive = true
     const abort = new AbortController()
     const impl = (url, init = {}) => fetch(url, { ...init, signal: abort.signal })
-    resolveSandboxResource(address, impl, location.origin)
-      .then((spec) => {
+    Promise.all([resolveSandboxResource(address, impl, location.origin), loadCore()])
+      .then(([spec]) => {
         if (!alive) return
         setLaneSpec({ tid: newTermId(), ...spec })
       })

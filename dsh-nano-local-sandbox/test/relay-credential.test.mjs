@@ -163,3 +163,19 @@ test('the production relay transport presents the credential as a request header
   assert.deepEqual(calls[0].protocols, [])
   assert.equal(calls[0].options.headers['x-dnls-relay-credential'], 'tok-abc')
 })
+
+test('production connect hands the relay token to the header transport, not a subprotocol', () => {
+  let called = null
+  const transport = (url, token) => {
+    called = { url, token }
+    const socket = new EventTarget()
+    socket.send = () => {}
+    socket.close = () => {}
+    queueMicrotask(() => socket.dispatchEvent(new Event('open')))
+    return socket
+  }
+  const client = connectCdp('http://127.0.0.1:1', { relayUrl: 'ws://127.0.0.1:1/cdp', relayToken: 'tok-xyz', relayTransport: transport })
+  // The socket is built synchronously, so the wiring is observable without waiting.
+  assert.deepEqual(called, { url: 'ws://127.0.0.1:1/cdp', token: 'tok-xyz' })
+  try { client?.close?.() } catch { /* pending client */ }
+})

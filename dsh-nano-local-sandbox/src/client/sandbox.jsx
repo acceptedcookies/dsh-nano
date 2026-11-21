@@ -2,9 +2,10 @@
  *  Terminals live in the shell's dock. */
 import React from 'react'
 import {
-  Button, CodeBlock, DisclosureRow, Input, SegmentedControl, StateDot, Tag, IconRefreshOutlineRegular,
+  Button, CodeBlock, Input, SegmentedControl, StateDot, Tag, IconRefreshOutlineRegular,
+  IconChevronDownOutlineRegular, IconChevronUpOutlineRegular, IconChevronsUpDownOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { FactGrid, IconButton, Meter, NanoTabs, SplitRow } from 'dsh-nano-ui'
+import { FactGrid, IconButton, Meter, SplitRow } from 'dsh-nano-ui'
 import { createTicket } from './managed.js'
 import { fill } from './i18n.js'
 import { formatBytes, serviceAddress } from './format.js'
@@ -13,13 +14,11 @@ import {
   DOT, OP_DOT, actionText, cores, driverText, idleStatusText, lastActivityText, lastOperationText, nameOf, opText,
   pendingRevision, ratio, serviceHealthText, sizeLine, stateText, stepText, when, whole,
 } from './model.js'
-import { AppList, ErrorLine, Group, Muted, ReceiptList, Section, StateMinutes, UsageCharts, WindowControl } from './parts.jsx'
+import { AppList, ErrorLine, Group, Muted, Pending, ReceiptList, Section, StateMinutes, UsageCharts, WindowControl } from './parts.jsx'
 
 const h = React.createElement
 const PLANES = ['container', 'engine', 'bridge', 'page', 'dom', 'terminal']
 const HEALTH_TONE = { healthy: 'success', unhealthy: 'danger' }
-// Linux process state letters; only a live verdict earns a coloured dot.
-const PROC_DOT = { R: 'done', Z: 'error', T: 'warning' }
 const DANGER = 'nano-modal-action nano-modal-danger'
 // Engine logs carry terminal colour codes that a code block would print literally.
 const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g
@@ -42,46 +41,92 @@ function idleText(copy, configuration) {
 
 /* ── monitor ─────────────────────────────────────────────────────────── */
 
+/* Column-click sorting lives here; the table chrome is nano-ui's `nano-table`. */
+const PROC_COLS = [
+  { key: 'pid', label: 'procPid', numeric: true, hint: 'procPidHint' },
+  { key: 'name', label: 'procName' },
+  { key: 'state', label: 'procState' },
+  { key: 'rssBytes', label: 'procRss', numeric: true, hint: 'procRssHint' },
+]
+
+function ProcessTable({ copy, procs }) {
+  const [sort, setSort] = React.useState({ key: 'rssBytes', dir: -1 })
+  const rows = [...procs.list].sort((a, b) => {
+    const fallback = sort.key === 'name' || sort.key === 'state' ? '' : 0
+    const av = a[sort.key] ?? fallback
+    const bv = b[sort.key] ?? fallback
+    const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv
+    return (cmp * sort.dir) || (a.pid - b.pid)
+  })
+  return h('table', { className: 'nano-table' },
+    h('thead', null, h('tr', null, PROC_COLS.map((col) => {
+      const active = sort.key === col.key
+      const toggle = () => setSort((prev) => (prev.key === col.key
+        ? { key: col.key, dir: -prev.dir }
+        : { key: col.key, dir: col.numeric ? -1 : 1 }))
+      // The header is quiet text; its sort chevron shows on hover or when the
+      // column drives the order. Numeric headers share the cells' right axis.
+      return h('th', {
+        key: col.key,
+        className: col.numeric ? 'dnls-num-cell' : undefined,
+        title: col.hint ? copy[col.hint] : undefined,
+        'aria-sort': active ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none',
+        tabIndex: 0,
+        onClick: toggle,
+        onKeyDown: (event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return
+          event.preventDefault()
+          toggle()
+        },
+      }, h('span', { className: 'dnls-col-label' }, copy[col.label],
+        h('span', { className: 'dnls-sort-icon', 'aria-hidden': true },
+          active
+            ? h(sort.dir === 1 ? IconChevronUpOutlineRegular : IconChevronDownOutlineRegular, { size: 12 })
+            : h(IconChevronsUpDownOutlineRegular, { size: 12 }))))
+    }))),
+    h('tbody', null, rows.map((proc) => h('tr', { key: proc.pid },
+      h('td', { className: 'dnls-num-cell' }, String(proc.pid)),
+      h('td', { className: 'dnls-col-name' }, proc.name ?? copy.none),
+      h('td', { className: 'dnls-col-state', title: proc.state }, copy.procStates[proc.state] ?? proc.state ?? copy.none),
+      h('td', { className: 'dnls-num-cell' }, formatBytes(proc.rssBytes) ?? copy.none)))))
+}
+
 function MonitorTab({ copy, target, detail, running, usageWindow, setUsageWindow, procs, host, address, onError }) {
   const minute = running ? (detail?.lastMinute ?? target.lastMinute) : null
   const cpus = target.resources?.cpus
   const memory = target.resources?.memoryBytes
   const usage = detail?.usage
-  const sortedProcs = procs?.list ? [...procs.list].sort((a, b) => (b.rssBytes ?? 0) - (a.rssBytes ?? 0)) : []
   return h(React.Fragment, null,
     h(Section, { title: copy.apps, aside: h('span', { className: 'dnls-muted' }, copy.newPane) },
       h(AppList, { copy, host, address, onError })),
     h(Section, { title: copy.allocated, aside: h('span', { className: 'dnls-muted' }, running ? copy.lastMinute : copy.notSampling) },
+      // The track renders even without samples (0 = empty track, text stays —),
+      // so the meter's height never changes when the first sample arrives.
       h(Meter, {
         label: copy.usageCpu,
         text: `${cores(minute?.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: cpus ?? copy.none })}`,
-        value: ratio(minute?.cpuCores, cpus),
+        value: ratio(minute?.cpuCores, cpus) ?? 0,
       }),
       h(Meter, {
         label: copy.usageMemory,
         text: `${formatBytes(minute?.memoryBytes) ?? copy.none} / ${formatBytes(memory) ?? copy.none}`,
-        value: ratio(minute?.memoryBytes, memory),
+        value: ratio(minute?.memoryBytes, memory) ?? 0,
       })),
     h(Section, { title: copy.usage, aside: h(WindowControl, { copy, value: usageWindow, onChange: setUsageWindow }) },
-      detail == null ? h(Muted, null, copy.loading)
-      : usage ? h(React.Fragment, null, h(UsageCharts, { copy, usages: [usage] }), h(StateMinutes, { copy, usage }))
+      detail == null ? h(Pending, { copy, className: 'dnls-pending-usage' })
+      : usage ? h('div', { className: 'dnls-usage' }, h(UsageCharts, { copy, usages: [usage] }), h(StateMinutes, { copy, usage }))
       : h(Muted, null, copy.usageDenied)),
     h(Section, { title: copy.processes, aside: procs?.list ? h('span', { className: 'dnls-muted' }, String(procs.list.length)) : null },
       !running ? h(Muted, null, copy.notSampling)
-      : procs == null ? h(Muted, null, copy.loading)
-      : procs.error ? h(ErrorLine, { error: procs.error })
-      : sortedProcs.length === 0 ? h(Muted, null, copy.processesEmpty)
+      : procs == null ? h(Pending, { copy, className: 'dnls-pending-procs' })
       : h(React.Fragment, null,
-        h('div', { className: 'dnls-procs' }, sortedProcs.map((proc) => h(DisclosureRow, {
-          key: proc.pid,
-          icon: h(StateDot, { state: PROC_DOT[proc.state] ?? 'idle' }),
-          title: proc.name ?? String(proc.pid),
-          expandable: false,
-          headerAccessory: h('span', { className: 'dnls-proc-meta' }, `${proc.pid} · ${formatBytes(proc.rssBytes) ?? copy.none}`),
-        }))),
-        procs.truncated ? h(Muted, null, fill(copy.processesTruncated, { n: sortedProcs.length })) : null)),
+        h('div', { className: 'dnls-procs' },
+          procs.error ? h(ErrorLine, { error: procs.error })
+          : !procs.list || procs.list.length === 0 ? h(Muted, null, copy.processesEmpty)
+          : h(ProcessTable, { copy, procs })),
+        procs.truncated ? h(Muted, null, fill(copy.processesTruncated, { n: procs.list?.length ?? 0 })) : null)),
     h(Section, { title: copy.deployment },
-      detail == null ? h(Muted, null, copy.loading) : h(Group, null,
+      detail == null ? h(Pending, { copy, className: 'dnls-pending-block' }) : h(Group, null,
         h(SplitRow, { label: copy.imageDigest },
           typeof detail.applied?.imageDigest === 'string'
             ? h('span', { className: 'dnls-mono', title: detail.applied.imageDigest }, detail.applied.imageDigest.slice(0, 19))
@@ -110,7 +155,7 @@ function ServicesTab({ copy, detail, running, probe, control, canProbe, canContr
   const degraded = Array.isArray(status?.degraded) ? status.degraded : []
   return h(React.Fragment, null,
     h(Section, { title: copy.services },
-      detail == null ? h(Muted, null, copy.loading)
+      detail == null ? h(Pending, { copy, className: 'dnls-pending-page' })
       : services.length === 0 ? h(Muted, null, copy.servicesEmpty)
       : h(Group, null, services.map((service) => {
         const address = serviceAddress(service)
@@ -147,7 +192,7 @@ function ServicesTab({ copy, detail, running, probe, control, canProbe, canContr
     : null) : null,
     canControl ? h(Section, { title: copy.manualControl },
       control?.error ? h(ErrorLine, { error: control.error })
-      : control?.state == null ? h(Muted, null, running ? copy.loading : copy.probeStopped)
+      : control?.state == null ? (running ? h(Pending, { copy, className: 'dnls-pending-row' }) : h(Muted, null, copy.probeStopped))
       : h(Group, null, h(SplitRow, {
         label: h('span', { className: 'dnls-term' },
           h(StateDot, { state: control.state.humanHold?.active ? 'warning' : 'done' }),
@@ -174,7 +219,7 @@ function LogsTab({ copy, running, logs, onTail, onReload }) {
   },
   !running ? h(Muted, null, copy.logsStopped)
   : logs.error ? h(ErrorLine, { error: logs.error })
-  : logs.text == null ? h(Muted, null, copy.loading)
+  : logs.text == null ? h(Pending, { copy, className: 'dnls-pending-log' })
   : logs.text.trim() === '' ? h(Muted, null, copy.logsEmpty)
   : h('div', { className: 'dnls-log' },
     h(CodeBlock, {
@@ -212,7 +257,7 @@ function ActivityTab({ copy, detail, receipts, lookup, setLookup, onLookup, onRe
           fill(copy.receiptLine, { action: actionText(copy, lookup.result.action), state: opText(copy, lookup.result.state) })),
       }, h('span', { className: 'dnls-muted' }, [stepText(copy, lookup.result.step), when(copy, lookup.result.finishedAt ?? lookup.result.at)].filter(Boolean).join(' · ')))) : null),
     h(Section, { title: copy.history },
-      detail == null ? h(Muted, null, copy.loading)
+      detail == null ? h(Pending, { copy, className: 'dnls-pending-page' })
       : operations.length === 0 ? h(Muted, null, copy.historyEmpty)
       : h(Group, null, operations.map((op, index) => h(SplitRow, {
         key: `${op.action}:${op.at ?? index}`,
@@ -233,7 +278,7 @@ function SettingsTab({ copy, target, detail, running, busy, supports, draft, set
   const num = (key, label) => h('span', { className: 'dnls-num' }, field(key, label))
   const labelled = (label, value) => h('span', { className: 'dnls-label' },
     h('span', null, label), h('span', { className: 'dnls-muted' }, fill(copy.current, { value })))
-  if (detail == null) return h(Muted, null, copy.loading)
+  if (detail == null) return h(Pending, { copy, className: 'dnls-pending-page' })
   return h(React.Fragment, null,
     h(Section, { title: copy.power }, h(Group, null,
       running
@@ -453,12 +498,24 @@ export function SandboxView({
   ].filter(Boolean)
 
   const idle = detail?.idle
+  // Single-line facts with the full text on the tooltip: detail arriving must
+  // never add a wrapped line and move the tab strip or the panel.
+  const fact = (text) => h('span', { title: text }, text)
   const revisionText = pendingRevision(target)
     ? fill(copy.revisionPending, { applied: target.appliedRevision ?? 0, desired: target.desiredRevision })
     : String(target.appliedRevision ?? copy.none)
-  // The head and the tab strip stay put; only the active panel scrolls, so
-  // switching tabs never moves the chrome.
+  const activeTab = tabs.find((item) => item.value === tab) ?? tabs[0]
+  // The tab strip is the page's topmost navigation; the object head sits under
+  // it. Both stay put while only the active panel scrolls.
   return h('div', { className: 'dnls-view', 'data-dnls-view': 'sandbox' },
+    h('div', { className: 'dnls-tabbar' },
+      h(SegmentedControl, {
+        id: `dnls-sections-${sandboxId}`,
+        value: activeTab.value,
+        label: copy.tabs,
+        options: tabs.map((item) => ({ value: item.value, label: item.label })),
+        onChange: setTab,
+      })),
     h('div', { className: 'dnls-object-head' },
       h(ErrorLine, { error: error ?? outerError }),
       h('div', { className: 'dnls-head-card', 'data-dnls-status': observed ?? 'unknown' },
@@ -469,22 +526,22 @@ export function SandboxView({
           pendingRevision(target) ? h(Tag, { tone: 'neutral' }, copy.pendingApply) : null),
         h('div', { className: 'dnls-head-meta' },
           [stateText(copy, observed), sizeLine(copy, target), target.profileId].filter(Boolean).join(' · ')),
-        running && target.lastMinute ? h('div', { className: 'dnls-meters' },
+        running ? h('div', { className: 'dnls-meters' },
           h(Meter, {
             label: copy.usageCpu,
-            text: `${cores(target.lastMinute.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: target.resources?.cpus ?? copy.none })}`,
-            value: ratio(target.lastMinute.cpuCores, target.resources?.cpus),
+            text: `${cores(target.lastMinute?.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: target.resources?.cpus ?? copy.none })}`,
+            value: ratio(target.lastMinute?.cpuCores, target.resources?.cpus) ?? 0,
           }),
           h(Meter, {
             label: copy.usageMemory,
-            text: `${formatBytes(target.lastMinute.memoryBytes) ?? copy.none} / ${formatBytes(target.resources?.memoryBytes) ?? copy.none}`,
-            value: ratio(target.lastMinute.memoryBytes, target.resources?.memoryBytes),
+            text: `${formatBytes(target.lastMinute?.memoryBytes) ?? copy.none} / ${formatBytes(target.resources?.memoryBytes) ?? copy.none}`,
+            value: ratio(target.lastMinute?.memoryBytes, target.resources?.memoryBytes) ?? 0,
           })) : null,
         h(FactGrid, { items: [
-          { label: copy.driver, value: driverText(copy, control, running) },
-          { label: copy.idleSleep, value: detail ? idleStatusText(copy, idle) : copy.none },
-          { label: copy.lastActivity, value: lastActivityText(copy, idle) },
-          { label: copy.lastOperation, value: lastOperationText(copy, target, detail) },
+          { label: copy.driver, value: fact(driverText(copy, control, running)) },
+          { label: copy.idleSleep, value: fact(detail ? idleStatusText(copy, idle) : copy.none) },
+          { label: copy.lastActivity, value: fact(lastActivityText(copy, idle)) },
+          { label: copy.lastOperation, value: fact(lastOperationText(copy, target, detail)) },
           { label: copy.services, value: serviceHealthText(copy, target.services) },
           // The list row is re-read after every dock create/close; the inspect detail is not.
           { label: copy.terminals, value: String(row.visibleTerminalCount ?? target.visibleTerminalCount ?? copy.none) },
@@ -494,5 +551,10 @@ export function SandboxView({
           `${copy.drivers} ${drivers}`,
           `${copy.observed} ${when(copy, target.observedAt) ?? copy.none}`,
         ].join(' · ')))),
-    h(NanoTabs, { className: 'dnls-detail', label: copy.tabs, value: tab, onChange: setTab, items: tabs }))
+    h('div', {
+      className: 'dnls-panel',
+      role: 'tabpanel',
+      id: `dnls-sections-${sandboxId}-${activeTab.value}-panel`,
+      'aria-labelledby': `dnls-sections-${sandboxId}-${activeTab.value}`,
+    }, activeTab.content))
 }

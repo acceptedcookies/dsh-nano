@@ -7,7 +7,7 @@
 import React from 'react'
 import {
   StateDot,
-  IconEllipsisOutlineRegular, IconLayersOutlineRegular, IconPanelLeftOutlineRegular,
+  IconEllipsisOutlineRegular, IconPanelLeftOutlineRegular,
   IconRefreshOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton, NANO_STYLES, openNanoMenu } from 'dsh-nano-ui'
@@ -256,15 +256,8 @@ function DnlsPane({ sessionId, copy, host }) {
 
   // Only controls live in the bar; state and readings belong to the status line.
   const bar = h(React.Fragment, null,
-    // The dashboard entry is always visible, at any nesting depth; the drawer's
-    // overview row is the same destination in the vertical list.
-    h(IconButton, {
-      icon: h(IconLayersOutlineRegular, { size: 16 }),
-      'aria-label': copy.overview,
-      title: copy.back,
-      disabled: !current,
-      onClick: unchoose,
-    }),
+    // The drawer toggle is always the leftmost control; going back to the
+    // dashboard lives inside the drawer, never in this bar.
     h(ShellToggle, {
       icon: h(IconPanelLeftOutlineRegular, { size: 16 }),
       label: copy.drawerToggle,

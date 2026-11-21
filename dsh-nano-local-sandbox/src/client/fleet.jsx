@@ -11,7 +11,7 @@ import {
   DOT, combine, cores, driverText, idleStatusText, lastOperationText, nameOf, needsAttention,
   pendingRevision, ratio, serviceHealthText, sizeLine, stateText,
 } from './model.js'
-import { AppList, ErrorLine, Group, Muted, ReceiptList, Section, UsageCharts, WindowControl } from './parts.jsx'
+import { AppList, ErrorLine, Group, Muted, Pending, ReceiptList, Section, UsageCharts, WindowControl } from './parts.jsx'
 import { profileIdOf } from './dialogs.jsx'
 
 const h = React.createElement
@@ -56,6 +56,9 @@ function SandboxCard({ copy, host, row, detail, control, busy, supports, onOpen,
   const own = (event) => event.target === event.currentTarget
   const stop = (event) => event.stopPropagation()
   const idle = detail?.idle
+  // Long values are clipped to one line so late-arriving detail never grows
+  // the card; the full text stays on the tooltip.
+  const fact = (text) => h('span', { title: text }, text)
   return h('div', {
     className: 'dnls-card',
     role: 'button',
@@ -84,27 +87,27 @@ function SandboxCard({ copy, host, row, detail, control, busy, supports, onOpen,
         'aria-label': `${copy.more} · ${nameOf(row)}`,
         onClick: (event) => onMenu(event, row),
       }))),
-  minute
+  running
     ? h('div', { className: 'dnls-meters' },
       h(Meter, {
         label: copy.usageCpu,
-        text: `${cores(minute.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: row.resources?.cpus ?? copy.none })}`,
-        value: ratio(minute.cpuCores, row.resources?.cpus),
+        text: `${cores(minute?.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: row.resources?.cpus ?? copy.none })}`,
+        value: ratio(minute?.cpuCores, row.resources?.cpus) ?? 0,
       }),
       h(Meter, {
         label: copy.usageMemory,
-        text: `${formatBytes(minute.memoryBytes) ?? copy.none} / ${formatBytes(row.resources?.memoryBytes) ?? copy.none}`,
-        value: ratio(minute.memoryBytes, row.resources?.memoryBytes),
+        text: `${formatBytes(minute?.memoryBytes) ?? copy.none} / ${formatBytes(row.resources?.memoryBytes) ?? copy.none}`,
+        value: ratio(minute?.memoryBytes, row.resources?.memoryBytes) ?? 0,
       }))
     : h(Muted, null, [
-      row.observedState === 'missing' ? copy.containerMissing : running ? copy.noSamples : copy.notSampling,
+      row.observedState === 'missing' ? copy.containerMissing : copy.notSampling,
       sizeLine(copy, row),
     ].filter(Boolean).join(' · ')),
   h(FactGrid, { items: [
     { label: copy.services, value: serviceHealthText(copy, row.services) },
     { label: copy.terminals, value: String(row.visibleTerminalCount ?? copy.none) },
-    { label: copy.activation, value: [idleStatusText(copy, idle), driverText(copy, control, running)].filter(Boolean).join(' · ') },
-    { label: copy.lastOperation, value: lastOperationText(copy, row, detail) },
+    { label: copy.activation, value: fact([idleStatusText(copy, idle), driverText(copy, control, running)].filter(Boolean).join(' · ')) },
+    { label: copy.lastOperation, value: fact(lastOperationText(copy, row, detail)) },
   ] }),
   h(AppList, { copy, host, address: addressOf(row), compact: true, onError }))
 }
@@ -203,16 +206,18 @@ export function FleetView({
         aside: h(WindowControl, { copy, value: usageWindow, onChange: setUsageWindow }),
       },
       h(Muted, null, copy.usageFleet),
-      usages == null ? h(Muted, null, copy.loading) : h(UsageCharts, { copy, usages })) : null)
+      usages == null ? h(Pending, { copy, className: 'dnls-pending-usage' }) : h('div', { className: 'dnls-usage' }, h(UsageCharts, { copy, usages }))) : null)
   }
 
   return h('div', { className: 'dnls-view', 'data-dnls-view': 'fleet' },
     h('div', { className: 'dnls-scroll' },
       h('div', { className: 'dnls-page-head' },
-        h('h2', { className: 'dnls-page-title' }, copy.typeLabel),
+        h('div', { className: 'dnls-page-copy' },
+          h('h2', { className: 'dnls-page-title' }, copy.typeLabel),
+          h('p', { className: 'dnls-page-desc' }, copy.typeDescription)),
         supports('sandbox.instance.create')
           ? h(Button, {
-            variant: 'primary', size: 'sm', disabled: busy,
+            variant: 'primary', size: 'md', disabled: busy,
             icon: h(IconPlusOutlineRegular, { size: 14 }),
             onClick: onCreate,
           }, copy.create)

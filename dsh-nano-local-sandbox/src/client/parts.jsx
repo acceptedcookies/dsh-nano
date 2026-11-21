@@ -82,6 +82,11 @@ export function Muted({ children }) {
   return h('p', { className: 'dnls-muted' }, children)
 }
 
+/** Loading placeholder that reserves the loaded block's height (no layout jump). */
+export function Pending({ copy, className = '' }) {
+  return h('p', { className: `dnls-pending ${className}` }, copy.loading)
+}
+
 /** The server message, then its registered errorId so the operator can search it. */
 export function ErrorLine({ error }) {
   if (!error) return null

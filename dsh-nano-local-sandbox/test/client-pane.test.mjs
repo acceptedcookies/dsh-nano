@@ -335,7 +335,7 @@ test('provider-shaped projections render ids, ports and null-safe stats', () => 
 test('views are host primitives plus nano-ui; only the registered shell draws its own controls', () => {
   const read = (name) => readFileSync(join(root, 'src/client', name), 'utf8')
   const views = ['index.jsx', 'fleet.jsx', 'sandbox.jsx', 'dock.jsx', 'dialogs.jsx', 'parts.jsx'].map(read).join('\n')
-  for (const required of ['NANO_STYLES', 'NanoTabs', 'NanoDialog', 'FactGrid', 'SplitRow', 'StateDot', 'RiskConfirmation', 'SegmentedControl', 'WorkbenchShell', 'TabDrawer', 'StatusBar']) {
+  for (const required of ['NANO_STYLES', 'NanoDialog', 'FactGrid', 'SplitRow', 'StateDot', 'RiskConfirmation', 'SegmentedControl', 'WorkbenchShell', 'TabDrawer', 'StatusBar']) {
     assert.equal(views.includes(required), true, required)
   }
   for (const forbidden of ['PanelLayout', 'style=', '<select', "h('button'", '<button', '<input', 'font-weight']) {
@@ -345,6 +345,20 @@ test('views are host primitives plus nano-ui; only the registered shell draws it
   assert.equal((shell.match(/h\('button'/g) ?? []).length, (shell.match(/nano-ui-exempt/g) ?? []).length, 'every shell button carries its exemption')
   for (const name of ['styles.js', 'shell.jsx']) {
     assert.equal(/#[0-9a-f]{3,8}\b/i.test(read(name)), false, `${name}: colours come from host tokens`)
+  }
+})
+
+test('guest processes are a sortable nano-ui data table', () => {
+  const client = readFileSync(join(root, 'src/client/sandbox.jsx'), 'utf8')
+  for (const required of [
+    "className: 'nano-table'", 'function ProcessTable(', 'const PROC_COLS =',
+    "'aria-sort': active", 'tabIndex: 0,', 'onKeyDown: (event) =>',
+    "className: 'dnls-sort-icon'", 'useState({ key:',
+    "className: 'dnls-col-name'", "className: 'dnls-col-state'",
+  ]) assert.equal(client.includes(required), true, required)
+  const styles = readFileSync(join(root, 'src/client/styles.js'), 'utf8')
+  for (const rule of ['.dnls-procs tbody tr:hover', '.dnls-procs td.dnls-col-name', '.dnls-procs .dnls-sort-icon']) {
+    assert.equal(styles.includes(rule), true, rule)
   }
 })
 

@@ -42,8 +42,8 @@ var __dnlsClient = (() => {
     apply: () => apply,
     inject: () => inject
   });
-  var import_react16 = __toESM(__require("react"), 1);
-  var import_dsh_client_ui_primitives11 = __require("@deepseek-ai/dsh-client-ui-primitives");
+  var import_react15 = __toESM(__require("react"), 1);
+  var import_dsh_client_ui_primitives10 = __require("@deepseek-ai/dsh-client-ui-primitives");
 
   // ../packages/dsh-nano-ui/src/version.js
   var VERSION = "0.2.1";
@@ -297,35 +297,8 @@ ${LAYER_CSS}
     return h3("span", { className: "nano-anchor", style: { left: `${menu.x}px`, top: `${menu.y}px` } }, list);
   }
 
-  // ../packages/dsh-nano-ui/src/tabs.js
-  var import_react4 = __toESM(__require("react"), 1);
-  var import_dsh_client_ui_primitives4 = __require("@deepseek-ai/dsh-client-ui-primitives");
-  var h4 = import_react4.default.createElement;
-  function NanoTabs({ items, value, onChange, label, className }) {
-    const [inner, setInner] = import_react4.default.useState(() => value ?? items[0]?.value);
-    const id = `nano-seg-${import_react4.default.useId().replaceAll(":", "")}`;
-    const current = value ?? inner;
-    const select = (next) => {
-      if (value === void 0) setInner(next);
-      onChange?.(next);
-    };
-    return h4(
-      "div",
-      { className: ["nano-panes", className ?? ""].filter(Boolean).join(" ") },
-      h4(import_dsh_client_ui_primitives4.SegmentedControl, { id, value: current, label, options: items.map((item) => ({ value: item.value, label: item.label })), onChange: select }),
-      items.map((item) => h4("div", {
-        key: item.value,
-        id: `${id}-${item.value}-panel`,
-        role: "tabpanel",
-        className: "nano-pane",
-        "aria-labelledby": `${id}-${item.value}`,
-        hidden: item.value !== current
-      }, item.content))
-    );
-  }
-
   // ../packages/dsh-nano-ui/src/dom.js
-  var import_react5 = __toESM(__require("react"), 1);
+  var import_react4 = __toESM(__require("react"), 1);
   var import_client = __require("react-dom/client");
   var HOST_MENU_GAP = 4;
   function mount(parent) {
@@ -364,7 +337,7 @@ ${LAYER_CSS}
         y: (up ? top - gap : bottom + gap) - box.top - scroller.clientTop + scroller.scrollTop
       };
     }
-    root.render(import_react5.default.createElement(NanoMenu, {
+    root.render(import_react4.default.createElement(NanoMenu, {
       menu,
       actions: options.items ?? [],
       width: options.width,
@@ -377,61 +350,61 @@ ${LAYER_CSS}
   }
 
   // ../packages/dsh-nano-ui/src/button.js
-  var import_react6 = __toESM(__require("react"), 1);
-  var import_dsh_client_ui_primitives5 = __require("@deepseek-ai/dsh-client-ui-primitives");
+  var import_react5 = __toESM(__require("react"), 1);
+  var import_dsh_client_ui_primitives4 = __require("@deepseek-ai/dsh-client-ui-primitives");
   function IconButton({ icon, variant = "ghost", size = "sm", ...rest }) {
     const label = rest["aria-label"];
     if (typeof label !== "string" || label.trim() === "") throw new TypeError("dsh-nano-ui: IconButton needs an aria-label");
-    return import_react6.default.createElement(import_dsh_client_ui_primitives5.Button, { variant, size, icon, title: label, ...rest });
+    return import_react5.default.createElement(import_dsh_client_ui_primitives4.Button, { variant, size, icon, title: label, ...rest });
   }
 
   // ../packages/dsh-nano-ui/src/empty.js
-  var import_react7 = __toESM(__require("react"), 1);
-  var h5 = import_react7.default.createElement;
+  var import_react6 = __toESM(__require("react"), 1);
+  var h4 = import_react6.default.createElement;
   function EmptyState({ icon, title, description, action, className }) {
-    return h5(
+    return h4(
       "div",
       { className: ["nano-empty", className ?? ""].filter(Boolean).join(" ") },
-      icon === void 0 ? null : h5("span", { className: "nano-empty-icon", "aria-hidden": "true" }, icon),
-      h5("p", { className: "nano-empty-title" }, title),
-      description === void 0 ? null : h5("p", { className: "nano-empty-desc" }, description),
+      icon === void 0 ? null : h4("span", { className: "nano-empty-icon", "aria-hidden": "true" }, icon),
+      h4("p", { className: "nano-empty-title" }, title),
+      description === void 0 ? null : h4("p", { className: "nano-empty-desc" }, description),
       action ?? null
     );
   }
 
   // ../packages/dsh-nano-ui/src/panel.js
-  var import_react8 = __toESM(__require("react"), 1);
-  var h6 = import_react8.default.createElement;
+  var import_react7 = __toESM(__require("react"), 1);
+  var h5 = import_react7.default.createElement;
   function FactGrid({ items }) {
-    return h6(
+    return h5(
       "dl",
       { className: "nano-facts" },
-      (items ?? []).map((item, index) => h6(
+      (items ?? []).map((item, index) => h5(
         "div",
         { key: index },
-        h6("dt", null, item.label),
-        h6("dd", null, item.value ?? "\u2014")
+        h5("dt", null, item.label),
+        h5("dd", null, item.value ?? "\u2014")
       ))
     );
   }
   function SplitRow({ label, children }) {
-    return h6(
+    return h5(
       "div",
       { className: "nano-split" },
-      h6("span", { className: "nano-split-label" }, label),
-      h6("span", { className: "nano-split-control" }, children)
+      h5("span", { className: "nano-split-label" }, label),
+      h5("span", { className: "nano-split-control" }, children)
     );
   }
   function Meter({ label, text, value }) {
     const width = typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : null;
-    return h6(
+    return h5(
       "div",
       { className: "nano-meter" },
-      h6("span", { className: "nano-meter-label" }, `${label} ${text ?? ""}`),
-      width === null ? null : h6(
+      h5("span", { className: "nano-meter-label" }, `${label} ${text ?? ""}`),
+      width === null ? null : h5(
         "span",
         { className: "nano-meter-track" },
-        h6("span", { className: "nano-meter-fill", style: { width: `${width}%` } })
+        h5("span", { className: "nano-meter-fill", style: { width: `${width}%` } })
       )
     );
   }
@@ -883,6 +856,9 @@ ${LAYER_CSS}
     procName: "Name",
     procState: "State",
     procRss: "RSS",
+    procPidHint: "Process id",
+    procRssHint: "Resident set size: physical memory the process holds",
+    procStates: { R: "running", S: "sleeping", D: "waiting", Z: "zombie", T: "stopped", X: "dead" },
     deployment: "Deployment",
     imageDigest: "Image",
     verifiedAt: "Verified",
@@ -1128,6 +1104,9 @@ ${LAYER_CSS}
     procName: "\u540D\u79F0",
     procState: "\u72B6\u6001",
     procRss: "RSS",
+    procPidHint: "\u8FDB\u7A0B\u53F7",
+    procRssHint: "\u5E38\u9A7B\u5185\u5B58\uFF1A\u8FDB\u7A0B\u5B9E\u9645\u5360\u7528\u7684\u7269\u7406\u5185\u5B58",
+    procStates: { R: "\u8FD0\u884C", S: "\u7761\u7720", D: "\u7B49\u5F85", Z: "\u50F5\u5C38", T: "\u505C\u6B62", X: "\u5DF2\u9000\u51FA" },
     deployment: "\u90E8\u7F72",
     imageDigest: "\u955C\u50CF",
     verifiedAt: "\u9A8C\u8BC1\u4E8E",
@@ -1287,11 +1266,6 @@ ${LAYER_CSS}
 .dnls-head-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-strong-13)}
 .dnls-head-meta{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12)}
 .dnls-head-foot{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11)}
-.dnls-page-head{display:flex;align-items:center;justify-content:space-between;gap:var(--nano-space-2);min-height:28px;padding:0 var(--nano-space-1)}
-.dnls-page-title{margin:0;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-strong-13)}
-.dnls-procs{display:flex;flex-direction:column;min-width:0}
-.dnls-procs [data-disclosure-row]{min-height:28px}
-.dnls-proc-meta{flex:none;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);font-family:var(--dsh-font-family-code)}
 .dnls-meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));gap:var(--nano-space-3)}
 .dnls-cards{display:flex;flex-direction:column;gap:var(--nano-space-2)}
 .dnls-card{display:flex;flex-direction:column;gap:var(--nano-space-3);min-width:0;padding:var(--nano-space-3);background:color-mix(in srgb,var(--dsw-alias-label-primary) 4%,var(--dsw-alias-bg-layer-1));border:var(--dsh-hairline-width) solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg);cursor:pointer}
@@ -1306,10 +1280,6 @@ ${LAYER_CSS}
 .dnls-muted{margin:0;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
 .dnls-error{margin:0;color:var(--dsw-alias-state-error-primary);font:var(--dsw-font-xxs-12)}
 .dnls-inline{display:flex;flex-wrap:wrap;align-items:center;gap:var(--nano-space-2);min-width:0}
-.dnls-detail.nano-panes{padding:var(--nano-space-2) var(--nano-space-3) var(--nano-space-3)}
-.dnls-detail>*:first-child{flex:none}
-.dnls-detail>.nano-pane{display:flex;flex-direction:column;gap:var(--nano-space-4);padding-top:var(--nano-space-2)}
-.dnls-detail>.nano-pane[hidden]{display:none}
 .dnls-chart{display:flex;flex-direction:column;gap:var(--nano-space-1)}
 .dnls-chart-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:var(--nano-space-2);color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12)}
 .dnls-history{display:block;width:100%;height:48px;color:var(--dsw-alias-state-business-primary)}
@@ -1321,26 +1291,55 @@ ${LAYER_CSS}
 .dnls-grow{display:grid;grid-template-columns:minmax(0,1fr);flex:1 1 12rem;min-width:0}
 .dnls-num{display:grid;grid-template-columns:minmax(0,1fr);width:6.5rem}
 .dnls-label{display:flex;flex-direction:column;gap:2px;min-width:0}
-.dnls-log{max-height:360px;overflow:auto;border-radius:var(--dsw-radius-md)}
+.dnls-log{height:360px;overflow:auto;border-radius:var(--dsw-radius-md)}
+.dnls-pending{display:flex;align-items:center;justify-content:center;margin:0;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
+.dnls-pending-usage,.dnls-usage{min-height:180px}
+.dnls-pending-page{min-height:240px}
+.dnls-pending-block{min-height:120px}
+.dnls-pending-log{height:360px}
+.dnls-pending-row{min-height:40px}
+.dnls-pending-procs,.dnls-procs{height:232px}
+.dnls-procs{min-width:0;overflow-y:auto;overscroll-behavior:contain}
+.dnls-procs .nano-table{width:100%}
+.dnls-procs thead th{position:sticky;top:0;z-index:var(--nano-layer-local1);background:color-mix(in srgb,var(--dsw-alias-label-primary) 4%,var(--dsw-alias-bg-layer-1))}
+.dnls-procs .dnls-num-cell{text-align:right;font-family:var(--dsh-font-family-code)}
+.dnls-procs td{height:28px;padding-block:var(--nano-space-1);border-bottom:var(--dsh-hairline-width) solid var(--dsw-alias-border-l3)}
+.dnls-procs tbody tr:last-child td{border-bottom:0}
+.dnls-procs tbody tr:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dnls-procs td.dnls-col-name{width:100%;color:var(--dsw-alias-label-primary)}
+.dnls-procs td.dnls-col-state{color:var(--dsw-alias-label-tertiary)}
+.dnls-procs th{cursor:pointer;user-select:none}
+.dnls-procs th:hover{color:var(--dsw-alias-label-primary)}
+.dnls-procs th:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}
+.dnls-procs .dnls-col-label{display:inline-flex;align-items:center;gap:2px}
+.dnls-procs .dnls-sort-icon{display:inline-flex;opacity:0}
+.dnls-procs th:hover .dnls-sort-icon,.dnls-procs th[aria-sort="ascending"] .dnls-sort-icon,.dnls-procs th[aria-sort="descending"] .dnls-sort-icon{opacity:1}
+.dnls-card .nano-facts dd,.dnls-head-card .nano-facts dd{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dnls-page-head{display:flex;align-items:center;justify-content:space-between;gap:var(--nano-space-3);padding:0 var(--nano-space-1)}
+.dnls-page-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dnls-page-title{margin:0;color:var(--dsw-alias-label-primary);font:var(--dsw-font-m-18);font-weight:600}
+.dnls-page-desc{margin:0;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
+.dnls-tabbar{flex:none;padding:var(--nano-space-2) var(--nano-space-3) 0}
+.dnls-panel{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:var(--nano-space-4);padding:var(--nano-space-2) var(--nano-space-3) var(--nano-space-3)}
 `;
 
   // src/client/shell.jsx
-  var import_react9 = __toESM(__require("react"), 1);
-  var h7 = import_react9.default.createElement;
+  var import_react8 = __toESM(__require("react"), 1);
+  var h6 = import_react8.default.createElement;
   var DOCK_MIN = 120;
   function WorkbenchShell({ label, bar, drawer, dock, status, children }) {
-    return h7(
+    return h6(
       "section",
       { className: "dnls-shell", "data-dnls-shell": "1" },
-      h7("div", { className: "dnls-shell-bar", role: "toolbar", "aria-label": label }, bar),
-      h7("div", { className: "dnls-shell-body" }, children),
+      h6("div", { className: "dnls-shell-bar", role: "toolbar", "aria-label": label }, bar),
+      h6("div", { className: "dnls-shell-body" }, children),
       drawer ?? null,
       dock ?? null,
       status ?? null
     );
   }
   function ShellToggle({ icon, label, title, open, onClick }) {
-    return h7("button", {
+    return h6("button", {
       type: "button",
       className: "dnls-shell-toggle",
       "data-dnls-drawer-toggle": "1",
@@ -1349,11 +1348,11 @@ ${LAYER_CSS}
       "aria-label": label,
       title: label,
       onClick
-    }, icon, h7("span", { className: "dnls-shell-toggle-text" }, title));
+    }, icon, h6("span", { className: "dnls-shell-toggle-text" }, title));
   }
   function TabDrawer({ open, label, head, onClose, children }) {
-    const ref = import_react9.default.useRef(null);
-    import_react9.default.useEffect(() => {
+    const ref = import_react8.default.useRef(null);
+    import_react8.default.useEffect(() => {
       if (!open) return void 0;
       const onKey = (event) => {
         if (event.key === "Escape") onClose?.();
@@ -1371,7 +1370,7 @@ ${LAYER_CSS}
         document.removeEventListener("pointerdown", onDown);
       };
     }, [open, onClose]);
-    return h7(
+    return h6(
       "nav",
       {
         ref,
@@ -1380,12 +1379,12 @@ ${LAYER_CSS}
         "aria-label": label,
         "aria-hidden": open ? void 0 : true
       },
-      head ? h7("div", { className: "dnls-drawer-head" }, head) : null,
-      h7("div", { className: "dnls-drawer-list" }, children)
+      head ? h6("div", { className: "dnls-drawer-head" }, head) : null,
+      h6("div", { className: "dnls-drawer-list" }, children)
     );
   }
   function DrawerRow({ current, onClick, mark, label, meta }) {
-    return h7(
+    return h6(
       "button",
       {
         type: "button",
@@ -1393,23 +1392,23 @@ ${LAYER_CSS}
         "aria-current": current ? "page" : void 0,
         onClick
       },
-      mark ? h7("span", { className: "dnls-drawer-mark" }, mark) : null,
-      h7(
+      mark ? h6("span", { className: "dnls-drawer-mark" }, mark) : null,
+      h6(
         "span",
         { className: "dnls-drawer-copy" },
-        h7("span", { className: "dnls-drawer-label" }, label),
-        meta ? h7("span", { className: "dnls-drawer-meta" }, meta) : null
+        h6("span", { className: "dnls-drawer-label" }, label),
+        meta ? h6("span", { className: "dnls-drawer-meta" }, meta) : null
       )
     );
   }
   function StatusBar({ label, children, actions = [] }) {
-    return h7(
+    return h6(
       "footer",
       { className: "dnls-statusbar", "aria-label": label },
-      h7("span", { className: "dnls-statusbar-text" }, children),
-      h7("span", { className: "dnls-statusbar-actions" }, actions.map((action) => (
+      h6("span", { className: "dnls-statusbar-text" }, children),
+      h6("span", { className: "dnls-statusbar-actions" }, actions.map((action) => (
         /* nano-ui-exempt: 宿主 Button 最小档 28px，26px 状态条里的 20px 文字按钮没有对应档；度量照 DNK .nks-status button。 */
-        h7("button", {
+        h6("button", {
           key: action.id,
           type: "button",
           className: "dnls-statusbar-btn",
@@ -1426,8 +1425,8 @@ ${LAYER_CSS}
     return Math.min(limit, Math.max(DOCK_MIN, Math.round(height)));
   }
   function Dock({ label, height, onCommit, children }) {
-    const ref = import_react9.default.useRef(null);
-    import_react9.default.useLayoutEffect(() => {
+    const ref = import_react8.default.useRef(null);
+    import_react8.default.useLayoutEffect(() => {
       if (ref.current) ref.current.style.height = `${height}px`;
     }, [height]);
     const drag = (event) => {
@@ -1448,17 +1447,17 @@ ${LAYER_CSS}
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
     };
-    return h7(
+    return h6(
       "div",
       { ref, className: "dnls-dock", role: "region", "aria-label": label },
-      h7("div", {
+      h6("div", {
         className: "dnls-dock-grip",
         role: "separator",
         "aria-orientation": "horizontal",
         "aria-label": label,
         onPointerDown: drag
       }),
-      h7("div", { className: "dnls-dock-body" }, children)
+      h6("div", { className: "dnls-dock-body" }, children)
     );
   }
   var SHELL_STYLE = `
@@ -1499,8 +1498,8 @@ ${LAYER_CSS}
 `;
 
   // src/client/fleet.jsx
-  var import_react13 = __toESM(__require("react"), 1);
-  var import_dsh_client_ui_primitives8 = __require("@deepseek-ai/dsh-client-ui-primitives");
+  var import_react12 = __toESM(__require("react"), 1);
+  var import_dsh_client_ui_primitives7 = __require("@deepseek-ai/dsh-client-ui-primitives");
 
   // src/client/format.js
   function formatBytes(value) {
@@ -1654,12 +1653,12 @@ ${LAYER_CSS}
   }
 
   // src/client/parts.jsx
-  var import_react11 = __toESM(__require("react"), 1);
-  var import_dsh_client_ui_primitives6 = __require("@deepseek-ai/dsh-client-ui-primitives");
+  var import_react10 = __toESM(__require("react"), 1);
+  var import_dsh_client_ui_primitives5 = __require("@deepseek-ai/dsh-client-ui-primitives");
 
   // src/client/history.jsx
-  var import_react10 = __toESM(__require("react"), 1);
-  var h8 = import_react10.default.createElement;
+  var import_react9 = __toESM(__require("react"), 1);
+  var h7 = import_react9.default.createElement;
   function segments(points) {
     const deltas = [];
     for (let i = 1; i < points.length; i++) deltas.push(points[i].at - points[i - 1].at);
@@ -1694,12 +1693,12 @@ ${LAYER_CSS}
       const y = 46 - (point.value - min) / span * 40;
       return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(" ")).join(" ");
-    return h8("svg", {
+    return h7("svg", {
       className: "dnls-history",
       viewBox: "0 0 240 48",
       preserveAspectRatio: "none",
       "aria-hidden": "true"
-    }, h8("path", {
+    }, h7("path", {
       d,
       fill: "none",
       stroke: "currentColor",
@@ -1709,18 +1708,18 @@ ${LAYER_CSS}
   }
 
   // src/client/parts.jsx
-  var h9 = import_react11.default.createElement;
+  var h8 = import_react10.default.createElement;
   function Section({ title, aside, children }) {
-    return h9(
+    return h8(
       "section",
       { className: "dnls-section" },
-      h9(
+      h8(
         "div",
         { className: "dnls-section-head" },
-        h9("h3", { className: "dnls-section-title" }, title),
-        aside ? h9("div", { className: "dnls-inline" }, aside) : null
+        h8("h3", { className: "dnls-section-title" }, title),
+        aside ? h8("div", { className: "dnls-inline" }, aside) : null
       ),
-      h9("div", { className: "dnls-plate" }, children)
+      h8("div", { className: "dnls-plate" }, children)
     );
   }
   function handlersFor(host, address) {
@@ -1741,21 +1740,21 @@ ${LAYER_CSS}
   }
   function handlerIcon(handler) {
     const Icon = Array.isArray(handler?.guide) ? handler.guide.find((entry) => entry?.icon)?.icon : null;
-    return h9(Icon ?? import_dsh_client_ui_primitives6.PluginArtworkDefault, { size: 16 });
+    return h8(Icon ?? import_dsh_client_ui_primitives5.PluginArtworkDefault, { size: 16 });
   }
   function AppList({ copy, host, address, compact, onError }) {
     const handlers = handlersFor(host, address);
     const open = (handler) => {
       if (host.openResource(address, { kind: handler.kind, preferNewPane: true }) !== true) onError?.(new Error(copy.workspaceUnavailable));
     };
-    if (handlers.length === 0) return compact ? null : h9(Muted, null, copy.workspaceUnavailable);
+    if (handlers.length === 0) return compact ? null : h8(Muted, null, copy.workspaceUnavailable);
     if (compact) {
-      return h9(
+      return h8(
         "span",
         { className: "dnls-apps", onClick: (event) => event.stopPropagation(), onKeyDown: (event) => event.stopPropagation() },
         handlers.map((handler) => {
           const title = handlerTitle(handler, address, copy.none);
-          return h9(import_dsh_client_ui_primitives6.Button, {
+          return h8(import_dsh_client_ui_primitives5.Button, {
             key: handler.id ?? handler.kind,
             variant: "outline",
             size: "sm",
@@ -1767,12 +1766,12 @@ ${LAYER_CSS}
         })
       );
     }
-    return h9(Group, null, handlers.map((handler) => {
+    return h8(Group, null, handlers.map((handler) => {
       const title = handlerTitle(handler, address, copy.none);
-      return h9(SplitRow, {
+      return h8(SplitRow, {
         key: handler.id ?? handler.kind,
-        label: h9("span", { className: "dnls-term" }, handlerIcon(handler), h9("span", null, title))
-      }, h9(import_dsh_client_ui_primitives6.Button, {
+        label: h8("span", { className: "dnls-term" }, handlerIcon(handler), h8("span", null, title))
+      }, h8(import_dsh_client_ui_primitives5.Button, {
         variant: "outline",
         size: "sm",
         title: copy.newPane,
@@ -1782,19 +1781,22 @@ ${LAYER_CSS}
     }));
   }
   function Group({ children }) {
-    return h9("div", { className: "dnls-group" }, children);
+    return h8("div", { className: "dnls-group" }, children);
   }
   function Muted({ children }) {
-    return h9("p", { className: "dnls-muted" }, children);
+    return h8("p", { className: "dnls-muted" }, children);
+  }
+  function Pending({ copy, className = "" }) {
+    return h8("p", { className: `dnls-pending ${className}` }, copy.loading);
   }
   function ErrorLine({ error }) {
     if (!error) return null;
     const message = typeof error === "string" ? error : error.message;
     const id = typeof error === "object" && typeof error.errorId === "string" ? error.errorId : null;
-    return h9("p", { className: "dnls-error", role: "alert" }, id && id !== message ? `${message} (${id})` : message);
+    return h8("p", { className: "dnls-error", role: "alert" }, id && id !== message ? `${message} (${id})` : message);
   }
   function WindowControl({ copy, value, onChange }) {
-    return h9(import_dsh_client_ui_primitives6.SegmentedControl, {
+    return h8(import_dsh_client_ui_primitives5.SegmentedControl, {
       label: copy.usageWindow,
       value,
       onChange,
@@ -1806,50 +1808,50 @@ ${LAYER_CSS}
     });
   }
   function Chart({ copy, label, series, format }) {
-    return h9(
+    return h8(
       "div",
       { className: "dnls-chart" },
-      h9(
+      h8(
         "div",
         { className: "dnls-chart-head" },
-        h9("span", null, label, " \xB7 ", series.mean == null ? copy.noSamples : fill(copy.meanPeak, { mean: format(series.mean), peak: format(series.peak) })),
-        h9("span", null, fill(copy.coverage, { valid: series.valid, expected: series.expected }))
+        h8("span", null, label, " \xB7 ", series.mean == null ? copy.noSamples : fill(copy.meanPeak, { mean: format(series.mean), peak: format(series.peak) })),
+        h8("span", null, fill(copy.coverage, { valid: series.valid, expected: series.expected }))
       ),
-      h9(HistoryLine, { points: series.points })
+      h8(HistoryLine, { points: series.points })
     );
   }
   function UsageCharts({ copy, usages }) {
     const cpu = combine(usages, "cpu", "core", "cpuCores");
     const memory = combine(usages, "memory", "bytes", "memoryBytes");
-    if (cpu.objects === 0 && memory.objects === 0) return h9(Muted, null, copy.noSamples);
-    return h9(
-      import_react11.default.Fragment,
+    if (cpu.objects === 0 && memory.objects === 0) return h8(Muted, null, copy.noSamples);
+    return h8(
+      import_react10.default.Fragment,
       null,
-      h9(Chart, { copy, label: copy.usageCpu, series: cpu, format: (value) => fill(copy.cores, { n: cores(value) }) }),
-      h9(Chart, { copy, label: copy.usageMemory, series: memory, format: (value) => formatBytes(value) ?? copy.none })
+      h8(Chart, { copy, label: copy.usageCpu, series: cpu, format: (value) => fill(copy.cores, { n: cores(value) }) }),
+      h8(Chart, { copy, label: copy.usageMemory, series: memory, format: (value) => formatBytes(value) ?? copy.none })
     );
   }
   function StateMinutes({ copy, usage }) {
     const states = usage?.states;
     if (!states || typeof states !== "object") return null;
     const parts = Object.entries(states).filter(([, minutes]) => Number.isFinite(minutes) && minutes > 0).map(([state, minutes]) => `${stateText(copy, state)} ${minutes}`);
-    return parts.length ? h9(Muted, null, `${copy.stateMinutes}: ${parts.join(" \xB7 ")}`) : null;
+    return parts.length ? h8(Muted, null, `${copy.stateMinutes}: ${parts.join(" \xB7 ")}`) : null;
   }
   function ReceiptList({ copy, receipts, onRecheck, showName }) {
     return receipts.map((receipt) => {
       const settled = SETTLED.has(receipt.state);
       const line = fill(copy.receiptLine, { action: actionText(copy, receipt.action), state: opText(copy, receipt.state) });
-      return h9(SplitRow, {
+      return h8(SplitRow, {
         key: receipt.operationId,
-        label: h9(
+        label: h8(
           "span",
           { className: "dnls-term" },
-          h9(import_dsh_client_ui_primitives6.StateDot, { state: OP_DOT[receipt.state] ?? "idle" }),
-          h9(import_dsh_client_ui_primitives6.TextShimmer, { active: !settled }, showName ? `${receipt.name} \xB7 ${line}` : line),
-          h9("span", { className: "dnls-muted dnls-mono" }, shortId(receipt.operationId)),
-          receipt.error ? h9("span", { className: "dnls-error" }, receipt.error) : null
+          h8(import_dsh_client_ui_primitives5.StateDot, { state: OP_DOT[receipt.state] ?? "idle" }),
+          h8(import_dsh_client_ui_primitives5.TextShimmer, { active: !settled }, showName ? `${receipt.name} \xB7 ${line}` : line),
+          h8("span", { className: "dnls-muted dnls-mono" }, shortId(receipt.operationId)),
+          receipt.error ? h8("span", { className: "dnls-error" }, receipt.error) : null
         )
-      }, h9(import_dsh_client_ui_primitives6.Button, {
+      }, h8(import_dsh_client_ui_primitives5.Button, {
         variant: "ghost",
         size: "sm",
         disabled: receipt.checking === true,
@@ -1859,17 +1861,17 @@ ${LAYER_CSS}
   }
 
   // src/client/dialogs.jsx
-  var import_react12 = __toESM(__require("react"), 1);
-  var import_dsh_client_ui_primitives7 = __require("@deepseek-ai/dsh-client-ui-primitives");
-  var h10 = import_react12.default.createElement;
+  var import_react11 = __toESM(__require("react"), 1);
+  var import_dsh_client_ui_primitives6 = __require("@deepseek-ai/dsh-client-ui-primitives");
+  var h9 = import_react11.default.createElement;
   var profileIdOf = (profile) => typeof profile === "string" ? profile : profile?.profileId ?? profile?.id ?? "";
   function CreateDialog({ copy, profiles, busy, error, onCancel, onSubmit }) {
-    const [name, setName] = import_react12.default.useState("");
+    const [name, setName] = import_react11.default.useState("");
     const ready = (profiles ?? []).filter((profile) => profile?.ready !== false);
-    const [profileId, setProfileId] = import_react12.default.useState("");
+    const [profileId, setProfileId] = import_react11.default.useState("");
     const chosen = profileId || profileIdOf(ready[0]);
     const facts = (profiles ?? []).find((profile) => profileIdOf(profile) === chosen);
-    return h10(
+    return h9(
       NanoDialog,
       {
         copy,
@@ -1880,18 +1882,18 @@ ${LAYER_CSS}
         onCancel,
         onConfirm: () => onSubmit({ name: name.trim(), profileId: chosen })
       },
-      h10(
+      h9(
         "label",
         { className: "dnls-field" },
         copy.createName,
-        h10(import_dsh_client_ui_primitives7.Input, { value: name, "aria-label": copy.createName, autoFocus: true, onChange: (event) => setName(event.target.value) })
+        h9(import_dsh_client_ui_primitives6.Input, { value: name, "aria-label": copy.createName, autoFocus: true, onChange: (event) => setName(event.target.value) })
       ),
-      h10(Muted, null, copy.createNameHint),
-      h10(
+      h9(Muted, null, copy.createNameHint),
+      h9(
         "div",
         { className: "dnls-field" },
         copy.createProfile,
-        profiles == null ? h10(Muted, null, copy.loading) : profiles.length === 0 ? h10(Muted, null, copy.noProfiles) : h10(import_dsh_client_ui_primitives7.SegmentedControl, {
+        profiles == null ? h9(Muted, null, copy.loading) : profiles.length === 0 ? h9(Muted, null, copy.noProfiles) : h9(import_dsh_client_ui_primitives6.SegmentedControl, {
           label: copy.createProfile,
           value: chosen,
           onChange: setProfileId,
@@ -1901,14 +1903,14 @@ ${LAYER_CSS}
           })
         })
       ),
-      facts && (facts.version != null || facts.maxInstances != null) ? h10(Muted, null, fill(copy.profileFacts, { version: facts.version ?? copy.none, max: facts.maxInstances ?? copy.none })) : null,
-      h10(ErrorLine, { error })
+      facts && (facts.version != null || facts.maxInstances != null) ? h9(Muted, null, fill(copy.profileFacts, { version: facts.version ?? copy.none, max: facts.maxInstances ?? copy.none })) : null,
+      h9(ErrorLine, { error })
     );
   }
   function LifecycleConfirm({ copy, request, busy, onCancel, onConfirm }) {
-    const [acknowledged, setAcknowledged] = import_react12.default.useState(false);
+    const [acknowledged, setAcknowledged] = import_react11.default.useState(false);
     const { action, target } = request;
-    return h10(import_dsh_client_ui_primitives7.RiskConfirmation, {
+    return h9(import_dsh_client_ui_primitives6.RiskConfirmation, {
       open: true,
       title: copy.confirmTitle[action],
       description: fill(copy.confirmBody[action], { name: target.name }),
@@ -1925,7 +1927,7 @@ ${LAYER_CSS}
   }
 
   // src/client/fleet.jsx
-  var h11 = import_react13.default.createElement;
+  var h10 = import_react12.default.createElement;
   var HEALTH_TONE = { healthy: "success", unhealthy: "danger" };
   function addressOf(row) {
     try {
@@ -1946,10 +1948,10 @@ ${LAYER_CSS}
     }).join(" \xB7 ") : "";
     const cpu = usages ? combine(usages, "cpu", "core", "cpuCores") : null;
     const sampling = cpu && cpu.expected > 0 ? fill(copy.samplingLine, { valid: cpu.valid, expected: cpu.expected, window: copy[`window${usageWindow === "24h" ? "24" : usageWindow === "7d" ? "7" : "30"}`] }) : copy.none;
-    return h11(
+    return h10(
       Section,
       { title: copy.system },
-      h11(FactGrid, { items: [
+      h10(FactGrid, { items: [
         { label: copy.envs, value: envText },
         { label: copy.typeLabel, value: fill(copy.sandboxesCount, { running, stopped, attention }) },
         { label: copy.quota, value: quota || copy.none },
@@ -1965,7 +1967,8 @@ ${LAYER_CSS}
     const own = (event) => event.target === event.currentTarget;
     const stop = (event) => event.stopPropagation();
     const idle = detail?.idle;
-    return h11(
+    const fact = (text) => h10("span", { title: text }, text);
+    return h10(
       "div",
       {
         className: "dnls-card",
@@ -1980,49 +1983,49 @@ ${LAYER_CSS}
           onOpen(row);
         }
       },
-      h11(
+      h10(
         "div",
         { className: "dnls-card-head" },
-        h11(import_dsh_client_ui_primitives8.StateDot, { state: DOT[row.observedState] ?? "idle" }),
-        h11("span", { className: "dnls-card-name" }, nameOf(row)),
-        h11("span", { className: "dnls-card-state" }, stateText(copy, row.observedState)),
-        HEALTH_TONE[row.health] ? h11(import_dsh_client_ui_primitives8.Tag, { tone: HEALTH_TONE[row.health] }, copy.health[row.health]) : null,
-        pendingRevision(row) ? h11(import_dsh_client_ui_primitives8.Tag, { tone: "neutral" }, copy.pendingApply) : null,
-        h11(
+        h10(import_dsh_client_ui_primitives7.StateDot, { state: DOT[row.observedState] ?? "idle" }),
+        h10("span", { className: "dnls-card-name" }, nameOf(row)),
+        h10("span", { className: "dnls-card-state" }, stateText(copy, row.observedState)),
+        HEALTH_TONE[row.health] ? h10(import_dsh_client_ui_primitives7.Tag, { tone: HEALTH_TONE[row.health] }, copy.health[row.health]) : null,
+        pendingRevision(row) ? h10(import_dsh_client_ui_primitives7.Tag, { tone: "neutral" }, copy.pendingApply) : null,
+        h10(
           "span",
           { className: "dnls-card-tail", onClick: stop, onKeyDown: stop },
-          stopped && supports("sandbox.instance.start") ? h11(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", disabled: busy, onClick: () => onStart(row) }, copy.action.start) : null,
-          h11(IconButton, {
-            icon: h11(import_dsh_client_ui_primitives8.IconEllipsisOutlineRegular, { size: 16 }),
+          stopped && supports("sandbox.instance.start") ? h10(import_dsh_client_ui_primitives7.Button, { variant: "outline", size: "sm", disabled: busy, onClick: () => onStart(row) }, copy.action.start) : null,
+          h10(IconButton, {
+            icon: h10(import_dsh_client_ui_primitives7.IconEllipsisOutlineRegular, { size: 16 }),
             "aria-label": `${copy.more} \xB7 ${nameOf(row)}`,
             onClick: (event) => onMenu(event, row)
           })
         )
       ),
-      minute ? h11(
+      running ? h10(
         "div",
         { className: "dnls-meters" },
-        h11(Meter, {
+        h10(Meter, {
           label: copy.usageCpu,
-          text: `${cores(minute.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: row.resources?.cpus ?? copy.none })}`,
-          value: ratio(minute.cpuCores, row.resources?.cpus)
+          text: `${cores(minute?.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: row.resources?.cpus ?? copy.none })}`,
+          value: ratio(minute?.cpuCores, row.resources?.cpus) ?? 0
         }),
-        h11(Meter, {
+        h10(Meter, {
           label: copy.usageMemory,
-          text: `${formatBytes(minute.memoryBytes) ?? copy.none} / ${formatBytes(row.resources?.memoryBytes) ?? copy.none}`,
-          value: ratio(minute.memoryBytes, row.resources?.memoryBytes)
+          text: `${formatBytes(minute?.memoryBytes) ?? copy.none} / ${formatBytes(row.resources?.memoryBytes) ?? copy.none}`,
+          value: ratio(minute?.memoryBytes, row.resources?.memoryBytes) ?? 0
         })
-      ) : h11(Muted, null, [
-        row.observedState === "missing" ? copy.containerMissing : running ? copy.noSamples : copy.notSampling,
+      ) : h10(Muted, null, [
+        row.observedState === "missing" ? copy.containerMissing : copy.notSampling,
         sizeLine(copy, row)
       ].filter(Boolean).join(" \xB7 ")),
-      h11(FactGrid, { items: [
+      h10(FactGrid, { items: [
         { label: copy.services, value: serviceHealthText(copy, row.services) },
         { label: copy.terminals, value: String(row.visibleTerminalCount ?? copy.none) },
-        { label: copy.activation, value: [idleStatusText(copy, idle), driverText(copy, control, running)].filter(Boolean).join(" \xB7 ") },
-        { label: copy.lastOperation, value: lastOperationText(copy, row, detail) }
+        { label: copy.activation, value: fact([idleStatusText(copy, idle), driverText(copy, control, running)].filter(Boolean).join(" \xB7 ")) },
+        { label: copy.lastOperation, value: fact(lastOperationText(copy, row, detail)) }
       ] }),
-      h11(AppList, { copy, host, address: addressOf(row), compact: true, onError })
+      h10(AppList, { copy, host, address: addressOf(row), compact: true, onError })
     );
   }
   function FleetView({
@@ -2046,16 +2049,16 @@ ${LAYER_CSS}
     onRecheck,
     onError
   }) {
-    const [usageWindow, setUsageWindow] = import_react13.default.useState("24h");
-    const [details, setDetails] = import_react13.default.useState({});
-    const [controls, setControls] = import_react13.default.useState({});
-    const [usages, setUsages] = import_react13.default.useState(null);
-    const [profiles, setProfiles] = import_react13.default.useState(null);
-    const ticket = import_react13.default.useRef(null);
+    const [usageWindow, setUsageWindow] = import_react12.default.useState("24h");
+    const [details, setDetails] = import_react12.default.useState({});
+    const [controls, setControls] = import_react12.default.useState({});
+    const [usages, setUsages] = import_react12.default.useState(null);
+    const [profiles, setProfiles] = import_react12.default.useState(null);
+    const ticket = import_react12.default.useRef(null);
     if (!ticket.current) ticket.current = createTicket();
-    import_react13.default.useEffect(() => () => ticket.current.kill(), []);
+    import_react12.default.useEffect(() => () => ticket.current.kill(), []);
     const canListProfiles = supports("sandbox.profile.list");
-    import_react13.default.useEffect(() => {
+    import_react12.default.useEffect(() => {
       if (!canListProfiles) return;
       let live = true;
       api.listProfiles().then((list2) => {
@@ -2067,7 +2070,7 @@ ${LAYER_CSS}
         live = false;
       };
     }, [refreshKey, canListProfiles]);
-    import_react13.default.useEffect(() => {
+    import_react12.default.useEffect(() => {
       if (!rows || rows.length === 0) return;
       const ok = ticket.current.take();
       (async () => {
@@ -2105,32 +2108,32 @@ ${LAYER_CSS}
     const list = rows ?? [];
     const recent = receipts.slice(0, 3);
     let body;
-    if (phase === "loading" && !rows) body = h11(EmptyState, { title: copy.loading });
+    if (phase === "loading" && !rows) body = h10(EmptyState, { title: copy.loading });
     else if (phase === "failed" && !rows) {
-      body = h11(EmptyState, {
+      body = h10(EmptyState, {
         title: copy.failed,
         description: error?.message,
-        action: h11(import_dsh_client_ui_primitives8.Button, { variant: "outline", onClick: onRetry }, copy.retry)
+        action: h10(import_dsh_client_ui_primitives7.Button, { variant: "outline", onClick: onRetry }, copy.retry)
       });
     } else if (list.length === 0) {
-      body = h11(EmptyState, {
-        icon: h11(import_dsh_client_ui_primitives8.PluginArtworkDefault, { size: 40 }),
+      body = h10(EmptyState, {
+        icon: h10(import_dsh_client_ui_primitives7.PluginArtworkDefault, { size: 40 }),
         title: copy.emptyTitle,
         description: copy.emptyHint,
-        action: supports("sandbox.instance.create") ? h11(import_dsh_client_ui_primitives8.Button, { variant: "primary", onClick: onCreate }, copy.create) : void 0
+        action: supports("sandbox.instance.create") ? h10(import_dsh_client_ui_primitives7.Button, { variant: "primary", onClick: onCreate }, copy.create) : void 0
       });
     } else {
-      body = h11(
-        import_react13.default.Fragment,
+      body = h10(
+        import_react12.default.Fragment,
         null,
-        h11(SystemPlate, { copy, rows: list, envs, complete, profiles, usages, usageWindow }),
-        h11(
+        h10(SystemPlate, { copy, rows: list, envs, complete, profiles, usages, usageWindow }),
+        h10(
           "section",
           { className: "dnls-section" },
-          h11(
+          h10(
             "div",
             { className: "dnls-cards", "data-dnls-list": "1" },
-            list.map((row) => h11(SandboxCard, {
+            list.map((row) => h10(SandboxCard, {
               key: row.sandboxId,
               copy,
               host,
@@ -2145,57 +2148,61 @@ ${LAYER_CSS}
               onError
             }))
           ),
-          !complete ? h11(Muted, null, copy.listPartial) : null
+          !complete ? h10(Muted, null, copy.listPartial) : null
         ),
-        supports("sandbox.inspect") ? h11(
+        supports("sandbox.inspect") ? h10(
           Section,
           {
             title: copy.usage,
-            aside: h11(WindowControl, { copy, value: usageWindow, onChange: setUsageWindow })
+            aside: h10(WindowControl, { copy, value: usageWindow, onChange: setUsageWindow })
           },
-          h11(Muted, null, copy.usageFleet),
-          usages == null ? h11(Muted, null, copy.loading) : h11(UsageCharts, { copy, usages })
+          h10(Muted, null, copy.usageFleet),
+          usages == null ? h10(Pending, { copy, className: "dnls-pending-usage" }) : h10("div", { className: "dnls-usage" }, h10(UsageCharts, { copy, usages }))
         ) : null
       );
     }
-    return h11(
+    return h10(
       "div",
       { className: "dnls-view", "data-dnls-view": "fleet" },
-      h11(
+      h10(
         "div",
         { className: "dnls-scroll" },
-        h11(
+        h10(
           "div",
           { className: "dnls-page-head" },
-          h11("h2", { className: "dnls-page-title" }, copy.typeLabel),
-          supports("sandbox.instance.create") ? h11(import_dsh_client_ui_primitives8.Button, {
+          h10(
+            "div",
+            { className: "dnls-page-copy" },
+            h10("h2", { className: "dnls-page-title" }, copy.typeLabel),
+            h10("p", { className: "dnls-page-desc" }, copy.typeDescription)
+          ),
+          supports("sandbox.instance.create") ? h10(import_dsh_client_ui_primitives7.Button, {
             variant: "primary",
-            size: "sm",
+            size: "md",
             disabled: busy,
-            icon: h11(import_dsh_client_ui_primitives8.IconPlusOutlineRegular, { size: 14 }),
+            icon: h10(import_dsh_client_ui_primitives7.IconPlusOutlineRegular, { size: 14 }),
             onClick: onCreate
           }, copy.create) : null
         ),
-        rows ? h11(ErrorLine, { error }) : null,
-        recent.length > 0 ? h11(Section, { title: copy.receipts }, h11(Group, null, h11(ReceiptList, { copy, receipts: recent, onRecheck, showName: true }))) : null,
+        rows ? h10(ErrorLine, { error }) : null,
+        recent.length > 0 ? h10(Section, { title: copy.receipts }, h10(Group, null, h10(ReceiptList, { copy, receipts: recent, onRecheck, showName: true }))) : null,
         body
       )
     );
   }
 
   // src/client/sandbox.jsx
-  var import_react14 = __toESM(__require("react"), 1);
-  var import_dsh_client_ui_primitives9 = __require("@deepseek-ai/dsh-client-ui-primitives");
-  var h12 = import_react14.default.createElement;
+  var import_react13 = __toESM(__require("react"), 1);
+  var import_dsh_client_ui_primitives8 = __require("@deepseek-ai/dsh-client-ui-primitives");
+  var h11 = import_react13.default.createElement;
   var PLANES = ["container", "engine", "bridge", "page", "dom", "terminal"];
   var HEALTH_TONE2 = { healthy: "success", unhealthy: "danger" };
-  var PROC_DOT = { R: "done", Z: "error", T: "warning" };
   var DANGER = "nano-modal-action nano-modal-danger";
   var ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
   function useTickets() {
-    const ref = import_react14.default.useRef(null);
+    const ref = import_react13.default.useRef(null);
     if (!ref.current) ref.current = {};
-    import_react14.default.useEffect(() => () => {
+    import_react13.default.useEffect(() => () => {
       for (const ticket of Object.values(ref.current)) ticket.kill();
     }, []);
     return (key) => {
@@ -2208,76 +2215,129 @@ ${LAYER_CSS}
     if (!Number.isFinite(ms) || ms <= 0) return copy.idleOff;
     return fill(copy.idleAfter, { n: Math.round(ms / 6e4) });
   }
+  var PROC_COLS = [
+    { key: "pid", label: "procPid", numeric: true, hint: "procPidHint" },
+    { key: "name", label: "procName" },
+    { key: "state", label: "procState" },
+    { key: "rssBytes", label: "procRss", numeric: true, hint: "procRssHint" }
+  ];
+  function ProcessTable({ copy, procs }) {
+    const [sort, setSort] = import_react13.default.useState({ key: "rssBytes", dir: -1 });
+    const rows = [...procs.list].sort((a, b) => {
+      const fallback = sort.key === "name" || sort.key === "state" ? "" : 0;
+      const av = a[sort.key] ?? fallback;
+      const bv = b[sort.key] ?? fallback;
+      const cmp = typeof av === "string" ? av.localeCompare(bv) : av - bv;
+      return cmp * sort.dir || a.pid - b.pid;
+    });
+    return h11(
+      "table",
+      { className: "nano-table" },
+      h11("thead", null, h11("tr", null, PROC_COLS.map((col) => {
+        const active = sort.key === col.key;
+        const toggle = () => setSort((prev) => prev.key === col.key ? { key: col.key, dir: -prev.dir } : { key: col.key, dir: col.numeric ? -1 : 1 });
+        return h11("th", {
+          key: col.key,
+          className: col.numeric ? "dnls-num-cell" : void 0,
+          title: col.hint ? copy[col.hint] : void 0,
+          "aria-sort": active ? sort.dir === 1 ? "ascending" : "descending" : "none",
+          tabIndex: 0,
+          onClick: toggle,
+          onKeyDown: (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            toggle();
+          }
+        }, h11(
+          "span",
+          { className: "dnls-col-label" },
+          copy[col.label],
+          h11(
+            "span",
+            { className: "dnls-sort-icon", "aria-hidden": true },
+            active ? h11(sort.dir === 1 ? import_dsh_client_ui_primitives8.IconChevronUpOutlineRegular : import_dsh_client_ui_primitives8.IconChevronDownOutlineRegular, { size: 12 }) : h11(import_dsh_client_ui_primitives8.IconChevronsUpDownOutlineRegular, { size: 12 })
+          )
+        ));
+      }))),
+      h11("tbody", null, rows.map((proc) => h11(
+        "tr",
+        { key: proc.pid },
+        h11("td", { className: "dnls-num-cell" }, String(proc.pid)),
+        h11("td", { className: "dnls-col-name" }, proc.name ?? copy.none),
+        h11("td", { className: "dnls-col-state", title: proc.state }, copy.procStates[proc.state] ?? proc.state ?? copy.none),
+        h11("td", { className: "dnls-num-cell" }, formatBytes(proc.rssBytes) ?? copy.none)
+      )))
+    );
+  }
   function MonitorTab({ copy, target, detail, running, usageWindow, setUsageWindow, procs, host, address, onError }) {
     const minute = running ? detail?.lastMinute ?? target.lastMinute : null;
     const cpus = target.resources?.cpus;
     const memory = target.resources?.memoryBytes;
     const usage = detail?.usage;
-    const sortedProcs = procs?.list ? [...procs.list].sort((a, b) => (b.rssBytes ?? 0) - (a.rssBytes ?? 0)) : [];
-    return h12(
-      import_react14.default.Fragment,
+    return h11(
+      import_react13.default.Fragment,
       null,
-      h12(
+      h11(
         Section,
-        { title: copy.apps, aside: h12("span", { className: "dnls-muted" }, copy.newPane) },
-        h12(AppList, { copy, host, address, onError })
+        { title: copy.apps, aside: h11("span", { className: "dnls-muted" }, copy.newPane) },
+        h11(AppList, { copy, host, address, onError })
       ),
-      h12(
+      h11(
         Section,
-        { title: copy.allocated, aside: h12("span", { className: "dnls-muted" }, running ? copy.lastMinute : copy.notSampling) },
-        h12(Meter, {
+        { title: copy.allocated, aside: h11("span", { className: "dnls-muted" }, running ? copy.lastMinute : copy.notSampling) },
+        // The track renders even without samples (0 = empty track, text stays —),
+        // so the meter's height never changes when the first sample arrives.
+        h11(Meter, {
           label: copy.usageCpu,
           text: `${cores(minute?.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: cpus ?? copy.none })}`,
-          value: ratio(minute?.cpuCores, cpus)
+          value: ratio(minute?.cpuCores, cpus) ?? 0
         }),
-        h12(Meter, {
+        h11(Meter, {
           label: copy.usageMemory,
           text: `${formatBytes(minute?.memoryBytes) ?? copy.none} / ${formatBytes(memory) ?? copy.none}`,
-          value: ratio(minute?.memoryBytes, memory)
+          value: ratio(minute?.memoryBytes, memory) ?? 0
         })
       ),
-      h12(
+      h11(
         Section,
-        { title: copy.usage, aside: h12(WindowControl, { copy, value: usageWindow, onChange: setUsageWindow }) },
-        detail == null ? h12(Muted, null, copy.loading) : usage ? h12(import_react14.default.Fragment, null, h12(UsageCharts, { copy, usages: [usage] }), h12(StateMinutes, { copy, usage })) : h12(Muted, null, copy.usageDenied)
+        { title: copy.usage, aside: h11(WindowControl, { copy, value: usageWindow, onChange: setUsageWindow }) },
+        detail == null ? h11(Pending, { copy, className: "dnls-pending-usage" }) : usage ? h11("div", { className: "dnls-usage" }, h11(UsageCharts, { copy, usages: [usage] }), h11(StateMinutes, { copy, usage })) : h11(Muted, null, copy.usageDenied)
       ),
-      h12(
+      h11(
         Section,
-        { title: copy.processes, aside: procs?.list ? h12("span", { className: "dnls-muted" }, String(procs.list.length)) : null },
-        !running ? h12(Muted, null, copy.notSampling) : procs == null ? h12(Muted, null, copy.loading) : procs.error ? h12(ErrorLine, { error: procs.error }) : sortedProcs.length === 0 ? h12(Muted, null, copy.processesEmpty) : h12(
-          import_react14.default.Fragment,
+        { title: copy.processes, aside: procs?.list ? h11("span", { className: "dnls-muted" }, String(procs.list.length)) : null },
+        !running ? h11(Muted, null, copy.notSampling) : procs == null ? h11(Pending, { copy, className: "dnls-pending-procs" }) : h11(
+          import_react13.default.Fragment,
           null,
-          h12("div", { className: "dnls-procs" }, sortedProcs.map((proc) => h12(import_dsh_client_ui_primitives9.DisclosureRow, {
-            key: proc.pid,
-            icon: h12(import_dsh_client_ui_primitives9.StateDot, { state: PROC_DOT[proc.state] ?? "idle" }),
-            title: proc.name ?? String(proc.pid),
-            expandable: false,
-            headerAccessory: h12("span", { className: "dnls-proc-meta" }, `${proc.pid} \xB7 ${formatBytes(proc.rssBytes) ?? copy.none}`)
-          }))),
-          procs.truncated ? h12(Muted, null, fill(copy.processesTruncated, { n: sortedProcs.length })) : null
+          h11(
+            "div",
+            { className: "dnls-procs" },
+            procs.error ? h11(ErrorLine, { error: procs.error }) : !procs.list || procs.list.length === 0 ? h11(Muted, null, copy.processesEmpty) : h11(ProcessTable, { copy, procs })
+          ),
+          procs.truncated ? h11(Muted, null, fill(copy.processesTruncated, { n: procs.list?.length ?? 0 })) : null
         )
       ),
-      h12(
+      h11(
         Section,
         { title: copy.deployment },
-        detail == null ? h12(Muted, null, copy.loading) : h12(
+        detail == null ? h11(Pending, { copy, className: "dnls-pending-block" }) : h11(
           Group,
           null,
-          h12(
+          h11(
             SplitRow,
             { label: copy.imageDigest },
-            typeof detail.applied?.imageDigest === "string" ? h12("span", { className: "dnls-mono", title: detail.applied.imageDigest }, detail.applied.imageDigest.slice(0, 19)) : copy.none
+            typeof detail.applied?.imageDigest === "string" ? h11("span", { className: "dnls-mono", title: detail.applied.imageDigest }, detail.applied.imageDigest.slice(0, 19)) : copy.none
           ),
-          h12(SplitRow, { label: copy.verifiedAt }, when(copy, detail.applied?.verifiedAt) ?? copy.none),
-          h12(SplitRow, { label: copy.observed }, when(copy, detail.observedAt) ?? copy.none)
+          h11(SplitRow, { label: copy.verifiedAt }, when(copy, detail.applied?.verifiedAt) ?? copy.none),
+          h11(SplitRow, { label: copy.observed }, when(copy, detail.observedAt) ?? copy.none)
         )
       ),
-      Array.isArray(detail?.mounts) && detail.mounts.length > 0 ? h12(Section, { title: copy.storage }, h12(
+      Array.isArray(detail?.mounts) && detail.mounts.length > 0 ? h11(Section, { title: copy.storage }, h11(
         Group,
         null,
-        detail.mounts.map((mount2, index) => h12(SplitRow, {
+        detail.mounts.map((mount2, index) => h11(SplitRow, {
           key: `${mount2.target}:${index}`,
-          label: h12("span", { className: "dnls-mono" }, mount2.target ?? copy.none)
+          label: h11("span", { className: "dnls-mono" }, mount2.target ?? copy.none)
         }, `${mount2.type ?? ""} \xB7 ${mount2.readOnly ? copy.readOnly : copy.readWrite}`))
       )) : null
     );
@@ -2292,75 +2352,75 @@ ${LAYER_CSS}
     const services = Array.isArray(detail?.services) ? detail.services : [];
     const status = probe?.result;
     const degraded = Array.isArray(status?.degraded) ? status.degraded : [];
-    return h12(
-      import_react14.default.Fragment,
+    return h11(
+      import_react13.default.Fragment,
       null,
-      h12(
+      h11(
         Section,
         { title: copy.services },
-        detail == null ? h12(Muted, null, copy.loading) : services.length === 0 ? h12(Muted, null, copy.servicesEmpty) : h12(Group, null, services.map((service) => {
+        detail == null ? h11(Pending, { copy, className: "dnls-pending-page" }) : services.length === 0 ? h11(Muted, null, copy.servicesEmpty) : h11(Group, null, services.map((service) => {
           const address = serviceAddress(service);
           const role = service.role && service.role !== service.serviceId ? `${service.role} \xB7 ` : "";
-          return h12(SplitRow, {
+          return h11(SplitRow, {
             key: service.serviceId,
-            label: h12(
+            label: h11(
               "span",
               { className: "dnls-row-copy" },
-              h12("span", { className: "dnls-mono" }, service.serviceId),
-              h12("span", { className: "dnls-row-meta" }, `${role}${service.containerPort ?? copy.none}/${service.protocol ?? "tcp"}`)
+              h11("span", { className: "dnls-mono" }, service.serviceId),
+              h11("span", { className: "dnls-row-meta" }, `${role}${service.containerPort ?? copy.none}/${service.protocol ?? "tcp"}`)
             )
-          }, h12(
+          }, h11(
             "span",
             { className: "dnls-inline" },
-            address ? h12("span", { className: "dnls-mono" }, address) : h12("span", { className: "dnls-muted" }, copy.unpublished),
+            address ? h11("span", { className: "dnls-mono" }, address) : h11("span", { className: "dnls-muted" }, copy.unpublished),
             // Only a recorded verdict earns a tag; live state is the probe below.
-            HEALTH_TONE2[service.health] ? h12(import_dsh_client_ui_primitives9.Tag, { tone: HEALTH_TONE2[service.health] }, copy.health[service.health]) : null
+            HEALTH_TONE2[service.health] ? h11(import_dsh_client_ui_primitives8.Tag, { tone: HEALTH_TONE2[service.health] }, copy.health[service.health]) : null
           ));
         }))
       ),
-      canProbe ? h12(
+      canProbe ? h11(
         Section,
         {
           title: copy.probeTitle,
-          aside: h12(
-            import_dsh_client_ui_primitives9.Button,
+          aside: h11(
+            import_dsh_client_ui_primitives8.Button,
             { variant: "outline", size: "sm", disabled: !running || probe?.busy, onClick: onProbe },
             probe?.busy ? copy.probing : copy.probe
           )
         },
-        !running ? h12(Muted, null, copy.probeStopped) : probe?.error ? h12(ErrorLine, { error: probe.error }) : status ? h12(
-          import_react14.default.Fragment,
+        !running ? h11(Muted, null, copy.probeStopped) : probe?.error ? h11(ErrorLine, { error: probe.error }) : status ? h11(
+          import_react13.default.Fragment,
           null,
-          h12(
+          h11(
             "div",
             { className: "dnls-inline" },
-            h12(
-              import_dsh_client_ui_primitives9.Tag,
+            h11(
+              import_dsh_client_ui_primitives8.Tag,
               { tone: status.healthy ? "success" : "danger" },
               status.healthy ? copy.probeHealthy : fill(copy.probeDegraded, { planes: degraded.map((p) => copy.plane[p] ?? p).join(", ") })
             ),
-            h12("span", { className: "dnls-muted" }, fill(copy.probeAt, { at: when(copy, status.observedAt) ?? copy.none }))
+            h11("span", { className: "dnls-muted" }, fill(copy.probeAt, { at: when(copy, status.observedAt) ?? copy.none }))
           ),
-          h12(Group, null, PLANES.filter((key) => status.planes?.[key]).map((key) => {
+          h11(Group, null, PLANES.filter((key) => status.planes?.[key]).map((key) => {
             const plane = status.planes[key];
-            return h12(SplitRow, {
+            return h11(SplitRow, {
               key,
-              label: h12("span", { className: "dnls-term" }, h12(import_dsh_client_ui_primitives9.StateDot, { state: planeDot(plane) }), copy.plane[key] ?? key)
-            }, h12("span", { className: "dnls-muted" }, plane.skipped ? copy.planeSkipped : copy.planeState[plane.state] ?? plane.state ?? copy.none));
+              label: h11("span", { className: "dnls-term" }, h11(import_dsh_client_ui_primitives8.StateDot, { state: planeDot(plane) }), copy.plane[key] ?? key)
+            }, h11("span", { className: "dnls-muted" }, plane.skipped ? copy.planeSkipped : copy.planeState[plane.state] ?? plane.state ?? copy.none));
           }))
         ) : null
       ) : null,
-      canControl ? h12(
+      canControl ? h11(
         Section,
         { title: copy.manualControl },
-        control?.error ? h12(ErrorLine, { error: control.error }) : control?.state == null ? h12(Muted, null, running ? copy.loading : copy.probeStopped) : h12(Group, null, h12(SplitRow, {
-          label: h12(
+        control?.error ? h11(ErrorLine, { error: control.error }) : control?.state == null ? running ? h11(Pending, { copy, className: "dnls-pending-row" }) : h11(Muted, null, copy.probeStopped) : h11(Group, null, h11(SplitRow, {
+          label: h11(
             "span",
             { className: "dnls-term" },
-            h12(import_dsh_client_ui_primitives9.StateDot, { state: control.state.humanHold?.active ? "warning" : "done" }),
+            h11(import_dsh_client_ui_primitives8.StateDot, { state: control.state.humanHold?.active ? "warning" : "done" }),
             control.state.humanHold?.active ? copy.manualHeld : copy.manualFree
           )
-        }, h12(import_dsh_client_ui_primitives9.Button, {
+        }, h11(import_dsh_client_ui_primitives8.Button, {
           variant: "outline",
           size: "sm",
           disabled: busy || control.busy,
@@ -2370,26 +2430,26 @@ ${LAYER_CSS}
     );
   }
   function LogsTab({ copy, running, logs, onTail, onReload }) {
-    return h12(
+    return h11(
       Section,
       {
         title: copy.logs,
-        aside: h12(
-          import_react14.default.Fragment,
+        aside: h11(
+          import_react13.default.Fragment,
           null,
-          h12(import_dsh_client_ui_primitives9.SegmentedControl, {
+          h11(import_dsh_client_ui_primitives8.SegmentedControl, {
             label: copy.logsLines,
             value: String(logs.tail),
             onChange: (value) => onTail(Number(value)),
             options: [{ value: "50", label: "50" }, { value: "100", label: "100" }, { value: "200", label: "200" }]
           }),
-          h12(IconButton, { icon: h12(import_dsh_client_ui_primitives9.IconRefreshOutlineRegular, { size: 16 }), "aria-label": copy.refresh, disabled: !running || logs.busy, onClick: onReload })
+          h11(IconButton, { icon: h11(import_dsh_client_ui_primitives8.IconRefreshOutlineRegular, { size: 16 }), "aria-label": copy.refresh, disabled: !running || logs.busy, onClick: onReload })
         )
       },
-      !running ? h12(Muted, null, copy.logsStopped) : logs.error ? h12(ErrorLine, { error: logs.error }) : logs.text == null ? h12(Muted, null, copy.loading) : logs.text.trim() === "" ? h12(Muted, null, copy.logsEmpty) : h12(
+      !running ? h11(Muted, null, copy.logsStopped) : logs.error ? h11(ErrorLine, { error: logs.error }) : logs.text == null ? h11(Pending, { copy, className: "dnls-pending-log" }) : logs.text.trim() === "" ? h11(Muted, null, copy.logsEmpty) : h11(
         "div",
         { className: "dnls-log" },
-        h12(import_dsh_client_ui_primitives9.CodeBlock, {
+        h11(import_dsh_client_ui_primitives8.CodeBlock, {
           code: logs.text.replace(ANSI, "").replace(/\n$/, ""),
           lang: "text",
           wrap: true,
@@ -2402,128 +2462,128 @@ ${LAYER_CSS}
   }
   function ActivityTab({ copy, detail, receipts, lookup, setLookup, onLookup, onRecheck }) {
     const operations = Array.isArray(detail?.operations) ? [...detail.operations].reverse() : [];
-    return h12(
-      import_react14.default.Fragment,
+    return h11(
+      import_react13.default.Fragment,
       null,
-      receipts.length > 0 ? h12(
+      receipts.length > 0 ? h11(
         Section,
         { title: copy.receipts },
-        h12(Group, null, h12(ReceiptList, { copy, receipts, onRecheck })),
-        h12(Muted, null, copy.receiptHint)
+        h11(Group, null, h11(ReceiptList, { copy, receipts, onRecheck })),
+        h11(Muted, null, copy.receiptHint)
       ) : null,
-      h12(
+      h11(
         Section,
         { title: copy.lookup },
-        h12(
+        h11(
           "div",
           { className: "dnls-inline" },
-          h12(
+          h11(
             "span",
             { className: "dnls-grow" },
-            h12(import_dsh_client_ui_primitives9.Input, {
+            h11(import_dsh_client_ui_primitives8.Input, {
               value: lookup.text,
               placeholder: copy.lookupPlaceholder,
               "aria-label": copy.lookupPlaceholder,
               onChange: (event) => setLookup({ ...lookup, text: event.target.value })
             })
           ),
-          h12(import_dsh_client_ui_primitives9.Button, { variant: "outline", size: "sm", disabled: lookup.busy || lookup.text.trim() === "", onClick: onLookup }, copy.lookupGo)
+          h11(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", disabled: lookup.busy || lookup.text.trim() === "", onClick: onLookup }, copy.lookupGo)
         ),
-        lookup.error ? h12(ErrorLine, { error: lookup.error }) : null,
-        lookup.result ? h12(Group, null, h12(SplitRow, {
-          label: h12(
+        lookup.error ? h11(ErrorLine, { error: lookup.error }) : null,
+        lookup.result ? h11(Group, null, h11(SplitRow, {
+          label: h11(
             "span",
             { className: "dnls-term" },
-            h12(import_dsh_client_ui_primitives9.StateDot, { state: OP_DOT[lookup.result.state] ?? "idle" }),
+            h11(import_dsh_client_ui_primitives8.StateDot, { state: OP_DOT[lookup.result.state] ?? "idle" }),
             fill(copy.receiptLine, { action: actionText(copy, lookup.result.action), state: opText(copy, lookup.result.state) })
           )
-        }, h12("span", { className: "dnls-muted" }, [stepText(copy, lookup.result.step), when(copy, lookup.result.finishedAt ?? lookup.result.at)].filter(Boolean).join(" \xB7 ")))) : null
+        }, h11("span", { className: "dnls-muted" }, [stepText(copy, lookup.result.step), when(copy, lookup.result.finishedAt ?? lookup.result.at)].filter(Boolean).join(" \xB7 ")))) : null
       ),
-      h12(
+      h11(
         Section,
         { title: copy.history },
-        detail == null ? h12(Muted, null, copy.loading) : operations.length === 0 ? h12(Muted, null, copy.historyEmpty) : h12(Group, null, operations.map((op, index) => h12(SplitRow, {
+        detail == null ? h11(Pending, { copy, className: "dnls-pending-page" }) : operations.length === 0 ? h11(Muted, null, copy.historyEmpty) : h11(Group, null, operations.map((op, index) => h11(SplitRow, {
           key: `${op.action}:${op.at ?? index}`,
-          label: h12(
+          label: h11(
             "span",
             { className: "dnls-term" },
-            h12(import_dsh_client_ui_primitives9.StateDot, { state: OP_DOT[op.state] ?? "idle" }),
+            h11(import_dsh_client_ui_primitives8.StateDot, { state: OP_DOT[op.state] ?? "idle" }),
             fill(copy.receiptLine, { action: actionText(copy, op.action), state: opText(copy, op.state) })
           )
-        }, h12("span", { className: "dnls-muted" }, when(copy, op.finishedAt ?? op.at) ?? copy.none))))
+        }, h11("span", { className: "dnls-muted" }, when(copy, op.finishedAt ?? op.at) ?? copy.none))))
       )
     );
   }
   function SettingsTab({ copy, target, detail, running, busy, supports, draft, setDraft, onAction, onSaveIdle, onSaveResources }) {
     const configuration = detail?.configuration;
-    const field = (key, label) => h12(import_dsh_client_ui_primitives9.Input, {
+    const field = (key, label) => h11(import_dsh_client_ui_primitives8.Input, {
       value: draft[key],
       "aria-label": label,
       inputMode: "numeric",
       onChange: (event) => setDraft({ ...draft, [key]: event.target.value, message: null })
     });
-    const num = (key, label) => h12("span", { className: "dnls-num" }, field(key, label));
-    const labelled = (label, value) => h12(
+    const num = (key, label) => h11("span", { className: "dnls-num" }, field(key, label));
+    const labelled = (label, value) => h11(
       "span",
       { className: "dnls-label" },
-      h12("span", null, label),
-      h12("span", { className: "dnls-muted" }, fill(copy.current, { value }))
+      h11("span", null, label),
+      h11("span", { className: "dnls-muted" }, fill(copy.current, { value }))
     );
-    if (detail == null) return h12(Muted, null, copy.loading);
-    return h12(
-      import_react14.default.Fragment,
+    if (detail == null) return h11(Pending, { copy, className: "dnls-pending-page" });
+    return h11(
+      import_react13.default.Fragment,
       null,
-      h12(Section, { title: copy.power }, h12(
+      h11(Section, { title: copy.power }, h11(
         Group,
         null,
-        running ? h12(SplitRow, { label: copy.powerState }, h12(import_dsh_client_ui_primitives9.Button, { variant: "outline", size: "sm", disabled: busy || !supports("sandbox.instance.stop"), onClick: () => onAction("stop") }, copy.action.stop)) : h12(SplitRow, { label: copy.powerState }, h12(import_dsh_client_ui_primitives9.Button, { variant: "primary", size: "sm", disabled: busy || !supports("sandbox.instance.start"), onClick: () => onAction("start") }, copy.action.start)),
-        running ? h12(
+        running ? h11(SplitRow, { label: copy.powerState }, h11(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", disabled: busy || !supports("sandbox.instance.stop"), onClick: () => onAction("stop") }, copy.action.stop)) : h11(SplitRow, { label: copy.powerState }, h11(import_dsh_client_ui_primitives8.Button, { variant: "primary", size: "sm", disabled: busy || !supports("sandbox.instance.start"), onClick: () => onAction("start") }, copy.action.start)),
+        running ? h11(
           SplitRow,
           { label: copy.restartRow },
-          h12(import_dsh_client_ui_primitives9.Button, { variant: "outline", size: "sm", disabled: busy || !supports("sandbox.instance.restart"), onClick: () => onAction("restart") }, copy.action.restart)
+          h11(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", disabled: busy || !supports("sandbox.instance.restart"), onClick: () => onAction("restart") }, copy.action.restart)
         ) : null,
-        configuration && supports("sandbox.idle.configure") ? h12(
+        configuration && supports("sandbox.idle.configure") ? h11(
           SplitRow,
           { label: labelled(copy.idleMinutes, idleText(copy, configuration)) },
-          h12(
+          h11(
             "span",
             { className: "dnls-inline" },
             num("idle", copy.idleMinutes),
-            h12(import_dsh_client_ui_primitives9.Button, { variant: "outline", size: "sm", disabled: busy, onClick: onSaveIdle }, copy.save)
+            h11(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", disabled: busy, onClick: onSaveIdle }, copy.save)
           )
         ) : null
       )),
-      configuration && supports("sandbox.revision.save") ? h12(
+      configuration && supports("sandbox.revision.save") ? h11(
         Section,
         { title: copy.resources },
-        h12(Muted, null, copy.resourcesHint),
-        h12(
+        h11(Muted, null, copy.resourcesHint),
+        h11(
           Group,
           null,
-          h12(SplitRow, { label: labelled(copy.cpus, target.resources?.cpus ?? copy.none) }, num("cpus", copy.cpus)),
-          h12(SplitRow, { label: labelled(copy.memoryMiB, formatBytes(target.resources?.memoryBytes) ?? copy.none) }, num("memory", copy.memoryMiB))
+          h11(SplitRow, { label: labelled(copy.cpus, target.resources?.cpus ?? copy.none) }, num("cpus", copy.cpus)),
+          h11(SplitRow, { label: labelled(copy.memoryMiB, formatBytes(target.resources?.memoryBytes) ?? copy.none) }, num("memory", copy.memoryMiB))
         ),
-        h12(
+        h11(
           "div",
           { className: "dnls-inline" },
-          h12(import_dsh_client_ui_primitives9.Button, { variant: "primary", size: "sm", disabled: busy, onClick: onSaveResources }, copy.save),
-          pendingRevision(detail) && supports("sandbox.instance.recreate") ? h12(import_dsh_client_ui_primitives9.Button, { variant: "outline", size: "sm", disabled: busy, onClick: () => onAction("recreate") }, copy.applyNow) : null
+          h11(import_dsh_client_ui_primitives8.Button, { variant: "primary", size: "sm", disabled: busy, onClick: onSaveResources }, copy.save),
+          pendingRevision(detail) && supports("sandbox.instance.recreate") ? h11(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", disabled: busy, onClick: () => onAction("recreate") }, copy.applyNow) : null
         )
       ) : null,
-      !configuration ? h12(Muted, null, copy.configDenied) : null,
-      draft.message ? h12(draft.error ? ErrorLine : Muted, draft.error ? { error: draft.message } : null, draft.error ? void 0 : draft.message) : null,
-      h12(Section, { title: copy.danger }, h12(
+      !configuration ? h11(Muted, null, copy.configDenied) : null,
+      draft.message ? h11(draft.error ? ErrorLine : Muted, draft.error ? { error: draft.message } : null, draft.error ? void 0 : draft.message) : null,
+      h11(Section, { title: copy.danger }, h11(
         Group,
         null,
-        h12(
+        h11(
           SplitRow,
           { label: copy.recreateRow },
-          h12(import_dsh_client_ui_primitives9.Button, { variant: "outline", size: "sm", className: DANGER, disabled: busy || !supports("sandbox.instance.recreate"), onClick: () => onAction("recreate") }, `${copy.action.recreate}\u2026`)
+          h11(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", className: DANGER, disabled: busy || !supports("sandbox.instance.recreate"), onClick: () => onAction("recreate") }, `${copy.action.recreate}\u2026`)
         ),
-        h12(
+        h11(
           SplitRow,
           { label: copy.removeRow },
-          h12(import_dsh_client_ui_primitives9.Button, { variant: "outline", size: "sm", className: DANGER, disabled: busy || !supports("sandbox.instance.remove"), onClick: () => onAction("remove") }, `${copy.action.remove}\u2026`)
+          h11(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", className: DANGER, disabled: busy || !supports("sandbox.instance.remove"), onClick: () => onAction("remove") }, `${copy.action.remove}\u2026`)
         )
       ))
     );
@@ -2544,22 +2604,22 @@ ${LAYER_CSS}
   }) {
     const sandboxId = row.sandboxId;
     const take = useTickets();
-    const [tick, setTick] = import_react14.default.useState(0);
-    const [tab, setTab] = import_react14.default.useState("monitor");
-    const [usageWindow, setUsageWindow] = import_react14.default.useState("24h");
-    const [detail, setDetail] = import_react14.default.useState(null);
-    const [error, setError] = import_react14.default.useState(null);
-    const [procs, setProcs] = import_react14.default.useState(null);
-    const [probe, setProbe] = import_react14.default.useState(null);
-    const [control, setControl] = import_react14.default.useState(null);
-    const [logs, setLogs] = import_react14.default.useState({ tail: 100, text: null });
-    const [lookup, setLookup] = import_react14.default.useState({ text: "" });
-    const [draft, setDraft] = import_react14.default.useState({ cpus: "", memory: "", idle: "" });
+    const [tick, setTick] = import_react13.default.useState(0);
+    const [tab, setTab] = import_react13.default.useState("monitor");
+    const [usageWindow, setUsageWindow] = import_react13.default.useState("24h");
+    const [detail, setDetail] = import_react13.default.useState(null);
+    const [error, setError] = import_react13.default.useState(null);
+    const [procs, setProcs] = import_react13.default.useState(null);
+    const [probe, setProbe] = import_react13.default.useState(null);
+    const [control, setControl] = import_react13.default.useState(null);
+    const [logs, setLogs] = import_react13.default.useState({ tail: 100, text: null });
+    const [lookup, setLookup] = import_react13.default.useState({ text: "" });
+    const [draft, setDraft] = import_react13.default.useState({ cpus: "", memory: "", idle: "" });
     const target = detail ? { ...row, ...detail } : row;
     const observed = target.observedState;
     const running = observed === "running";
     const reload = () => setTick((value) => value + 1);
-    import_react14.default.useEffect(() => {
+    import_react13.default.useEffect(() => {
       const ok = take("detail");
       (async () => {
         try {
@@ -2578,7 +2638,7 @@ ${LAYER_CSS}
         }
       })();
     }, [sandboxId, usageWindow, refreshKey, tick]);
-    import_react14.default.useEffect(() => {
+    import_react13.default.useEffect(() => {
       const cfg = detail?.configuration;
       setDraft((prev) => prev.touched ? prev : {
         cpus: cfg?.overrides?.cpus == null ? "" : String(cfg.overrides.cpus),
@@ -2586,7 +2646,7 @@ ${LAYER_CSS}
         idle: cfg?.idleTimeoutMs == null ? "" : String(Math.round(cfg.idleTimeoutMs / 6e4))
       });
     }, [detail?.configuration]);
-    import_react14.default.useEffect(() => {
+    import_react13.default.useEffect(() => {
       if (tab !== "monitor" || !running || !supports("sandbox.processes")) return;
       const ok = take("procs");
       (async () => {
@@ -2598,7 +2658,7 @@ ${LAYER_CSS}
         }
       })();
     }, [sandboxId, tab, running, refreshKey, tick]);
-    import_react14.default.useEffect(() => {
+    import_react13.default.useEffect(() => {
       if (!running || !supports("dnls.control")) {
         setControl(null);
         return;
@@ -2613,7 +2673,7 @@ ${LAYER_CSS}
         }
       })();
     }, [sandboxId, running, refreshKey, tick]);
-    import_react14.default.useEffect(() => {
+    import_react13.default.useEffect(() => {
       if (tab !== "logs" || !running || !supports("dnls.logs")) return;
       const ok = take("logs");
       setLogs((prev) => ({ ...prev, busy: true }));
@@ -2626,7 +2686,7 @@ ${LAYER_CSS}
         }
       })();
     }, [tab, sandboxId, running, logs.tail, tick]);
-    import_react14.default.useEffect(() => {
+    import_react13.default.useEffect(() => {
       setProbe(null);
       setControl(null);
       setProcs(null);
@@ -2704,8 +2764,8 @@ ${LAYER_CSS}
     const mine = receipts.filter((receipt) => receipt.sandboxId === sandboxId);
     const drivers = Array.isArray(target.drivers) && target.drivers.length > 0 ? target.drivers.join(" \xB7 ") : copy.none;
     const tabs = [
-      { value: "monitor", label: copy.tabMonitor, content: tab === "monitor" ? h12(MonitorTab, { copy, target, detail, running, usageWindow, setUsageWindow, procs, host, address: objectAddress, onError: setError }) : null },
-      { value: "services", label: copy.tabServices, content: tab === "services" ? h12(ServicesTab, {
+      { value: "monitor", label: copy.tabMonitor, content: tab === "monitor" ? h11(MonitorTab, { copy, target, detail, running, usageWindow, setUsageWindow, procs, host, address: objectAddress, onError: setError }) : null },
+      { value: "services", label: copy.tabServices, content: tab === "services" ? h11(ServicesTab, {
         copy,
         detail,
         running,
@@ -2717,14 +2777,14 @@ ${LAYER_CSS}
         onProbe: runProbe,
         onControl: runControl
       }) : null },
-      supports("dnls.logs") ? { value: "logs", label: copy.tabLogs, content: tab === "logs" ? h12(LogsTab, {
+      supports("dnls.logs") ? { value: "logs", label: copy.tabLogs, content: tab === "logs" ? h11(LogsTab, {
         copy,
         running,
         logs,
         onTail: (tail) => setLogs((prev) => ({ ...prev, tail, text: null })),
         onReload: reload
       }) : null } : null,
-      { value: "activity", label: copy.tabActivity, content: tab === "activity" ? h12(ActivityTab, {
+      { value: "activity", label: copy.tabActivity, content: tab === "activity" ? h11(ActivityTab, {
         copy,
         detail,
         receipts: mine,
@@ -2733,7 +2793,7 @@ ${LAYER_CSS}
         onLookup: runLookup,
         onRecheck
       }) : null },
-      { value: "settings", label: copy.tabSettings, content: tab === "settings" ? h12(SettingsTab, {
+      { value: "settings", label: copy.tabSettings, content: tab === "settings" ? h11(SettingsTab, {
         copy,
         target,
         detail,
@@ -2748,83 +2808,101 @@ ${LAYER_CSS}
       }) : null }
     ].filter(Boolean);
     const idle = detail?.idle;
+    const fact = (text) => h11("span", { title: text }, text);
     const revisionText = pendingRevision(target) ? fill(copy.revisionPending, { applied: target.appliedRevision ?? 0, desired: target.desiredRevision }) : String(target.appliedRevision ?? copy.none);
-    return h12(
+    const activeTab = tabs.find((item) => item.value === tab) ?? tabs[0];
+    return h11(
       "div",
       { className: "dnls-view", "data-dnls-view": "sandbox" },
-      h12(
+      h11(
+        "div",
+        { className: "dnls-tabbar" },
+        h11(import_dsh_client_ui_primitives8.SegmentedControl, {
+          id: `dnls-sections-${sandboxId}`,
+          value: activeTab.value,
+          label: copy.tabs,
+          options: tabs.map((item) => ({ value: item.value, label: item.label })),
+          onChange: setTab
+        })
+      ),
+      h11(
         "div",
         { className: "dnls-object-head" },
-        h12(ErrorLine, { error: error ?? outerError }),
-        h12(
+        h11(ErrorLine, { error: error ?? outerError }),
+        h11(
           "div",
           { className: "dnls-head-card", "data-dnls-status": observed ?? "unknown" },
-          h12(
+          h11(
             "div",
             { className: "dnls-head-name" },
-            h12(import_dsh_client_ui_primitives9.StateDot, { state: DOT[observed] ?? "idle" }),
-            h12("span", { className: "dnls-head-title" }, nameOf(target)),
-            HEALTH_TONE2[target.health] ? h12(import_dsh_client_ui_primitives9.Tag, { tone: HEALTH_TONE2[target.health] }, copy.health[target.health]) : null,
-            pendingRevision(target) ? h12(import_dsh_client_ui_primitives9.Tag, { tone: "neutral" }, copy.pendingApply) : null
+            h11(import_dsh_client_ui_primitives8.StateDot, { state: DOT[observed] ?? "idle" }),
+            h11("span", { className: "dnls-head-title" }, nameOf(target)),
+            HEALTH_TONE2[target.health] ? h11(import_dsh_client_ui_primitives8.Tag, { tone: HEALTH_TONE2[target.health] }, copy.health[target.health]) : null,
+            pendingRevision(target) ? h11(import_dsh_client_ui_primitives8.Tag, { tone: "neutral" }, copy.pendingApply) : null
           ),
-          h12(
+          h11(
             "div",
             { className: "dnls-head-meta" },
             [stateText(copy, observed), sizeLine(copy, target), target.profileId].filter(Boolean).join(" \xB7 ")
           ),
-          running && target.lastMinute ? h12(
+          running ? h11(
             "div",
             { className: "dnls-meters" },
-            h12(Meter, {
+            h11(Meter, {
               label: copy.usageCpu,
-              text: `${cores(target.lastMinute.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: target.resources?.cpus ?? copy.none })}`,
-              value: ratio(target.lastMinute.cpuCores, target.resources?.cpus)
+              text: `${cores(target.lastMinute?.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: target.resources?.cpus ?? copy.none })}`,
+              value: ratio(target.lastMinute?.cpuCores, target.resources?.cpus) ?? 0
             }),
-            h12(Meter, {
+            h11(Meter, {
               label: copy.usageMemory,
-              text: `${formatBytes(target.lastMinute.memoryBytes) ?? copy.none} / ${formatBytes(target.resources?.memoryBytes) ?? copy.none}`,
-              value: ratio(target.lastMinute.memoryBytes, target.resources?.memoryBytes)
+              text: `${formatBytes(target.lastMinute?.memoryBytes) ?? copy.none} / ${formatBytes(target.resources?.memoryBytes) ?? copy.none}`,
+              value: ratio(target.lastMinute?.memoryBytes, target.resources?.memoryBytes) ?? 0
             })
           ) : null,
-          h12(FactGrid, { items: [
-            { label: copy.driver, value: driverText(copy, control, running) },
-            { label: copy.idleSleep, value: detail ? idleStatusText(copy, idle) : copy.none },
-            { label: copy.lastActivity, value: lastActivityText(copy, idle) },
-            { label: copy.lastOperation, value: lastOperationText(copy, target, detail) },
+          h11(FactGrid, { items: [
+            { label: copy.driver, value: fact(driverText(copy, control, running)) },
+            { label: copy.idleSleep, value: fact(detail ? idleStatusText(copy, idle) : copy.none) },
+            { label: copy.lastActivity, value: fact(lastActivityText(copy, idle)) },
+            { label: copy.lastOperation, value: fact(lastOperationText(copy, target, detail)) },
             { label: copy.services, value: serviceHealthText(copy, target.services) },
             // The list row is re-read after every dock create/close; the inspect detail is not.
             { label: copy.terminals, value: String(row.visibleTerminalCount ?? target.visibleTerminalCount ?? copy.none) }
           ] }),
-          h12("div", { className: "dnls-head-foot" }, [
+          h11("div", { className: "dnls-head-foot" }, [
             `${copy.revision} ${revisionText}`,
             `${copy.drivers} ${drivers}`,
             `${copy.observed} ${when(copy, target.observedAt) ?? copy.none}`
           ].join(" \xB7 "))
         )
       ),
-      h12(NanoTabs, { className: "dnls-detail", label: copy.tabs, value: tab, onChange: setTab, items: tabs })
+      h11("div", {
+        className: "dnls-panel",
+        role: "tabpanel",
+        id: `dnls-sections-${sandboxId}-${activeTab.value}-panel`,
+        "aria-labelledby": `dnls-sections-${sandboxId}-${activeTab.value}`
+      }, activeTab.content)
     );
   }
 
   // src/client/dock.jsx
-  var import_react15 = __toESM(__require("react"), 1);
-  var import_dsh_client_ui_primitives10 = __require("@deepseek-ai/dsh-client-ui-primitives");
-  var h13 = import_react15.default.createElement;
+  var import_react14 = __toESM(__require("react"), 1);
+  var import_dsh_client_ui_primitives9 = __require("@deepseek-ai/dsh-client-ui-primitives");
+  var h12 = import_react14.default.createElement;
   var PROBE_TERMINAL = "00000000-0000-4000-8000-000000000000";
   function LocalTerminal({ copy, host, onError }) {
-    return h13(Group, null, h13(SplitRow, {
-      label: h13(
+    return h12(Group, null, h12(SplitRow, {
+      label: h12(
         "span",
         { className: "dnls-term" },
-        h13(import_dsh_client_ui_primitives10.PluginArtworkTerminal, { size: 16 }),
-        h13(
+        h12(import_dsh_client_ui_primitives9.PluginArtworkTerminal, { size: 16 }),
+        h12(
           "span",
           { className: "dnls-label" },
-          h13("span", null, copy.localTerminal),
-          h13("span", { className: "dnls-muted", "data-dnls-local-note": "1" }, copy.localTerminalNote)
+          h12("span", null, copy.localTerminal),
+          h12("span", { className: "dnls-muted", "data-dnls-local-note": "1" }, copy.localTerminalNote)
         )
       )
-    }, h13(import_dsh_client_ui_primitives10.Button, {
+    }, h12(import_dsh_client_ui_primitives9.Button, {
       variant: "outline",
       size: "sm",
       title: copy.newPane,
@@ -2834,13 +2912,13 @@ ${LAYER_CSS}
     }, copy.localTerminalOpen)));
   }
   function TerminalDock({ copy, api, host, paneId, row, supports, busy, refreshKey, onWrite, onChanged }) {
-    const [terms, setTerms] = import_react15.default.useState(null);
-    const [error, setError] = import_react15.default.useState(null);
-    const [closing, setClosing] = import_react15.default.useState(null);
-    const [closeError, setCloseError] = import_react15.default.useState(void 0);
-    const ticket = import_react15.default.useRef(null);
+    const [terms, setTerms] = import_react14.default.useState(null);
+    const [error, setError] = import_react14.default.useState(null);
+    const [closing, setClosing] = import_react14.default.useState(null);
+    const [closeError, setCloseError] = import_react14.default.useState(void 0);
+    const ticket = import_react14.default.useRef(null);
     if (!ticket.current) ticket.current = createTicket();
-    import_react15.default.useEffect(() => () => ticket.current.kill(), []);
+    import_react14.default.useEffect(() => () => ticket.current.kill(), []);
     const sandboxId = row?.sandboxId ?? null;
     const running = row?.observedState === "running";
     let probe = null;
@@ -2852,7 +2930,7 @@ ${LAYER_CSS}
       }
     }
     const sandboxHandlers = handlersFor(host, probe).length > 0;
-    const load = import_react15.default.useCallback(async () => {
+    const load = import_react14.default.useCallback(async () => {
       const ok = ticket.current.take();
       if (!sandboxId) {
         setTerms(null);
@@ -2873,7 +2951,7 @@ ${LAYER_CSS}
         if (ok()) setTerms(caught?.status === 403 ? { denied: true } : { error: caught });
       }
     }, [sandboxId, running]);
-    import_react15.default.useEffect(() => {
+    import_react14.default.useEffect(() => {
       load();
     }, [sandboxId, running, refreshKey]);
     function openTerm(term) {
@@ -2910,38 +2988,38 @@ ${LAYER_CSS}
       onChanged?.();
     }
     if (!row) {
-      return h13(
-        import_react15.default.Fragment,
+      return h12(
+        import_react14.default.Fragment,
         null,
-        h13(Muted, null, copy.dockPick),
-        h13(LocalTerminal, { copy, host, onError: setError }),
-        h13(ErrorLine, { error })
+        h12(Muted, null, copy.dockPick),
+        h12(LocalTerminal, { copy, host, onError: setError }),
+        h12(ErrorLine, { error })
       );
     }
     const list = terms?.list ?? [];
     const canCreate = supports("term.session.create") && !terms?.denied && sandboxHandlers;
     const canClose = supports("term.session.close");
     let body;
-    if (terms?.denied) body = h13(Muted, null, copy.terminalsDenied);
-    else if (terms == null) body = h13(Muted, null, copy.loading);
-    else if (terms.error) body = h13(ErrorLine, { error: terms.error });
-    else if (list.length === 0) body = h13(Muted, null, running ? copy.terminalsEmpty : copy.terminalsStopped);
+    if (terms?.denied) body = h12(Muted, null, copy.terminalsDenied);
+    else if (terms == null) body = h12(Muted, null, copy.loading);
+    else if (terms.error) body = h12(ErrorLine, { error: terms.error });
+    else if (list.length === 0) body = h12(Muted, null, running ? copy.terminalsEmpty : copy.terminalsStopped);
     else {
-      body = h13(Group, null, list.map((term) => h13(SplitRow, {
+      body = h12(Group, null, list.map((term) => h12(SplitRow, {
         key: term.terminalId,
-        label: h13(
+        label: h12(
           "span",
           { className: "dnls-term" },
-          h13(import_dsh_client_ui_primitives10.StateDot, { state: term.state === "active" ? "done" : "idle" }),
-          h13("span", { className: "dnls-mono" }, fill(copy.terminalLabel, { id: shortId(term.terminalId) })),
-          term.state ? h13(import_dsh_client_ui_primitives10.Tag, { tone: "neutral" }, copy.termState[term.state] ?? term.state) : null
+          h12(import_dsh_client_ui_primitives9.StateDot, { state: term.state === "active" ? "done" : "idle" }),
+          h12("span", { className: "dnls-mono" }, fill(copy.terminalLabel, { id: shortId(term.terminalId) })),
+          term.state ? h12(import_dsh_client_ui_primitives9.Tag, { tone: "neutral" }, copy.termState[term.state] ?? term.state) : null
         )
-      }, h13(
+      }, h12(
         "span",
         { className: "dnls-inline" },
-        term.state === "active" && sandboxHandlers ? h13(import_dsh_client_ui_primitives10.Button, { variant: "ghost", size: "sm", title: copy.newPane, onClick: () => openTerm(term) }, copy.terminalOpen) : null,
-        canClose && term.state !== "ended" ? h13(IconButton, {
-          icon: h13(import_dsh_client_ui_primitives10.IconTrashOutlineRegular, { size: 16 }),
+        term.state === "active" && sandboxHandlers ? h12(import_dsh_client_ui_primitives9.Button, { variant: "ghost", size: "sm", title: copy.newPane, onClick: () => openTerm(term) }, copy.terminalOpen) : null,
+        canClose && term.state !== "ended" ? h12(IconButton, {
+          icon: h12(import_dsh_client_ui_primitives9.IconTrashOutlineRegular, { size: 16 }),
           "aria-label": `${copy.terminalClose} ${shortId(term.terminalId)}`,
           disabled: busy,
           onClick: () => {
@@ -2951,25 +3029,25 @@ ${LAYER_CSS}
         }) : null
       ))));
     }
-    return h13(
-      import_react15.default.Fragment,
+    return h12(
+      import_react14.default.Fragment,
       null,
-      h13(
+      h12(
         "div",
         { className: "dnls-dock-head" },
-        h13("span", { className: "dnls-section-title" }, `${copy.terminals} \xB7 ${nameOf(row)}`),
-        canCreate ? h13(import_dsh_client_ui_primitives10.Button, {
+        h12("span", { className: "dnls-section-title" }, `${copy.terminals} \xB7 ${nameOf(row)}`),
+        canCreate ? h12(import_dsh_client_ui_primitives9.Button, {
           variant: "primary",
           size: "sm",
           disabled: busy || !running,
-          icon: h13(import_dsh_client_ui_primitives10.IconPlusOutlineRegular, { size: 14 }),
+          icon: h12(import_dsh_client_ui_primitives9.IconPlusOutlineRegular, { size: 14 }),
           onClick: createTerm
         }, copy.terminalNew) : null
       ),
-      h13(ErrorLine, { error }),
+      h12(ErrorLine, { error }),
       body,
-      sandboxHandlers ? terms?.denied ? null : h13(Muted, null, copy.terminalsHint) : h13(import_react15.default.Fragment, null, h13(Muted, null, copy.terminalUnavailable), h13(LocalTerminal, { copy, host, onError: setError })),
-      closing ? h13(NanoDialog, {
+      sandboxHandlers ? terms?.denied ? null : h12(Muted, null, copy.terminalsHint) : h12(import_react14.default.Fragment, null, h12(Muted, null, copy.terminalUnavailable), h12(LocalTerminal, { copy, host, onError: setError })),
+      closing ? h12(NanoDialog, {
         copy,
         title: copy.terminalCloseTitle,
         confirmLabel: copy.terminalClose,
@@ -2978,12 +3056,12 @@ ${LAYER_CSS}
         error: closeError,
         onCancel: () => setClosing(null),
         onConfirm: closeTerm
-      }, h13("p", { className: "dnls-muted" }, fill(copy.terminalCloseBody, { id: shortId(closing.terminalId) }))) : null
+      }, h12("p", { className: "dnls-muted" }, fill(copy.terminalCloseBody, { id: shortId(closing.terminalId) }))) : null
     );
   }
 
   // src/client/index.jsx
-  var h14 = import_react16.default.createElement;
+  var h13 = import_react15.default.createElement;
   var KIND = "dnls-sandbox";
   var CONFIRMED = /* @__PURE__ */ new Set(["stop", "restart", "recreate", "remove"]);
   var POLL_MS = 1500;
@@ -3000,33 +3078,33 @@ ${LAYER_CSS}
     return null;
   }
   function DnlsPane({ sessionId, copy, host }) {
-    const paneId = import_react16.default.useId();
-    const clientRef = import_react16.default.useRef(null);
-    const listTicket = import_react16.default.useRef(null);
+    const paneId = import_react15.default.useId();
+    const clientRef = import_react15.default.useRef(null);
+    const listTicket = import_react15.default.useRef(null);
     if (!listTicket.current) listTicket.current = createTicket();
-    const alive = import_react16.default.useRef(true);
-    const writeLock = import_react16.default.useRef(false);
-    const [phase, setPhase] = import_react16.default.useState("loading");
-    const [error, setError] = import_react16.default.useState(null);
-    const [list, setList] = import_react16.default.useState(null);
-    const [boot, setBoot] = import_react16.default.useState(0);
-    const [selected, setSelected] = import_react16.default.useState(null);
-    const [refreshKey, setRefreshKey] = import_react16.default.useState(0);
-    const [receipts, setReceipts] = import_react16.default.useState([]);
-    const [confirm, setConfirm] = import_react16.default.useState(null);
-    const [create, setCreate] = import_react16.default.useState(null);
-    const [busy, setBusy] = import_react16.default.useState(false);
-    const [drawer, setDrawer] = import_react16.default.useState(false);
-    const [dock, setDock] = import_react16.default.useState(0);
-    const [dockHeight, setDockHeight] = import_react16.default.useState(DOCK_DEFAULT);
-    const closeDrawer = import_react16.default.useCallback(() => setDrawer(false), []);
-    import_react16.default.useEffect(() => () => {
+    const alive = import_react15.default.useRef(true);
+    const writeLock = import_react15.default.useRef(false);
+    const [phase, setPhase] = import_react15.default.useState("loading");
+    const [error, setError] = import_react15.default.useState(null);
+    const [list, setList] = import_react15.default.useState(null);
+    const [boot, setBoot] = import_react15.default.useState(0);
+    const [selected, setSelected] = import_react15.default.useState(null);
+    const [refreshKey, setRefreshKey] = import_react15.default.useState(0);
+    const [receipts, setReceipts] = import_react15.default.useState([]);
+    const [confirm, setConfirm] = import_react15.default.useState(null);
+    const [create, setCreate] = import_react15.default.useState(null);
+    const [busy, setBusy] = import_react15.default.useState(false);
+    const [drawer, setDrawer] = import_react15.default.useState(false);
+    const [dock, setDock] = import_react15.default.useState(0);
+    const [dockHeight, setDockHeight] = import_react15.default.useState(DOCK_DEFAULT);
+    const closeDrawer = import_react15.default.useCallback(() => setDrawer(false), []);
+    import_react15.default.useEffect(() => () => {
       alive.current = false;
       listTicket.current.kill();
     }, []);
     const supports = (id) => clientRef.current?.supports(id) === true;
     const api = clientRef.current;
-    const loadList = import_react16.default.useCallback(async () => {
+    const loadList = import_react15.default.useCallback(async () => {
       const ok = listTicket.current.take();
       try {
         const client = clientRef.current ?? createDnlsClient();
@@ -3043,7 +3121,7 @@ ${LAYER_CSS}
         setPhase((prev) => prev === "ready" ? "ready" : "failed");
       }
     }, []);
-    import_react16.default.useEffect(() => {
+    import_react15.default.useEffect(() => {
       if (sessionId) loadList();
     }, [sessionId, boot, loadList]);
     if (!sessionId) return null;
@@ -3175,7 +3253,7 @@ ${LAYER_CSS}
     const stopped = all.filter((row) => row.observedState === "stopped").length;
     const attention = all.filter(needsAttention).length;
     const terminalCount = current ? current.visibleTerminalCount ?? 0 : all.reduce((sum, row) => sum + (Number.isInteger(row.visibleTerminalCount) ? row.visibleTerminalCount : 0), 0);
-    const view = current ? h14(SandboxView, {
+    const view = current ? h13(SandboxView, {
       key: current.sandboxId,
       copy,
       api,
@@ -3189,7 +3267,7 @@ ${LAYER_CSS}
       onAction: ask,
       onRecheck: recheck,
       onWrite: write
-    }) : h14(FleetView, {
+    }) : h13(FleetView, {
       copy,
       api,
       host,
@@ -3210,64 +3288,57 @@ ${LAYER_CSS}
       onRecheck: recheck,
       onError: setError
     });
-    const bar = h14(
-      import_react16.default.Fragment,
+    const bar = h13(
+      import_react15.default.Fragment,
       null,
-      // The dashboard entry is always visible, at any nesting depth; the drawer's
-      // overview row is the same destination in the vertical list.
-      h14(IconButton, {
-        icon: h14(import_dsh_client_ui_primitives11.IconLayersOutlineRegular, { size: 16 }),
-        "aria-label": copy.overview,
-        title: copy.back,
-        disabled: !current,
-        onClick: unchoose
-      }),
-      h14(ShellToggle, {
-        icon: h14(import_dsh_client_ui_primitives11.IconPanelLeftOutlineRegular, { size: 16 }),
+      // The drawer toggle is always the leftmost control; going back to the
+      // dashboard lives inside the drawer, never in this bar.
+      h13(ShellToggle, {
+        icon: h13(import_dsh_client_ui_primitives10.IconPanelLeftOutlineRegular, { size: 16 }),
         label: copy.drawerToggle,
         title: copy.typeLabel,
         open: drawer,
         onClick: () => setDrawer((open) => !open)
       }),
-      h14("span", { className: "dnls-shell-spacer" }),
-      h14(IconButton, {
-        icon: h14(import_dsh_client_ui_primitives11.IconRefreshOutlineRegular, { size: 16 }),
+      h13("span", { className: "dnls-shell-spacer" }),
+      h13(IconButton, {
+        icon: h13(import_dsh_client_ui_primitives10.IconRefreshOutlineRegular, { size: 16 }),
         "aria-label": copy.refresh,
         disabled: phase === "loading" && !rows,
         onClick: refresh
       }),
-      current ? h14(IconButton, {
-        icon: h14(import_dsh_client_ui_primitives11.IconEllipsisOutlineRegular, { size: 16 }),
+      current ? h13(IconButton, {
+        icon: h13(import_dsh_client_ui_primitives10.IconEllipsisOutlineRegular, { size: 16 }),
         "aria-label": copy.more,
         onClick: (event) => openMenu(event, rowTarget(current))
       }) : null
     );
-    const drawerNode = h14(
+    const drawerNode = h13(
       TabDrawer,
       {
         open: drawer,
         label: copy.drawerToggle,
         onClose: closeDrawer,
-        head: h14(import_react16.default.Fragment, null, h14("span", null, copy.typeLabel), h14("span", null, String(list?.total ?? all.length)))
+        head: h13(import_react15.default.Fragment, null, h13("span", null, copy.typeLabel), h13("span", null, String(list?.total ?? all.length)))
       },
-      h14(DrawerRow, {
+      h13(DrawerRow, {
         current: !current,
         onClick: unchoose,
         label: copy.overview,
         meta: rows ? fill(copy.sandboxesCount, { running, stopped, attention }) : null
       }),
-      all.length > 0 ? h14("div", { className: "dnls-drawer-sep", role: "presentation" }) : null,
-      all.map((row) => h14(DrawerRow, {
+      all.length > 0 ? h13("div", { className: "dnls-drawer-sep", role: "presentation" }) : null,
+      all.map((row) => h13(DrawerRow, {
         key: row.sandboxId,
         current: current?.sandboxId === row.sandboxId,
         onClick: () => choose(row),
-        mark: h14(import_dsh_client_ui_primitives11.StateDot, { state: DOT[row.observedState] ?? "idle" }),
+        mark: h13(import_dsh_client_ui_primitives10.StateDot, { state: DOT[row.observedState] ?? "idle" }),
         label: nameOf(row),
         meta: [stateText(copy, row.observedState), reading(copy, row)].filter(Boolean).join(" \xB7 ")
       }))
     );
     const statusText = current ? [stateText(copy, current.observedState), reading(copy, current), current.profileId].filter(Boolean).join(" \xB7 ") : rows ? fill(copy.sandboxesCount, { running, stopped, attention }) : copy.loading;
-    const status = h14(
+    const status = h13(
       StatusBar,
       {
         label: copy.statusLabel,
@@ -3279,20 +3350,20 @@ ${LAYER_CSS}
           onClick: () => setDock((open) => open > 0 ? 0 : 1)
         }]
       },
-      current ? h14(import_dsh_client_ui_primitives11.StateDot, { state: DOT[current.observedState] ?? "idle" }) : null,
-      h14("span", null, statusText)
+      current ? h13(import_dsh_client_ui_primitives10.StateDot, { state: DOT[current.observedState] ?? "idle" }) : null,
+      h13("span", null, statusText)
     );
-    const dockNode = dock > 0 ? h14(
+    const dockNode = dock > 0 ? h13(
       Dock,
       { label: copy.dockLabel, height: dockHeight, onCommit: setDockHeight },
-      h14(TerminalDock, { copy, api, host, paneId, row: current, supports, busy, refreshKey, onWrite: write, onChanged: loadList })
+      h13(TerminalDock, { copy, api, host, paneId, row: current, supports, busy, refreshKey, onWrite: write, onChanged: loadList })
     ) : null;
-    return h14(
+    return h13(
       "div",
       { className: "dnls-pane", "data-dnls-pane": "1" },
-      h14("style", null, NANO_STYLES, SHELL_STYLE, STYLE),
-      h14(WorkbenchShell, { label: copy.workbench, bar, drawer: drawerNode, dock: dockNode, status }, view),
-      create ? h14(CreateDialog, {
+      h13("style", null, NANO_STYLES, SHELL_STYLE, STYLE),
+      h13(WorkbenchShell, { label: copy.workbench, bar, drawer: drawerNode, dock: dockNode, status }, view),
+      create ? h13(CreateDialog, {
         copy,
         profiles: create.profiles,
         busy,
@@ -3300,7 +3371,7 @@ ${LAYER_CSS}
         onCancel: () => setCreate(null),
         onSubmit: (fields) => dispatch("create", {}, fields)
       }) : null,
-      confirm ? h14(LifecycleConfirm, {
+      confirm ? h13(LifecycleConfirm, {
         copy,
         request: confirm,
         busy,
@@ -3336,7 +3407,7 @@ ${LAYER_CSS}
         }
       }
     };
-    const Pane = (props) => h14(DnlsPane, { sessionId: props.sessionId, copy: copy(), host });
+    const Pane = (props) => h13(DnlsPane, { sessionId: props.sessionId, copy: copy(), host });
     ctx.effect(() => ctx.sidebarRightTabs.register({
       id: KIND,
       kind: KIND,

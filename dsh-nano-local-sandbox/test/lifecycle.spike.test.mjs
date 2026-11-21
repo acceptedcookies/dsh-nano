@@ -49,3 +49,33 @@ test('DNLS03-T61 a verified idle stop preserves the managed object', async t => 
   assert.equal(stored.operations.at(-1).action, 'stop')
 
 })
+
+test('idle status reports held, active and watching without changing the stop decision', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'dnls-idle-status-'))
+  const registry = openControlRegistry({ root, envId: 'test' })
+  t.after(() => { registry.close(); rmSync(root, { recursive: true, force: true }) })
+  const row = registry.reserve({ name: 'two', profileId: 'test', recipeRef: 'tested', principal: 'operator' })
+  const obs = { locator: row.binding.locator, stateVolume: row.stateVolume, generation: 'g1', state: 'running' }
+  registry.confirm(row.sandboxId, obs)
+  let proof = null, now = 0
+  const profileFor = async () => ({ idleEvidence: () => proof, idleTimeoutMs: 60_000 })
+  const observe = async () => ({ ...obs })
+  const stops = []
+  const uses = createUseBindings(registry, id => idle.touch(id))
+  const idle = createIdlePolicy({ registry, envId: 'test', profileFor, observe, uses,
+    stop: async (r) => { stops.push(r.sandboxId) }, clock: () => now, wallClock: () => 1_800_000_000_000 + now, cadenceMs: 25 })
+  t.after(() => idle.close())
+  assert.equal(idle.status(row.sandboxId), null, 'no verdict before the first poll')
+  now = 0; await idle.tick()
+  assert.deepEqual(idle.status(row.sandboxId), { state: 'active', timeoutMs: 60_000 })
+  proof = { idle: true, activityEpoch: 'e1' }
+  now = 20; await idle.tick()
+  const watching = idle.status(row.sandboxId)
+  assert.equal(watching.state, 'watching')
+  assert.equal(watching.idleSince, new Date(1_800_000_000_020).toISOString())
+  assert.equal(watching.sleepAt, new Date(1_800_000_060_020).toISOString())
+  assert.equal(uses.ensure({ sandboxId: row.sandboxId, sessionId: 'session-1', policy: {} }).ok, true)
+  now = 40; await idle.tick()
+  assert.deepEqual(idle.status(row.sandboxId), { state: 'held', reason: 'use' })
+  assert.deepEqual(stops, [], 'reporting status never stops the object')
+})

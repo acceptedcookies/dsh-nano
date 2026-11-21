@@ -74,6 +74,7 @@ export function openEnvironmentOwner(deps) {
         observe,
         profileFor,
         usage,
+        idle,
         backend,
       }],
     })

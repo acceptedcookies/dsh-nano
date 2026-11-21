@@ -26,6 +26,23 @@ const denied = () => Object.assign(new Error('denied'), { status: 403 })
 const notFound = () => Object.assign(new Error('not found'), { status: 404 })
 
 const ENV_ID = /^[a-z][a-z0-9-]{0,15}$/
+const IDLE_STATES = new Set(['off', 'held', 'active', 'watching'])
+const IDLE_REASONS = new Set(['stopped', 'operation', 'terminal', 'use'])
+const isoOrNull = (value) => (typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null)
+
+/** The idle policy's last verdict through an allowlist; null when the source has none yet. */
+function idleView(policy, sandboxId) {
+  let verdict = null
+  try { verdict = typeof policy?.status === 'function' ? policy.status(sandboxId) : null } catch { verdict = null }
+  if (!verdict || !IDLE_STATES.has(verdict.state)) return null
+  return {
+    state: verdict.state,
+    reason: IDLE_REASONS.has(verdict.reason) ? verdict.reason : null,
+    timeoutMs: Number.isSafeInteger(verdict.timeoutMs) && verdict.timeoutMs > 0 ? verdict.timeoutMs : null,
+    idleSince: isoOrNull(verdict.idleSince),
+    sleepAt: isoOrNull(verdict.sleepAt),
+  }
+}
 const USAGE_WINDOWS = new Set(['24h', '7d', '30d'])
 const LIST_DEFAULT_LIMIT = 50
 const LIST_MAX_LIMIT = 200
@@ -264,6 +281,7 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
           } : {},
           idleTimeoutMs: fresh.idleTimeoutMs ?? null,
         },
+        idle: idleView(source.idle, fresh.sandboxId),
         applied: fresh.appliedRevision
           ? { imageDigest: fresh.appliedRevision.imageDigest, verifiedAt: fresh.appliedRevision.verifiedAt }
           : null,

@@ -547,3 +547,25 @@ test('T60 processes: generation moved after guest read suppresses the table', as
   assert.equal(local.calls.processes, 1, 'the read happened — suppression, not prevention')
   assert.equal(JSON.stringify(res.result).includes('"pid"'), false)
 })
+
+test('detail idle: the policy verdict passes an allowlist and stays operator-only', async () => {
+  const row = makeRow({ idleTimeoutMs: 600_000 })
+  const local = makeSource('dev', [row])
+  local.idle = { status: (id) => (id === row.sandboxId ? {
+    state: 'watching', reason: 'nope', timeoutMs: 600_000,
+    idleSince: '2026-11-21T10:00:00.000Z', sleepAt: '2026-11-21T10:10:00.000Z', epoch: 'secret',
+  } : null) }
+  const { tool } = setup({ sources: [local] })
+  const res = await tool('sandbox.inspect', { sandboxId: row.sandboxId })
+  assert.equal(res.result.isError, false, JSON.stringify(res.result))
+  assert.deepEqual(res.result.structuredContent.idle, {
+    state: 'watching', reason: null, timeoutMs: 600_000,
+    idleSince: '2026-11-21T10:00:00.000Z', sleepAt: '2026-11-21T10:10:00.000Z',
+  })
+  local.idle = { status: () => ({ state: 'sleeping' }) }
+  const unknown = await tool('sandbox.inspect', { sandboxId: row.sandboxId })
+  assert.equal(unknown.result.structuredContent.idle, null, 'an unlisted state is not projected')
+  const scoped = setup({ sources: [local], principal: { key: 'scoped', operator: false, canSee: true, canUse: true } })
+  const plain = await scoped.tool('sandbox.inspect', { sandboxId: row.sandboxId })
+  assert.equal(Object.hasOwn(plain.result.structuredContent, 'idle'), false, 'non-operator detail leaked idle state')
+})

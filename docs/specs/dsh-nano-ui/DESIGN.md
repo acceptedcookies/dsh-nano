@@ -217,11 +217,6 @@ U5 只覆盖上面三种模式。宿主 `data-*` 属性被当作样式钩子或�
 | 位置 | 缺口说明 |
 |---|---|
 | `dsh-nano-local-sandbox/src/client/history.jsx`（`HistoryLine`） | 宿主及 nano-ui 没有可保留分钟缺样、且不把缺样画成零的历史折线。仅折线使用 SVG，文字与控件不在 SVG 内。 |
-| `dsh-nano-local-sandbox/src/client/shell.jsx`（`.dnls-status-btn`） | 宿主 `Button` 最小档 28px，测得的 26px 状态条只能放下 20px 文字按钮，故状态条动作保留原生 button。外壳退回本包后豁免仍只覆盖这一个原生控件（`T-O-69`）。 |
-| `dsh-nano-local-sandbox/src/client/shell.jsx`（`DrawerRow`） | 抽屉行用宿主 `Button` 会把单行截断的对象名折开；原生 button 只做行选择，度量照 `.nks-nav-tab`；外壳由 [DNLS] client 自持（`T-O-69`）。 |
-| `dsh-nano-local-sandbox/src/client/shell.jsx`（`ShellToggle`） | 宿主 `Button` 没有 DNK 的 28px 图标+文字页签钮（markdown-tag 底、按下混色），度量照 `.nks-nav-toggle`；外壳由 [DNLS] client 自持（`T-O-69`）。 |
-| `dsh-nano-local-sandbox/src/client/shell.jsx`（`ShellIcon` / `.dnls-shell-tool`） | 宿主 `Button` 没有 28×28 仅图标的顶栏工具座位，度量照 `.nks-tool`；外壳由 [DNLS] client 自持（`T-O-69`）。 |
-| `dsh-nano-local-sandbox/src/client/index.jsx`（`.dnls-select`） | 宿主与 nano-ui 都没有 Select primitive；窗口段的窗口周期选择用原生 `<select>`，只做选择不承载控件，尺寸对齐 28px 工具座位且只用 §2 令牌。 |
 | `dsh-nano-model-selector/src/client/styles.js`（`.nms-trigger-label` / `.nms-trigger-effort` / `.nms-trigger-icon`） | 读 `--dsh-composer-model-text-display` / `--dsh-composer-model-icon-display`：宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts`），不是 `--dsw` 令牌，catalog 不收录，U1 照报（`T20`） |
 | `dsh-nano-explorer-extra/src/client/format.js`（`formatBytes`） | 宿主 `fileSizeText` 输出不等价：不加空格、1024 进制套十进制单位名（`1.0KB`）、最高 GB、对 0/NaN 无兜底；本包状态栏读 `1 KiB`，替换会改掉全部体积文案 |
 | `dsh-nano-explorer-extra/src/client/styles.js`（`.nxe-git-alert`） | 宿主 `Toast` 到 `holdMs` 自动结束，没有「常驻到用户关闭」的形态；Git 读取失败提示必须常驻，故由本包自绘 |

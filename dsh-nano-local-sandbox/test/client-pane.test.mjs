@@ -332,12 +332,14 @@ test('provider-shaped projections render ids, ports and null-safe stats', () => 
   assert.equal(formatCores(null), null)
 })
 
-test('the workbench is host primitives plus the nano shell, not a private dashboard', () => {
-  const source = readFileSync(join(root, 'src/client/index.jsx'), 'utf8')
-  for (const required of ['WorkbenchShell', 'TabDrawer', 'StatusDock', 'StateDot', 'DisclosureRow', 'Button', 'FactGrid', 'PanelSection', 'NANO_STYLES']) {
-    assert.equal(source.includes(required), true, required)
+test('the workbench is host primitives plus nano-ui, not a private dashboard', () => {
+  const read = (name) => readFileSync(join(root, 'src/client', name), 'utf8')
+  const views = ['index.jsx', 'fleet.jsx', 'sandbox.jsx', 'dialogs.jsx', 'parts.jsx'].map(read).join('\n')
+  for (const required of ['NANO_STYLES', 'Toolbar', 'NanoTabs', 'NanoDialog', 'FactGrid', 'DisclosureRow', 'StateDot', 'RiskConfirmation', 'SegmentedControl']) {
+    assert.equal(views.includes(required), true, required)
   }
-  for (const forbidden of ['PanelLayout', 'font-weight: 600', 'font-weight:600']) {
-    assert.equal(source.includes(forbidden), false, forbidden)
+  for (const forbidden of ['WorkbenchShell', 'TabDrawer', 'StatusDock', 'PanelLayout', 'style={', '<select', '<button', '<input', 'font-weight']) {
+    assert.equal(views.includes(forbidden), false, forbidden)
   }
+  assert.equal(/#[0-9a-f]{3,8}\b/i.test(read('styles.js')), false, 'colours come from host tokens')
 })

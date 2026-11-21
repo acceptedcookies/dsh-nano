@@ -89,3 +89,27 @@
 > 4. 基于新的 ui, 进行完整的 ego-browser 测试与调试. 并在新 ui 内, 完成全部我们自己内部工具的观察, 控制
 >
 > 请注册成为新的 todo 后, 确定验收标准, 并持续工作
+
+## 重做轮：nano-ui 原生工作台（`S5-02`）
+
+登记：[业主] 判定 `2ba1d4a` 起的外壳（`shell.jsx` 抽屉、状态条、私有工具钮、原生 `<select>`）凌乱且不可用，要求整体废弃，按 [nano-ui DESIGN](../../dsh-nano-ui/DESIGN.md) 用宿主 primitive 与 nano-ui 重做，不写手绘样式。本轮记在 [todo.DNLS03.md](todo.DNLS03.md) `S5-02` 名下：只改 [DNLS] client，只重装 [DNLS] 并重启开发 Web，不换镜像，不扩约。T-O-68 errorId、relay `lastAt`、`fail()` 信封、`dnls03-dev` 行处置仍待 [业主]，本轮不碰。
+
+信息架构：同一页签内两级视图，不再有抽屉与状态条。
+
+- 总览：nano `Toolbar`（标题与可见数、刷新、主按钮「新建沙箱」）→ 需关注对象 → 宿主 `DisclosureRow` 对象行（`StateDot`、名称、状态、上一完整分钟读数；停止对象行尾直接「启动」，其余动作在 `openNanoMenu` 行菜单）→ 本页回执 → 全体用量（窗口用宿主 `SegmentedControl`）→ 页脚计数。空态用 nano `EmptyState` 与宿主默认插画。
+- 对象：`Toolbar`（返回、名称、刷新、更多）→ `Card` 状态与 `FactGrid` → 宿主正式入口打开设计工作区 → `NanoTabs` 六页：监控、终端、服务、日志、活动、设置。
+
+验收（逐条从真实页面复核，不以测试或计数代替）：
+
+- [ ] A1 无手绘控件：client 源码无 `style=`、`<button>`、`<input>`、`<select>`、`font-weight`、十六进制色；`check-ui-rules --plugin DNLS` 除 `HistoryLine` 已登记 U10 外为零；DESIGN §10 删去 `shell.jsx` 与 `.dnls-select` 五行。
+- [ ] A2 总览可读：不点开即可分出运行、停止、需关注；没有读数说明原因；不预选对象；刷新不改选择。
+- [ ] A3 日志恢复：运行对象可按 50/100/200 行读取有界日志并显示在 `CodeBlock`；停止对象说明只能从运行容器读取。
+- [ ] A4 按原号查回执：本页发出的生命周期请求自动跟随 `sandbox.operations` 直到终态，从不重发；「活动」页可按任意 `operationId` 查询。
+- [ ] A5 关闭终端：终端页逐项「关闭」，经 `NanoDialog` 危险确认后调用 `term.session.close`，列表读回；共享主体被拒时显示 `errorId`。
+- [ ] A6 真实探针：服务页「检查」调用 `status` 并显示各平面实测结果，不再把静态健康字段当探针；人工接管与释放各自读回。
+- [ ] A7 [DNK]/[DNT] 交接：设计工作区与终端从宿主资源地址的正式处理器打开；无处理器时说明原因且不预建终端。
+- [ ] A8 设置：电源、闲置、资源修订的保存与应用分开；重建、移除用宿主 `RiskConfirmation`，默认不可确认。
+- [ ] A9 宽度与主题：390×844 无横向滚动，焦点与草稿在缩放后保留；深色与浅色各检查一次后复原。
+- [ ] A10 安装与字节：正式 CLI 安装，页面加载的模块字节与 tarball 内 `lib/client.js` 一致；三包测试与 `check-*` 全绿。
+
+截图只截 [dsh工作台] 面板，不含会话内容；文件名 `redo-<视图>-<dark|light|390>.png`，存 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`。

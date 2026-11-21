@@ -101,15 +101,28 @@
 
 验收（逐条从真实页面复核，不以测试或计数代替）：
 
-- [ ] A1 无手绘控件：client 源码无 `style=`、`<button>`、`<input>`、`<select>`、`font-weight`、十六进制色；`check-ui-rules --plugin DNLS` 除 `HistoryLine` 已登记 U10 外为零；DESIGN §10 删去 `shell.jsx` 与 `.dnls-select` 五行。
-- [ ] A2 总览可读：不点开即可分出运行、停止、需关注；没有读数说明原因；不预选对象；刷新不改选择。
-- [ ] A3 日志恢复：运行对象可按 50/100/200 行读取有界日志并显示在 `CodeBlock`；停止对象说明只能从运行容器读取。
-- [ ] A4 按原号查回执：本页发出的生命周期请求自动跟随 `sandbox.operations` 直到终态，从不重发；「活动」页可按任意 `operationId` 查询。
-- [ ] A5 关闭终端：终端页逐项「关闭」，经 `NanoDialog` 危险确认后调用 `term.session.close`，列表读回；共享主体被拒时显示 `errorId`。
-- [ ] A6 真实探针：服务页「检查」调用 `status` 并显示各平面实测结果，不再把静态健康字段当探针；人工接管与释放各自读回。
-- [ ] A7 [DNK]/[DNT] 交接：设计工作区与终端从宿主资源地址的正式处理器打开；无处理器时说明原因且不预建终端。
-- [ ] A8 设置：电源、闲置、资源修订的保存与应用分开；重建、移除用宿主 `RiskConfirmation`，默认不可确认。
-- [ ] A9 宽度与主题：390×844 无横向滚动，焦点与草稿在缩放后保留；深色与浅色各检查一次后复原。
-- [ ] A10 安装与字节：正式 CLI 安装，页面加载的模块字节与 tarball 内 `lib/client.js` 一致；三包测试与 `check-*` 全绿。
+- [x] A1 无手绘控件：client 源码扫描 `style=`、`<button>`、`<input>`、`<select>`、`font-weight`、十六进制色 0 命中（仅对象行的 ARIA `role:'button'`）；`check-ui-rules --plugin DNLS` U1–U9 全 0、U10 = 1（`history.jsx` 已登记）；DESIGN §10 已无 `shell.jsx` 与 `.dnls-select` 行。
+- [x] A2 总览可读：对象行带 `StateDot` 与状态词，`dnls03-dev` 显示「缺失 · 容器缺失」并计入「1 需处理」；不预选对象，刷新不改选择。截图 `redo-fleet-dark.png`、`redo-fleet-dark-390.png`、`redo-fleet-light-390.png`。
+- [x] A3 日志恢复：运行对象 50/100/200 行读入 `CodeBlock`（`redo-logs-dark.png`）；停止 `dnls03-s4` 后日志页只显示「日志从运行中的容器读取。」（2026-11-21T10:20Z 实测，文字为证；该次截图因宿主分段控件滑块动画未落定已删）。
+- [x] A4 按原号查回执：停止与启动由本页发出并跟随到 `succeeded/verify`，未重发；「活动」页按原号查到本地化步骤，未知号显示「这个沙箱上没有该操作号。」（`redo-lookup-dark.png`、`redo-activity-dark.png`）。
+- [ ] A5 关闭终端：已通过——逐项「关闭」经 `NanoDialog` 确认后调 `term.session.close`，`807e09b8` 读回「已结束」且失去关闭与打开动作；worker 已不在的 `743d6a7b` 关闭失败时在对话框内显示原因（`redo-term-close-dialog-dark.png`、`redo-term-close-error-dark.png`、`redo-terminals-dark.png`）。**未在真机复核**：「共享主体被拒时显示 `errorId`」——本机只有一个 owner 主体，无法制造被拒的共享主体，只有单测覆盖。
+- [x] A6 真实探针：「立即检查」调用 `status`，逐平面显示容器/引擎/桥/页面/DOM/终端实测结果；「接管」读回「已由操作者接管」，「释放」读回「允许 agent 写入」（`redo-services-probe-dark.png`）。
+- [x] A7 [DNK]/[DNT] 交接：「打开设计工作区」经宿主资源处理器打开 [DNK] `dnls03-s4` 页签（`redo-dnk-handoff-dark.png`）；终端经资源地址在 [DNT] 页签打开，`wss://dsh-dev.local` 上输入 `echo dnls-io-42 && uname -sm` 正常回显；非活动终端不显示打开动作，也不预建终端。
+- [x] A8 设置：电源、闲置、资源修订分行，保存与应用分开；重建、移除用宿主 `RiskConfirmation`，未勾选确认前按钮不可用（`redo-recreate-dialog-dark.png`、`redo-remove-dialog-dark.png`，均取消，未执行）。
+- [x] A9 宽度与主题：390×844 下八个视图无横向滚动（`redo-*-dark-390.png`）；设置页闲置输入框输入 `7` 后缩到 390 再复原，值与焦点都保留；浅色经页面属性临时切换取图后刷新复原（`redo-*-light-390.png`）。
+- [x] A10 安装与字节：`dsh plugin --profile web add` 安装 `redo-it11` tarball；tarball 内、已装与提交 `7a8c62d` 的 `lib/client.js` 同为 `bf17b2bd…`，页面合并包逐字节包含已装的 [DNLS] 与 [DNT] `lib/client.js`；测试 [DNLS] 498/498、[DNT] 273/273、[DNK] 73/73、nano-ui 43/43，五个 `check-*` 退出码 0。
 
 截图只截 [dsh工作台] 面板，不含会话内容；文件名 `redo-<视图>-<dark|light|390>.png`，存 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`。
+
+本轮额外修复（[业主] 要求「发现的问题全部修复」，因此超出「只改 client」）：
+
+| 问题 | 根因 | 修复 | 提交 |
+|---|---|---|---|
+| 终端 attach 在 TLS 代理后连不上 | locator 用宿主监听源 `ws://127.0.0.1` | `requestWsOrigin` 按请求的 Origin+Host 发 `wss://` | `385ec2a` |
+| 连续按键后终端 1008 断开 | 每个键一个作业，作业约 0.5–1 s，超过队列上限 16 | 未开始的输入作业合并后续按键（上限 64 KiB） | `385ec2a` |
+| 重启/停止后终端仍显示「活动」，关闭必然 503 | 已验证的 stop 不结束本代终端，只有 remove 结束 | stop、restart 验证后把本代终端记为已结束；真机停止后三条终端全部「已结束」 | `385ec2a` |
+| 关闭失败时对话框无反应 | 错误写到页面级，对话框不显示 | 对话框内显示原因并读回列表；已结束终端去掉关闭与打开 | `2c4c317` |
+| 停止对象的终端页显示原始 503 | 停止时仍请求终端列表 | 未运行时不请求，显示「启动沙箱后才能打开终端。」 | `7a8c62d` |
+| [DNT] 沙箱终端页签崩溃 | 资源 pane 未注入样式与 wasm 核心 | `SandboxResourcePane` 注入 STYLE 并 `loadCore` | `f46afdf` |
+
+仍待 [业主]：`T-O-68` errorId、relay `lastAt`、`fail()` 信封、`dnls03-dev` 行处置；终端 attach 偶发约 12 s（容器 exec 路径慢，未改）；状态探针的「终端」平面显示「无」而台账当时仍有活动终端（探针读的是旧终端平面，本轮未改）。

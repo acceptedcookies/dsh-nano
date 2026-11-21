@@ -312,7 +312,7 @@ S1-01 并入 main
   - **落点 / 对象**：`dsh-nano-local-sandbox/src/client/`
   - **完成判据**：只改 [DNLS] client；只重装 [DNLS] 并重启开发 Web；镜像 digest 不变；与 agent 无关的返工不发模型消息
   - **验证映射**：`DNLS03X-T51` · **依赖**：`S5-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-21T04:50Z`–`2026-11-21T10:25Z` · **证据 / 备注**：按 [业主] 指示整体废弃旧外壳、以宿主 primitive + nano-ui 重做（`032dedb`、`2c4c317`、`7a8c62d`），验收 A1–A10 与逐条证据见 [todo.DNLS03-control-redesign.md](todo.DNLS03-control-redesign.md)「重做轮」：9/10 通过，A5 的「共享主体被拒显示 errorId」因本机只有一个 owner 无法真机复核。**偏差**：[业主] 要求修复发现的全部问题，本轮同时改了 [DNLS] 宿主（`385ec2a`：attach 源、按键合并、stop/restart 结束本代终端）与 [DNT]（`f46afdf`），超出「只改 client」。镜像未换：容器仍跑 `kitesurf-engine:39feadfb…-54e9326a17d8`，`image inspect` 仍含 `sha256:5bab7732`。未发模型消息。安装 `redo-it11`，tarball / 已装 / 提交的 `lib/client.js` 同为 `bf17b2bd…`，页面合并包逐字节包含。截图 `redo-*.png` 在 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`。等 [业主] 的 P2 结论。
 - [ ] `S5-03` — 合入 main
   - **落点 / 对象**：主工作区；不覆盖未提交文件
   - **完成判据**：`--no-ff` 合入且提交信息为 `merge(dnls): …`；main 上三包测试与 `check-*` 绿；按合并提交重建的三包与 S5 复跑逐一比对一致；不一致即停且不写回基准
@@ -354,7 +354,7 @@ S1-01 并入 main
 | `DNLS03X-T40` | 每条真机行独立通过 | ego-browser + session 证据 | 逐行通过；消息 ≤ 20 | U1/U3/U4/U5/U6/U8/U9/A1/A2/A3 通过；U7 7/9（缺总览浅色） | partial |
 | `DNLS03X-T41` | 八张截图 | 文件名 + SHA | 八张齐 | 7 张（另 1 张 HTML 模式为额外）；浅色未取 | partial |
 | `DNLS03X-T50` | 只复跑失败行 | 对比 S4 记录 | 未失败行不重跑 | 未执行 | pending |
-| `DNLS03X-T51` | P2 返工不换镜像 | 返工前后 digest | digest 不变 | 未执行 | pending |
+| `DNLS03X-T51` | P2 返工不换镜像 | 返工前后 digest | digest 不变 | 镜像引用不变，`image inspect` 仍含 `5bab7732`；P2 结论待 [业主] | partial |
 | `DNLS03X-T52` | main 上的比对 | `npm test` + 重建 SHA 对比 | 逐包一致 | 未执行 | pending |
 | `DNLS03X-T60` | 生产六步与五项只读验收 | 现场核对 + contract 响应 | 五项都过；镜像仍在 | 未执行 | pending |
 | `DNLS03X-T61` | 回填先于删树 | 三处 diff 与删树时间 | 回填在前 | 未执行 | pending |
@@ -367,7 +367,7 @@ S1-01 并入 main
 - **当前节点 / 已完成**：`S5-01` 待开工（唯一未取行是 U7 的「总览浅色」）/ S1 全 13 项、`S2-01`、`S3-01`、`S3-02` 完成；`S4-01` 与 `S4-02` 为 `partial`
 - **下一动作**：S4-01，安装已完成（客户端字节已核对与 tarball 一致）；按补充计划 §4.4 执行 U1–U9 与 A1–A3，逐行记录操作号/对象 ID/截图名/session 标识/UTC
 - **当前阻塞**：无
-- **待 owner / 外部决定**：U7 八张图的 P2 设计结论（到 `S4-02` 才需要）；桌面切换继续推迟，不需本轮处理
+- **待 owner / 外部决定**：U7 八张图的 P2 设计结论（到 `S4-02` 才需要）；`S5-02` 重做轮的 P2 结论（截图 `redo-*.png`）；桌面切换继续推迟，不需本轮处理
 - **最终交接目标**：`S6-02` 之后的工作树删除与 [业主] 验收
 
 | Item / node | 当前状态 | 原因或证据 | 下一动作 | 责任 / 承接方 | 重开条件 |

@@ -6,9 +6,9 @@
  */
 import React from 'react'
 import {
-  Button, StateDot,
-  IconChevronLeftOutlineRegular, IconEllipsisOutlineRegular, IconPanelLeftOutlineRegular,
-  IconPlusOutlineRegular, IconRefreshOutlineRegular,
+  StateDot,
+  IconEllipsisOutlineRegular, IconLayersOutlineRegular, IconPanelLeftOutlineRegular,
+  IconRefreshOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton, NANO_STYLES, openNanoMenu } from 'dsh-nano-ui'
 import { createDnlsClient, createTicket } from './managed.js'
@@ -254,37 +254,38 @@ function DnlsPane({ sessionId, copy, host }) {
       onError: setError,
     })
 
+  // Only controls live in the bar; state and readings belong to the status line.
   const bar = h(React.Fragment, null,
-    current ? h(IconButton, { icon: h(IconChevronLeftOutlineRegular, { size: 16 }), 'aria-label': copy.back, onClick: unchoose }) : null,
+    // The dashboard entry is always visible, at any nesting depth; the drawer's
+    // overview row is the same destination in the vertical list.
+    h(IconButton, {
+      icon: h(IconLayersOutlineRegular, { size: 16 }),
+      'aria-label': copy.overview,
+      title: copy.back,
+      disabled: !current,
+      onClick: unchoose,
+    }),
     h(ShellToggle, {
       icon: h(IconPanelLeftOutlineRegular, { size: 16 }),
       label: copy.drawerToggle,
-      title: current ? nameOf(current) : copy.overview,
+      title: copy.typeLabel,
       open: drawer,
       onClick: () => setDrawer((open) => !open),
     }),
-    h('span', { className: 'dnls-shell-title' },
-      current
-        ? h(React.Fragment, null, h(StateDot, { state: DOT[current.observedState] ?? 'idle' }), h('span', null, stateText(copy, current.observedState)))
-        : rows ? h('span', null, fill(copy.sandboxesCount, { running, stopped, attention })) : null),
-    h('span', { className: 'dnls-shell-tail' },
-      h(IconButton, {
-        icon: h(IconRefreshOutlineRegular, { size: 16 }),
-        'aria-label': copy.refresh,
-        disabled: phase === 'loading' && !rows,
-        onClick: refresh,
-      }),
-      current
-        ? h(IconButton, {
-          icon: h(IconEllipsisOutlineRegular, { size: 16 }),
-          'aria-label': copy.more,
-          onClick: (event) => openMenu(event, rowTarget(current)),
-        })
-        : supports('sandbox.instance.create') ? h(Button, {
-          variant: 'primary', size: 'sm', disabled: busy,
-          icon: h(IconPlusOutlineRegular, { size: 14 }),
-          onClick: openCreate,
-        }, copy.create) : null))
+    h('span', { className: 'dnls-shell-spacer' }),
+    h(IconButton, {
+      icon: h(IconRefreshOutlineRegular, { size: 16 }),
+      'aria-label': copy.refresh,
+      disabled: phase === 'loading' && !rows,
+      onClick: refresh,
+    }),
+    current
+      ? h(IconButton, {
+        icon: h(IconEllipsisOutlineRegular, { size: 16 }),
+        'aria-label': copy.more,
+        onClick: (event) => openMenu(event, rowTarget(current)),
+      })
+      : null)
 
   const drawerNode = h(TabDrawer, {
     open: drawer,

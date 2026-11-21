@@ -1,7 +1,7 @@
 /** Overview: the system as a whole, then one card per sandbox with what it is
  *  doing, how healthy it is, what it uses and what can open it. */
 import React from 'react'
-import { Button, StateDot, Tag, IconEllipsisOutlineRegular, PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, StateDot, Tag, IconEllipsisOutlineRegular, IconPlusOutlineRegular, PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, FactGrid, IconButton, Meter } from 'dsh-nano-ui'
 import { createTicket } from './managed.js'
 import { fill } from './i18n.js'
@@ -103,10 +103,8 @@ function SandboxCard({ copy, host, row, detail, control, busy, supports, onOpen,
   h(FactGrid, { items: [
     { label: copy.services, value: serviceHealthText(copy, row.services) },
     { label: copy.terminals, value: String(row.visibleTerminalCount ?? copy.none) },
+    { label: copy.activation, value: [idleStatusText(copy, idle), driverText(copy, control, running)].filter(Boolean).join(' · ') },
     { label: copy.lastOperation, value: lastOperationText(copy, row, detail) },
-    { label: copy.idleSleep, value: idleStatusText(copy, idle) },
-    { label: copy.driver, value: driverText(copy, control, running) },
-    { label: copy.profile, value: row.profileId ?? copy.none },
   ] }),
   h(AppList, { copy, host, address: addressOf(row), compact: true, onError }))
 }
@@ -193,9 +191,6 @@ export function FleetView({
     body = h(React.Fragment, null,
       h(SystemPlate, { copy, rows: list, envs, complete, profiles, usages, usageWindow }),
       h('section', { className: 'dnls-section' },
-        h('div', { className: 'dnls-section-head' },
-          h('h3', { className: 'dnls-section-title' }, copy.typeLabel),
-          h('span', { className: 'dnls-muted' }, String(list.length))),
         h('div', { className: 'dnls-cards', 'data-dnls-list': '1' },
           list.map((row) => h(SandboxCard, {
             key: row.sandboxId, copy, host, row, busy, supports,
@@ -213,6 +208,15 @@ export function FleetView({
 
   return h('div', { className: 'dnls-view', 'data-dnls-view': 'fleet' },
     h('div', { className: 'dnls-scroll' },
+      h('div', { className: 'dnls-page-head' },
+        h('h2', { className: 'dnls-page-title' }, copy.typeLabel),
+        supports('sandbox.instance.create')
+          ? h(Button, {
+            variant: 'primary', size: 'sm', disabled: busy,
+            icon: h(IconPlusOutlineRegular, { size: 14 }),
+            onClick: onCreate,
+          }, copy.create)
+          : null),
       rows ? h(ErrorLine, { error }) : null,
       recent.length > 0
         ? h(Section, { title: copy.receipts }, h(Group, null, h(ReceiptList, { copy, receipts: recent, onRecheck, showName: true })))

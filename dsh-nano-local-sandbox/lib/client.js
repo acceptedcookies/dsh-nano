@@ -435,14 +435,6 @@ ${LAYER_CSS}
       )
     );
   }
-  function PlainTable({ columns, children }) {
-    return h6(
-      "table",
-      { className: "nano-table" },
-      h6("thead", null, h6("tr", null, (columns ?? []).map((column) => h6("th", { key: column }, column)))),
-      h6("tbody", null, children)
-    );
-  }
 
   // src/client/managed.js
   var CONTRACT_VERSION = "dnls.control/1";
@@ -797,6 +789,7 @@ ${LAYER_CSS}
     lastActivity: "Last activity",
     activeNow: "Now",
     driver: "Driven by",
+    activation: "Activation",
     driverUnknown: "Could not read",
     apps: "Apps",
     appOpen: "Open",
@@ -1047,6 +1040,7 @@ ${LAYER_CSS}
     lastActivity: "\u6700\u8FD1\u6D3B\u52A8",
     activeNow: "\u73B0\u5728",
     driver: "\u9A71\u52A8\u65B9",
+    activation: "\u6FC0\u53D1\u72B6\u6001",
     driverUnknown: "\u8BFB\u53D6\u5931\u8D25",
     apps: "\u5E94\u7528",
     appOpen: "\u6253\u5F00",
@@ -1288,9 +1282,16 @@ ${LAYER_CSS}
 .dnls-group>.nano-split{flex-wrap:wrap;min-height:40px;padding-block:var(--nano-space-1)}
 .dnls-group>.nano-split:last-child{border-bottom:0}
 .dnls-head-card{display:flex;flex-direction:column;gap:var(--nano-space-3);padding:var(--nano-space-3);background:color-mix(in srgb,var(--dsw-alias-label-primary) 8%,var(--dsw-alias-bg-layer-2));border:var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-lg)}
-.dnls-status{display:flex;flex-wrap:wrap;align-items:center;gap:var(--nano-space-2)}
-.dnls-status-label{font:var(--dsw-font-xs-strong-13)}
-.dnls-status-size{margin-left:auto;color:var(--dsw-alias-label-secondary)}
+.dnls-object-head{flex:none;display:flex;flex-direction:column;gap:var(--nano-space-3);padding:var(--nano-space-3) var(--nano-space-3) 0}
+.dnls-head-name{display:flex;align-items:center;gap:var(--nano-space-2);min-width:0}
+.dnls-head-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-strong-13)}
+.dnls-head-meta{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12)}
+.dnls-head-foot{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11)}
+.dnls-page-head{display:flex;align-items:center;justify-content:space-between;gap:var(--nano-space-2);min-height:28px;padding:0 var(--nano-space-1)}
+.dnls-page-title{margin:0;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-strong-13)}
+.dnls-procs{display:flex;flex-direction:column;min-width:0}
+.dnls-procs [data-disclosure-row]{min-height:28px}
+.dnls-proc-meta{flex:none;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);font-family:var(--dsh-font-family-code)}
 .dnls-meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));gap:var(--nano-space-3)}
 .dnls-cards{display:flex;flex-direction:column;gap:var(--nano-space-2)}
 .dnls-card{display:flex;flex-direction:column;gap:var(--nano-space-3);min-width:0;padding:var(--nano-space-3);background:color-mix(in srgb,var(--dsw-alias-label-primary) 4%,var(--dsw-alias-bg-layer-1));border:var(--dsh-hairline-width) solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg);cursor:pointer}
@@ -1305,8 +1306,9 @@ ${LAYER_CSS}
 .dnls-muted{margin:0;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
 .dnls-error{margin:0;color:var(--dsw-alias-state-error-primary);font:var(--dsw-font-xxs-12)}
 .dnls-inline{display:flex;flex-wrap:wrap;align-items:center;gap:var(--nano-space-2);min-width:0}
-.dnls-detail.nano-panes{height:auto}
-.dnls-detail>.nano-pane{display:flex;flex-direction:column;gap:var(--nano-space-4);overflow:visible;padding-top:var(--nano-space-2)}
+.dnls-detail.nano-panes{padding:var(--nano-space-2) var(--nano-space-3) var(--nano-space-3)}
+.dnls-detail>*:first-child{flex:none}
+.dnls-detail>.nano-pane{display:flex;flex-direction:column;gap:var(--nano-space-4);padding-top:var(--nano-space-2)}
 .dnls-detail>.nano-pane[hidden]{display:none}
 .dnls-chart{display:flex;flex-direction:column;gap:var(--nano-space-1)}
 .dnls-chart-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:var(--nano-space-2);color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12)}
@@ -1467,8 +1469,7 @@ ${LAYER_CSS}
 .dnls-shell-toggle:focus-visible,.dnls-drawer-row:focus-visible,.dnls-statusbar-btn:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}
 .dnls-shell-toggle[aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link) 14%,var(--dsw-alias-markdown-tag))}
 .dnls-shell-toggle-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.dnls-shell-title{display:flex;flex:1 1 auto;align-items:center;gap:var(--nano-space-2);min-width:0;overflow:hidden;white-space:nowrap;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12)}
-.dnls-shell-tail{display:flex;flex:none;align-items:center;gap:var(--nano-space-1)}
+.dnls-shell-spacer{flex:1 1 auto;min-width:0}
 .dnls-shell-body{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
 .dnls-drawer{position:absolute;z-index:var(--nano-layer-local4);top:44px;left:10px;bottom:36px;width:216px;max-width:calc(100% - 20px);box-sizing:border-box;display:flex;flex-direction:column;min-height:0;background:var(--dsw-alias-bg-layer-2);border:var(--dsh-hairline-width) solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg);box-shadow:var(--dsw-elevation-prominent);transform:translateX(calc(-100% - 12px));visibility:hidden;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease),visibility 0s linear var(--ds-transition-duration-slow,.32s)}
 .dnls-drawer[data-dnls-drawer-state="open"]{transform:none;visibility:visible;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease)}
@@ -2018,10 +2019,8 @@ ${LAYER_CSS}
       h11(FactGrid, { items: [
         { label: copy.services, value: serviceHealthText(copy, row.services) },
         { label: copy.terminals, value: String(row.visibleTerminalCount ?? copy.none) },
-        { label: copy.lastOperation, value: lastOperationText(copy, row, detail) },
-        { label: copy.idleSleep, value: idleStatusText(copy, idle) },
-        { label: copy.driver, value: driverText(copy, control, running) },
-        { label: copy.profile, value: row.profileId ?? copy.none }
+        { label: copy.activation, value: [idleStatusText(copy, idle), driverText(copy, control, running)].filter(Boolean).join(" \xB7 ") },
+        { label: copy.lastOperation, value: lastOperationText(copy, row, detail) }
       ] }),
       h11(AppList, { copy, host, address: addressOf(row), compact: true, onError })
     );
@@ -2130,12 +2129,6 @@ ${LAYER_CSS}
           { className: "dnls-section" },
           h11(
             "div",
-            { className: "dnls-section-head" },
-            h11("h3", { className: "dnls-section-title" }, copy.typeLabel),
-            h11("span", { className: "dnls-muted" }, String(list.length))
-          ),
-          h11(
-            "div",
             { className: "dnls-cards", "data-dnls-list": "1" },
             list.map((row) => h11(SandboxCard, {
               key: row.sandboxId,
@@ -2171,6 +2164,18 @@ ${LAYER_CSS}
       h11(
         "div",
         { className: "dnls-scroll" },
+        h11(
+          "div",
+          { className: "dnls-page-head" },
+          h11("h2", { className: "dnls-page-title" }, copy.typeLabel),
+          supports("sandbox.instance.create") ? h11(import_dsh_client_ui_primitives8.Button, {
+            variant: "primary",
+            size: "sm",
+            disabled: busy,
+            icon: h11(import_dsh_client_ui_primitives8.IconPlusOutlineRegular, { size: 14 }),
+            onClick: onCreate
+          }, copy.create) : null
+        ),
         rows ? h11(ErrorLine, { error }) : null,
         recent.length > 0 ? h11(Section, { title: copy.receipts }, h11(Group, null, h11(ReceiptList, { copy, receipts: recent, onRecheck, showName: true }))) : null,
         body
@@ -2184,6 +2189,7 @@ ${LAYER_CSS}
   var h12 = import_react14.default.createElement;
   var PLANES = ["container", "engine", "bridge", "page", "dom", "terminal"];
   var HEALTH_TONE2 = { healthy: "success", unhealthy: "danger" };
+  var PROC_DOT = { R: "done", Z: "error", T: "warning" };
   var DANGER = "nano-modal-action nano-modal-danger";
   var ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
   function useTickets() {
@@ -2202,7 +2208,7 @@ ${LAYER_CSS}
     if (!Number.isFinite(ms) || ms <= 0) return copy.idleOff;
     return fill(copy.idleAfter, { n: Math.round(ms / 6e4) });
   }
-  function MonitorTab({ copy, target, detail, running, usageWindow, setUsageWindow, procs }) {
+  function MonitorTab({ copy, target, detail, running, usageWindow, setUsageWindow, procs, host, address, onError }) {
     const minute = running ? detail?.lastMinute ?? target.lastMinute : null;
     const cpus = target.resources?.cpus;
     const memory = target.resources?.memoryBytes;
@@ -2211,6 +2217,11 @@ ${LAYER_CSS}
     return h12(
       import_react14.default.Fragment,
       null,
+      h12(
+        Section,
+        { title: copy.apps, aside: h12("span", { className: "dnls-muted" }, copy.newPane) },
+        h12(AppList, { copy, host, address, onError })
+      ),
       h12(
         Section,
         { title: copy.allocated, aside: h12("span", { className: "dnls-muted" }, running ? copy.lastMinute : copy.notSampling) },
@@ -2236,18 +2247,13 @@ ${LAYER_CSS}
         !running ? h12(Muted, null, copy.notSampling) : procs == null ? h12(Muted, null, copy.loading) : procs.error ? h12(ErrorLine, { error: procs.error }) : sortedProcs.length === 0 ? h12(Muted, null, copy.processesEmpty) : h12(
           import_react14.default.Fragment,
           null,
-          h12(
-            PlainTable,
-            { columns: [copy.procPid, copy.procName, copy.procState, copy.procRss] },
-            sortedProcs.map((proc) => h12(
-              "tr",
-              { key: proc.pid },
-              h12("td", null, String(proc.pid)),
-              h12("td", null, proc.name),
-              h12("td", null, proc.state ?? copy.none),
-              h12("td", null, formatBytes(proc.rssBytes) ?? copy.none)
-            ))
-          ),
+          h12("div", { className: "dnls-procs" }, sortedProcs.map((proc) => h12(import_dsh_client_ui_primitives9.DisclosureRow, {
+            key: proc.pid,
+            icon: h12(import_dsh_client_ui_primitives9.StateDot, { state: PROC_DOT[proc.state] ?? "idle" }),
+            title: proc.name ?? String(proc.pid),
+            expandable: false,
+            headerAccessory: h12("span", { className: "dnls-proc-meta" }, `${proc.pid} \xB7 ${formatBytes(proc.rssBytes) ?? copy.none}`)
+          }))),
           procs.truncated ? h12(Muted, null, fill(copy.processesTruncated, { n: sortedProcs.length })) : null
         )
       ),
@@ -2698,7 +2704,7 @@ ${LAYER_CSS}
     const mine = receipts.filter((receipt) => receipt.sandboxId === sandboxId);
     const drivers = Array.isArray(target.drivers) && target.drivers.length > 0 ? target.drivers.join(" \xB7 ") : copy.none;
     const tabs = [
-      { value: "monitor", label: copy.tabMonitor, content: tab === "monitor" ? h12(MonitorTab, { copy, target, detail, running, usageWindow, setUsageWindow, procs }) : null },
+      { value: "monitor", label: copy.tabMonitor, content: tab === "monitor" ? h12(MonitorTab, { copy, target, detail, running, usageWindow, setUsageWindow, procs, host, address: objectAddress, onError: setError }) : null },
       { value: "services", label: copy.tabServices, content: tab === "services" ? h12(ServicesTab, {
         copy,
         detail,
@@ -2742,23 +2748,29 @@ ${LAYER_CSS}
       }) : null }
     ].filter(Boolean);
     const idle = detail?.idle;
+    const revisionText = pendingRevision(target) ? fill(copy.revisionPending, { applied: target.appliedRevision ?? 0, desired: target.desiredRevision }) : String(target.appliedRevision ?? copy.none);
     return h12(
       "div",
       { className: "dnls-view", "data-dnls-view": "sandbox" },
       h12(
         "div",
-        { className: "dnls-scroll" },
+        { className: "dnls-object-head" },
         h12(ErrorLine, { error: error ?? outerError }),
         h12(
           "div",
           { className: "dnls-head-card", "data-dnls-status": observed ?? "unknown" },
           h12(
             "div",
-            { className: "dnls-status" },
+            { className: "dnls-head-name" },
             h12(import_dsh_client_ui_primitives9.StateDot, { state: DOT[observed] ?? "idle" }),
-            h12("span", { className: "dnls-status-label" }, stateText(copy, observed)),
+            h12("span", { className: "dnls-head-title" }, nameOf(target)),
             HEALTH_TONE2[target.health] ? h12(import_dsh_client_ui_primitives9.Tag, { tone: HEALTH_TONE2[target.health] }, copy.health[target.health]) : null,
-            h12("span", { className: "dnls-status-size" }, sizeLine(copy, target) ?? copy.none)
+            pendingRevision(target) ? h12(import_dsh_client_ui_primitives9.Tag, { tone: "neutral" }, copy.pendingApply) : null
+          ),
+          h12(
+            "div",
+            { className: "dnls-head-meta" },
+            [stateText(copy, observed), sizeLine(copy, target), target.profileId].filter(Boolean).join(" \xB7 ")
           ),
           running && target.lastMinute ? h12(
             "div",
@@ -2775,27 +2787,22 @@ ${LAYER_CSS}
             })
           ) : null,
           h12(FactGrid, { items: [
+            { label: copy.driver, value: driverText(copy, control, running) },
             { label: copy.idleSleep, value: detail ? idleStatusText(copy, idle) : copy.none },
             { label: copy.lastActivity, value: lastActivityText(copy, idle) },
-            { label: copy.driver, value: driverText(copy, control, running) },
             { label: copy.lastOperation, value: lastOperationText(copy, target, detail) },
             { label: copy.services, value: serviceHealthText(copy, target.services) },
             // The list row is re-read after every dock create/close; the inspect detail is not.
-            { label: copy.terminals, value: String(row.visibleTerminalCount ?? target.visibleTerminalCount ?? copy.none) },
-            { label: copy.profile, value: target.profileId ?? copy.none },
-            { label: copy.revision, value: pendingRevision(target) ? fill(copy.revisionPending, { applied: target.appliedRevision ?? 0, desired: target.desiredRevision }) : String(target.appliedRevision ?? copy.none) },
-            { label: copy.drivers, value: drivers },
-            { label: copy.observed, value: when(copy, target.observedAt) ?? copy.none }
-          ] })
-        ),
-        mine.some((receipt) => receipt.checking || !receipt.settled) ? h12(Group, null, h12(ReceiptList, { copy, receipts: mine.filter((receipt) => !receipt.settled), onRecheck })) : null,
-        h12(
-          Section,
-          { title: copy.apps, aside: h12("span", { className: "dnls-muted" }, copy.newPane) },
-          h12(AppList, { copy, host, address: objectAddress, onError: setError })
-        ),
-        h12(NanoTabs, { className: "dnls-detail", label: copy.tabs, value: tab, onChange: setTab, items: tabs })
-      )
+            { label: copy.terminals, value: String(row.visibleTerminalCount ?? target.visibleTerminalCount ?? copy.none) }
+          ] }),
+          h12("div", { className: "dnls-head-foot" }, [
+            `${copy.revision} ${revisionText}`,
+            `${copy.drivers} ${drivers}`,
+            `${copy.observed} ${when(copy, target.observedAt) ?? copy.none}`
+          ].join(" \xB7 "))
+        )
+      ),
+      h12(NanoTabs, { className: "dnls-detail", label: copy.tabs, value: tab, onChange: setTab, items: tabs })
     );
   }
 
@@ -3206,40 +3213,34 @@ ${LAYER_CSS}
     const bar = h14(
       import_react16.default.Fragment,
       null,
-      current ? h14(IconButton, { icon: h14(import_dsh_client_ui_primitives11.IconChevronLeftOutlineRegular, { size: 16 }), "aria-label": copy.back, onClick: unchoose }) : null,
+      // The dashboard entry is always visible, at any nesting depth; the drawer's
+      // overview row is the same destination in the vertical list.
+      h14(IconButton, {
+        icon: h14(import_dsh_client_ui_primitives11.IconLayersOutlineRegular, { size: 16 }),
+        "aria-label": copy.overview,
+        title: copy.back,
+        disabled: !current,
+        onClick: unchoose
+      }),
       h14(ShellToggle, {
         icon: h14(import_dsh_client_ui_primitives11.IconPanelLeftOutlineRegular, { size: 16 }),
         label: copy.drawerToggle,
-        title: current ? nameOf(current) : copy.overview,
+        title: copy.typeLabel,
         open: drawer,
         onClick: () => setDrawer((open) => !open)
       }),
-      h14(
-        "span",
-        { className: "dnls-shell-title" },
-        current ? h14(import_react16.default.Fragment, null, h14(import_dsh_client_ui_primitives11.StateDot, { state: DOT[current.observedState] ?? "idle" }), h14("span", null, stateText(copy, current.observedState))) : rows ? h14("span", null, fill(copy.sandboxesCount, { running, stopped, attention })) : null
-      ),
-      h14(
-        "span",
-        { className: "dnls-shell-tail" },
-        h14(IconButton, {
-          icon: h14(import_dsh_client_ui_primitives11.IconRefreshOutlineRegular, { size: 16 }),
-          "aria-label": copy.refresh,
-          disabled: phase === "loading" && !rows,
-          onClick: refresh
-        }),
-        current ? h14(IconButton, {
-          icon: h14(import_dsh_client_ui_primitives11.IconEllipsisOutlineRegular, { size: 16 }),
-          "aria-label": copy.more,
-          onClick: (event) => openMenu(event, rowTarget(current))
-        }) : supports("sandbox.instance.create") ? h14(import_dsh_client_ui_primitives11.Button, {
-          variant: "primary",
-          size: "sm",
-          disabled: busy,
-          icon: h14(import_dsh_client_ui_primitives11.IconPlusOutlineRegular, { size: 14 }),
-          onClick: openCreate
-        }, copy.create) : null
-      )
+      h14("span", { className: "dnls-shell-spacer" }),
+      h14(IconButton, {
+        icon: h14(import_dsh_client_ui_primitives11.IconRefreshOutlineRegular, { size: 16 }),
+        "aria-label": copy.refresh,
+        disabled: phase === "loading" && !rows,
+        onClick: refresh
+      }),
+      current ? h14(IconButton, {
+        icon: h14(import_dsh_client_ui_primitives11.IconEllipsisOutlineRegular, { size: 16 }),
+        "aria-label": copy.more,
+        onClick: (event) => openMenu(event, rowTarget(current))
+      }) : null
     );
     const drawerNode = h14(
       TabDrawer,

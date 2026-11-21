@@ -2,9 +2,9 @@
  *  Terminals live in the shell's dock. */
 import React from 'react'
 import {
-  Button, CodeBlock, Input, SegmentedControl, StateDot, Tag, IconRefreshOutlineRegular,
+  Button, CodeBlock, DisclosureRow, Input, SegmentedControl, StateDot, Tag, IconRefreshOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { FactGrid, IconButton, Meter, NanoTabs, PlainTable, SplitRow } from 'dsh-nano-ui'
+import { FactGrid, IconButton, Meter, NanoTabs, SplitRow } from 'dsh-nano-ui'
 import { createTicket } from './managed.js'
 import { fill } from './i18n.js'
 import { formatBytes, serviceAddress } from './format.js'
@@ -18,6 +18,8 @@ import { AppList, ErrorLine, Group, Muted, ReceiptList, Section, StateMinutes, U
 const h = React.createElement
 const PLANES = ['container', 'engine', 'bridge', 'page', 'dom', 'terminal']
 const HEALTH_TONE = { healthy: 'success', unhealthy: 'danger' }
+// Linux process state letters; only a live verdict earns a coloured dot.
+const PROC_DOT = { R: 'done', Z: 'error', T: 'warning' }
 const DANGER = 'nano-modal-action nano-modal-danger'
 // Engine logs carry terminal colour codes that a code block would print literally.
 const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g
@@ -40,13 +42,15 @@ function idleText(copy, configuration) {
 
 /* ── monitor ─────────────────────────────────────────────────────────── */
 
-function MonitorTab({ copy, target, detail, running, usageWindow, setUsageWindow, procs }) {
+function MonitorTab({ copy, target, detail, running, usageWindow, setUsageWindow, procs, host, address, onError }) {
   const minute = running ? (detail?.lastMinute ?? target.lastMinute) : null
   const cpus = target.resources?.cpus
   const memory = target.resources?.memoryBytes
   const usage = detail?.usage
   const sortedProcs = procs?.list ? [...procs.list].sort((a, b) => (b.rssBytes ?? 0) - (a.rssBytes ?? 0)) : []
   return h(React.Fragment, null,
+    h(Section, { title: copy.apps, aside: h('span', { className: 'dnls-muted' }, copy.newPane) },
+      h(AppList, { copy, host, address, onError })),
     h(Section, { title: copy.allocated, aside: h('span', { className: 'dnls-muted' }, running ? copy.lastMinute : copy.notSampling) },
       h(Meter, {
         label: copy.usageCpu,
@@ -68,12 +72,13 @@ function MonitorTab({ copy, target, detail, running, usageWindow, setUsageWindow
       : procs.error ? h(ErrorLine, { error: procs.error })
       : sortedProcs.length === 0 ? h(Muted, null, copy.processesEmpty)
       : h(React.Fragment, null,
-        h(PlainTable, { columns: [copy.procPid, copy.procName, copy.procState, copy.procRss] },
-          sortedProcs.map((proc) => h('tr', { key: proc.pid },
-            h('td', null, String(proc.pid)),
-            h('td', null, proc.name),
-            h('td', null, proc.state ?? copy.none),
-            h('td', null, formatBytes(proc.rssBytes) ?? copy.none)))),
+        h('div', { className: 'dnls-procs' }, sortedProcs.map((proc) => h(DisclosureRow, {
+          key: proc.pid,
+          icon: h(StateDot, { state: PROC_DOT[proc.state] ?? 'idle' }),
+          title: proc.name ?? String(proc.pid),
+          expandable: false,
+          headerAccessory: h('span', { className: 'dnls-proc-meta' }, `${proc.pid} · ${formatBytes(proc.rssBytes) ?? copy.none}`),
+        }))),
         procs.truncated ? h(Muted, null, fill(copy.processesTruncated, { n: sortedProcs.length })) : null)),
     h(Section, { title: copy.deployment },
       detail == null ? h(Muted, null, copy.loading) : h(Group, null,
@@ -428,7 +433,7 @@ export function SandboxView({
   const drivers = Array.isArray(target.drivers) && target.drivers.length > 0 ? target.drivers.join(' · ') : copy.none
 
   const tabs = [
-    { value: 'monitor', label: copy.tabMonitor, content: tab === 'monitor' ? h(MonitorTab, { copy, target, detail, running, usageWindow, setUsageWindow, procs }) : null },
+    { value: 'monitor', label: copy.tabMonitor, content: tab === 'monitor' ? h(MonitorTab, { copy, target, detail, running, usageWindow, setUsageWindow, procs, host, address: objectAddress, onError: setError }) : null },
     { value: 'services', label: copy.tabServices, content: tab === 'services' ? h(ServicesTab, {
       copy, detail, running, probe, control, busy,
       canProbe: supports('dnls.status'), canControl: supports('dnls.control'),
@@ -448,15 +453,22 @@ export function SandboxView({
   ].filter(Boolean)
 
   const idle = detail?.idle
+  const revisionText = pendingRevision(target)
+    ? fill(copy.revisionPending, { applied: target.appliedRevision ?? 0, desired: target.desiredRevision })
+    : String(target.appliedRevision ?? copy.none)
+  // The head and the tab strip stay put; only the active panel scrolls, so
+  // switching tabs never moves the chrome.
   return h('div', { className: 'dnls-view', 'data-dnls-view': 'sandbox' },
-    h('div', { className: 'dnls-scroll' },
+    h('div', { className: 'dnls-object-head' },
       h(ErrorLine, { error: error ?? outerError }),
       h('div', { className: 'dnls-head-card', 'data-dnls-status': observed ?? 'unknown' },
-        h('div', { className: 'dnls-status' },
+        h('div', { className: 'dnls-head-name' },
           h(StateDot, { state: DOT[observed] ?? 'idle' }),
-          h('span', { className: 'dnls-status-label' }, stateText(copy, observed)),
+          h('span', { className: 'dnls-head-title' }, nameOf(target)),
           HEALTH_TONE[target.health] ? h(Tag, { tone: HEALTH_TONE[target.health] }, copy.health[target.health]) : null,
-          h('span', { className: 'dnls-status-size' }, sizeLine(copy, target) ?? copy.none)),
+          pendingRevision(target) ? h(Tag, { tone: 'neutral' }, copy.pendingApply) : null),
+        h('div', { className: 'dnls-head-meta' },
+          [stateText(copy, observed), sizeLine(copy, target), target.profileId].filter(Boolean).join(' · ')),
         running && target.lastMinute ? h('div', { className: 'dnls-meters' },
           h(Meter, {
             label: copy.usageCpu,
@@ -469,24 +481,18 @@ export function SandboxView({
             value: ratio(target.lastMinute.memoryBytes, target.resources?.memoryBytes),
           })) : null,
         h(FactGrid, { items: [
+          { label: copy.driver, value: driverText(copy, control, running) },
           { label: copy.idleSleep, value: detail ? idleStatusText(copy, idle) : copy.none },
           { label: copy.lastActivity, value: lastActivityText(copy, idle) },
-          { label: copy.driver, value: driverText(copy, control, running) },
           { label: copy.lastOperation, value: lastOperationText(copy, target, detail) },
           { label: copy.services, value: serviceHealthText(copy, target.services) },
           // The list row is re-read after every dock create/close; the inspect detail is not.
           { label: copy.terminals, value: String(row.visibleTerminalCount ?? target.visibleTerminalCount ?? copy.none) },
-          { label: copy.profile, value: target.profileId ?? copy.none },
-          { label: copy.revision, value: pendingRevision(target)
-            ? fill(copy.revisionPending, { applied: target.appliedRevision ?? 0, desired: target.desiredRevision })
-            : String(target.appliedRevision ?? copy.none) },
-          { label: copy.drivers, value: drivers },
-          { label: copy.observed, value: when(copy, target.observedAt) ?? copy.none },
-        ] })),
-      mine.some((receipt) => receipt.checking || !receipt.settled)
-        ? h(Group, null, h(ReceiptList, { copy, receipts: mine.filter((receipt) => !receipt.settled), onRecheck }))
-        : null,
-      h(Section, { title: copy.apps, aside: h('span', { className: 'dnls-muted' }, copy.newPane) },
-        h(AppList, { copy, host, address: objectAddress, onError: setError })),
-      h(NanoTabs, { className: 'dnls-detail', label: copy.tabs, value: tab, onChange: setTab, items: tabs })))
+        ] }),
+        h('div', { className: 'dnls-head-foot' }, [
+          `${copy.revision} ${revisionText}`,
+          `${copy.drivers} ${drivers}`,
+          `${copy.observed} ${when(copy, target.observedAt) ?? copy.none}`,
+        ].join(' · ')))),
+    h(NanoTabs, { className: 'dnls-detail', label: copy.tabs, value: tab, onChange: setTab, items: tabs }))
 }

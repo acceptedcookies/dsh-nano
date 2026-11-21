@@ -684,7 +684,7 @@ test('T-O-68 pre-dispatch refusal returns status + errorId only — no error, no
  * capability owner + dispatcher, not a second object executor.
  */
 
-const AGENT_TOOL_NAMES = ['sandbox.list', 'sandbox.status', 'sandbox.open', 'sandbox.control.status']
+const AGENT_TOOL_NAMES = ['sandbox_list', 'sandbox_status', 'sandbox_open', 'sandbox_control_status']
 
 /**
  * A guaranteed-free port pool for one test: probes `size` consecutive
@@ -769,7 +769,7 @@ test('T-O-64: the four agent tools are the same owner + dispatcher the /mcp and 
   setPeer(ownerPeer())
   const callsBefore = execCalls.length
   // Same capability, three entrances, one counted dispatcher call each.
-  const viaTool = await tools.find((d) => d.name === 'sandbox.list').execute({}, { agent: { session: {} }, signal: new AbortController().signal })
+  const viaTool = await tools.find((d) => d.name === 'sandbox_list').execute({}, { agent: { session: {} }, signal: new AbortController().signal })
   assert.equal(viaTool.status, 200, JSON.stringify(viaTool))
   assert.ok(viaTool.rows.some((r) => r.sandboxId === row.sandboxId), 'tool sees the same ledger')
   const toolDispatches = execCalls.slice(callsBefore).filter((c) => c.capability === 'sandbox.list' && c.via === 'tool')
@@ -786,7 +786,7 @@ test('T-O-64: the four agent tools are the same owner + dispatcher the /mcp and 
 
 test('T-O-64: object tools refuse a missing sandboxId before any dispatch', async (t) => {
   const { tools, execCalls } = await setup(t)
-  for (const name of ['sandbox.status', 'sandbox.open', 'sandbox.control.status']) {
+  for (const name of ['sandbox_status', 'sandbox_open', 'sandbox_control_status']) {
     const before = execCalls.length
     const answer = await tools.find((d) => d.name === name).execute({}, { agent: { session: {} }, signal: new AbortController().signal })
     assert.equal(answer.status, 400, `${name}`)
@@ -800,7 +800,7 @@ test('T-O-64: object tools refuse a missing sandboxId before any dispatch', asyn
     }
   }
   // No session context → the composition adapter yields no peer: pre-dispatch.
-  const refused = await tools.find((d) => d.name === 'sandbox.list').execute({}, {})
+  const refused = await tools.find((d) => d.name === 'sandbox_list').execute({}, {})
   assert.equal(refused.status, 401)
   assert.equal(refused.ok, false)
 })
@@ -829,7 +829,7 @@ test('T-O-64: invisible and nonexistent objects refuse identically on every entr
   assert.deepEqual(mcpInvisible.result.structuredContent, mcpMissing.result.structuredContent,
     'invisible and missing answer with the identical body')
 
-  const status = tools.find((d) => d.name === 'sandbox.status')
+  const status = tools.find((d) => d.name === 'sandbox_status')
   const exec = { agent: { session: {} }, signal: blind.signal }
   const toolInvisible = await status.execute({ sandboxId: row.sandboxId }, exec)
   const toolMissing = await status.execute({ sandboxId: 'sb-no-such-row' }, exec)
@@ -866,7 +866,7 @@ test('R-11: human hold refuses tool + /mcp opens pre-dispatch while the pane HTT
 
   const kernelBefore = connects.length
   // (a) agent tool open: refused, dispatcher envelope, kernel untouched.
-  const opened = tools.find((d) => d.name === 'sandbox.open')
+  const opened = tools.find((d) => d.name === 'sandbox_open')
   const refusal = await opened.execute({ sandboxId: row.sandboxId, url: 'https://example.net/' },
     { agent: { session: {} }, signal: new AbortController().signal })
   assert.equal(refusal.status, 409)
@@ -930,7 +930,7 @@ test('T-O-64: tool results pass the dispatcher redaction — denied keys never s
     env: { SECRET: 'v' },
   }
   await fakeBridge(t, control, reservedPort(row, 'mcp-bridge'))
-  const answer = await tools.find((d) => d.name === 'sandbox.control.status')
+  const answer = await tools.find((d) => d.name === 'sandbox_control_status')
     .execute({ sandboxId: row.sandboxId }, { agent: { session: {} }, signal: new AbortController().signal })
   assert.equal(answer.status, 200, JSON.stringify(answer))
   assert.equal(answer.ok, true)
@@ -958,7 +958,7 @@ test('R-11: a failed humanHold read refuses with control.bridge before any kerne
   // inspect evidence, but nothing listens on it — the control read fails.
   const kernelBefore = connects.length
 
-  const opened = tools.find((d) => d.name === 'sandbox.open')
+  const opened = tools.find((d) => d.name === 'sandbox_open')
   const refused = await opened.execute({ sandboxId: row.sandboxId, url: 'https://example.net/' },
     { agent: { session: {} }, signal: new AbortController().signal })
   assert.equal(refused.ok, false)

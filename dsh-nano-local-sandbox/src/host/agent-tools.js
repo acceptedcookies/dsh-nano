@@ -28,14 +28,25 @@ const safeSegment = (value) => typeof value === 'string' && SAFE_SEGMENT.test(va
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
 
 /** capability → { tool name, read-only, narrow result projection } */
+// The model tool API only accepts [a-zA-Z0-9_-]+ — a dotted capability id is
+// rejected by the provider (T-O-64: schema and description are the contract,
+// so a bad name breaks every model turn, not just this tool).
+const TOOL_NAME = /^[a-zA-Z0-9_-]{1,64}$/
+const assertToolName = (name) => {
+  if (typeof name !== 'string' || !TOOL_NAME.test(name)) throw new Error(`agent tool name is not provider-safe: ${name}`)
+  return name
+}
+
 const AGENT_TOOLS = [
   {
     capability: 'sandbox.list',
+    name: 'sandbox_list',
     read: true,
     present: () => '列出可见沙箱对象',
   },
   {
     capability: 'dnls.diagnostics',
+    name: 'sandbox_status',
     read: true,
     present: args => `读取沙箱状态 ${args?.sandboxId ?? ''}`.trimEnd(),
     // Contract surface: phase, relay address `cdp`, navigation, hints — the
@@ -51,11 +62,13 @@ const AGENT_TOOLS = [
   },
   {
     capability: 'dnls.open',
+    name: 'sandbox_open',
     read: false,
     present: args => `打开 ${args?.url ?? ''}`.trimEnd(),
   },
   {
     capability: 'dnls.control',
+    name: 'sandbox_control_status',
     read: true,
     present: args => `读取接管状态 ${args?.sandboxId ?? ''}`.trimEnd(),
     // Two-slot read: humanHold + relay — nothing else of the control doc.
@@ -90,14 +103,14 @@ export function makeAgentToolDefinitions({ owner, peerFor }) {
     throw new Error('agent tools require the managed owner ({capabilities, execute})')
   }
   if (typeof peerFor !== 'function') throw new Error('agent tools require a composition peerFor adapter')
-  return AGENT_TOOLS.map(({ capability, read, present, project }) => {
+  return AGENT_TOOLS.map(({ capability, name, read, present, project }) => {
     const def = owner.capabilities.get(capability)
     // A capability the provider filtered out is not advertised — same as /mcp.
     if (!def?.tool?.name) return null
     const tool = def.tool
     const objectTool = def.target === 'object'
     return {
-      name: tool.name,
+      name: assertToolName(name),
       description: tool.description,
       parameters: tool.inputSchema,
       output: {

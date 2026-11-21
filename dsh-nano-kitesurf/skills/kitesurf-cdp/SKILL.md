@@ -2,7 +2,7 @@
 name: kitesurf-cdp
 description: Collaborate on a frontend through the Kitesurf CDP endpoint. Use when the user points at a page, or asks to inspect or change what Kitesurf is rendering — including debugging a site the sandbox container must reach (local dev servers included, addressed via the container host gateway). Do not launch Chrome.
 version: 0.1.0
-date: 2026-11-20
+date: 2026-11-21
 user-invocable: true
 ---
 
@@ -15,9 +15,11 @@ rules that MUST NOT be violated inline. Load topic references on demand from
 this skill's directory — `references/<topic>.md`.
 
 ## 0. 受管入口：列表 → 用户明确对象 → 状态
-session 内你的受管入口是沙箱宿主注册的四个模型工具（列表 / 状态 / 打开 / 接管状态；以宿主注册的工具名为准），不要从页面、地址栏或端口推断目标。
+session 内你的受管入口是沙箱宿主注册的四个模型工具：sandbox_list（列表）、sandbox_status（状态）、sandbox_open（打开）、sandbox_control_status（接管状态）。不要从页面、地址栏或端口推断目标。
 1. **列表**：先调列表工具，只得到你可见对象的窄行——它不替你选择。
 2. **用户明确对象**：用户没说清目标对象就**询问**——即使列表里只有一个候选也要问，不自动选中。经宿主导航明确交给你的对象引用，算用户已选。
+   - **硬规则**：这一轮用户没有点名 sandboxId 或对象名，就必须先问。上一轮失败、重复请求、"你知道是哪个吧"、列表里只有一个对象，**都不构成指定**。不得自己挑一个再事后解释；不得因为"用户会不耐烦"就替他选。
+   - 问句只列可见对象的名称与短 ID，然后停下等回答；回答之前不调 sandbox_open、不调 sandbox_status。
 3. **状态**：对用户确认的 `sandboxId` 调状态工具，得到 `phase`、relay 地址 `cdp`、`navigation` 与 `hints`。**relay 地址只从状态工具取**——不从页面地址栏、hostname 或端口推断、拼接 socket。
 - 打开页面：调**打开**工具 `{sandboxId, url}`——它计入写；人在接管中会被拒，被拒就停。
 - 人是否接管：调**接管状态**工具，只读 `humanHold` 与 `relay` 两档。

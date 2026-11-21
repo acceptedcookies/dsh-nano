@@ -2,7 +2,7 @@
 name: nano-kite
 description: Guide the user to run Kitesurf engine lifecycle actions in the workbench sandbox controls. Use when the user types /nano-kite.
 version: 0.1.0
-date: 2026-11-20
+date: 2026-11-21
 user-invocable: true
 ---
 

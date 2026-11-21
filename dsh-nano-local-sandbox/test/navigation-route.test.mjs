@@ -167,6 +167,14 @@ test('/open on a tunnel domain keeps the same hint on failure, status unchanged'
   assert.match(result.body.hint, /kitesurf\.navigate\.public-tunnel/)
 })
 
+test('/open only matches whole tunnel hosts, never a lookalike suffix or prefix', async t => {
+  const h = harness(t, () => ({ frameId: 'p' }))
+  for (const url of ['https://nottrycloudflare.com/', 'https://foo.trycloudflare.com.evil.test/']) {
+    const result = await h.open(url)
+    assert.equal('hint' in result.body, false, `${url} is not a tunnel domain`)
+  }
+})
+
 test('/open on an ordinary host carries no hint on success, and only the error hint on failure', async t => {
   const h = harness(t, () => ({ frameId: 'p' }))
   const ok = await h.open('https://archy.studio/')

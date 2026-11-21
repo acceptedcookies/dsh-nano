@@ -14,6 +14,7 @@ import {
   IconPinOutlineRegular,
   IconRefreshOutlineRegular,
   IconSearchOutlineRegular,
+  IconSlidersTwoOutlineRegular,
   IconSparkleRegular,
   IconLayersOutlineRegular,
   IconClockOutlineRegular,
@@ -33,6 +34,11 @@ export function StarIcon({ filled = false, ...props }) {
 /** @param {{ className?: string, size?: number }} props */
 export function SearchIcon(props) {
   return <IconSearchOutlineRegular {...props} />
+}
+
+/** @param {{ className?: string, size?: number }} props */
+export function AccountPinIcon(props) {
+  return <IconSlidersTwoOutlineRegular {...props} />
 }
 
 /** @param {{ className?: string, size?: number }} props */

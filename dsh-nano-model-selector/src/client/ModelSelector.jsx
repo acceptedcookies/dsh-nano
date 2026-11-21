@@ -9,6 +9,7 @@ import { BrandMark } from './BrandMark.jsx'
 import { readFavorites, writeFavorites } from './favorites.js'
 import { fetchEngine, fetchEngines, readEngineCache, selectEngine, writeEngineCache } from './media.js'
 import { CompactPanel } from './CompactPanel.jsx'
+import { AccountPinPanel } from './AccountPinPanel.jsx'
 import { SubagentDefault } from './SubagentDefault.jsx'
 import { fetchBundleState, fetchCompactState } from './compact.js'
 import { jsonOp, call } from './jsonClient.js'
@@ -24,6 +25,7 @@ import {
   RefreshIcon,
   DragHandleIcon,
   SearchIcon,
+  AccountPinIcon,
   StarIcon,
   WarningIcon,
 } from './icons.jsx'
@@ -783,10 +785,10 @@ export function ModelSelector({ locked, available, directory, load, select, lang
         >
           <div className="nms-top">
             <div className="nms-title">
-              <span className="nms-title-icon"><ModelIcon size={16} /></span>
+              <span className="nms-title-icon">{filter === 'accounts' ? <AccountPinIcon size={16} /> : <ModelIcon size={16} />}</span>
               <span className="nms-title-text">
-                <span className="nms-title-main">{copy.title}</span>
-                <span className="nms-title-sub">{copy.modelCount(allModels.length)}</span>
+                <span className="nms-title-main">{filter === 'accounts' ? copy.accountPinTitle : copy.title}</span>
+                {filter !== 'accounts' && <span className="nms-title-sub">{copy.modelCount(allModels.length)}</span>}
               </span>
             </div>
             <label className="nms-search">
@@ -809,6 +811,18 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                 <RefreshIcon size={14} />
               </button>
             </label>
+            <div className="nms-top-actions">
+            <button
+              type="button"
+              className="nms-icon-button"
+              data-active={filter === 'accounts'}
+              title={copy.accountPinTitle}
+              aria-label={copy.accountPinTitle}
+              aria-pressed={filter === 'accounts'}
+              onClick={() => { setFilter(filter === 'accounts' ? 'all' : 'accounts'); setQuery('') }}
+            >
+              <AccountPinIcon size={16} />
+            </button>
             {compactInstalled && (
               <Tooltip portal side="bottom" delayMs={300} disabled={!compactEnabled} label={() => waterTip(copy, compactLines)}>
                 <button
@@ -829,6 +843,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
             <button type="button" className="nms-icon-button" title={copy.close} aria-label={copy.close} onClick={() => close(true)}>
               <CloseIcon size={16} />
             </button>
+            </div>
           </div>
 
           <div className="nms-body">
@@ -955,26 +970,30 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                   </div>
                 )}
 
+                {filter === 'accounts' && (
+                  <AccountPinPanel copy={copy} sessionId={typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null} models={allModels} />
+                )}
+
                 {filter === 'compact' && (
                   <CompactPanel copy={copy} models={compactModelPairs} sessionId={typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null} onError={onCompactError} onSwitchDone={pullCompact}
                     onOpenHistory={typeof onOpenHistory === 'function' ? () => { close(false); onOpenHistory() } : undefined} />
                 )}
 
-                {filter !== 'media' && filter !== 'compact' && visibleFavorites.length > 0 && (
+                {filter !== 'media' && filter !== 'compact' && filter !== 'accounts' && visibleFavorites.length > 0 && (
                   <div>
                     <div className="nms-group"><StarIcon className="nms-group-star nms-group-star-fav" size={12} filled />{copy.favorites}<span className="nms-group-count">{copy.favoriteCount(visibleFavorites.length)}</span></div>
                     {visibleFavorites.map(item => renderModel(item, { reorderable: filter === 'favorites' }))}
                   </div>
                 )}
 
-                {filter !== 'favorites' && filter !== 'media' && filter !== 'compact' && visibleGroups.map(group => (
+                {filter !== 'favorites' && filter !== 'media' && filter !== 'compact' && filter !== 'accounts' && visibleGroups.map(group => (
                   <div key={group.id}>
                     <div className="nms-group">{group.name}<span className="nms-group-count">{copy.modelCount(group.models.length)}</span></div>
                     {group.models.map(item => renderModel(item))}
                   </div>
                 ))}
 
-                {filter !== 'media' && filter !== 'compact' && visibleCount === 0 && state.status !== 'loading' && !reloading && (
+                {filter !== 'media' && filter !== 'compact' && filter !== 'accounts' && visibleCount === 0 && state.status !== 'loading' && !reloading && (
                   <div className="nms-empty">
                     <span className="nms-empty-icon">{filter === 'favorites' ? <StarIcon size={17} /> : <ModelIcon size={17} />}</span>
                     {filter === 'favorites' && favorites.length === 0
@@ -992,7 +1011,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                 ))}
               </div>
 
-              {filter !== 'media' && filter !== 'compact' && (
+              {filter !== 'media' && filter !== 'compact' && filter !== 'accounts' && (
               <footer className="nms-effort">
                 <span className="nms-effort-label">{copy.effort}</span>
                 {current === null || currentItem === undefined

@@ -43,6 +43,7 @@
 | `/nano-model-selector/media-engines` | — | `dnms.media-engines` | http | exact |
 | `/nano-model-selector/media-engine` | — | `dnms.media-engine` | http | exact |
 | `/nano-model-selector/subagent-default` | — | `dnms.subagent-default` | http | exact |
+| `/nano-model-selector/account-pin` | — | `dnms.account-pin` | http | exact |
 | `/nano-model-selector/async-compact` | — | `dnms.async-compact` | http | exact |
 | `/nano-model-selector/async-compact/bundle` | — | `dnms.async-compact.bundle` | http | exact |
 | `/nano-model-selector/async-compact/switch` | — | `dnms.async-compact.switch` | http | exact |

@@ -3178,7 +3178,7 @@ export function apply(ctx) {
     keepMounted: true,
     title: (address) => {
       const ref = parseSandboxReference(address)
-      return ref ? `sandbox ${ref.sandboxId.slice(0, 8)}` : copy().typeLabel
+      return ref ? `${copy().typeLabel} · ${ref.sandboxId.slice(0, 8)}` : copy().typeLabel
     },
   }))
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(

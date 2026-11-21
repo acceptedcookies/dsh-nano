@@ -1,6 +1,6 @@
 /** Small building blocks shared by the fleet list and the sandbox page. */
 import React from 'react'
-import { Button, SegmentedControl, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, PluginArtworkDefault, SegmentedControl, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SplitRow } from 'dsh-nano-ui'
 import { HistoryLine } from './history.jsx'
 import { fill } from './i18n.js'
@@ -9,12 +9,68 @@ import { OP_DOT, SETTLED, actionText, combine, cores, opText, shortId, stateText
 
 const h = React.createElement
 
+/** One semantic block: its title outside, its content on its own plate. */
 export function Section({ title, aside, children }) {
   return h('section', { className: 'dnls-section' },
     h('div', { className: 'dnls-section-head' },
       h('h3', { className: 'dnls-section-title' }, title),
       aside ? h('div', { className: 'dnls-inline' }, aside) : null),
-    children)
+    h('div', { className: 'dnls-plate' }, children))
+}
+
+export function handlersFor(host, address) {
+  if (typeof address !== 'string') return []
+  try { return host.handlers(address) ?? [] } catch { return [] }
+}
+
+export function handlerTitle(handler, address, fallback) {
+  try {
+    const title = typeof handler?.title === 'function' ? handler.title(address) : handler?.title
+    return typeof title === 'string' && title !== '' ? title : fallback
+  } catch { return fallback }
+}
+
+function handlerIcon(handler) {
+  const Icon = Array.isArray(handler?.guide) ? handler.guide.find((entry) => entry?.icon)?.icon : null
+  return h(Icon ?? PluginArtworkDefault, { size: 16 })
+}
+
+/**
+ * Every host handler that accepts the sandbox address is one app; its name is
+ * the handler's own tab title. Opening names that handler's kind so the host
+ * opens exactly the app the user picked.
+ */
+export function AppList({ copy, host, address, compact, onError }) {
+  const handlers = handlersFor(host, address)
+  const open = (handler) => {
+    if (host.openResource(address, { kind: handler.kind, preferNewPane: true }) !== true) onError?.(new Error(copy.workspaceUnavailable))
+  }
+  if (handlers.length === 0) return compact ? null : h(Muted, null, copy.workspaceUnavailable)
+  if (compact) {
+    return h('span', { className: 'dnls-apps', onClick: (event) => event.stopPropagation(), onKeyDown: (event) => event.stopPropagation() },
+      handlers.map((handler) => {
+        const title = handlerTitle(handler, address, copy.none)
+        return h(Button, {
+          key: handler.id ?? handler.kind,
+          variant: 'outline', size: 'sm',
+          icon: handlerIcon(handler),
+          title: copy.newPane,
+          'aria-label': `${copy.appOpen} ${title}`,
+          onClick: () => open(handler),
+        }, title)
+      }))
+  }
+  return h(Group, null, handlers.map((handler) => {
+    const title = handlerTitle(handler, address, copy.none)
+    return h(SplitRow, {
+      key: handler.id ?? handler.kind,
+      label: h('span', { className: 'dnls-term' }, handlerIcon(handler), h('span', null, title)),
+    }, h(Button, {
+      variant: 'outline', size: 'sm', title: copy.newPane,
+      'aria-label': `${copy.appOpen} ${title}`,
+      onClick: () => open(handler),
+    }, copy.appOpen))
+  }))
 }
 
 /** Rows that belong together, on one bordered surface. */

@@ -1,24 +1,66 @@
-/** Sandbox list: what exists, whether it runs and what it uses, without opening anything. */
+/** Overview: the system as a whole, then one card per sandbox with what it is
+ *  doing, how healthy it is, what it uses and what can open it. */
 import React from 'react'
-import {
-  Button, StateDot, IconPlusOutlineRegular, IconRefreshOutlineRegular,
-  IconEllipsisOutlineRegular, PluginArtworkDefault,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import { EmptyState, IconButton, Toolbar } from 'dsh-nano-ui'
+import { Button, StateDot, Tag, IconEllipsisOutlineRegular, PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
+import { EmptyState, FactGrid, IconButton, Meter } from 'dsh-nano-ui'
 import { createTicket } from './managed.js'
 import { fill } from './i18n.js'
-import { DOT, needsAttention, nameOf, rowMeta, stateText } from './model.js'
-import { ErrorLine, Group, Muted, ReceiptList, Section, UsageCharts, WindowControl } from './parts.jsx'
+import { formatBytes } from './format.js'
+import { sandboxAddress } from '../host/terminal-resource.js'
+import {
+  DOT, combine, cores, driverText, idleStatusText, lastOperationText, nameOf, needsAttention,
+  pendingRevision, ratio, serviceHealthText, sizeLine, stateText,
+} from './model.js'
+import { AppList, ErrorLine, Group, Muted, ReceiptList, Section, UsageCharts, WindowControl } from './parts.jsx'
+import { profileIdOf } from './dialogs.jsx'
 
 const h = React.createElement
+const HEALTH_TONE = { healthy: 'success', unhealthy: 'danger' }
 
-function SandboxRow({ copy, row, busy, supports, onOpen, onMenu, onStart }) {
+function addressOf(row) {
+  try { return sandboxAddress({ envId: row.envId, sandboxId: row.sandboxId }) } catch { return null }
+}
+
+function SystemPlate({ copy, rows, envs, complete, profiles, usages, usageWindow }) {
+  const running = rows.filter((row) => row.observedState === 'running').length
+  const stopped = rows.filter((row) => row.observedState === 'stopped').length
+  const attention = rows.filter(needsAttention).length
+  const terminals = rows.reduce((sum, row) => sum + (Number.isInteger(row.visibleTerminalCount) ? row.visibleTerminalCount : 0), 0)
+  const envText = Array.isArray(envs) && envs.length > 0
+    ? envs.map((env) => fill(env.complete === false ? copy.envSilent : copy.envAnswered, { env: env.envId })).join(' · ')
+    : complete ? copy.none : copy.listPartial
+  const quota = Array.isArray(profiles)
+    ? profiles.filter((profile) => Number.isInteger(profile?.maxInstances)).map((profile) => {
+      const id = profileIdOf(profile)
+      return fill(copy.quotaLine, { profile: id, used: rows.filter((row) => row.profileId === id).length, max: profile.maxInstances })
+    }).join(' · ')
+    : ''
+  const cpu = usages ? combine(usages, 'cpu', 'core', 'cpuCores') : null
+  const sampling = cpu && cpu.expected > 0
+    ? fill(copy.samplingLine, { valid: cpu.valid, expected: cpu.expected, window: copy[`window${usageWindow === '24h' ? '24' : usageWindow === '7d' ? '7' : '30'}`] })
+    : copy.none
+  return h(Section, { title: copy.system },
+    h(FactGrid, { items: [
+      { label: copy.envs, value: envText },
+      { label: copy.typeLabel, value: fill(copy.sandboxesCount, { running, stopped, attention }) },
+      { label: copy.quota, value: quota || copy.none },
+      { label: copy.sampling, value: sampling },
+      { label: copy.terminalsTotal, value: String(terminals) },
+    ] }))
+}
+
+function SandboxCard({ copy, host, row, detail, control, busy, supports, onOpen, onMenu, onStart, onError }) {
+  const running = row.observedState === 'running'
   const stopped = row.observedState === 'stopped'
+  const minute = running ? row.lastMinute : null
   const own = (event) => event.target === event.currentTarget
+  const stop = (event) => event.stopPropagation()
+  const idle = detail?.idle
   return h('div', {
-    className: 'dnls-row',
+    className: 'dnls-card',
     role: 'button',
     tabIndex: 0,
+    'data-dnls-card': row.sandboxId,
     'aria-label': `${nameOf(row)} · ${stateText(copy, row.observedState)}`,
     onClick: () => onOpen(row),
     onKeyDown: (event) => {
@@ -27,54 +69,107 @@ function SandboxRow({ copy, row, busy, supports, onOpen, onMenu, onStart }) {
       onOpen(row)
     },
   },
-  h(StateDot, { state: DOT[row.observedState] ?? 'idle' }),
-  h('span', { className: 'dnls-row-copy' },
-    h('span', { className: 'dnls-row-name' },
-      h('span', null, nameOf(row)),
-      h('span', { className: 'dnls-row-state' }, stateText(copy, row.observedState))),
-    h('span', { className: 'dnls-row-meta' }, rowMeta(copy, row))),
-  // Row actions must not also open the row.
-  h('span', { className: 'dnls-row-tail', onClick: (event) => event.stopPropagation(), onKeyDown: (event) => event.stopPropagation() },
-    stopped && supports('sandbox.instance.start')
-      ? h(Button, { variant: 'outline', size: 'sm', disabled: busy, onClick: () => onStart(row) }, copy.action.start)
-      : null,
-    h(IconButton, {
-      icon: h(IconEllipsisOutlineRegular, { size: 16 }),
-      'aria-label': `${copy.more} · ${nameOf(row)}`,
-      onClick: (event) => onMenu(event, row),
-    })))
+  h('div', { className: 'dnls-card-head' },
+    h(StateDot, { state: DOT[row.observedState] ?? 'idle' }),
+    h('span', { className: 'dnls-card-name' }, nameOf(row)),
+    h('span', { className: 'dnls-card-state' }, stateText(copy, row.observedState)),
+    HEALTH_TONE[row.health] ? h(Tag, { tone: HEALTH_TONE[row.health] }, copy.health[row.health]) : null,
+    pendingRevision(row) ? h(Tag, { tone: 'neutral' }, copy.pendingApply) : null,
+    h('span', { className: 'dnls-card-tail', onClick: stop, onKeyDown: stop },
+      stopped && supports('sandbox.instance.start')
+        ? h(Button, { variant: 'outline', size: 'sm', disabled: busy, onClick: () => onStart(row) }, copy.action.start)
+        : null,
+      h(IconButton, {
+        icon: h(IconEllipsisOutlineRegular, { size: 16 }),
+        'aria-label': `${copy.more} · ${nameOf(row)}`,
+        onClick: (event) => onMenu(event, row),
+      }))),
+  minute
+    ? h('div', { className: 'dnls-meters' },
+      h(Meter, {
+        label: copy.usageCpu,
+        text: `${cores(minute.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: row.resources?.cpus ?? copy.none })}`,
+        value: ratio(minute.cpuCores, row.resources?.cpus),
+      }),
+      h(Meter, {
+        label: copy.usageMemory,
+        text: `${formatBytes(minute.memoryBytes) ?? copy.none} / ${formatBytes(row.resources?.memoryBytes) ?? copy.none}`,
+        value: ratio(minute.memoryBytes, row.resources?.memoryBytes),
+      }))
+    : h(Muted, null, [
+      row.observedState === 'missing' ? copy.containerMissing : running ? copy.noSamples : copy.notSampling,
+      sizeLine(copy, row),
+    ].filter(Boolean).join(' · ')),
+  h(FactGrid, { items: [
+    { label: copy.services, value: serviceHealthText(copy, row.services) },
+    { label: copy.terminals, value: String(row.visibleTerminalCount ?? copy.none) },
+    { label: copy.lastOperation, value: lastOperationText(copy, row, detail) },
+    { label: copy.idleSleep, value: idleStatusText(copy, idle) },
+    { label: copy.driver, value: driverText(copy, control, running) },
+    { label: copy.profile, value: row.profileId ?? copy.none },
+  ] }),
+  h(AppList, { copy, host, address: addressOf(row), compact: true, onError }))
 }
 
 export function FleetView({
-  copy, api, rows, total, complete, phase, error, busy, supports, receipts,
-  onRetry, onRefresh, onCreate, onOpen, onMenu, onStart, onRecheck,
+  copy, api, host, rows, envs, complete, phase, error, busy, supports, receipts, refreshKey,
+  onRetry, onCreate, onOpen, onMenu, onStart, onRecheck, onError,
 }) {
   const [usageWindow, setUsageWindow] = React.useState('24h')
+  const [details, setDetails] = React.useState({})
+  const [controls, setControls] = React.useState({})
   const [usages, setUsages] = React.useState(null)
+  const [profiles, setProfiles] = React.useState(null)
   const ticket = React.useRef(null)
   if (!ticket.current) ticket.current = createTicket()
   React.useEffect(() => () => ticket.current.kill(), [])
 
+  // The view mounts while discovery is still running, so the announced
+  // capability is part of the dependency list, not just the refresh key.
+  const canListProfiles = supports('sandbox.profile.list')
   React.useEffect(() => {
-    if (!rows || rows.length === 0 || !supports('sandbox.inspect')) return
+    if (!canListProfiles) return
+    let live = true
+    api.listProfiles().then((list) => { if (live) setProfiles(list) }, () => { if (live) setProfiles([]) })
+    return () => { live = false }
+  }, [refreshKey, canListProfiles])
+
+  // One sequential pass per refresh: object detail (usage, idle, timeline) and,
+  // for running objects, the shared-engine control state.
+  React.useEffect(() => {
+    if (!rows || rows.length === 0) return
     const ok = ticket.current.take()
     ;(async () => {
+      const nextDetails = {}
+      const nextControls = {}
       const found = []
       for (const row of rows) {
-        try {
-          const body = await api.inspect(row.sandboxId, { window: usageWindow })
-          if (body?.usage) found.push(body.usage)
-        } catch { /* a sandbox without readable usage simply adds no samples */ }
+        if (supports('sandbox.inspect')) {
+          try {
+            const body = await api.inspect(row.sandboxId, { window: usageWindow })
+            nextDetails[row.sandboxId] = body
+            if (body?.usage) found.push(body.usage)
+          } catch {
+            try { nextDetails[row.sandboxId] = await api.inspect(row.sandboxId, { window: null }) } catch { /* the card keeps row facts */ }
+          }
+        }
+        if (row.observedState === 'running' && supports('dnls.control')) {
+          try {
+            const body = await api.control(row.sandboxId)
+            nextControls[row.sandboxId] = { state: body.control }
+          } catch (caught) {
+            nextControls[row.sandboxId] = { error: caught }
+          }
+        }
         if (!ok()) return
       }
+      setDetails(nextDetails)
+      setControls(nextControls)
       setUsages(found)
     })()
   }, [rows, usageWindow])
 
   const list = rows ?? []
-  const running = list.filter((row) => row.observedState === 'running').length
-  const stopped = list.filter((row) => row.observedState === 'stopped').length
-  const attention = list.filter(needsAttention).length
   const recent = receipts.slice(0, 3)
 
   let body
@@ -96,9 +191,18 @@ export function FleetView({
     })
   } else {
     body = h(React.Fragment, null,
-      h('div', { className: 'dnls-group dnls-rows', 'data-dnls-list': '1' },
-        list.map((row) => h(SandboxRow, { key: row.sandboxId, copy, row, busy, supports, onOpen, onMenu, onStart }))),
-      !complete ? h(Muted, null, copy.listPartial) : null,
+      h(SystemPlate, { copy, rows: list, envs, complete, profiles, usages, usageWindow }),
+      h('section', { className: 'dnls-section' },
+        h('div', { className: 'dnls-section-head' },
+          h('h3', { className: 'dnls-section-title' }, copy.typeLabel),
+          h('span', { className: 'dnls-muted' }, String(list.length))),
+        h('div', { className: 'dnls-cards', 'data-dnls-list': '1' },
+          list.map((row) => h(SandboxCard, {
+            key: row.sandboxId, copy, host, row, busy, supports,
+            detail: details[row.sandboxId], control: controls[row.sandboxId],
+            onOpen, onMenu, onStart, onError,
+          }))),
+        !complete ? h(Muted, null, copy.listPartial) : null),
       supports('sandbox.inspect') ? h(Section, {
         title: copy.usage,
         aside: h(WindowControl, { copy, value: usageWindow, onChange: setUsageWindow }),
@@ -108,28 +212,10 @@ export function FleetView({
   }
 
   return h('div', { className: 'dnls-view', 'data-dnls-view': 'fleet' },
-    h(Toolbar, { label: copy.workbench },
-      h('span', { className: 'dnls-heading' },
-        h('span', null, copy.typeLabel),
-        rows ? h('span', { className: 'dnls-count' }, String(total ?? list.length)) : null),
-      h(IconButton, {
-        icon: h(IconRefreshOutlineRegular, { size: 16 }),
-        'aria-label': copy.refresh,
-        disabled: phase === 'loading',
-        onClick: onRefresh,
-      }),
-      supports('sandbox.instance.create') ? h(Button, {
-        variant: 'primary', size: 'sm', disabled: busy,
-        icon: h(IconPlusOutlineRegular, { size: 14 }),
-        onClick: onCreate,
-      }, copy.create) : null),
     h('div', { className: 'dnls-scroll' },
       rows ? h(ErrorLine, { error }) : null,
       recent.length > 0
         ? h(Section, { title: copy.receipts }, h(Group, null, h(ReceiptList, { copy, receipts: recent, onRecheck, showName: true })))
         : null,
-      body),
-    rows && list.length > 0 ? h('footer', { className: 'dnls-foot' },
-      h('span', null, fill(copy.footRunning, { running, stopped })),
-      attention > 0 ? h('span', null, fill(copy.footAttention, { count: attention })) : null) : null)
+      body))
 }

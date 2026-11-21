@@ -332,14 +332,26 @@ test('provider-shaped projections render ids, ports and null-safe stats', () => 
   assert.equal(formatCores(null), null)
 })
 
-test('the workbench is host primitives plus nano-ui, not a private dashboard', () => {
+test('views are host primitives plus nano-ui; only the registered shell draws its own controls', () => {
   const read = (name) => readFileSync(join(root, 'src/client', name), 'utf8')
-  const views = ['index.jsx', 'fleet.jsx', 'sandbox.jsx', 'dialogs.jsx', 'parts.jsx'].map(read).join('\n')
-  for (const required of ['NANO_STYLES', 'Toolbar', 'NanoTabs', 'NanoDialog', 'FactGrid', 'SplitRow', 'StateDot', 'RiskConfirmation', 'SegmentedControl']) {
+  const views = ['index.jsx', 'fleet.jsx', 'sandbox.jsx', 'dock.jsx', 'dialogs.jsx', 'parts.jsx'].map(read).join('\n')
+  for (const required of ['NANO_STYLES', 'NanoTabs', 'NanoDialog', 'FactGrid', 'SplitRow', 'StateDot', 'RiskConfirmation', 'SegmentedControl', 'WorkbenchShell', 'TabDrawer', 'StatusBar']) {
     assert.equal(views.includes(required), true, required)
   }
-  for (const forbidden of ['WorkbenchShell', 'TabDrawer', 'StatusDock', 'PanelLayout', 'style={', '<select', '<button', '<input', 'font-weight']) {
+  for (const forbidden of ['PanelLayout', 'style=', '<select', "h('button'", '<button', '<input', 'font-weight']) {
     assert.equal(views.includes(forbidden), false, forbidden)
   }
-  assert.equal(/#[0-9a-f]{3,8}\b/i.test(read('styles.js')), false, 'colours come from host tokens')
+  const shell = read('shell.jsx')
+  assert.equal((shell.match(/h\('button'/g) ?? []).length, (shell.match(/nano-ui-exempt/g) ?? []).length, 'every shell button carries its exemption')
+  for (const name of ['styles.js', 'shell.jsx']) {
+    assert.equal(/#[0-9a-f]{3,8}\b/i.test(read(name)), false, `${name}: colours come from host tokens`)
+  }
+})
+
+test('no plugin names or private entry points in the workbench', () => {
+  const read = (name) => readFileSync(join(root, 'src/client', name), 'utf8')
+  const all = ['index.jsx', 'fleet.jsx', 'sandbox.jsx', 'dock.jsx', 'parts.jsx', 'i18n.js'].map(read).join('\n')
+  for (const banned of ['openWorkspace', 'design workspace', '设计工作区', 'Kitesurf', 'kitesurf', 'DNK', 'DNT']) {
+    assert.equal(all.includes(banned), false, banned)
+  }
 })

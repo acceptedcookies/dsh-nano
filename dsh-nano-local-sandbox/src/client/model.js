@@ -73,6 +73,73 @@ export function rowMeta(copy, row) {
   return parts.join(' · ')
 }
 
+/** Recorded service verdicts: `{healthy, total, checked}`; unknown is not healthy. */
+export function serviceHealth(services) {
+  const list = Array.isArray(services) ? services : []
+  return {
+    total: list.length,
+    healthy: list.filter((service) => service?.health === 'healthy').length,
+    checked: list.filter((service) => service?.health === 'healthy' || service?.health === 'unhealthy').length,
+  }
+}
+
+export function serviceHealthText(copy, services) {
+  const { total, healthy, checked } = serviceHealth(services)
+  if (total === 0) return copy.none
+  if (checked === 0) return fillText(copy.servicesUnchecked, { total })
+  return fillText(copy.servicesHealthy, { healthy, total })
+}
+
+/** Last ledger operation: the detail timeline when read, else the row's state/step. */
+export function lastOperationText(copy, row, detail) {
+  const timeline = Array.isArray(detail?.operations) ? detail.operations : []
+  const last = timeline.length ? timeline[timeline.length - 1] : null
+  if (last) {
+    const at = when(copy, last.finishedAt ?? last.at)
+    return [`${actionText(copy, last.action)} · ${opText(copy, last.state)}`, at].filter(Boolean).join(' · ')
+  }
+  const op = row?.operation
+  if (!op?.state) return copy.none
+  return [opText(copy, op.state), stepText(copy, op.step)].filter(Boolean).join(' · ')
+}
+
+function minutesUntil(iso, now) {
+  const at = Date.parse(iso ?? '')
+  if (!Number.isFinite(at)) return null
+  return Math.max(0, Math.ceil((at - now) / 60000))
+}
+
+/** Idle-sleep verdict for display. A missing verdict stays '—', never "awake". */
+export function idleStatusText(copy, idle, now = Date.now()) {
+  if (!idle?.state) return copy.none
+  if (idle.state === 'off') return copy.idleOff
+  if (idle.state === 'held') return copy.idleHeld[idle.reason] ?? copy.idleHeld.other
+  if (idle.state === 'active') return copy.idleActive
+  if (idle.state === 'watching') {
+    const left = minutesUntil(idle.sleepAt, now)
+    return left == null ? copy.idleWatching : fillText(copy.idleSleepIn, { n: left })
+  }
+  return copy.none
+}
+
+/** When the object was last seen active, only while the idle window is open. */
+export function lastActivityText(copy, idle) {
+  if (idle?.state === 'watching') return when(copy, idle.idleSince) ?? copy.none
+  if (idle?.state === 'held' || idle?.state === 'active') return copy.activeNow
+  return copy.none
+}
+
+/** Who may move the shared engine: an operator hold, or agents. */
+export function driverText(copy, control, running) {
+  if (!running) return copy.none
+  if (control?.error) return copy.driverUnknown
+  const hold = control?.state?.humanHold
+  if (!control?.state) return copy.none
+  return hold?.active ? copy.manualHeld : copy.manualFree
+}
+
+const fillText = (template, params) => String(template).replace(/\{(\w+)\}/g, (_, key) => String(params?.[key] ?? ''))
+
 /** Minute bins of one metric, gaps omitted. */
 export function pointsOf(usage, metric, unit, valueKey) {
   if (usage?.[metric]?.unit !== unit || !Array.isArray(usage.history)) return []

@@ -216,6 +216,9 @@ U5 只覆盖上面三种模式。宿主 `data-*` 属性被当作样式钩子或�
 
 | 位置 | 缺口说明 |
 |---|---|
+| `dsh-nano-local-sandbox/src/client/shell.jsx`（`ShellToggle` / `.dnls-shell-toggle`） | 工作台外壳（T-O-69 归消费方）顶栏的抽屉切换钮：宿主 `Button` 没有「图标+文字、28px、markdown-tag 底、按下混色」这一颗；度量照 [DNK] `.nks-nav-toggle` |
+| `dsh-nano-local-sandbox/src/client/shell.jsx`（`DrawerRow` / `.dnls-drawer-row`） | 竖排沙箱抽屉的行：宿主 `Button` 不能排「状态点 + 单行截断名称 + 次行读数」，`SegmentedControl` 只做互斥选择且不带次行；度量照 [DNK] `.nks-nav-tab` |
+| `dsh-nano-local-sandbox/src/client/shell.jsx`（`StatusBar` / `.dnls-statusbar-btn`） | 26px 底部状态条里上拉终端坞的 20px 文字按钮：宿主 `Button` 最小档 28px，没有对应档；度量照 [DNK] `.nks-status button` |
 | `dsh-nano-local-sandbox/src/client/history.jsx`（`HistoryLine`） | 宿主及 nano-ui 没有可保留分钟缺样、且不把缺样画成零的历史折线。仅折线使用 SVG，文字与控件不在 SVG 内。 |
 | `dsh-nano-model-selector/src/client/styles.js`（`.nms-trigger-label` / `.nms-trigger-effort` / `.nms-trigger-icon`） | 读 `--dsh-composer-model-text-display` / `--dsh-composer-model-icon-display`：宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts`），不是 `--dsw` 令牌，catalog 不收录，U1 照报（`T20`） |
 | `dsh-nano-explorer-extra/src/client/format.js`（`formatBytes`） | 宿主 `fileSizeText` 输出不等价：不加空格、1024 进制套十进制单位名（`1.0KB`）、最高 GB、对 0/NaN 无兜底；本包状态栏读 `1 KiB`，替换会改掉全部体积文案 |

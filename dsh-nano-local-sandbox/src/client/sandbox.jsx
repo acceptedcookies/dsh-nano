@@ -1,19 +1,19 @@
-/** One sandbox: status, the primary open action, and its sections behind tabs. */
+/** One sandbox: its status, the apps that can open it, and its sections behind tabs.
+ *  Terminals live in the shell's dock. */
 import React from 'react'
 import {
-  Button, CodeBlock, Input, SegmentedControl, StateDot, Tag,
-  IconChevronLeftOutlineRegular, IconEllipsisOutlineRegular, IconPlusOutlineRegular,
-  IconRefreshOutlineRegular, IconTrashOutlineRegular,
+  Button, CodeBlock, Input, SegmentedControl, StateDot, Tag, IconRefreshOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { Card, FactGrid, IconButton, Meter, NanoDialog, NanoTabs, PlainTable, SplitRow, Toolbar } from 'dsh-nano-ui'
+import { FactGrid, IconButton, Meter, NanoTabs, PlainTable, SplitRow } from 'dsh-nano-ui'
 import { createTicket } from './managed.js'
 import { fill } from './i18n.js'
 import { formatBytes, serviceAddress } from './format.js'
-import { sandboxAddress, terminalAddress } from '../host/terminal-resource.js'
+import { sandboxAddress } from '../host/terminal-resource.js'
 import {
-  DOT, OP_DOT, actionText, cores, nameOf, opText, pendingRevision, ratio, shortId, sizeLine, stateText, stepText, when, whole,
+  DOT, OP_DOT, actionText, cores, driverText, idleStatusText, lastActivityText, lastOperationText, nameOf, opText,
+  pendingRevision, ratio, serviceHealthText, sizeLine, stateText, stepText, when, whole,
 } from './model.js'
-import { ErrorLine, Group, Muted, ReceiptList, Section, StateMinutes, UsageCharts, WindowControl } from './parts.jsx'
+import { AppList, ErrorLine, Group, Muted, ReceiptList, Section, StateMinutes, UsageCharts, WindowControl } from './parts.jsx'
 
 const h = React.createElement
 const PLANES = ['container', 'engine', 'bridge', 'page', 'dom', 'terminal']
@@ -30,17 +30,6 @@ function useTickets() {
     if (!ref.current[key]) ref.current[key] = createTicket()
     return ref.current[key].take()
   }
-}
-
-function handlersFor(host, address) {
-  try { return host.handlers(address) ?? [] } catch { return [] }
-}
-
-function handlerTitle(handler, address, fallback) {
-  try {
-    const title = typeof handler?.title === 'function' ? handler.title(address) : handler?.title
-    return typeof title === 'string' && title !== '' ? title : fallback
-  } catch { return fallback }
 }
 
 function idleText(copy, configuration) {
@@ -99,49 +88,6 @@ function MonitorTab({ copy, target, detail, running, usageWindow, setUsageWindow
         key: `${mount.target}:${index}`,
         label: h('span', { className: 'dnls-mono' }, mount.target ?? copy.none),
       }, `${mount.type ?? ''} · ${mount.readOnly ? copy.readOnly : copy.readWrite}`)))) : null)
-}
-
-/* ── terminals ───────────────────────────────────────────────────────── */
-
-function TerminalsTab({ copy, host, terms, running, busy, canCreate, canClose, onCreate, onOpen, onClose }) {
-  const list = terms?.list ?? []
-  let body
-  if (terms?.denied) body = h(Muted, null, copy.terminalsDenied)
-  else if (terms == null) body = h(Muted, null, copy.loading)
-  else if (terms.error) body = h(ErrorLine, { error: terms.error })
-  else if (list.length === 0) body = h(Muted, null, running ? copy.terminalsEmpty : copy.terminalsStopped)
-  else {
-    body = h(Group, null, list.map((term) => {
-      const handlers = typeof term.address === 'string' ? handlersFor(host, term.address) : []
-      return h(SplitRow, {
-        key: term.terminalId,
-        label: h('span', { className: 'dnls-term' },
-          h(StateDot, { state: term.state === 'active' ? 'done' : 'idle' }),
-          h('span', { className: 'dnls-mono' }, fill(copy.terminalLabel, { id: shortId(term.terminalId) })),
-          term.state ? h(Tag, { tone: 'neutral' }, copy.termState[term.state] ?? term.state) : null),
-      }, h('span', { className: 'dnls-inline' },
-        term.state !== 'active' ? null
-        : handlers.length === 0
-          ? h('span', { className: 'dnls-muted' }, copy.terminalUnavailable)
-          : handlers.map((handler, index) => h(Button, {
-            key: index, variant: 'ghost', size: 'sm', onClick: () => onOpen(term),
-          }, handlers.length === 1 ? copy.terminalOpen : fill(copy.openIn, { name: handlerTitle(handler, term.address, copy.none) }))),
-        canClose && term.state !== 'ended' ? h(IconButton, {
-          icon: h(IconTrashOutlineRegular, { size: 16 }),
-          'aria-label': `${copy.terminalClose} ${shortId(term.terminalId)}`,
-          disabled: busy,
-          onClick: () => onClose(term),
-        }) : null))
-    }))
-  }
-  return h(Section, {
-    title: copy.terminals,
-    aside: canCreate && !terms?.denied ? h(Button, {
-      variant: 'primary', size: 'sm', disabled: busy || !running,
-      icon: h(IconPlusOutlineRegular, { size: 14 }),
-      onClick: onCreate,
-    }, copy.terminalNew) : null,
-  }, body, terms?.denied ? null : h(Muted, null, copy.terminalsHint))
 }
 
 /* ── services ────────────────────────────────────────────────────────── */
@@ -316,8 +262,8 @@ function SettingsTab({ copy, target, detail, running, busy, supports, draft, set
 /* ── page ────────────────────────────────────────────────────────────── */
 
 export function SandboxView({
-  copy, api, row, host, paneId, busy, supports, receipts, refreshKey, outerError,
-  onBack, onRefresh, onMenu, onAction, onRecheck, onWrite,
+  copy, api, row, host, busy, supports, receipts, refreshKey, outerError,
+  onAction, onRecheck, onWrite,
 }) {
   const sandboxId = row.sandboxId
   const take = useTickets()
@@ -327,9 +273,6 @@ export function SandboxView({
   const [detail, setDetail] = React.useState(null)
   const [error, setError] = React.useState(null)
   const [procs, setProcs] = React.useState(null)
-  const [terms, setTerms] = React.useState(null)
-  const [closing, setClosing] = React.useState(null)
-  const [closeError, setCloseError] = React.useState(undefined)
   const [probe, setProbe] = React.useState(null)
   const [control, setControl] = React.useState(null)
   const [logs, setLogs] = React.useState({ tail: 100, text: null })
@@ -340,7 +283,6 @@ export function SandboxView({
   const observed = target.observedState
   const running = observed === 'running'
   const reload = () => setTick((value) => value + 1)
-  const refreshAll = () => { reload(); onRefresh() }
 
   React.useEffect(() => {
     const ok = take('detail')
@@ -385,25 +327,9 @@ export function SandboxView({
     })()
   }, [sandboxId, tab, running, refreshKey, tick])
 
-  const loadTerms = React.useCallback(async () => {
-    const ok = take('terms')
-    if (!supports('term.session.list')) { setTerms({ denied: true }); return }
-    // Shells live only in a running container; the host answers 503 otherwise.
-    if (!running) { setTerms({ list: [] }); return }
-    try {
-      const out = await api.terminalList(sandboxId)
-      if (ok()) setTerms({ list: out.terminals })
-    } catch (caught) {
-      if (ok()) setTerms(caught?.status === 403 ? { denied: true } : { error: caught })
-    }
-  }, [sandboxId, running])
-
+  // Who drives the shared engine is part of the status header, not only of the services tab.
   React.useEffect(() => {
-    if (tab === 'terminals') loadTerms()
-  }, [tab, sandboxId, running, refreshKey, tick])
-
-  React.useEffect(() => {
-    if (tab !== 'services' || !running || !supports('dnls.control')) return
+    if (!running || !supports('dnls.control')) { setControl(null); return }
     const ok = take('control')
     ;(async () => {
       try {
@@ -413,7 +339,7 @@ export function SandboxView({
         if (ok()) setControl({ error: caught })
       }
     })()
-  }, [tab, sandboxId, running, refreshKey, tick])
+  }, [sandboxId, running, refreshKey, tick])
 
   React.useEffect(() => {
     if (tab !== 'logs' || !running || !supports('dnls.logs')) return
@@ -432,44 +358,8 @@ export function SandboxView({
   React.useEffect(() => {
     setProbe(null)
     setControl(null)
-    setTerms(null)
     setProcs(null)
   }, [sandboxId])
-
-  function openWorkspace() {
-    let address = null
-    try { address = sandboxAddress({ envId: target.envId, sandboxId }) } catch { address = null }
-    if (!address || host.openResource(address) !== true) setError(new Error(copy.workspaceUnavailable))
-  }
-
-  function openTerm(term) {
-    let address = typeof term?.address === 'string' ? term.address : null
-    if (!address) {
-      try { address = terminalAddress({ envId: target.envId, sandboxId, terminalId: term.terminalId }) } catch { address = null }
-    }
-    if (!address || host.openResource(address) !== true) setError(new Error(copy.terminalUnavailable))
-  }
-
-  async function createTerm() {
-    await onWrite(async () => {
-      const out = await api.terminalCreate(sandboxId, { paneId, openId: crypto.randomUUID() })
-      const listed = await api.terminalList(sandboxId)
-      setTerms({ list: listed.terminals })
-      openTerm(listed.terminals.find((item) => item.terminalId === out.terminalId) ?? out)
-    }, setError)
-  }
-
-  async function closeTerm() {
-    const term = closing
-    await onWrite(async () => {
-      await api.terminalClose(sandboxId, term.terminalId)
-      setClosing(null)
-      await loadTerms()
-    }, (caught) => {
-      setCloseError(caught?.status === 503 ? copy.terminalCloseUnavailable : caught?.message ?? String(caught))
-      loadTerms()
-    })
-  }
 
   async function runProbe() {
     setProbe((prev) => ({ ...prev, busy: true, error: null }))
@@ -534,18 +424,11 @@ export function SandboxView({
 
   let objectAddress = null
   try { objectAddress = sandboxAddress({ envId: target.envId, sandboxId }) } catch { objectAddress = null }
-  const objectHandlers = objectAddress ? handlersFor(host, objectAddress) : []
   const mine = receipts.filter((receipt) => receipt.sandboxId === sandboxId)
   const drivers = Array.isArray(target.drivers) && target.drivers.length > 0 ? target.drivers.join(' · ') : copy.none
 
   const tabs = [
     { value: 'monitor', label: copy.tabMonitor, content: tab === 'monitor' ? h(MonitorTab, { copy, target, detail, running, usageWindow, setUsageWindow, procs }) : null },
-    { value: 'terminals', label: copy.tabTerminals, content: tab === 'terminals' ? h(TerminalsTab, {
-      copy, host, terms, running, busy,
-      canCreate: supports('term.session.create'), canClose: supports('term.session.close'),
-      onCreate: createTerm, onOpen: openTerm,
-      onClose: (term) => { setCloseError(undefined); setClosing(term) },
-    }) : null },
     { value: 'services', label: copy.tabServices, content: tab === 'services' ? h(ServicesTab, {
       copy, detail, running, probe, control, busy,
       canProbe: supports('dnls.status'), canControl: supports('dnls.control'),
@@ -564,52 +447,46 @@ export function SandboxView({
     }) : null },
   ].filter(Boolean)
 
+  const idle = detail?.idle
   return h('div', { className: 'dnls-view', 'data-dnls-view': 'sandbox' },
-    h(Toolbar, { label: copy.workbench },
-      h(IconButton, { icon: h(IconChevronLeftOutlineRegular, { size: 16 }), 'aria-label': copy.back, onClick: onBack }),
-      h('span', { className: 'dnls-heading' }, h('span', null, nameOf(target))),
-      h(IconButton, { icon: h(IconRefreshOutlineRegular, { size: 16 }), 'aria-label': copy.refresh, onClick: refreshAll }),
-      h(IconButton, {
-        icon: h(IconEllipsisOutlineRegular, { size: 16 }),
-        'aria-label': copy.more,
-        onClick: (event) => onMenu(event, lifecycleTarget),
-      })),
     h('div', { className: 'dnls-scroll' },
       h(ErrorLine, { error: error ?? outerError }),
-      h(Card, null,
+      h('div', { className: 'dnls-head-card', 'data-dnls-status': observed ?? 'unknown' },
         h('div', { className: 'dnls-status' },
           h(StateDot, { state: DOT[observed] ?? 'idle' }),
           h('span', { className: 'dnls-status-label' }, stateText(copy, observed)),
+          HEALTH_TONE[target.health] ? h(Tag, { tone: HEALTH_TONE[target.health] }, copy.health[target.health]) : null,
           h('span', { className: 'dnls-status-size' }, sizeLine(copy, target) ?? copy.none)),
+        running && target.lastMinute ? h('div', { className: 'dnls-meters' },
+          h(Meter, {
+            label: copy.usageCpu,
+            text: `${cores(target.lastMinute.cpuCores) ?? copy.none} / ${fill(copy.cores, { n: target.resources?.cpus ?? copy.none })}`,
+            value: ratio(target.lastMinute.cpuCores, target.resources?.cpus),
+          }),
+          h(Meter, {
+            label: copy.usageMemory,
+            text: `${formatBytes(target.lastMinute.memoryBytes) ?? copy.none} / ${formatBytes(target.resources?.memoryBytes) ?? copy.none}`,
+            value: ratio(target.lastMinute.memoryBytes, target.resources?.memoryBytes),
+          })) : null,
         h(FactGrid, { items: [
+          { label: copy.idleSleep, value: detail ? idleStatusText(copy, idle) : copy.none },
+          { label: copy.lastActivity, value: lastActivityText(copy, idle) },
+          { label: copy.driver, value: driverText(copy, control, running) },
+          { label: copy.lastOperation, value: lastOperationText(copy, target, detail) },
+          { label: copy.services, value: serviceHealthText(copy, target.services) },
+          // The list row is re-read after every dock create/close; the inspect detail is not.
+          { label: copy.terminals, value: String(row.visibleTerminalCount ?? target.visibleTerminalCount ?? copy.none) },
           { label: copy.profile, value: target.profileId ?? copy.none },
           { label: copy.revision, value: pendingRevision(target)
             ? fill(copy.revisionPending, { applied: target.appliedRevision ?? 0, desired: target.desiredRevision })
             : String(target.appliedRevision ?? copy.none) },
-          { label: copy.idleSleep, value: detail ? idleText(copy, detail.configuration) : copy.none },
-          { label: copy.terminals, value: String(target.visibleTerminalCount ?? copy.none) },
           { label: copy.drivers, value: drivers },
           { label: copy.observed, value: when(copy, target.observedAt) ?? copy.none },
         ] })),
       mine.some((receipt) => receipt.checking || !receipt.settled)
-        ? h(ReceiptList, { copy, receipts: mine.filter((receipt) => !receipt.settled), onRecheck })
+        ? h(Group, null, h(ReceiptList, { copy, receipts: mine.filter((receipt) => !receipt.settled), onRecheck }))
         : null,
-      objectHandlers.length === 0
-        ? h(Muted, null, copy.workspaceUnavailable)
-        : h('div', { className: 'dnls-cta' }, objectHandlers.map((handler, index) => h(Button, {
-          key: index,
-          variant: index === 0 ? 'primary' : 'outline',
-          onClick: openWorkspace,
-        }, index === 0 ? copy.openWorkspace : fill(copy.openIn, { name: handlerTitle(handler, objectAddress, copy.none) })))),
-      h(NanoTabs, { className: 'dnls-detail', label: copy.tabs, value: tab, onChange: setTab, items: tabs })),
-    closing ? h(NanoDialog, {
-      copy,
-      title: copy.terminalCloseTitle,
-      confirmLabel: copy.terminalClose,
-      danger: true,
-      busy,
-      error: closeError,
-      onCancel: () => setClosing(null),
-      onConfirm: closeTerm,
-    }, h('p', { className: 'dnls-muted' }, fill(copy.terminalCloseBody, { id: shortId(closing.terminalId) }))) : null)
+      h(Section, { title: copy.apps, aside: h('span', { className: 'dnls-muted' }, copy.newPane) },
+        h(AppList, { copy, host, address: objectAddress, onError: setError })),
+      h(NanoTabs, { className: 'dnls-detail', label: copy.tabs, value: tab, onChange: setTab, items: tabs })))
 }

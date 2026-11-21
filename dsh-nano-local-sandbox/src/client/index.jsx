@@ -1,26 +1,46 @@
 /**
- * Sandbox workbench: one right-sidebar tab with a list and a per-sandbox page.
- * Controls are host primitives and nano-ui. A real sessionId only gates
- * rendering; it is never sent as a selector, and refreshing never chooses a
- * sandbox for the user.
+ * Sandbox workbench: one right-sidebar tab. The shell (bar, sandbox drawer,
+ * status line and terminal dock) is this client's chrome; the controls inside
+ * are host primitives and nano-ui. A real sessionId only gates rendering; it
+ * is never sent as a selector, and refreshing never chooses a sandbox.
  */
 import React from 'react'
-import { NANO_STYLES, openNanoMenu } from 'dsh-nano-ui'
+import {
+  Button, StateDot,
+  IconChevronLeftOutlineRegular, IconEllipsisOutlineRegular, IconPanelLeftOutlineRegular,
+  IconPlusOutlineRegular, IconRefreshOutlineRegular,
+} from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconButton, NANO_STYLES, openNanoMenu } from 'dsh-nano-ui'
 import { createDnlsClient, createTicket } from './managed.js'
-import { copyFor } from './i18n.js'
-import { openResourceAddress, sandboxAddress } from '../host/terminal-resource.js'
+import { copyFor, fill } from './i18n.js'
+import { openResourceAddress } from '../host/terminal-resource.js'
 import { STYLE } from './styles.js'
+import { Dock, DrawerRow, ShellToggle, SHELL_STYLE, StatusBar, TabDrawer, WorkbenchShell } from './shell.jsx'
 import { FleetView } from './fleet.jsx'
 import { SandboxView } from './sandbox.jsx'
+import { TerminalDock } from './dock.jsx'
 import { CreateDialog, LifecycleConfirm } from './dialogs.jsx'
-import { SETTLED, nameOf } from './model.js'
+import { DOT, SETTLED, cores, nameOf, needsAttention, stateText } from './model.js'
+import { formatBytes } from './format.js'
 
 const h = React.createElement
 const KIND = 'dnls-sandbox'
 const CONFIRMED = new Set(['stop', 'restart', 'recreate', 'remove'])
 const POLL_MS = 1500
 const POLL_TRIES = 40
+const DOCK_DEFAULT = 220
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** One-line reading for a drawer row or the status line. */
+function reading(copy, row) {
+  if (row?.observedState === 'running' && row.lastMinute) {
+    const cpu = cores(row.lastMinute.cpuCores) ?? copy.none
+    const mem = formatBytes(row.lastMinute.memoryBytes) ?? copy.none
+    return `CPU ${cpu}/${row.resources?.cpus ?? copy.none} · ${mem}/${formatBytes(row.resources?.memoryBytes) ?? copy.none}`
+  }
+  if (row?.observedState === 'missing') return copy.containerMissing
+  return null
+}
 
 function DnlsPane({ sessionId, copy, host }) {
   const paneId = React.useId()
@@ -39,6 +59,10 @@ function DnlsPane({ sessionId, copy, host }) {
   const [confirm, setConfirm] = React.useState(null)
   const [create, setCreate] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
+  const [drawer, setDrawer] = React.useState(false)
+  const [dock, setDock] = React.useState(0)
+  const [dockHeight, setDockHeight] = React.useState(DOCK_DEFAULT)
+  const closeDrawer = React.useCallback(() => setDrawer(false), [])
 
   React.useEffect(() => () => {
     alive.current = false
@@ -168,25 +192,30 @@ function DnlsPane({ sessionId, copy, host }) {
     }
   }
 
-  function openWorkspace(target) {
-    let address = null
-    try { address = sandboxAddress({ envId: target.envId, sandboxId: target.sandboxId }) } catch { address = null }
-    if (!address || host.openResource(address) !== true) setError(new Error(copy.workspaceUnavailable))
-  }
-
   function choose(row) {
     setSelected({ sandboxId: row.sandboxId, envId: row.envId, name: row.name })
     setError(null)
+    setDrawer(false)
   }
+
+  function unchoose() {
+    setSelected(null)
+    setError(null)
+    setDrawer(false)
+  }
+
+  const rowTarget = (row) => ({
+    sandboxId: row.sandboxId, envId: row.envId, name: nameOf(row),
+    desiredRevision: row.desiredRevision, observedState: row.observedState,
+  })
 
   function openMenu(event, target) {
     event.stopPropagation()
     const running = target.observedState === 'running'
     const can = (action) => !busy && supports(`sandbox.instance.${action}`)
     const items = [
-      { id: 'workspace', label: copy.openWorkspace, run: () => openWorkspace(target) },
       selected ? null : { id: 'details', label: copy.details, run: () => choose(target) },
-      { id: 'power', separator: true },
+      selected ? null : { id: 'power', separator: true },
       running
         ? { id: 'stop', label: copy.action.stop, disabled: !can('stop'), run: () => ask('stop', target) }
         : { id: 'start', label: copy.action.start, disabled: !can('start'), run: () => ask('start', target) },
@@ -198,36 +227,110 @@ function DnlsPane({ sessionId, copy, host }) {
     openNanoMenu({ anchor: event.currentTarget.getBoundingClientRect(), width: 200, items })
   }
 
-  const rowTarget = (row) => ({
-    sandboxId: row.sandboxId, envId: row.envId, name: nameOf(row),
-    desiredRevision: row.desiredRevision, observedState: row.observedState,
-  })
+  const all = rows ?? []
+  const running = all.filter((row) => row.observedState === 'running').length
+  const stopped = all.filter((row) => row.observedState === 'stopped').length
+  const attention = all.filter(needsAttention).length
+  const terminalCount = current
+    ? (current.visibleTerminalCount ?? 0)
+    : all.reduce((sum, row) => sum + (Number.isInteger(row.visibleTerminalCount) ? row.visibleTerminalCount : 0), 0)
 
   const view = current
     ? h(SandboxView, {
       key: current.sandboxId,
-      copy, api, row: current, host, paneId, busy, supports, receipts, refreshKey, outerError: error,
-      onBack: () => { setSelected(null); setError(null) },
-      onRefresh: refresh,
-      onMenu: openMenu,
+      copy, api, row: current, host, busy, supports, receipts, refreshKey, outerError: error,
       onAction: ask,
       onRecheck: recheck,
       onWrite: write,
     })
     : h(FleetView, {
-      copy, api, rows, total: list?.total, complete: list?.complete !== false, phase, error, busy, supports, receipts,
+      copy, api, host, rows, envs: list?.envs, complete: list?.complete !== false, phase, error, busy, supports, receipts, refreshKey,
       onRetry: refresh,
-      onRefresh: refresh,
       onCreate: openCreate,
       onOpen: choose,
       onMenu: (event, row) => openMenu(event, rowTarget(row)),
       onStart: (row) => ask('start', rowTarget(row)),
       onRecheck: recheck,
+      onError: setError,
     })
 
+  const bar = h(React.Fragment, null,
+    current ? h(IconButton, { icon: h(IconChevronLeftOutlineRegular, { size: 16 }), 'aria-label': copy.back, onClick: unchoose }) : null,
+    h(ShellToggle, {
+      icon: h(IconPanelLeftOutlineRegular, { size: 16 }),
+      label: copy.drawerToggle,
+      title: current ? nameOf(current) : copy.overview,
+      open: drawer,
+      onClick: () => setDrawer((open) => !open),
+    }),
+    h('span', { className: 'dnls-shell-title' },
+      current
+        ? h(React.Fragment, null, h(StateDot, { state: DOT[current.observedState] ?? 'idle' }), h('span', null, stateText(copy, current.observedState)))
+        : rows ? h('span', null, fill(copy.sandboxesCount, { running, stopped, attention })) : null),
+    h('span', { className: 'dnls-shell-tail' },
+      h(IconButton, {
+        icon: h(IconRefreshOutlineRegular, { size: 16 }),
+        'aria-label': copy.refresh,
+        disabled: phase === 'loading' && !rows,
+        onClick: refresh,
+      }),
+      current
+        ? h(IconButton, {
+          icon: h(IconEllipsisOutlineRegular, { size: 16 }),
+          'aria-label': copy.more,
+          onClick: (event) => openMenu(event, rowTarget(current)),
+        })
+        : supports('sandbox.instance.create') ? h(Button, {
+          variant: 'primary', size: 'sm', disabled: busy,
+          icon: h(IconPlusOutlineRegular, { size: 14 }),
+          onClick: openCreate,
+        }, copy.create) : null))
+
+  const drawerNode = h(TabDrawer, {
+    open: drawer,
+    label: copy.drawerToggle,
+    onClose: closeDrawer,
+    head: h(React.Fragment, null, h('span', null, copy.typeLabel), h('span', null, String(list?.total ?? all.length))),
+  },
+  h(DrawerRow, {
+    current: !current,
+    onClick: unchoose,
+    label: copy.overview,
+    meta: rows ? fill(copy.sandboxesCount, { running, stopped, attention }) : null,
+  }),
+  all.length > 0 ? h('div', { className: 'dnls-drawer-sep', role: 'presentation' }) : null,
+  all.map((row) => h(DrawerRow, {
+    key: row.sandboxId,
+    current: current?.sandboxId === row.sandboxId,
+    onClick: () => choose(row),
+    mark: h(StateDot, { state: DOT[row.observedState] ?? 'idle' }),
+    label: nameOf(row),
+    meta: [stateText(copy, row.observedState), reading(copy, row)].filter(Boolean).join(' · '),
+  })))
+
+  const statusText = current
+    ? [stateText(copy, current.observedState), reading(copy, current), current.profileId].filter(Boolean).join(' · ')
+    : rows ? fill(copy.sandboxesCount, { running, stopped, attention }) : copy.loading
+
+  const status = h(StatusBar, {
+    label: copy.statusLabel,
+    actions: [{
+      id: 'terminals',
+      label: fill(copy.dockButton, { n: terminalCount }),
+      pressed: dock > 0,
+      expanded: dock > 0,
+      onClick: () => setDock((open) => (open > 0 ? 0 : 1)),
+    }],
+  },
+  current ? h(StateDot, { state: DOT[current.observedState] ?? 'idle' }) : null,
+  h('span', null, statusText))
+
+  const dockNode = dock > 0 ? h(Dock, { label: copy.dockLabel, height: dockHeight, onCommit: setDockHeight },
+    h(TerminalDock, { copy, api, host, paneId, row: current, supports, busy, refreshKey, onWrite: write, onChanged: loadList })) : null
+
   return h('div', { className: 'dnls-pane', 'data-dnls-pane': '1' },
-    h('style', null, NANO_STYLES, STYLE),
-    view,
+    h('style', null, NANO_STYLES, SHELL_STYLE, STYLE),
+    h(WorkbenchShell, { label: copy.workbench, bar, drawer: drawerNode, dock: dockNode, status }, view),
     create ? h(CreateDialog, {
       copy, profiles: create.profiles, busy, error: create.error,
       onCancel: () => setCreate(null),
@@ -245,15 +348,30 @@ export const inject = ['slots', 'sidebarRightTabs', 'sidebarRight', 'locale']
 export function apply(ctx) {
   const zh = () => ctx.locale?.getSnapshot?.().active?.startsWith('zh') === true
   const copy = () => copyFor(zh() ? 'zh' : 'en')
-  // T-O-61: an address's open actions are the host's ranked handlers; the
-  // plugin never names a handler kind. `openResource` re-runs the same handoff.
+  // T-O-61: an address's open actions are the host's ranked handlers. The
+  // plugin names a kind only when the user picked that handler from the list.
   const host = {
     handlers: (address) => ctx.sidebarRightTabs?.candidates?.(address),
-    openResource: (address) => openResourceAddress({
-      candidates: (value) => ctx.sidebarRightTabs?.candidates?.(value),
-      openResource: (value) => ctx.sidebarRight?.openResource?.(value),
-      address,
-    }),
+    openResource: (address, options) => {
+      try {
+        return openResourceAddress({
+          candidates: (value) => ctx.sidebarRightTabs?.candidates?.(value),
+          openResource: (value) => ctx.sidebarRight?.openResource?.(value, options),
+          address,
+        })
+      } catch {
+        return false
+      }
+    },
+    // The host's own shell tab: it runs on this machine, never in a sandbox.
+    openLocalTerminal: () => {
+      try {
+        ctx.sidebarRight.openTab('terminal', { preferNewPane: true })
+        return true
+      } catch {
+        return false
+      }
+    },
   }
   const Pane = (props) => h(DnlsPane, { sessionId: props.sessionId, copy: copy(), host })
   ctx.effect(() => ctx.sidebarRightTabs.register({

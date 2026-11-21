@@ -569,7 +569,18 @@ async function acquireClient(session, httpBase, connect) {
 }
 
 /** Optional transport and budgets are a local test seam, not an HTTP setting. */
-export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket, timeouts = {}, relayUrl, relayToken } = {}) {
+/**
+ * Production relay transport: the generation credential rides a request
+ * header. A requested subprotocol would have to be selected by the bridge's
+ * 101, which it deliberately never does, so WHATWG WebSocket would abort the
+ * handshake (T-O-63). Exported so the header shape is unit-testable without a
+ * socket.
+ */
+export function relaySocket(wsUrl, token, { WebSocket: NodeWS = NodeWebSocket } = {}) {
+  return new NodeWS(wsUrl, [], { headers: { 'x-dnls-relay-credential': token } })
+}
+
+export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket, timeouts = {}, relayUrl, relayToken, relayTransport = relaySocket } = {}) {
   const budgets = { ...CDP_TIMEOUTS, ...timeouts }
   // A failed shared-page relay must not silently open a different page.
   const direct = `${String(httpBase).replace(/^http/, 'ws')}/devtools/browser`
@@ -584,7 +595,7 @@ export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket,
     const production = Socket === globalThis.WebSocket
     const ws = relayToken
       ? (production
-        ? new NodeWebSocket(wsUrl, [], { headers: { 'x-dnls-relay-credential': relayToken } })
+        ? relayTransport(wsUrl, relayToken)
         : new Socket(wsUrl, [`dnls-relay.${relayToken}`]))
       : new Socket(wsUrl)
   let next = 1

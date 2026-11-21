@@ -26,6 +26,13 @@ import { createErrorCatalog } from './error-catalog.js'
 
 const CONTRACT_PATH = '/nano-local-sandbox/contract'
 const MCP_PATH = '/nano-local-sandbox/mcp'
+
+/**
+ * T-O-68: the only typed refusals that already have a registered catalog row.
+ * Everything else keeps the detail-free text — a status without a row must
+ * never invent an errorId.
+ */
+export const registeredRefusalId = (status) => (status === 409 ? 'sandbox.state_conflict' : null)
 const CONTRACT_TOOL = 'sandbox.contract'
 const CONTRACT_HEADER = 'x-dnls-contract'
 const CONTRACT_META = 'dnls/contract'
@@ -75,7 +82,12 @@ export function createManagedRoutes({ table, connection, capabilities, execute }
     }
     // A typed refusal keeps its status; only detail-free text crosses.
     const status = Number.isInteger(error?.status) ? error.status : null
-    if (status === 400 || status === 401 || status === 403 || status === 404 || status === 409 || status === 413 || status === 503) {
+    // T-O-68: a 409 typed refusal has a registered catalog row, so it answers
+    // with that errorId instead of bare text. Statuses with no catalog row
+    // keep the detail-free text rather than inventing a new errorId.
+    const registered = registeredRefusalId(status)
+    if (registered) return fail(registered)
+    if (status === 400 || status === 401 || status === 403 || status === 404 || status === 413 || status === 503) {
       const text = { 400: 'bad request', 401: 'unauthenticated', 403: 'denied', 404: 'not found', 409: 'conflict', 413: 'too large', 503: 'unavailable' }[status]
       return genericFail(status, text)
     }

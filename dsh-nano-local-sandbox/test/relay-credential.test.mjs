@@ -8,7 +8,7 @@ import { PassThrough } from 'node:stream'
 import { publishRelayCredential, runPublishRelayCredential } from '../profiles/terminal/relay-credential.mjs'
 import { createBridgeCredentialVault } from '../src/host/bridge-credential.js'
 import { createAppleBackend } from '../src/host/backend-apple.js'
-import { connectCdp } from '../src/host/cdp-elements.js'
+import { connectCdp, relaySocket } from '../src/host/cdp-elements.js'
 import { ensureBridgeCredential } from '../src/host/routes.js'
 
 const TOKEN = 'a'.repeat(43)
@@ -148,4 +148,18 @@ test('ensureBridgeCredential: managed sessions get the token, delivery failure i
   const failSession = { containerName: 'dnls-b', generation: 'gen-9' }
   await assert.rejects(() => ensureBridgeCredential(failSession, { relayCredentials: broken }), (e) => e.status === 503)
   assert.equal(failSession.relayToken, null)
+})
+
+test('the production relay transport presents the credential as a request header', () => {
+  const calls = []
+  class FakeSocket {
+    constructor(url, protocols, options) { calls.push({ url, protocols, options }) }
+  }
+  relaySocket('ws://127.0.0.1:9/cdp', 'tok-abc', { WebSocket: FakeSocket })
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, 'ws://127.0.0.1:9/cdp')
+  // No subprotocol is offered: a requested one must be selected by the 101,
+  // and the bridge deliberately never selects one (T-O-63).
+  assert.deepEqual(calls[0].protocols, [])
+  assert.equal(calls[0].options.headers['x-dnls-relay-credential'], 'tok-abc')
 })

@@ -38,8 +38,13 @@ test('T80: shipped plugin registers a single managed control surface from discov
   let current = peer
   const connection = { requestRejection: () => undefined, admit: () => ({ peer: current }) }
   // Only the host services, host scope and container boundary are fixtures.
+  // T-O-64 apply-level: the four model tools are registered by the plugin and
+  // every registration's disposer runs on teardown — no second channel.
+  const registeredTools = []
+  const disposedTools = []
+  const tools = { register(definition) { registeredTools.push(definition); return () => disposedTools.push(definition.name) } }
   const ctx = {
-    get: name => ({ webServer, connection })[name],
+    get: name => ({ webServer, connection, tools })[name],
     effect(start) {
       const produced = start()
       if (!produced?.next) return produced
@@ -53,10 +58,14 @@ test('T80: shipped plugin registers a single managed control surface from discov
     try { await dispose?.() } finally { rmSync(root, { recursive: true, force: true }) }
     assert.equal(routes.size, 0)
     assert.equal(upgrades.size, 0)
+    assert.deepEqual(disposedTools.sort(), registeredTools.map(t => t.name).sort(), 'T-O-64: unregister on dispose')
   })
   dispose = apply(ctx, { env, backend, clock: () => 0, visibleTo: () => true,
     resolvePrincipal: input => input.peer === peer ? { key: 'fixture-user', operator: true, canSee: true, canUse: true } : resolveOwnerPrincipal(input) })
   assert.deepEqual([...routes.keys()].sort(), BINDING_TABLE.map(r => r.path).sort())
+  assert.equal(registeredTools.length, 4, 'T-O-64: four model tools registered')
+  assert.deepEqual([...new Set(registeredTools.map(t => t.name))].length, 4)
+  assert.deepEqual(disposedTools, [], 'nothing disposed before teardown')
   const version = 'dnls.control/1'
   let serial = 0
   async function http(path, data, expected = 200, paired = true) {

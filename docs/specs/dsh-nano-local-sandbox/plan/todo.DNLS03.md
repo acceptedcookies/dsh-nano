@@ -322,7 +322,7 @@ S1-01 并入 main
   - **落点 / 对象**：`~/.dsh`；三包目录、`~/.dsh/nano-local-sandbox/state/kitesurf/`、容器 `kitesurf`
   - **完成判据**：使用 `S5-03` 的比对结果不再重建；删除前核对 ID/镜像/挂载；状态根无其他条目且 `term.audit` 仍在；一次 `plugin add` 三个 tarball 加一次重启；五项只读验收都通过后才删留存目录；不删镜像、不碰桌面
   - **验证映射**：`DNLS03X-T60` · **依赖**：`S5-03`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：**S6 只读前置盘点（2026-11-21）**：①生产 web profile 的 9 个 nano 包依赖是 `file:../../plugins/<pkg>`，所以「把三包目录复制到该目录之外」的回滚来源就是 `~/.dsh/plugins/` 下这三个目录；②生产状态根 `~/.dsh/nano-local-sandbox/state/kitesurf` 存在，S6 要清的是它，不动 `term.audit`；③生产环境容器是 `kitesurf`（镜像 `-dfe7b4388fdc`），`container list` 里另有 `kitesurf-desktop` 与 dev 的 `dnls-b97ed742`，两者都不在 S6 范围；④候选三包：DNLS `3dcbca252fd37427…`（s5）、DNK `5b7b616c657353f7…`（s5）、DNT `5528ace1cab4f3d2…`（s2，与旧记录一致）；镜像 `kitesurf-engine:39feadfb…-54e9326a17d8`（digest `5bab7732…`）。以上只做读取，未安装、未停容器、未改生产。
 - [ ] `S6-02` — 回填并删除工作树
   - **落点 / 对象**：本计划 §11、本节、`closure/DNLS03-closure.md` §0、三份 `AGENTS.md`
   - **完成判据**：三处回填在删树之前写完；其余 closure 各节保留 `b3ad7e5` 快照并注明；三份 AGENTS 各加一行且不进 RELEASE 必跑项

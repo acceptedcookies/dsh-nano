@@ -1,5 +1,6 @@
 /** Per-session CDP reader. The socket hangs off the session object, not a module global. */
 import { errorCode } from './error-catalog.js'
+import { WebSocket as NodeWebSocket } from 'ws'
 
 /**
  * The page-level session is cached on the client: this pin's TargetInfo rows
@@ -576,10 +577,16 @@ export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket,
 
   function openSocket(wsUrl, via) {
     // T-O-63: the host proves itself to the bridge with the current
-    // generation credential at the relay handshake. Node's WebSocket cannot
-    // send custom headers, so the token rides a dnls-relay.<token>
-    // subprotocol offer — never echoed back by the bridge's 101.
-    const ws = relayToken ? new Socket(wsUrl, [`dnls-relay.${relayToken}`]) : new Socket(wsUrl)
+    // generation credential at the relay handshake. A requested subprotocol
+    // must be selected by the 101, and the bridge deliberately echoes none,
+    // so the production transport presents the token as a request header via
+    // `ws`. Injected sockets (tests, fixtures) keep the subprotocol seam.
+    const production = Socket === globalThis.WebSocket
+    const ws = relayToken
+      ? (production
+        ? new NodeWebSocket(wsUrl, [], { headers: { 'x-dnls-relay-credential': relayToken } })
+        : new Socket(wsUrl, [`dnls-relay.${relayToken}`]))
+      : new Socket(wsUrl)
   let next = 1
   const navigations = new Set()
   const navIntents = new Map() // command id -> url the caller asked for

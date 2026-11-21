@@ -19,6 +19,7 @@
  */
 
 import { CONTRACT_VERSION } from './control-contract.js'
+import { registeredRefusalId } from './managed-routes.js'
 import { redact } from './object-pages.js'
 
 // Same single-segment rule the dispatcher applies to HTTP/MCP selectors.
@@ -141,8 +142,11 @@ export function makeAgentToolDefinitions({ owner, peerFor }) {
               via: 'tool',
             }))
           } catch (error) {
-            answer = refusal(Number.isInteger(error?.status) ? error.status : 502,
-              typeof error?.errorId === 'string' ? error.errorId : null)
+            // T-O-68: the tool entry must answer with the same pre-dispatch
+            // envelope as HTTP and /mcp. A typed status whose catalog row
+            // exists is projected to that errorId; nothing new is invented.
+            const status = Number.isInteger(error?.status) ? error.status : 502
+            answer = refusal(status, typeof error?.errorId === 'string' ? error.errorId : registeredRefusalId(status))
           }
         }
         if (answer === null || answer === undefined) answer = refusal(502, null)

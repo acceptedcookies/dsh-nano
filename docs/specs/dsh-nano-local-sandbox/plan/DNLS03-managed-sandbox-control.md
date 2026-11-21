@@ -1140,7 +1140,7 @@ S1-12 的点名初值（普查行不在这张表里预判）：
 | 编号 | 工作项 | 工作内容 | 涉及文件 | 预期结果 | 测试映射 | 收口标准 |
 |------|--------|----------|----------|----------|----------|----------|
 | S6-01 | 六步切换 | a) 使用 S5-03 已经比对通过的那一次重建结果，不再单独重建，也不把新 SHA 写成基准。不一致则不得 `plugin add`。b) 把 `~/.dsh/plugins/` 下三包目录复制到该目录之外，作为唯一回滚来源。五项只读验收都通过之后才删除这份留存。c) 删除容器前核对 ID、镜像、挂载。然后停止并删除容器 `kitesurf`，永久删除 `~/.dsh/nano-local-sandbox/state/kitesurf/`，确认状态根没有其他条目。`term.audit` 仍在。d) 一次 `dsh plugin --profile web add` 三个 tarball，重启生产 Web 一次。e) 只读验收：依赖与 bundles 含三包；`/contract` 头和正文都是 `dnls.control/1`；三份 client 字节一致；已挂载 session 的右栏有「沙箱」且总览为空；[DNK] 打开后是空选择器。不在生产创建对象来换一个非空总览。f) 失败则用留存目录重装旧三包并重启。留存已删而验收未完，不得写已切换，也不得写已回滚。g) 不发模型消息，不改 pin，不删任何镜像，不碰桌面和 `kitesurf-lab-*`。 | `~/.dsh`；`RELEASE.md:67` 只作桌面推迟后的未来路径，本期不执行 | K-07 web 记本期实现；桌面仍是推迟 | `DNLS03X-T60` | 镜像仍在；半截删除不得 PASS |
-| S6-02 | 回填与删树 | a) 在 main 上一次回填本计划 §11、todo 终态、closure §0。b) 其余 closure 各节保留为 `b3ad7e5` 快照并在节首注明。c) 写完之后删除工作树和分支 `dnls03-managed-sandbox-control`。d) [DNK]、[DNT] 的「前置」各加一行：需要提供 `dnls.control/1` 的 [DNLS]。e) [DNLS]「安装」加一行：同批安装，状态根有旧条目时先清理。这三行不进 RELEASE 必跑项。 | `AGENTS.md`：`dsh-nano-kitesurf/AGENTS.md:39`、`dsh-nano-terminal/AGENTS.md:47`、`dsh-nano-local-sandbox/AGENTS.md:52` | 过程、终判、合同仍各只一处 | `DNLS03X-T61` | 删树发生在回填之后 |
+| S6-02 | 回填与删树 | a) 在 main 上一次回填本计划 §12、todo 终态、closure §0。b) 其余 closure 各节保留为 `b3ad7e5` 快照并在节首注明。c) 写完之后删除工作树和分支 `dnls03-managed-sandbox-control`。d) [DNK]、[DNT] 的「前置」各加一行：需要提供 `dnls.control/1` 的 [DNLS]。e) [DNLS]「安装」加一行：同批安装，状态根有旧条目时先清理。这三行不进 RELEASE 必跑项。 | `AGENTS.md`：`dsh-nano-kitesurf/AGENTS.md:39`、`dsh-nano-terminal/AGENTS.md:47`、`dsh-nano-local-sandbox/AGENTS.md:52` | 过程、终判、合同仍各只一处 | `DNLS03X-T61` | 删树发生在回填之后 |
 
 ---
 
@@ -1532,14 +1532,16 @@ S1-12 的点名初值（普查行不在这张表里预判）：
 
 ---
 
-## 11. 工作日志（执行回填，append-only）
+## 12. 补充阶段工作日志（执行回填，append-only）
+
+> 编号说明：上文 §11 是 P0–P8 的历史执行日志；本节是补充阶段（S1–S6）的日志，故编为 §12，避免同名。
 
 > 执行者：`DNLS03-extra 执行文档 agent（lead）`
 > 执行时间：`2026-11-20` – `2026-11-21`（UTC+8）
 > 文档状态：`executing`（S4 收尾、S5/S6 未开始）
 > 代码改动统计：`S1 阶段 12 个提交；S3–S4 期修复 4 个提交；三包测试 489/73/272`
 
-- **实际执行摘要**：S1 全 13 项、S2 一次构建、S3 清场与新建、S4 真机除 U7 浅色外全部完成。S4 期间修掉三个只有真机/真模型才暴露的缺陷（`openDesign` 事件参数、relay 凭据子协议、工具名非法 + skill 缺「必须问」）。
+- **实际执行摘要**：S1 全 13 项、S2 一次构建、S3 清场与新建、S4 真机除 U7 浅色外全部完成（模型回合 5 个，发送 8 次；3 次被提供方 400 拒、无回合）。S4 期间修掉三个只有真机/真模型才暴露的缺陷（`openDesign` 事件参数、relay 凭据子协议、工具名非法 + skill 缺「必须问」）。
 - **Phase 偏差（计划 vs 实际）**：
   1. `顺序调整` 文档提交早于 `S1-01` 的并入提交（WARN#1 要求工作树干净），并入提交本身仍不含问答与本计划。
   2. `顺序调整` S3-02 与 S4-01 a) 互换：对象必须用 S2 新镜像创建，所以先装候选再建对象。
@@ -1549,7 +1551,7 @@ S1-12 的点名初值（普查行不在这张表里预判）：
   1. `A1` 首两次被提供方 400 拒绝：一次是工具名带点号（`^[a-zA-Z0-9_-]+$`），一次是会话默认 `SWE-2 · Devin` 内部错误。均已处理（改名 + 切 DeepSeek），第三次通过。
   2. `U7 总览浅色` 需要改 macOS 外观，站内无主题开关；未授权，未生成。
   3. `S6` 需要 [业主] 的 P2 设计结论，且 S5 未开始。
-- **测试发现**：三包 `npm test` 489/489（[DNLS]）、73/73（[DNK]）、272/272（[DNT]）；`check-route-sensitivity` 99 路由 0 漂移；`check-feature-contract` 100 路由；`check-clean-lib` 104；`check-client-rules` 仅基线 1 warning。
+- **测试发现**：三包 `npm test` 491/491（[DNLS]）、73/73（[DNK]）、272/272（[DNT]）；`check-route-sensitivity` 99 路由 0 漂移；`check-feature-contract` 100 路由；`check-clean-lib` 104；`check-client-rules` 仅基线 1 warning。
 - **后续 handoff**：S5 只剩 U7 浅色一张待授权；S6 等 P2 结论后按 §4.6 六步执行。
 
 ### 11.1 逐工作项状态

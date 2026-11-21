@@ -19,6 +19,14 @@ let driverRows = []
 // surface, not a profile namespace, so the profile prefix never applies.
 const KERNEL_FIXED = [
   { code: 'sandbox.instance.policy-stale', status: 409, cause: 'session 策略指纹与实例不一致', next: '显式 recreate，不要热改挂载' },
+  // dnls.control/1 object surface (Q39.A(2)): fixed ids, never namespaced.
+  { code: 'sandbox.contract_mismatch', status: 400, cause: '合同版本缺失或不匹配', next: '先 GET /contract 或 sandbox.contract 配对版本' },
+  { code: 'sandbox.name_taken', status: 409, cause: '展示名已被其他受管对象占用', next: '换一个 name，或对原对象显式改名' },
+  { code: 'sandbox.port_exhausted', status: 409, cause: '该服务的宿主端口预留不可用', next: '释放或调整预留后重试' },
+  { code: 'sandbox.quota', status: 409, cause: '本 env/profile 的受管对象名额已满', next: '核配额；不逐出其他对象' },
+  { code: 'sandbox.state_conflict', status: 409, cause: '对象状态或修订与请求冲突', next: '重新读取对象修订/操作后再试' },
+  { code: 'sandbox.image_missing', status: 409, cause: '目标镜像或构建产物未备妥', next: '先备妥目标构建，再显式操作' },
+  { code: 'sandbox.upgrade_failed', status: 500, cause: '已派发的后端升级失败', next: '查原 operation 与已完成步骤' },
   { code: 'sandbox.cdp.page-lost', status: 502, cause: '该实例的页面 socket 已丢失', next: '按 lastUrl 重开，不要复用旧 DOM' },
   { code: 'sandbox.profile.unknown', status: 404, cause: '请求的 profile id 未注册', next: 'sandbox.profile.list 列可用 profile' },
   { code: 'sandbox.selftest.unavailable', status: 502, cause: '自检无法在当前环境完成', next: '先 GET /status 修引擎/桥面' },
@@ -82,12 +90,51 @@ function rowFor(namespace, row) {
   const fixed = row.code.startsWith('sandbox.')
   const code = fixed ? row.code : `${namespace}.${row.code}`
   const match = row.wildcard ? `^${patternOf(code)}` : `^${patternOf(code)}$`
-  return { match, example: code, status: row.status, cause: row.cause, next: row.next }
+  // `hint: true` marks a registered hint code, not an errorId: it names the
+  // visible-warning a response may attach without changing its status or
+  // outcome (DNK01 T-O-6 / DNLS03 T-O-66). The catalog is its only registry.
+  return { match, example: code, status: row.status, cause: row.cause, next: row.next, ...(row.hint === true ? { hint: true } : {}) }
+}
+
+const NAMESPACE_RE = /^[a-z][a-z0-9-]{0,31}$/
+
+function composeCatalog(ns, drivers) {
+  return [
+    ...KERNEL_FIXED.map((row) => rowFor(ns, row)),
+    ...drivers.map((row) => rowFor(ns, { ...row, wildcard: row.wildcard === true })),
+    ...KERNEL_CODES.filter((row) => !row.wildcard).map((row) => rowFor(ns, row)),
+    ...KERNEL_CODES.filter((row) => row.wildcard === true).map((row) => rowFor(ns, row)),
+  ]
+}
+
+function statusIn(catalog, id) {
+  for (const row of catalog) {
+    if (new RegExp(row.match).test(id)) return row.status
+  }
+  return 502
+}
+
+/**
+ * One scoped, immutable catalogue per composition. Driver rows are copied at
+ * build time, so loading another profile afterwards can never move the
+ * prefix or the row set of a catalogue a caller already holds — the managed
+ * object dispatch uses this instead of the global selection.
+ */
+export function createErrorCatalog({ namespace = 'sandbox', rows = [] } = {}) {
+  const ns = typeof namespace === 'string' && NAMESPACE_RE.test(namespace) ? namespace : 'sandbox'
+  const drivers = (Array.isArray(rows) ? rows : []).map((row) => Object.freeze({ ...row }))
+  const catalog = Object.freeze(composeCatalog(ns, drivers).map((row) => Object.freeze(row)))
+  return {
+    errorNamespace: ns,
+    errorCode: (code) => `${ns}.${code}`,
+    errorCatalog: () => catalog.map((row) => ({ ...row })),
+    statusOf: (id) => statusIn(catalog, id),
+  }
 }
 
 /** Register the active profile's namespace and its driver-only rows. */
 export function registerDriverErrors({ namespace, rows = [] } = {}) {
-  if (typeof namespace === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(namespace)) activeNamespace = namespace
+  if (typeof namespace === 'string' && NAMESPACE_RE.test(namespace)) activeNamespace = namespace
   driverRows = (Array.isArray(rows) ? rows : []).map((row) => ({ ...row }))
 }
 
@@ -102,20 +149,11 @@ export function errorCode(code) {
 
 /** The single composed catalogue (kernel rows + driver rows). */
 export function errorCatalog() {
-  const ns = activeNamespace
-  return [
-    ...KERNEL_FIXED.map((row) => rowFor(ns, row)),
-    ...driverRows.map((row) => rowFor(ns, { ...row, wildcard: row.wildcard === true })),
-    ...KERNEL_CODES.filter((row) => !row.wildcard).map((row) => rowFor(ns, row)),
-    ...KERNEL_CODES.filter((row) => row.wildcard === true).map((row) => rowFor(ns, row)),
-  ]
+  return createErrorCatalog({ namespace: activeNamespace, rows: driverRows }).errorCatalog()
 }
 
 export function statusOf(id) {
-  for (const row of errorCatalog()) {
-    if (new RegExp(row.match).test(id)) return row.status
-  }
-  return 502
+  return statusIn(errorCatalog(), id)
 }
 
 export function renderSkillTable(catalog = errorCatalog()) {

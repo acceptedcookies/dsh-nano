@@ -157,6 +157,48 @@ ${LAYER_CSS}
 .nano-window-floating { position: fixed; z-index: var(--nano-layer-window); }
 .nano-window-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .nano-window-body { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+/* Generic panel skeleton (\xA76.3): scrollable layout, sections, fact grid. */
+.nano-panel { box-sizing: border-box; block-size: 100%; min-block-size: 0; overflow: auto;
+  padding: var(--nano-space-3); color: var(--dsw-alias-label-primary); overflow-wrap: anywhere;
+  font: var(--dsw-font-s-14); }
+.nano-panes > .nano-toolbar { flex: none; flex-wrap: wrap; font: var(--dsw-font-xs-13); }
+.nano-panel-header, .nano-panel-section { display: grid; gap: var(--nano-space-2); margin-block-end: var(--nano-space-3); }
+.nano-panel-header h2, .nano-panel-section h3 { margin: 0; font: var(--dsw-font-s-14); font-weight: 500; }
+.nano-panel-header p { margin: 0; color: var(--dsw-alias-label-secondary); }
+.nano-panel-kicker { font-size: var(--nano-desc-size, inherit); }
+.nano-panel-section { padding-block: var(--nano-space-2); font: var(--dsw-font-s-14); }
+.nano-panel-section > p { margin: 0; }
+.nano-panel th { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.nano-panel-section > pre { min-inline-size: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.nano-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--nano-space-2); margin: 0; }
+.nano-facts dt { color: var(--dsw-alias-label-secondary); }
+.nano-facts dd { margin: 0; font-weight: 500; }
+/* Card surface for a fact block. Host has no bordered card; layer-2 on the base, hairline, radius-lg. */
+.nano-card { box-sizing: border-box; padding: var(--nano-space-3); background: var(--dsw-alias-bg-layer-2);
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); }
+/* Label on the left, control on the right, hairline between rows. */
+.nano-split { display: flex; align-items: center; justify-content: space-between; gap: var(--nano-space-2); min-height: 32px;
+  border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3); }
+.nano-split-label { color: var(--dsw-alias-label-primary); }
+.nano-split-control { flex: none; }
+/* Usage track: 3px rail, fill only when a measurement exists. */
+.nano-meter { display: grid; gap: 4px; }
+.nano-meter-label { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+.nano-meter-track { display: block; height: 3px; background: var(--dsw-alias-border-l3); }
+.nano-meter-fill { display: block; height: 3px; background: var(--dsw-alias-state-business-primary); }
+.nano-table { width: max-content; max-width: 100%; border-collapse: collapse; }
+.nano-table th, .nano-table td { padding: 4px 16px 4px 0; text-align: left; white-space: nowrap; font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-secondary); font-weight: 400; }
+.nano-table th { color: var(--dsw-alias-label-tertiary); border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3); }
+.nano-panel .nano-toolbar { flex-wrap: wrap; }
+.nano-panel .nano-panes { height: auto; }
+.nano-panel .nano-pane { overflow: visible; }
+@media (pointer: coarse) {
+  .nano-panel input,
+  .nano-facts dt,
+  .nano-facts dd { font-size: max(1em, 16px); }
+  .nano-facts dd { font-weight: 500; }
+}
 `;
     }
   });
@@ -1084,12 +1126,91 @@ ${LAYER_CSS}
     }
   });
 
+  // ../packages/dsh-nano-ui/src/panel.js
+  function PanelLayout({ title, kicker, description, actions, children, className, ...rest }) {
+    return h7(
+      "section",
+      { className: className ? `nano-panel ${className}` : "nano-panel", ...rest },
+      h7(
+        "header",
+        { className: "nano-panel-header" },
+        kicker ? h7("p", { className: "nano-panel-kicker" }, kicker) : null,
+        h7("h2", null, title),
+        description ? h7("p", null, description) : null,
+        actions ? h7("div", null, actions) : null
+      ),
+      children
+    );
+  }
+  function PanelSection({ title, children }) {
+    return h7(
+      "section",
+      { className: "nano-panel-section" },
+      title ? h7("h3", null, title) : null,
+      children
+    );
+  }
+  function FactGrid({ items }) {
+    return h7(
+      "dl",
+      { className: "nano-facts" },
+      (items ?? []).map((item, index) => h7(
+        "div",
+        { key: index },
+        h7("dt", null, item.label),
+        h7("dd", null, item.value ?? "\u2014")
+      ))
+    );
+  }
+  function Card({ children }) {
+    return h7("div", { className: "nano-card" }, children);
+  }
+  function SplitRow({ label, children }) {
+    return h7(
+      "div",
+      { className: "nano-split" },
+      h7("span", { className: "nano-split-label" }, label),
+      h7("span", { className: "nano-split-control" }, children)
+    );
+  }
+  function Meter({ label, text, value }) {
+    const width = typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : null;
+    return h7(
+      "div",
+      { className: "nano-meter" },
+      h7("span", { className: "nano-meter-label" }, `${label} ${text ?? ""}`),
+      width === null ? null : h7(
+        "span",
+        { className: "nano-meter-track" },
+        h7("span", { className: "nano-meter-fill", style: { width: `${width}%` } })
+      )
+    );
+  }
+  function PlainTable({ columns, children }) {
+    return h7(
+      "table",
+      { className: "nano-table" },
+      h7("thead", null, h7("tr", null, (columns ?? []).map((column) => h7("th", { key: column }, column)))),
+      h7("tbody", null, children)
+    );
+  }
+  var import_react12, h7;
+  var init_panel = __esm({
+    "../packages/dsh-nano-ui/src/panel.js"() {
+      import_react12 = __toESM(__require("react"), 1);
+      h7 = import_react12.default.createElement;
+    }
+  });
+
   // ../packages/dsh-nano-ui/index.js
   var dsh_nano_ui_exports = {};
   __export(dsh_nano_ui_exports, {
+    Card: () => Card,
     EmptyState: () => EmptyState,
+    FactGrid: () => FactGrid,
     FloatingWindow: () => FloatingWindow,
     IconButton: () => IconButton,
+    Meter: () => Meter,
     NANO_LAYER: () => NANO_LAYER,
     NANO_SPACE: () => NANO_SPACE,
     NANO_STYLES: () => NANO_STYLES,
@@ -1098,6 +1219,10 @@ ${LAYER_CSS}
     NanoTabs: () => NanoTabs,
     NanoToast: () => NanoToast,
     NanoWindowDialog: () => NanoWindowDialog,
+    PanelLayout: () => PanelLayout,
+    PanelSection: () => PanelSection,
+    PlainTable: () => PlainTable,
+    SplitRow: () => SplitRow,
     Toolbar: () => Toolbar,
     VERSION: () => VERSION,
     createThemeScope: () => createThemeScope,
@@ -1129,6 +1254,7 @@ ${LAYER_CSS}
       init_toolbar();
       init_empty();
       init_window();
+      init_panel();
     }
   });
 
@@ -2198,8 +2324,8 @@ ${LAYER_CSS}
        * React comes from impl.react at join (it's an external in every bundle).
        */
       profiler(Component) {
-        const React13 = row._react;
-        if (React13 == null || typeof React13.Profiler !== "function") return Component;
+        const React14 = row._react;
+        if (React14 == null || typeof React14.Profiler !== "function") return Component;
         const capture = (...args) => {
           const actualDuration = args[2];
           row.profiler.commits += 1;
@@ -2207,10 +2333,10 @@ ${LAYER_CSS}
           while (row.profiler.durations.length > PROFILER_SAMPLE_CAP) row.profiler.durations.shift();
         };
         return function PerfReviewProfiler(props) {
-          return React13.createElement(
-            React13.Profiler,
+          return React14.createElement(
+            React14.Profiler,
             { id: `nano:${pluginId}:root`, onRender: capture },
-            React13.createElement(Component, props)
+            React14.createElement(Component, props)
           );
         };
       }
@@ -2535,6 +2661,10 @@ ${LAYER_CSS}
           colWaterfall: "\u7011\u5E03",
           hitlAgent: "Agent \u6B63\u5728\u63A7\u5236",
           hitlHeld: "\u4EBA\u5DE5\u63A5\u7BA1\u4E2D",
+          hitlRelay: "Agent \u7ECF relay \u5DF2\u63A5\u5165",
+          hitlRelayWrite: "Agent \u7ECF relay \u5199\u5165",
+          hitlRefused: "\u88AB\u63A5\u7BA1\u62E6\u4E0B",
+          hintUnproxiedHtml: "HTML \u6A21\u5F0F\u662F\u4FDD\u7559\u771F\u5B9E\u5730\u5740\u7684\u9759\u6001\u6295\u5F71\uFF1A\u672C\u5730 http \u7AD9\u7684\u5916\u94FE\u8D44\u6E90\u53EF\u80FD\u88AB\u6309\u6DF7\u5408\u5185\u5BB9\u62E6\u6389\u3002\u8981\u770B\u6837\u5F0F\u8BF7\u7528\u9ED8\u8BA4\u7684\u5F15\u64CE\u6E32\u67D3",
           hitlTakeover: "\u63A5\u7BA1",
           hitlTakeoverTitle: "\u4EBA\u5DE5\u63A5\u7BA1\uFF1A\u6682\u505C Agent \u5BF9\u9875\u9762\u7684\u5199\u5165\uFF0C\u7531\u4F60\u64CD\u4F5C",
           hitlRelease: "\u505C\u6B62\u5199\u5165",
@@ -2582,7 +2712,7 @@ ${LAYER_CSS}
           hintBar: "\u70B9\u9009 \xB7 Shift+\u591A\u9009 \xB7 Alt+\u692D\u5706 \xB7 Shift+\u7BAD\u5934 \xB7 \u2191\u2193 \u7236/\u5B50 \xB7 \u53CC\u51FB\u6539\u6587\u5B57 \xB7 Esc \u5173\u95ED\u9009\u4E2D",
           clearSelection: "\u5173\u95ED\u9009\u4E2D",
           openFailed: "\u9875\u9762\u6CA1\u6709\u6253\u5F00",
-          navigateUnconfirmed: "\u5F15\u64CE\u63A5\u53D7\u4E86\u5730\u5740\uFF0C\u4F46\u6CA1\u6709\u6E32\u67D3\u51FA\u9875\u9762\u3002\u4E0B\u9762\u662F\u5F15\u64CE\u81EA\u5DF1\u7684\u65E5\u5FD7\u3002",
+          openRepairRetry: "\u4FEE\u590D\u5F15\u64CE\u5E76\u91CD\u8BD5",
           startEngine: "\u542F\u52A8\u5F15\u64CE",
           clearPins: "\u6E05\u7A7A\u5168\u90E8\u6807\u6CE8",
           editAria: "\u628A\u8FD9\u6BB5\u6587\u5B57\u5199\u56DE\u5143\u7D20",
@@ -2594,6 +2724,9 @@ ${LAYER_CSS}
           tabBrowse: "\u6A21\u62DF",
           settingsDesc: "\u73AF\u5883\u5065\u5EB7\u4E0E\u6D4F\u89C8\u5668\u6A21\u62DF\u3002\u6A21\u62DF\u8BBE\u7F6E\u5BF9\u65B0\u5BFC\u822A\u751F\u6548\uFF1B\u6D4F\u89C8\u5386\u53F2\u5728\u5DE5\u5177\u680F\u7684\u5386\u53F2\u5165\u53E3\u3002",
           cancel: "\u53D6\u6D88",
+          restartSandbox: "\u91CD\u542F\u6C99\u7BB1",
+          restartSandboxTitle: "\u91CD\u542F\u6240\u9009\u6C99\u7BB1",
+          restartSandboxBody: "\u5C06\u91CD\u542F\u5F53\u524D\u9009\u4E2D\u7684\u6C99\u7BB1 {name}\u3002\u6253\u5F00\u4E2D\u7684\u9875\u9762\u4F1A\u4E22\u5931\u3002",
           save: "\u4FDD\u5B58",
           close: "\u5173\u95ED",
           uaLabel: "User-Agent",
@@ -2643,7 +2776,7 @@ ${LAYER_CSS}
           historyDelete: "\u5220\u9664",
           historyTimes: " \xB7 {n} \u6B21",
           navCloseTab: "\u5173\u95ED\u6807\u7B7E\u9875",
-          nativeHtmlTitle: "\u7528\u9875\u9762\u81EA\u5DF1\u7684 HTML \u6E32\u67D3",
+          nativeHtmlTitle: "\u7528\u9875\u9762\u81EA\u5DF1\u7684 HTML \u6E32\u67D3\uFF08\u9759\u6001\u6295\u5F71\uFF0C\u811A\u672C\u5DF2\u5265\u79BB\uFF09",
           devtoolsToggleTitle: "\u5F00\u53D1\u8005\u5DE5\u5177\uFF08\u2318E\uFF0C\u7136\u540E\u6309 2\uFF09",
           viewportTitle: "\u9875\u9762\u89C6\u53E3",
           viewportFit: "\u81EA\u9002\u5E94",
@@ -2651,9 +2784,19 @@ ${LAYER_CSS}
           viewportWidthPh: "\u5BBD",
           viewportHeightPh: "\u9AD8",
           modeHtml: "HTML \u539F\u751F\u6E32\u67D3",
-          modeShot: "\u622A\u56FE\u56DE\u9000",
+          modeShot: "\u5F15\u64CE\u6E32\u67D3",
           modeEmpty: "\u672A\u6253\u5F00\u9875\u9762",
-          geoInvalid: "\u7ECF\u7EAC\u5EA6\u9700\u8981\u540C\u65F6\u586B\u5199\uFF0C\u4E14\u7EAC\u5EA6 -90..90\u3001\u7ECF\u5EA6 -180..180"
+          geoInvalid: "\u7ECF\u7EAC\u5EA6\u9700\u8981\u540C\u65F6\u586B\u5199\uFF0C\u4E14\u7EAC\u5EA6 -90..90\u3001\u7ECF\u5EA6 -180..180",
+          sandboxPick: "\u9009\u62E9\u4E00\u4E2A\u6258\u7BA1\u6C99\u7BB1",
+          sandboxEmpty: "\u6CA1\u6709\u53EF\u89C1\u7684\u6258\u7BA1\u6C99\u7BB1",
+          sandboxLoading: "\u6B63\u5728\u53D1\u73B0\u6258\u7BA1\u6C99\u7BB1\u2026",
+          sandboxFailed: "\u6C99\u7BB1\u53D1\u73B0\u5931\u8D25",
+          sandboxNoDriver: "\u672A\u58F0\u660E\u6D4F\u89C8\u5668\u9A71\u52A8",
+          referenceVerifying: "\u6B63\u5728\u6838\u5B9E\u5F15\u7528\u7684\u6C99\u7BB1\u2026",
+          referenceFailed: "\u65E0\u6CD5\u6253\u5F00\u5F15\u7528\u7684\u6C99\u7BB1",
+          referenceReasonMissing: "\u8BE5\u5BF9\u8C61\u4E0D\u5B58\u5728\u6216\u5BF9\u5F53\u524D\u4E3B\u4F53\u4E0D\u53EF\u89C1",
+          referenceReasonEnv: "\u8BE5\u5BF9\u8C61\u4E0D\u5728\u6B64\u73AF\u5883\u4E2D",
+          referenceReasonDriver: "\u8BE5\u5BF9\u8C61\u672A\u58F0\u660E\u6D4F\u89C8\u5668\u9A71\u52A8"
         },
         en: {
           typeLabel: "Kitesurf",
@@ -2754,6 +2897,10 @@ ${LAYER_CSS}
           colWaterfall: "Waterfall",
           hitlAgent: "Agent is controlling",
           hitlHeld: "Human override",
+          hitlRelay: "Agent on relay",
+          hitlRelayWrite: "Agent writing via relay",
+          hitlRefused: "Blocked by override",
+          hintUnproxiedHtml: "HTML mode is a static projection that keeps real addresses: subresources of a local http page may be blocked as mixed content. For styling, use the default engine render.",
           hitlTakeover: "Take over",
           hitlTakeoverTitle: "Human override: pause the agent\u2019s page writes while you drive",
           hitlRelease: "Stop writes",
@@ -2801,7 +2948,7 @@ ${LAYER_CSS}
           hintBar: "Click \xB7 Shift+multi \xB7 Alt+ellipse \xB7 Shift+arrow \xB7 \u2191\u2193 parent/child \xB7 double-click edit \xB7 Esc clears the pick",
           clearSelection: "Clear selection",
           openFailed: "Page did not open",
-          navigateUnconfirmed: "The engine accepted the address but never rendered it. Its own log is below.",
+          openRepairRetry: "Repair engine and retry",
           startEngine: "Start engine",
           clearPins: "Clear all notes",
           editAria: "Write this text back into the element",
@@ -2813,6 +2960,9 @@ ${LAYER_CSS}
           tabBrowse: "Simulation",
           settingsDesc: "Environment health and browser simulation. Simulation changes apply to new navigations; browsing history lives in the toolbar.",
           cancel: "Cancel",
+          restartSandbox: "Restart sandbox",
+          restartSandboxTitle: "Restart the selected sandbox",
+          restartSandboxBody: "This restarts the currently selected sandbox {name}. The open page is lost.",
           save: "Save",
           close: "Close",
           uaLabel: "User-Agent",
@@ -2862,7 +3012,7 @@ ${LAYER_CSS}
           historyDelete: "Delete",
           historyTimes: " \xB7 {n}\xD7",
           navCloseTab: "Close tab",
-          nativeHtmlTitle: "Render the page\u2019s own HTML",
+          nativeHtmlTitle: "Render the page\u2019s own HTML (static projection, scripts stripped)",
           devtoolsToggleTitle: "DevTools (\u2318E, then 2)",
           viewportTitle: "Page viewport",
           viewportFit: "Fit",
@@ -2870,9 +3020,19 @@ ${LAYER_CSS}
           viewportWidthPh: "W",
           viewportHeightPh: "H",
           modeHtml: "Native HTML",
-          modeShot: "Screenshot fallback",
+          modeShot: "Engine render",
           modeEmpty: "No page open",
-          geoInvalid: "Enter both latitude (\u221290..90) and longitude (\u2212180..180)"
+          geoInvalid: "Enter both latitude (\u221290..90) and longitude (\u2212180..180)",
+          sandboxPick: "Choose a managed sandbox",
+          sandboxEmpty: "No managed sandboxes are visible",
+          sandboxLoading: "Discovering managed sandboxes\u2026",
+          sandboxFailed: "Sandbox discovery failed",
+          sandboxNoDriver: "No browser driver declared",
+          referenceVerifying: "Verifying the referenced sandbox\u2026",
+          referenceFailed: "The referenced sandbox could not be opened",
+          referenceReasonMissing: "The object does not exist or is not visible to this principal",
+          referenceReasonEnv: "The object lives in a different environment",
+          referenceReasonDriver: "The object declares no browser driver"
         }
       };
     }
@@ -2986,9 +3146,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const x = Math.round(Number(box.x) || 0);
     const y = Math.round(Number(box.y) || 0);
     const w = Math.round(Number(box.width) || 0);
-    const h8 = Math.round(Number(box.height) || 0);
-    if (w <= 0 || h8 <= 0) return `${x},${y} empty`;
-    return `${x},${y} ${w}x${h8}`;
+    const h9 = Math.round(Number(box.height) || 0);
+    if (w <= 0 || h9 <= 0) return `${x},${y} empty`;
+    return `${x},${y} ${w}x${h9}`;
   }
   function cssLine(style) {
     if (!style || typeof style !== "object") return "";
@@ -3059,9 +3219,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     if (path.endsWith("/open") || path.endsWith("/shot") || path.endsWith("/history")) return 6e4;
     return 25e3;
   }
-  async function captureNavigation(post2, { openPath, shotPath, url, fit }) {
-    await post2(openPath, { url });
-    const frame = await post2(shotPath, { format: "webp", ...fit ? { fit } : {} });
+  async function captureNavigation(post, { openPath, shotPath, url, fit }) {
+    await post(openPath, { url });
+    const frame = await post(shotPath, { format: "webp", ...fit ? { fit } : {} });
     if (!frame?.data || !frame.url || frame.url === "about:blank") {
       throw Object.assign(new Error("Kitesurf did not return a rendered page"), { errorId: "kitesurf.navigate.failed" });
     }
@@ -3072,13 +3232,291 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }
   });
 
+  // src/shared/managed-client.js
+  var managed_client_exports = {};
+  __export(managed_client_exports, {
+    createManagedDesignClient: () => createManagedDesignClient,
+    listSandboxRows: () => listSandboxRows
+  });
+  function refuse(code, message) {
+    const error = new Error(message);
+    error.errorId = `kitesurf.managed.${code}`;
+    error.restricted = true;
+    throw error;
+  }
+  function capabilityFor(path) {
+    const managed = MANAGED_PATH_CAPS.get(path);
+    if (managed) return managed;
+    const suffix = path.slice(PREFIX.length);
+    if (!suffix || suffix.includes("/")) return null;
+    return `dnls.${suffix}`;
+  }
+  function hasSelector(value) {
+    if (Array.isArray(value)) return value.some(hasSelector);
+    if (!value || typeof value !== "object") return false;
+    return Object.entries(value).some(([key, entry]) => SELECTOR_KEYS.has(key) || hasSelector(entry));
+  }
+  function headerEntries(headers) {
+    if (!headers) return [];
+    if (typeof Headers === "function" && headers instanceof Headers) return [...headers.entries()];
+    if (Array.isArray(headers)) return headers;
+    return Object.entries(headers);
+  }
+  function createManagedDesignClient({ fetch: impl, origin } = {}) {
+    const doFetch = impl ?? globalThis.fetch?.bind(globalThis);
+    if (typeof doFetch !== "function") throw new Error("managed design client requires fetch");
+    const base = new URL(origin ?? globalThis.location?.origin);
+    if (!base.origin || base.origin === "null") throw new Error("managed design client requires an origin");
+    let contract = null;
+    async function discover() {
+      contract = null;
+      const res = await doFetch(new URL(CONTRACT_PATH, base).href, {
+        method: "GET",
+        credentials: "same-origin"
+      });
+      if (!res.ok) refuse("discovery", `contract discovery failed (${res.status})`);
+      if (res.headers.get(CONTRACT_HEADER) !== CONTRACT_VERSION) refuse("contract", "unknown control contract");
+      const body = await res.json().catch(() => null);
+      if (body?.contractVersion !== CONTRACT_VERSION || !Array.isArray(body.capabilities)) {
+        refuse("contract", "unknown control contract");
+      }
+      contract = { capabilities: new Set(body.capabilities) };
+      return body;
+    }
+    function requireContract() {
+      if (!contract) refuse("undiscovered", "control contract has not been discovered");
+      return contract;
+    }
+    async function checked(res, sandboxId) {
+      if (!res.ok) return res;
+      if (res.headers.get(CONTRACT_HEADER) !== CONTRACT_VERSION) refuse("contract", "response missing control contract");
+      const clone = res.clone();
+      const body = await clone.json().catch(() => null);
+      if (!body || typeof body !== "object") refuse("contract", "malformed control response");
+      if (body.contractVersion !== CONTRACT_VERSION) refuse("contract", "response body contract mismatch");
+      if (sandboxId && body.sandboxId !== sandboxId) refuse("object", "response names a different sandbox");
+      return res;
+    }
+    async function list() {
+      const { capabilities } = requireContract();
+      if (!capabilities.has("sandbox.list")) refuse("capability", "sandbox.list is not announced");
+      const res = await doFetch(new URL(LIST_PATH, base).href, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { [CONTRACT_HEADER]: CONTRACT_VERSION }
+      });
+      return checked(res, null);
+    }
+    function bind(sandboxId) {
+      if (typeof sandboxId !== "string" || sandboxId.length === 0) refuse("target", "missing sandbox id");
+      if (!SANDBOX_ID.test(sandboxId)) refuse("target", "invalid sandbox id");
+      const { capabilities } = requireContract();
+      return async function fetchBound(path, init = {}) {
+        if (typeof path !== "string") refuse("path", "request path must be a string");
+        const url = new URL(path, base);
+        if (url.origin !== base.origin) refuse("origin", "request crosses origin");
+        if (!url.pathname.startsWith(PREFIX)) refuse("path", `unannounced path ${url.pathname}`);
+        const capability = capabilityFor(url.pathname);
+        if (capability === null || !capabilities.has(capability)) {
+          refuse("capability", `capability for ${url.pathname} is not announced`);
+        }
+        for (const key of url.searchParams.keys()) {
+          if (SELECTOR_KEYS.has(key)) refuse("selector", "caller may not supply an object selector");
+        }
+        const entries = headerEntries(init.headers);
+        for (const [name] of entries) {
+          if (SELECTOR_HEADERS.has(String(name).toLowerCase())) refuse("selector", "caller may not supply a selector header");
+        }
+        if (init.credentials !== void 0 && init.credentials !== "same-origin") {
+          refuse("credentials", "request may not choose credentials");
+        }
+        const body = init.body;
+        if (body !== void 0) {
+          if (typeof body !== "string") refuse("body", "request body must be a serialized string");
+          let parsed;
+          try {
+            parsed = JSON.parse(body);
+          } catch {
+            refuse("body", "request body must be valid JSON");
+          }
+          if (hasSelector(parsed)) refuse("selector", "caller may not supply a body selector");
+        }
+        url.searchParams.set("sandboxId", sandboxId);
+        const headers = [
+          ...entries.filter(([name]) => !SELECTOR_HEADERS.has(String(name).toLowerCase())),
+          [CONTRACT_HEADER, CONTRACT_VERSION]
+        ];
+        return doFetch(url.href, { ...init, headers, credentials: "same-origin" }).then((res) => checked(res, sandboxId));
+      };
+    }
+    return { discover, list, bind };
+  }
+  function listSandboxRows(body) {
+    if (!Array.isArray(body?.rows)) throw new Error("invalid sandbox list");
+    return body.rows;
+  }
+  var CONTRACT_VERSION, CONTRACT_HEADER, CONTRACT_PATH, LIST_PATH, PREFIX, SANDBOX_ID, SELECTOR_KEYS, SELECTOR_HEADERS, MANAGED_PATH_CAPS;
+  var init_managed_client = __esm({
+    "src/shared/managed-client.js"() {
+      CONTRACT_VERSION = "dnls.control/1";
+      CONTRACT_HEADER = "x-dnls-contract";
+      CONTRACT_PATH = "/nano-local-sandbox/contract";
+      LIST_PATH = "/nano-local-sandbox/sandboxes";
+      PREFIX = "/nano-local-sandbox/";
+      SANDBOX_ID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+      SELECTOR_KEYS = /* @__PURE__ */ new Set(["sandboxId", "sessionId", "sandbox"]);
+      SELECTOR_HEADERS = /* @__PURE__ */ new Set(["x-sandbox-id", "x-dnls-sandbox", "x-session-id", "x-dnls-contract"]);
+      MANAGED_PATH_CAPS = /* @__PURE__ */ new Map([
+        ["/nano-local-sandbox/sandboxes", "sandbox.list"],
+        ["/nano-local-sandbox/fleet", "sandbox.fleet"],
+        ["/nano-local-sandbox/inspect", "sandbox.inspect"],
+        ["/nano-local-sandbox/processes", "sandbox.processes"],
+        ["/nano-local-sandbox/lifecycle", "sandbox.lifecycle"],
+        ["/nano-local-sandbox/operations", "sandbox.operations"]
+      ]);
+    }
+  });
+
+  // src/shared/sandbox-reference.js
+  var sandbox_reference_exports = {};
+  __export(sandbox_reference_exports, {
+    noteVerifiedSandboxName: () => noteVerifiedSandboxName,
+    parseSandboxReference: () => parseSandboxReference,
+    subscribeVerifiedSandboxNames: () => subscribeVerifiedSandboxNames,
+    verifiedSandboxName: () => verifiedSandboxName,
+    verifySandboxReference: () => verifySandboxReference
+  });
+  function refuse2(code, message) {
+    const error = new Error(message);
+    error.errorId = `kitesurf.sandbox.${code}`;
+    error.restricted = true;
+    throw error;
+  }
+  function parseSandboxReference(address) {
+    if (typeof address !== "string") return null;
+    const match = ADDRESS.exec(address);
+    return match ? { envId: match[1], sandboxId: match[2] } : null;
+  }
+  async function verifySandboxReference(address, impl, origin, { createManagedDesignClient: createManagedDesignClient3 }) {
+    const parsed = parseSandboxReference(address);
+    if (!parsed) refuse2("address", "not a canonical sandbox resource");
+    if (typeof impl !== "function") refuse2("fetch", "a fetch implementation is required");
+    const managed = createManagedDesignClient3({ fetch: impl, origin });
+    await managed.discover();
+    const bound = managed.bind(parsed.sandboxId);
+    const res = await bound("/nano-local-sandbox/inspect");
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      const error = new Error(body?.error ?? `inspect failed (${res.status})`);
+      error.errorId = body?.errorId ?? "kitesurf.sandbox.missing";
+      error.status = res.status;
+      throw error;
+    }
+    const detail = await res.json().catch(() => null);
+    if (detail?.sandboxId !== parsed.sandboxId) refuse2("object", "inspect names a different sandbox");
+    if (detail?.envId !== parsed.envId) refuse2("env", "sandbox lives in a different environment");
+    const drivers = Array.isArray(detail?.drivers) ? detail.drivers.filter((driver) => typeof driver === "string" && driver.length > 0) : [];
+    if (!drivers.includes(BROWSER_DRIVER)) {
+      refuse2("driver", "sandbox profile declares no browser driver");
+    }
+    return { client: managed, envId: parsed.envId, sandboxId: parsed.sandboxId, name: detail.name, drivers };
+  }
+  function noteVerifiedSandboxName(address, name) {
+    if (typeof name !== "string" || name.length === 0) return;
+    const parsed = parseSandboxReference(address);
+    if (!parsed) return;
+    verifiedNames.set(address, name);
+    for (const listener of nameListeners) {
+      try {
+        listener();
+      } catch {
+      }
+    }
+  }
+  function verifiedSandboxName(address) {
+    return verifiedNames.get(address) ?? null;
+  }
+  function subscribeVerifiedSandboxNames(listener) {
+    if (typeof listener !== "function") return () => {
+    };
+    nameListeners.add(listener);
+    return () => nameListeners.delete(listener);
+  }
+  var ENV_ID, UUID, ADDRESS, BROWSER_DRIVER, verifiedNames, nameListeners;
+  var init_sandbox_reference = __esm({
+    "src/shared/sandbox-reference.js"() {
+      ENV_ID = "[a-z][a-z0-9-]{0,15}";
+      UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+      ADDRESS = new RegExp(`^dsh-resource://sandbox/(${ENV_ID})/(${UUID})$`);
+      BROWSER_DRIVER = "cdp";
+      verifiedNames = /* @__PURE__ */ new Map();
+      nameListeners = /* @__PURE__ */ new Set();
+    }
+  });
+
+  // src/shared/pane-poll.js
+  var pane_poll_exports = {};
+  __export(pane_poll_exports, {
+    armPanePoll: () => armPanePoll
+  });
+  function armPanePoll(load, {
+    periodMs,
+    hiddenPeriodMs = null,
+    immediate = false,
+    shouldTick = () => true,
+    isVisible = () => true,
+    window: window2 = globalThis.window,
+    document: document2 = globalThis.document
+  } = {}) {
+    if (typeof load !== "function") throw new TypeError("armPanePoll requires a load function");
+    if (!Number.isFinite(periodMs) || periodMs <= 0) throw new TypeError("armPanePoll requires a positive periodMs");
+    if (typeof window2?.setInterval !== "function") return () => {
+    };
+    if (isVisible() !== true) return () => {
+    };
+    if (immediate === true) {
+      try {
+        load();
+      } catch {
+      }
+    }
+    let timer = null;
+    const period = () => hiddenPeriodMs !== null && document2?.visibilityState === "hidden" ? hiddenPeriodMs : periodMs;
+    const tick = () => {
+      if (isVisible() !== true || shouldTick() !== true) return;
+      try {
+        load();
+      } catch {
+      }
+    };
+    const arm = () => {
+      if (timer !== null) window2.clearInterval(timer);
+      timer = window2.setInterval(tick, period());
+    };
+    const onVis = () => {
+      arm();
+      if (document2?.visibilityState !== "hidden") tick();
+    };
+    if (hiddenPeriodMs !== null) document2?.addEventListener?.("visibilitychange", onVis);
+    arm();
+    return () => {
+      if (timer !== null) window2.clearInterval(timer);
+      timer = null;
+      if (hiddenPeriodMs !== null) document2?.removeEventListener?.("visibilitychange", onVis);
+    };
+  }
+  var init_pane_poll = __esm({
+    "src/shared/pane-poll.js"() {
+    }
+  });
+
   // src/client/index.js
   var index_exports = {};
   __export(index_exports, {
     apply: () => apply,
     inject: () => inject
   });
-  var React12 = __require("react");
+  var React13 = __require("react");
   var primitives2 = __require("@deepseek-ai/dsh-client-ui-primitives");
   var { createThemeScope: createThemeScope2, openNanoDialog: openNanoDialog2, openNanoMenu: openNanoMenu2, NANO_STYLES: NANO_STYLES2, NanoToast: NanoToast2, NanoTabs: NanoTabs2 } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
   var { ensurePerfReview: ensurePerfReview2 } = (init_client(), __toCommonJS(client_exports));
@@ -3087,7 +3525,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
   var { captureNavigation: captureNavigation2, requestTimeout: requestTimeout2 } = (init_navigation(), __toCommonJS(navigation_exports));
-  var h7 = React12.createElement;
+  var { createManagedDesignClient: createManagedDesignClient2, listSandboxRows: listSandboxRows2 } = (init_managed_client(), __toCommonJS(managed_client_exports));
+  var { parseSandboxReference: parseSandboxReference2, verifySandboxReference: verifySandboxReference2, noteVerifiedSandboxName: noteVerifiedSandboxName2, verifiedSandboxName: verifiedSandboxName2, subscribeVerifiedSandboxNames: subscribeVerifiedSandboxNames2 } = (init_sandbox_reference(), __toCommonJS(sandbox_reference_exports));
+  var { armPanePoll: armPanePoll2 } = (init_pane_poll(), __toCommonJS(pane_poll_exports));
+  var h8 = React13.createElement;
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
   var SHOT = "/nano-local-sandbox/shot";
@@ -3096,7 +3537,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var SETTINGS = "/nano-local-sandbox/settings";
   var HISTORY = "/nano-local-sandbox/history";
   var PORTS = "/nano-local-sandbox/ports";
-  var RECOVER = "/nano-local-sandbox/recover";
   var DIAGNOSTICS = "/nano-local-sandbox/diagnostics";
   var CONSOLE = "/nano-local-sandbox/console";
   var NETWORK = "/nano-local-sandbox/network";
@@ -3105,7 +3545,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var LOGS = "/nano-local-sandbox/logs";
   var DOM = "/nano-local-sandbox/dom";
   var CONTROL = "/nano-local-sandbox/control";
-  var localNotes = [];
   var LIFECYCLE = "/nano-local-sandbox/lifecycle";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
@@ -3152,7 +3591,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           version: true ? "0.1.0" : "0.0.0",
           buckets: BUCKETS2,
           decl: DECL_HASH2,
-          react: React12,
+          react: React13,
           root: () => document.querySelector("[data-nks-workspace]")
         });
         if (collector?.span) return collector.span(name, fn);
@@ -3227,6 +3666,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-empty-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:2px}
 .nks-empty-link{color:var(--dsw-alias-link,#2f6fed);cursor:pointer;background:none;border:0;font:inherit;padding:0;text-decoration:underline;text-underline-offset:2px}
 .nks-empty-meta{font:var(--dsw-font-xxxs-11);opacity:.75;word-break:break-all;max-width:340px}
+.nks-sandbox-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxs-12)}
+.nks-sandbox-bar select{flex:1;min-width:0;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;padding:4px 8px;font:inherit}
 .nks-box{position:absolute;border:1.5px solid var(--dsw-alias-link,#2f6fed);box-shadow:0 0 0 1px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.55);pointer-events:none}
 .nks-box[data-kind="ellipse"]{border-radius:50%}
 .nks-box[data-kind="hover"]{border-style:dashed;opacity:.75}
@@ -3270,7 +3711,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 @keyframes nks-spin{to{transform:rotate(360deg)}}
 .nks-open-error{margin:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);line-height:1.55;word-break:break-word}
 .nks-open-url{color:var(--dsw-alias-label-tertiary);unicode-bidi:plaintext}
-.nks-open-log{margin:6px 0 0;max-height:140px;overflow:auto;padding:6px 8px;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
+.nks-open-repair{margin-top:10px;height:28px;padding:0 12px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);cursor:pointer}
+.nks-open-repair:hover{background:var(--dsw-alias-bg-layer-3)}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
 .nks-simulation-body{min-height:0}
 .nks-settings-stack{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto}
@@ -3427,11 +3869,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
    dead area read as "canvas", and the picture is centred by object-position. */
 .nks-frame{background-image:linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%),linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%);background-size:16px 16px;background-position:0 0,8px 8px}
 `;
-  function post(path, body) {
+  function postRequest(fetch2, path, body) {
     const timeoutMs = requestTimeout2(path);
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : 0;
-    return fetch(path, {
+    return fetch2(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body ?? {}),
@@ -3448,6 +3890,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       if (!response.ok || payload.ok === false) {
         const error = new Error(payload.error || payload.reason || `request failed (${response.status})`);
         error.errorId = payload.errorId || payload.reason || "kitesurf.unknown";
+        if (typeof payload.hint === "string" && payload.hint) error.hint = payload.hint;
         throw error;
       }
       return payload;
@@ -3578,20 +4021,22 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     if (!needle) return true;
     return `${row.tag || ""} ${row.id || ""} ${row.cls || ""}`.toLowerCase().includes(needle);
   }
-  function DevTools({ copy, open, onClose }) {
-    const [tab, setTab] = React12.useState("console");
-    const [rows, setRows] = React12.useState([]);
-    const [failedOnly, setFailedOnly] = React12.useState(false);
-    const [query, setQuery] = React12.useState("");
-    const [typeFilter, setTypeFilter] = React12.useState("all");
-    const [levelFilter, setLevelFilter] = React12.useState("all");
-    const [netDetail, setNetDetail] = React12.useState(null);
-    const [netDetailTab, setNetDetailTab] = React12.useState("headers");
-    const [styles, setStyles] = React12.useState(null);
-    const detailSeq = React12.useRef(0);
-    const [height, setHeight] = React12.useState(240);
-    const [collapsed, setCollapsed] = React12.useState(false);
-    const dragRef = React12.useRef(null);
+  function DevTools({ copy, open, onClose, fetch: fetch2, visible = true }) {
+    const visRef = React13.useRef(true);
+    visRef.current = visible !== false;
+    const [tab, setTab] = React13.useState("console");
+    const [rows, setRows] = React13.useState([]);
+    const [failedOnly, setFailedOnly] = React13.useState(false);
+    const [query, setQuery] = React13.useState("");
+    const [typeFilter, setTypeFilter] = React13.useState("all");
+    const [levelFilter, setLevelFilter] = React13.useState("all");
+    const [netDetail, setNetDetail] = React13.useState(null);
+    const [netDetailTab, setNetDetailTab] = React13.useState("headers");
+    const [styles, setStyles] = React13.useState(null);
+    const detailSeq = React13.useRef(0);
+    const [height, setHeight] = React13.useState(240);
+    const [collapsed, setCollapsed] = React13.useState(false);
+    const dragRef = React13.useRef(null);
     function startResize(event) {
       event.preventDefault();
       event.stopPropagation();
@@ -3613,7 +4058,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", stop);
     }
-    React12.useEffect(() => {
+    React13.useEffect(() => {
       if (!open) return void 0;
       let alive = true;
       let since = null;
@@ -3630,7 +4075,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         try {
           if (tab === "console") {
             const url = sinceSeq != null ? `${CONSOLE}?limit=200&sinceSeq=${encodeURIComponent(sinceSeq)}` : `${CONSOLE}?limit=200`;
-            const data = await fetch(url).then((r) => r.json());
+            const data = await fetch2(url).then((r) => r.json());
             if (alive && Array.isArray(data.entries)) {
               merge(data.entries, (r) => `c${r.seq ?? r.at}`);
               const lastSeq = data.entries.reduce((m, r) => Math.max(m, Number(r.seq) || 0), 0);
@@ -3638,38 +4083,30 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             }
           } else if (tab === "network") {
             const url = `${NETWORK}?limit=200${since ? `&since=${encodeURIComponent(since)}` : ""}`;
-            const data = await fetch(url).then((r) => r.json());
+            const data = await fetch2(url).then((r) => r.json());
             if (alive && Array.isArray(data.entries)) {
               merge(data.entries, (r) => `n${r.id}`);
               const lastStart = data.entries.reduce((m, r) => Math.max(m, Number(r.updatedAt || r.startedAt) || 0), 0);
               if (lastStart) since = String(lastStart);
             }
           } else {
-            const data = await fetch(`${ELEMENTS}?depth=3`).then((r) => r.json());
+            const data = await fetch2(`${ELEMENTS}?depth=3`).then((r) => r.json());
             if (alive) setRows(data.nodes || []);
           }
         } catch {
         }
       };
-      load();
-      const period = () => document.visibilityState === "hidden" ? 15e3 : 1500;
-      let timer = 0;
-      const arm = () => {
-        clearInterval(timer);
-        timer = window.setInterval(load, period());
-      };
-      const onVis = () => {
-        arm();
-        if (document.visibilityState !== "hidden") load();
-      };
-      document.addEventListener("visibilitychange", onVis);
-      arm();
+      const disarm = armPanePoll2(load, {
+        periodMs: 1500,
+        hiddenPeriodMs: 15e3,
+        immediate: true,
+        isVisible: () => visRef.current
+      });
       return () => {
         alive = false;
-        clearInterval(timer);
-        document.removeEventListener("visibilitychange", onVis);
+        disarm();
       };
-    }, [open, tab]);
+    }, [open, tab, visible]);
     if (!open) return null;
     const visibleRows = rows.filter((row) => {
       if (tab === "network") {
@@ -3715,7 +4152,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       setHeight((value) => Math.max(value, 360));
       setNetDetail({ entry: row, responseBody: null, loading: true, error: "" });
       try {
-        const data = await fetch(`${NETWORK}?id=${encodeURIComponent(row.id)}`).then((response) => response.json());
+        const data = await fetch2(`${NETWORK}?id=${encodeURIComponent(row.id)}`).then((response) => response.json());
         if (seq2 !== detailSeq.current) return;
         if (!data?.ok || !data.entry) throw new Error(data?.error || copy.devtoolsDetailError);
         setNetDetail({ entry: data.entry, responseBody: data.responseBody, loading: false, error: "" });
@@ -3727,7 +4164,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const inspectNode = async (row) => {
       const selector = row.id ? `${row.tag}#${row.id}` : row.cls ? `${row.tag}.${String(row.cls).trim().split(/\s+/)[0]}` : row.tag;
       try {
-        const data = await fetch(`${ELEMENTS}?selector=${encodeURIComponent(selector)}`).then((r) => r.json());
+        const data = await fetch2(`${ELEMENTS}?selector=${encodeURIComponent(selector)}`).then((r) => r.json());
         setStyles({ selector, matched: data.matched?.matched || [], computed: data.computed || {} });
       } catch {
         setStyles({ selector, matched: [], computed: {} });
@@ -3735,31 +4172,31 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     };
     const clear = async () => {
       const path = tab === "console" ? CONSOLE : NETWORK;
-      await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: '{"clear":true}' }).catch(() => {
+      await fetch2(path, { method: "POST", headers: { "content-type": "application/json" }, body: '{"clear":true}' }).catch(() => {
       });
       setRows([]);
       setNetDetail(null);
     };
-    const kvRow = (label, value) => h7(
+    const kvRow = (label, value) => h8(
       "div",
       { className: "nks-net-kv", key: label },
-      h7("b", null, label),
-      h7("span", null, String(value ?? "\u2014"))
+      h8("b", null, label),
+      h8("span", null, String(value ?? "\u2014"))
     );
     const headerRows = (headers) => {
       const entries = Object.entries(headers || {});
-      return entries.length ? entries.map(([key, value]) => h7("div", { className: "nks-net-kv", key }, h7("b", null, key), h7("span", null, String(value)))) : h7("div", { className: "nks-net-empty" }, copy.devtoolsNoHeaders);
+      return entries.length ? entries.map(([key, value]) => h8("div", { className: "nks-net-kv", key }, h8("b", null, key), h8("span", null, String(value)))) : h8("div", { className: "nks-net-empty" }, copy.devtoolsNoHeaders);
     };
-    const netSection = (title, children) => h7(
+    const netSection = (title, children) => h8(
       "div",
       { className: "nks-net-section", key: title },
-      h7("b", null, title),
+      h8("b", null, title),
       children
     );
     const renderNetDetail = () => {
       if (!netDetail) return null;
-      if (netDetail.loading) return h7("div", { className: "nks-net-empty" }, copy.devtoolsLoading);
-      if (netDetail.error) return h7("div", { className: "nks-net-empty" }, `${copy.devtoolsDetailError}: ${netDetail.error}`);
+      if (netDetail.loading) return h8("div", { className: "nks-net-empty" }, copy.devtoolsLoading);
+      if (netDetail.error) return h8("div", { className: "nks-net-empty" }, `${copy.devtoolsDetailError}: ${netDetail.error}`);
       const entry = netDetail.entry || {};
       if (netDetailTab === "headers") {
         return [
@@ -3780,23 +4217,23 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         let queryRows = [];
         try {
           const parsed = new URL(entry.url || "", "http://local");
-          queryRows = [...parsed.searchParams].map(([key, value], index) => h7(
+          queryRows = [...parsed.searchParams].map(([key, value], index) => h8(
             "div",
             { className: "nks-net-kv", key: `${key}${index}` },
-            h7("b", null, key),
-            h7("span", null, value)
+            h8("b", null, key),
+            h8("span", null, value)
           ));
         } catch {
         }
         return [
           queryRows.length ? netSection(copy.devtoolsQuery, queryRows) : null,
-          netSection(copy.devtoolsRequestPayload, entry.postData ? h7("pre", { className: "nks-net-pre" }, entry.postData) : h7("div", { className: "nks-net-empty" }, copy.devtoolsNoPayload))
+          netSection(copy.devtoolsRequestPayload, entry.postData ? h8("pre", { className: "nks-net-pre" }, entry.postData) : h8("div", { className: "nks-net-empty" }, copy.devtoolsNoPayload))
         ];
       }
       const body = netDetail.responseBody;
-      return netSection(copy.devtoolsResponseBody, body == null ? h7("div", { className: "nks-net-empty" }, copy.devtoolsNoResponseBody) : body.body ? h7("pre", { className: "nks-net-pre" }, `${body.base64Encoded ? "[base64]\n" : ""}${body.body}${body.truncated ? "\n\u2026" : ""}`) : h7("div", { className: "nks-net-empty" }, copy.devtoolsEmptyBody));
+      return netSection(copy.devtoolsResponseBody, body == null ? h8("div", { className: "nks-net-empty" }, copy.devtoolsNoResponseBody) : body.body ? h8("pre", { className: "nks-net-pre" }, `${body.base64Encoded ? "[base64]\n" : ""}${body.body}${body.truncated ? "\n\u2026" : ""}`) : h8("div", { className: "nks-net-empty" }, copy.devtoolsEmptyBody));
     };
-    return h7(
+    return h8(
       "div",
       {
         className: "nks-dt",
@@ -3805,7 +4242,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         style: collapsed ? void 0 : { height: `${height}px` }
       },
       // Drag the top edge to give the panel more or less room.
-      h7("div", {
+      h8("div", {
         className: "nks-dt-grip",
         "data-nks-dt-grip": "1",
         role: "separator",
@@ -3813,16 +4250,16 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         "aria-label": copy.devtoolsResize,
         onPointerDown: startResize
       }),
-      h7(
+      h8(
         "div",
         { className: "nks-dt-head" },
         // View switch and row actions are host primitives; the
         // pane draws no tab chrome of its own (DESIGN.md §6.1). The strip is
         // scaled to the panel: at full size three options ate the whole header.
-        h7(
+        h8(
           "div",
           { className: "nks-dt-tabs" },
-          h7(primitives2.SegmentedControl, {
+          h8(primitives2.SegmentedControl, {
             id: "nks-dt-view",
             value: tab,
             label: copy.devtools,
@@ -3838,21 +4275,21 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             }
           })
         ),
-        h7("span", { style: { flex: "auto" } }),
-        h7(primitives2.Button, { variant: "ghost", size: "sm", onClick: clear }, copy.devtoolsClear),
-        h7(primitives2.Button, {
+        h8("span", { style: { flex: "auto" } }),
+        h8(primitives2.Button, { variant: "ghost", size: "sm", onClick: clear }, copy.devtoolsClear),
+        h8(primitives2.Button, {
           variant: "ghost",
           size: "sm",
           "data-nks-dt-collapse": "1",
           "aria-expanded": collapsed ? "false" : "true",
           onClick: () => setCollapsed((value) => !value)
         }, collapsed ? copy.devtoolsExpand : copy.devtoolsCollapse),
-        h7(primitives2.Button, { variant: "ghost", size: "sm", onClick: onClose }, copy.devtoolsClose)
+        h8(primitives2.Button, { variant: "ghost", size: "sm", onClick: onClose }, copy.devtoolsClose)
       ),
-      h7(
+      h8(
         "div",
         { className: "nks-dt-filterbar", "data-nks-dt-filterbar": "1" },
-        h7(primitives2.Input, {
+        h8(primitives2.Input, {
           className: "nks-dt-search",
           "data-nks-dt-search": "1",
           type: "search",
@@ -3861,10 +4298,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "aria-label": tab === "elements" ? copy.devtoolsSearchElements : tab === "console" ? copy.devtoolsSearchConsole : copy.devtoolsSearch,
           onChange: (event) => setQuery(event.target.value)
         }),
-        tab === "console" ? h7(
+        tab === "console" ? h8(
           primitives2.Tooltip,
           { label: copy.devtoolsFilterLevel },
-          h7(primitives2.Button, {
+          h8(primitives2.Button, {
             variant: "outline",
             size: "sm",
             "data-nks-dt-level": "1",
@@ -3872,10 +4309,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             onClick: openLevelMenu
           }, levelFilter === "all" ? copy.devtoolsAllLevels : levelFilter.toUpperCase())
         ) : null,
-        tab === "network" ? h7(
+        tab === "network" ? h8(
           primitives2.Tooltip,
           { label: copy.devtoolsFilterType },
-          h7(primitives2.Button, {
+          h8(primitives2.Button, {
             variant: "outline",
             size: "sm",
             "data-nks-dt-type": "1",
@@ -3883,42 +4320,42 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             onClick: openTypeMenu
           }, typeFilter === "all" ? copy.devtoolsTypeAll : typeFilter)
         ) : null,
-        tab === "network" ? h7(
+        tab === "network" ? h8(
           primitives2.Tooltip,
           { label: copy.devtoolsFailedOnlyHint },
-          h7(
+          h8(
             "label",
             { className: "nks-dt-switch", "data-nks-dt-failed": "1" },
-            h7(primitives2.Switch, { checked: failedOnly, onChange: setFailedOnly, label: copy.devtoolsFailedOnly }),
-            h7("span", null, copy.devtoolsFailedOnly)
+            h8(primitives2.Switch, { checked: failedOnly, onChange: setFailedOnly, label: copy.devtoolsFailedOnly }),
+            h8("span", null, copy.devtoolsFailedOnly)
           )
         ) : null,
-        tab === "network" ? h7(
+        tab === "network" ? h8(
           primitives2.Tooltip,
           { label: copy.devtoolsCacheUnsupported },
-          h7(
+          h8(
             "span",
             { className: "nks-dt-cache", "data-nks-dt-cache": "1", "aria-disabled": "true" },
-            h7(primitives2.Switch, { checked: false, disabled: true, onChange: () => {
+            h8(primitives2.Switch, { checked: false, disabled: true, onChange: () => {
             }, label: copy.devtoolsDisableCache }),
-            h7("span", null, copy.devtoolsDisableCache),
-            h7("b", null, copy.devtoolsUnsupported)
+            h8("span", null, copy.devtoolsDisableCache),
+            h8("b", null, copy.devtoolsUnsupported)
           )
         ) : null,
-        tab === "elements" ? h7("span", {
+        tab === "elements" ? h8("span", {
           className: "nks-dt-stats",
           "data-nks-dt-stats": "1",
           title: copy.devtoolsDomStatsHint
         }, `${copy.devtoolsNodes} ${rows.length} \xB7 ${copy.devtoolsElements} ${elementCount} \xB7 ${copy.devtoolsDepth} ${maxDepth}`) : null
       ),
-      tab === "elements" && styles ? h7(
+      tab === "elements" && styles ? h8(
         "div",
         { className: "nks-dt-styles", "data-nks-dt-styles": "1" },
-        h7(
+        h8(
           "div",
           { className: "nks-dt-style-head" },
-          h7("span", null, `${styles.selector} \xB7 ${styles.matched.length} rules \xB7 ${Object.keys(styles.computed || {}).length} computed`),
-          h7("button", {
+          h8("span", null, `${styles.selector} \xB7 ${styles.matched.length} rules \xB7 ${Object.keys(styles.computed || {}).length} computed`),
+          h8("button", {
             type: "button",
             className: "nks-dt-style-x",
             "data-nks-dt-style-close": "1",
@@ -3927,57 +4364,57 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             onClick: () => setStyles(null)
           }, "\xD7")
         ),
-        styles.matched.slice(0, 6).map((rule, i) => h7(
+        styles.matched.slice(0, 6).map((rule, i) => h8(
           "div",
           { className: "nks-dt-rule", key: `r${i}` },
-          h7("b", null, rule.selector || copy.devtoolsAnonymous),
-          h7("span", null, (rule.properties || []).slice(0, 6).join("; "))
+          h8("b", null, rule.selector || copy.devtoolsAnonymous),
+          h8("span", null, (rule.properties || []).slice(0, 6).join("; "))
         ))
       ) : null,
-      tab === "elements" ? h7(
+      tab === "elements" ? h8(
         "div",
         { className: "nks-dt-cols" },
-        h7("span", { className: "nks-dt-lv" }, copy.colTag),
-        h7("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, copy.colElement),
-        h7("span", { className: "nks-dt-dur" }, copy.colChildren)
+        h8("span", { className: "nks-dt-lv" }, copy.colTag),
+        h8("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, copy.colElement),
+        h8("span", { className: "nks-dt-dur" }, copy.colChildren)
       ) : null,
-      tab === "console" ? h7(
+      tab === "console" ? h8(
         "div",
         { className: "nks-dt-cols" },
-        h7("span", { className: "nks-dt-time" }, copy.colTime),
-        h7("span", { className: "nks-dt-lv" }, copy.colLevel),
-        h7("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, copy.colMessage),
-        h7("span", { className: "nks-dt-src" }, copy.colSource)
+        h8("span", { className: "nks-dt-time" }, copy.colTime),
+        h8("span", { className: "nks-dt-lv" }, copy.colLevel),
+        h8("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, copy.colMessage),
+        h8("span", { className: "nks-dt-src" }, copy.colSource)
       ) : null,
-      tab === "network" ? h7(
+      tab === "network" ? h8(
         "div",
         { className: "nks-dt-cols" },
-        h7("span", { className: "nks-dt-lv" }, copy.colMethod),
-        h7("span", { className: "nks-dt-st" }, copy.colStatus),
-        h7("span", { className: "nks-dt-type" }, copy.colType),
-        h7("span", { className: "nks-dt-url nks-dt-grow", style: { maxWidth: "none", textAlign: "left" } }, copy.colUrl),
-        h7("span", { className: "nks-dt-size" }, copy.colSize),
-        h7("span", { className: "nks-dt-dur" }, copy.colDuration),
-        h7("span", { className: "nks-dt-wf", style: { height: "auto" } }, copy.colWaterfall)
+        h8("span", { className: "nks-dt-lv" }, copy.colMethod),
+        h8("span", { className: "nks-dt-st" }, copy.colStatus),
+        h8("span", { className: "nks-dt-type" }, copy.colType),
+        h8("span", { className: "nks-dt-url nks-dt-grow", style: { maxWidth: "none", textAlign: "left" } }, copy.colUrl),
+        h8("span", { className: "nks-dt-size" }, copy.colSize),
+        h8("span", { className: "nks-dt-dur" }, copy.colDuration),
+        h8("span", { className: "nks-dt-wf", style: { height: "auto" } }, copy.colWaterfall)
       ) : null,
-      h7(
+      h8(
         "div",
         { className: "nks-dt-body", "data-nks-dt-body": "1" },
-        visibleRows.length === 0 ? h7("div", { className: "nks-dt-empty" }, rows.length && tab === "console" ? copy.devtoolsNoMatchConsole : rows.length && tab === "network" ? copy.devtoolsNoMatch : copy.devtoolsEmpty) : null,
-        visibleRows.map((row, index) => tab === "elements" ? h7(
+        visibleRows.length === 0 ? h8("div", { className: "nks-dt-empty" }, rows.length && tab === "console" ? copy.devtoolsNoMatchConsole : rows.length && tab === "network" ? copy.devtoolsNoMatch : copy.devtoolsEmpty) : null,
+        visibleRows.map((row, index) => tab === "elements" ? h8(
           "div",
           { className: "nks-dt-row", key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px`, cursor: "pointer" }, onClick: () => inspectNode(row), "data-nks-el-node": String(row.nodeId) },
-          h7("span", { className: "nks-dt-lv" }, row.tag),
-          h7("span", { className: "nks-dt-msg" }, `${row.id ? "#" + row.id : ""}${row.cls ? "." + String(row.cls).split(/\s+/).slice(0, 2).join(".") : ""}`),
-          h7("span", { className: "nks-dt-dur" }, row.childNodeCount ? String(row.childNodeCount) : "")
-        ) : tab === "console" ? h7(
+          h8("span", { className: "nks-dt-lv" }, row.tag),
+          h8("span", { className: "nks-dt-msg" }, `${row.id ? "#" + row.id : ""}${row.cls ? "." + String(row.cls).split(/\s+/).slice(0, 2).join(".") : ""}`),
+          h8("span", { className: "nks-dt-dur" }, row.childNodeCount ? String(row.childNodeCount) : "")
+        ) : tab === "console" ? h8(
           "div",
           { className: "nks-dt-row", key: `c${row.seq ?? row.at ?? index}`, "data-level": row.level },
-          h7("span", { className: "nks-dt-time" }, String(row.at || "").slice(11, 19)),
-          h7("span", { className: "nks-dt-lv", "data-lv": row.level }, row.level),
-          h7("span", { className: "nks-dt-msg" }, row.text),
-          h7("span", { className: "nks-dt-src" }, row.url ? `${row.url}${row.lineNumber != null ? ":" + row.lineNumber : ""}` : row.source || "")
-        ) : h7(
+          h8("span", { className: "nks-dt-time" }, String(row.at || "").slice(11, 19)),
+          h8("span", { className: "nks-dt-lv", "data-lv": row.level }, row.level),
+          h8("span", { className: "nks-dt-msg" }, row.text),
+          h8("span", { className: "nks-dt-src" }, row.url ? `${row.url}${row.lineNumber != null ? ":" + row.lineNumber : ""}` : row.source || "")
+        ) : h8(
           "div",
           {
             className: "nks-dt-row",
@@ -3987,27 +4424,27 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             "data-selected": netDetail?.entry?.id === row.id ? "true" : "false",
             onClick: () => openNetworkDetail(row)
           },
-          h7("span", { className: "nks-dt-lv" }, row.method),
-          h7("span", { className: "nks-dt-st", "data-bad": row.failed || row.status && row.status >= 400 ? "true" : "false" }, row.failed ? "ERR" : String(row.status || "\u2026")),
-          h7("span", { className: "nks-dt-type", "data-resource": resourceTypeLabel(row), title: `${row.type || "Other"}${row.mimeType ? " \xB7 " + row.mimeType : ""}` }, resourceTypeLabel(row)),
-          h7("span", { className: "nks-dt-url nks-dt-grow", "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false" }, row.url),
-          h7("span", { className: "nks-dt-size", title: copy.devtoolsSizeHint }, formatSize(row.size)),
-          h7("span", { className: "nks-dt-dur" }, formatDuration(row.durationMs)),
-          h7("span", { className: "nks-dt-wf", "data-nks-dt-wf": "1" }, wfBar(row, visibleRows))
+          h8("span", { className: "nks-dt-lv" }, row.method),
+          h8("span", { className: "nks-dt-st", "data-bad": row.failed || row.status && row.status >= 400 ? "true" : "false" }, row.failed ? "ERR" : String(row.status || "\u2026")),
+          h8("span", { className: "nks-dt-type", "data-resource": resourceTypeLabel(row), title: `${row.type || "Other"}${row.mimeType ? " \xB7 " + row.mimeType : ""}` }, resourceTypeLabel(row)),
+          h8("span", { className: "nks-dt-url nks-dt-grow", "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false" }, row.url),
+          h8("span", { className: "nks-dt-size", title: copy.devtoolsSizeHint }, formatSize(row.size)),
+          h8("span", { className: "nks-dt-dur" }, formatDuration(row.durationMs)),
+          h8("span", { className: "nks-dt-wf", "data-nks-dt-wf": "1" }, wfBar(row, visibleRows))
         ))
       ),
-      tab === "network" && netDetail ? h7(
+      tab === "network" && netDetail ? h8(
         "div",
         { className: "nks-net-detail", "data-nks-net-detail": "1" },
-        h7(
+        h8(
           "div",
           { className: "nks-net-detail-head" },
-          h7(
+          h8(
             "b",
             { className: "nks-net-detail-title", title: netDetail.entry?.url || "" },
             `${netDetail.entry?.method || "GET"} ${netDetail.entry?.url || ""}`
           ),
-          h7("button", {
+          h8("button", {
             type: "button",
             className: "nks-net-detail-x",
             "data-nks-net-detail-close": "1",
@@ -4016,10 +4453,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             onClick: () => setNetDetail(null)
           }, "\xD7")
         ),
-        h7(
+        h8(
           "div",
           { className: "nks-net-detail-tabs" },
-          [["headers", copy.devtoolsHeaders], ["payload", copy.devtoolsPayload], ["response", copy.devtoolsResponse]].map(([value, label]) => h7(primitives2.Button, {
+          [["headers", copy.devtoolsHeaders], ["payload", copy.devtoolsPayload], ["response", copy.devtoolsResponse]].map(([value, label]) => h8(primitives2.Button, {
             key: value,
             variant: netDetailTab === value ? "outline" : "ghost",
             size: "sm",
@@ -4027,7 +4464,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             onClick: () => setNetDetailTab(value)
           }, label))
         ),
-        h7("div", { className: "nks-net-detail-body" }, renderNetDetail())
+        h8("div", { className: "nks-net-detail-body" }, renderNetDetail())
       ) : null
     );
   }
@@ -4041,68 +4478,75 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const left = Math.max(0, Math.min(100, (start - min) / span * 100));
     const width = dur > 0 ? Math.max(1.5, Math.min(100 - left, dur / span * 100)) : 1.5;
     const pending = row.durationMs == null && !row.failed;
-    return h7("i", { style: { left: `${left}%`, width: `${width}%` }, "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false", "data-pending": pending ? "true" : "false" });
+    return h8("i", { style: { left: `${left}%`, width: `${width}%` }, "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false", "data-pending": pending ? "true" : "false" });
   }
-  function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
-    const [status, setStatus] = React12.useState(null);
+  function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch: fetch2, sandboxId, visible = true }) {
+    const post = (path, body) => postRequest(fetch2, path, body);
+    const paneVisible = visible !== false;
+    const visibleRef = React13.useRef(true);
+    visibleRef.current = paneVisible;
+    const localNotes = React13.useRef([]).current;
+    const [status, setStatus] = React13.useState(null);
     const engine = engineEndpoint(status);
     const statusDown = status != null && (status.ok === false || status.ready === false);
     const engineNavigating = status?.navigation?.outcome === "in-flight";
-    const [pageUrl, setPageUrl] = React12.useState("");
-    const [draftUrl, setDraftUrl] = React12.useState("");
-    const [history, setHistory] = React12.useState([]);
-    const [historyOpen, setHistoryOpen] = React12.useState(false);
-    const [shot, setShot] = React12.useState(null);
-    const [shotMime, setShotMime] = React12.useState("image/webp");
-    const [shotMeta, setShotMeta] = React12.useState(null);
-    const [annotate, setAnnotate] = React12.useState(false);
-    const [pick, setPick] = React12.useState(null);
-    const [pins, setPins] = React12.useState([]);
-    const [draftBox, setDraftBox] = React12.useState(null);
-    const [draftKind, setDraftKind] = React12.useState(null);
-    const [comment, setComment] = React12.useState("");
-    const [editing, setEditing] = React12.useState(false);
-    const [composing, setComposing] = React12.useState(false);
-    const refSeq = React12.useRef(0);
-    const [devtoolsOpen, setDevtoolsOpen] = React12.useState(false);
-    const [navOpen, setNavOpen] = React12.useState(false);
-    const [navTabs, setNavTabs] = React12.useState([]);
-    const [nativeHtml, setNativeHtml] = React12.useState(true);
-    const [domDoc, setDomDoc] = React12.useState(null);
-    const [staleNav, setStaleNav] = React12.useState(false);
-    const domVersionRef = React12.useRef("");
-    const [vp, setVp] = React12.useState(null);
-    const [vpCustom, setVpCustom] = React12.useState(false);
-    const domFrameRef = React12.useRef(null);
-    const [toast, setToast] = React12.useState(null);
-    const [toastFix, setToastFix] = React12.useState(false);
-    const [control, setControl] = React12.useState(null);
-    const [actionToast, setActionToast] = React12.useState(null);
-    const lastActionStamp = React12.useRef("");
-    const actionToastTimer = React12.useRef(0);
-    const [busy, setBusy] = React12.useState(false);
-    const [beat, setBeat] = React12.useState(false);
-    const [beatSec, setBeatSec] = React12.useState(0);
-    const [hover, setHover] = React12.useState(null);
-    const [frame, setFrame] = React12.useState(null);
-    const toastTimer = React12.useRef(0);
-    const workspaceRef = React12.useRef(null);
-    const frameRef = React12.useRef(null);
-    const dragRef = React12.useRef(null);
-    const busyRef = React12.useRef(false);
-    const shotInFlightRef = React12.useRef(false);
-    const dialogOpenRef = React12.useRef(false);
-    const hoverTimerRef = React12.useRef(0);
-    const clickTimerRef = React12.useRef(0);
-    const lastDblClickRef = React12.useRef(0);
-    const annotateRef = React12.useRef(false);
-    const pickRef = React12.useRef(null);
-    const pinsRef = React12.useRef([]);
-    const commentRef = React12.useRef("");
-    const editingRef = React12.useRef(false);
-    const shotMetaRef = React12.useRef(null);
-    const sendPickRef = React12.useRef(null);
-    const clearPickRef = React12.useRef(() => {
+    const [pageUrl, setPageUrl] = React13.useState("");
+    const [draftUrl, setDraftUrl] = React13.useState("");
+    const [history, setHistory] = React13.useState([]);
+    const [historyOpen, setHistoryOpen] = React13.useState(false);
+    const [shot, setShot] = React13.useState(null);
+    const [shotMime, setShotMime] = React13.useState("image/webp");
+    const [shotMeta, setShotMeta] = React13.useState(null);
+    const [annotate, setAnnotate] = React13.useState(false);
+    const [pick, setPick] = React13.useState(null);
+    const [pins, setPins] = React13.useState([]);
+    const [draftBox, setDraftBox] = React13.useState(null);
+    const [draftKind, setDraftKind] = React13.useState(null);
+    const [comment, setComment] = React13.useState("");
+    const [editing, setEditing] = React13.useState(false);
+    const [composing, setComposing] = React13.useState(false);
+    const refSeq = React13.useRef(0);
+    const [devtoolsOpen, setDevtoolsOpen] = React13.useState(false);
+    const [navOpen, setNavOpen] = React13.useState(false);
+    const [navTabs, setNavTabs] = React13.useState([]);
+    const [nativeHtml, setNativeHtml] = React13.useState(false);
+    const [domDoc, setDomDoc] = React13.useState(null);
+    const [staleNav, setStaleNav] = React13.useState(false);
+    const domVersionRef = React13.useRef("");
+    const [vp, setVp] = React13.useState(null);
+    const [vpCustom, setVpCustom] = React13.useState(false);
+    const domFrameRef = React13.useRef(null);
+    const [toast, setToast] = React13.useState(null);
+    const [toastFix, setToastFix] = React13.useState(false);
+    const [control, setControl] = React13.useState(null);
+    const relayConns = control?.relay?.conns || 0;
+    const relayWriting = relayConns > 0 && control?.relay?.lastAt ? Date.now() - Date.parse(control.relay.lastAt) < 9e4 : false;
+    const [actionToast, setActionToast] = React13.useState(null);
+    const lastActionStamp = React13.useRef("");
+    const actionToastTimer = React13.useRef(0);
+    const [busy, setBusy] = React13.useState(false);
+    const [beat, setBeat] = React13.useState(false);
+    const [beatSec, setBeatSec] = React13.useState(0);
+    const [hover, setHover] = React13.useState(null);
+    const [frame, setFrame] = React13.useState(null);
+    const toastTimer = React13.useRef(0);
+    const workspaceRef = React13.useRef(null);
+    const frameRef = React13.useRef(null);
+    const dragRef = React13.useRef(null);
+    const busyRef = React13.useRef(false);
+    const shotInFlightRef = React13.useRef(false);
+    const dialogOpenRef = React13.useRef(false);
+    const hoverTimerRef = React13.useRef(0);
+    const clickTimerRef = React13.useRef(0);
+    const lastDblClickRef = React13.useRef(0);
+    const annotateRef = React13.useRef(false);
+    const pickRef = React13.useRef(null);
+    const pinsRef = React13.useRef([]);
+    const commentRef = React13.useRef("");
+    const editingRef = React13.useRef(false);
+    const shotMetaRef = React13.useRef(null);
+    const sendPickRef = React13.useRef(null);
+    const clearPickRef = React13.useRef(() => {
     });
     annotateRef.current = annotate;
     pickRef.current = pick;
@@ -4110,18 +4554,18 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     commentRef.current = comment;
     editingRef.current = editing;
     shotMetaRef.current = shotMeta;
-    React12.useEffect(() => {
+    React13.useEffect(() => {
       const element = workspaceRef.current;
       if (element === null) return void 0;
       const scope = createThemeScope2({ theme, element, subscribe: onThemeChange });
       return () => scope.dispose();
     }, []);
-    const addressFocusedRef = React12.useRef(false);
-    React12.useEffect(() => {
+    const addressFocusedRef = React13.useRef(false);
+    React13.useEffect(() => {
       if (pageUrl && !addressFocusedRef.current) setDraftUrl(pageUrl);
     }, [pageUrl]);
-    const refreshStatus = React12.useCallback(() => {
-      return fetch(STATUS).then((response) => response.json()).then((payload) => {
+    const refreshStatus = React13.useCallback(() => {
+      return fetch2(STATUS).then((response) => response.json()).then((payload) => {
         setStatus(payload);
         return payload;
       }).catch((cause) => {
@@ -4130,10 +4574,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         return fallback;
       });
     }, []);
-    React12.useEffect(() => {
+    React13.useEffect(() => {
       if (!navOpen) return;
       let alive = true;
-      fetch(`${BROWSE_HISTORY}?limit=120`).then((r) => r.json()).then((data) => {
+      fetch2(`${BROWSE_HISTORY}?limit=120`).then((r) => r.json()).then((data) => {
         if (!alive) return;
         const byUrl = /* @__PURE__ */ new Map();
         for (const row of Array.isArray(data?.entries) ? data.entries : []) {
@@ -4151,27 +4595,27 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       };
     }, [navOpen]);
     const delNavTab = (url) => {
-      fetch(`${BROWSE_HISTORY}?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {
+      fetch2(`${BROWSE_HISTORY}?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {
       });
       setNavTabs((current) => current.filter((row) => row.url !== url));
     };
-    React12.useEffect(() => {
+    React13.useEffect(() => {
+      if (!paneVisible) return void 0;
       refreshStatus().then(async (statusPayload) => {
-        if (!statusPayload?.ok) return;
+        if (!statusPayload?.ok || !visibleRef.current) return;
         try {
           const fit = frameSize();
           const shotPayload = await post(SHOT, { format: "webp", ...fit ? { fit } : {} });
           setShot(shotPayload.data);
           setShotMime(shotPayload.mimeType || "image/webp");
-          loadDom().catch(() => {
-          });
           setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
           if (shotPayload.url && shotPayload.url !== "about:blank") setPageUrl(shotPayload.url);
         } catch {
         }
       });
-    }, []);
-    React12.useEffect(() => {
+      return void 0;
+    }, [paneVisible]);
+    React13.useEffect(() => {
       const onKey = (event) => {
         if (dialogOpenRef.current) return;
         const meta = event.metaKey || event.ctrlKey;
@@ -4229,7 +4673,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("keydown", onKey);
       return () => window.removeEventListener("keydown", onKey);
     }, []);
-    React12.useEffect(() => {
+    React13.useEffect(() => {
       if (!beat) {
         setBeatSec(0);
         return void 0;
@@ -4239,24 +4683,20 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const timer = window.setInterval(() => {
         ticks += 1;
         setBeatSec(Math.max(1, Math.floor((Date.now() - started) / 1e3)));
-        if (ticks % 2 === 0) refreshStatus().catch(() => {
+        if (visibleRef.current && ticks % 2 === 0) refreshStatus().catch(() => {
         });
       }, 1e3);
       return () => window.clearInterval(timer);
-    }, [beat]);
-    React12.useEffect(() => {
+    }, [beat, paneVisible]);
+    React13.useEffect(() => {
       if (!engineNavigating) return void 0;
       const timer = window.setInterval(() => {
-        refreshStatus().catch(() => {
+        if (visibleRef.current) refreshStatus().catch(() => {
         });
       }, 3e3);
       return () => window.clearInterval(timer);
-    }, [engineNavigating]);
-    React12.useEffect(() => {
-      if (nativeHtml && shot && !domDoc) loadDom().catch(() => {
-      });
-    }, [shot, nativeHtml]);
-    React12.useEffect(() => {
+    }, [engineNavigating, paneVisible]);
+    React13.useEffect(() => {
       if (!nativeHtml || !shot) return void 0;
       let alive = true;
       let fails = 0;
@@ -4267,23 +4707,26 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           fails += 1;
         });
       };
-      const timer = window.setInterval(() => {
-        if (alive && fails < 3) poll();
-      }, 3e3);
+      const disarm = armPanePoll2(poll, {
+        periodMs: 3e3,
+        immediate: true,
+        shouldTick: () => alive && fails < 3,
+        isVisible: () => visibleRef.current
+      });
       return () => {
         alive = false;
-        clearInterval(timer);
+        disarm();
       };
-    }, [shot, nativeHtml]);
-    React12.useEffect(() => {
-      if (shot) return void 0;
+    }, [shot, nativeHtml, paneVisible]);
+    React13.useEffect(() => {
+      if (shot || !paneVisible) return void 0;
       const timer = window.setInterval(() => {
-        if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
+        if (visibleRef.current && !busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
         });
       }, 2e3);
       return () => clearInterval(timer);
-    }, [shot]);
-    React12.useEffect(() => {
+    }, [shot, paneVisible]);
+    React13.useEffect(() => {
       let armed = 0;
       const onKey = (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "e") {
@@ -4299,7 +4742,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("keydown", onKey, true);
       return () => window.removeEventListener("keydown", onKey, true);
     }, []);
-    React12.useEffect(() => {
+    React13.useEffect(() => {
       if (!nativeHtml) return;
       const frame2 = domFrameRef.current;
       if (frame2 && domDoc) {
@@ -4309,7 +4752,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }
       }
     }, [domDoc, nativeHtml]);
-    React12.useEffect(() => {
+    React13.useEffect(() => {
       const onMessage = (event) => {
         const data = event.data;
         if (!data || data.__nks !== "pick" || !data.packet) return;
@@ -4320,7 +4763,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("message", onMessage);
       return () => window.removeEventListener("message", onMessage);
     }, []);
-    React12.useEffect(() => {
+    React13.useEffect(() => {
       const phase = engine.phase;
       if (phase && phase !== "running" && shot) {
         setShot(null);
@@ -4329,7 +4772,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         setShotMeta(null);
       }
     }, [engine.phase]);
-    React12.useEffect(() => {
+    React13.useEffect(() => {
       const element = frameRef.current;
       if (!element || typeof ResizeObserver === "undefined") return void 0;
       let timer = 0;
@@ -4344,7 +4787,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         if (!previous) return;
         clearTimeout(timer);
         timer = window.setTimeout(() => {
-          if (!busyRef.current) reloadShot(0, { keepPick: true, fromResize: true }).catch(() => {
+          if (visibleRef.current && !busyRef.current) reloadShot(0, { keepPick: true, fromResize: true }).catch(() => {
           });
         }, 320);
       });
@@ -4354,15 +4797,15 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         observer.disconnect();
       };
     }, []);
-    React12.useEffect(() => {
+    React13.useEffect(() => {
       const onFocus = () => {
-        if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
+        if (visibleRef.current && !busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
         });
       };
       window.addEventListener("focus", onFocus);
       return () => window.removeEventListener("focus", onFocus);
     }, []);
-    React12.useLayoutEffect(() => {
+    React13.useLayoutEffect(() => {
       const element = frameRef.current;
       if (!element) return void 0;
       const measure = () => {
@@ -4385,23 +4828,47 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       };
     }, [shot]);
     const RECOVERABLE = /^kitesurf\.(shot|engine|elements|dom|navigate|pick|wait|ref)\.|^sandbox\.cdp\./;
-    async function repairNow() {
+    function confirmRestart(work) {
+      const workspaceEl = workspaceRef.current;
+      if (dialogOpenRef.current || workspaceEl === null) {
+        showToast(copy.prepareNotReady);
+        return;
+      }
+      dialogOpenRef.current = true;
+      const finish = () => {
+        dialogOpenRef.current = false;
+      };
+      const name = sandboxId ?? "";
+      let dialog = null;
+      dialog = openNanoDialog2({
+        copy: { cancel: copy.cancel, confirm: copy.restartSandbox, close: copy.close },
+        title: copy.restartSandboxTitle,
+        width: 420,
+        container: workspaceEl,
+        confirmLabel: copy.restartSandbox,
+        onCancel: finish,
+        onConfirm: () => {
+          finish();
+          dialog?.close();
+          work();
+        },
+        children: h8("p", { "data-nks-restart-confirm": "1" }, fill(copy.restartSandboxBody, { name }))
+      });
+    }
+    function repairNow() {
       setToastFix(false);
-      setToast(copy.preparingEnv);
-      try {
-        await fetch(RECOVER, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      confirmRestart(() => run(async () => {
+        await runLifecycle("restart");
         await refreshStatus();
         await reloadShot(0, { keepPick: true }).catch(() => {
         });
         setToast(copy.prepareDone);
-      } catch (cause) {
-        setToast(`${copy.prepareFailed}: ${cause?.message || cause}`);
-      }
-      window.clearTimeout(toastTimer.current);
-      toastTimer.current = window.setTimeout(() => {
-        setToast(null);
-        setToastFix(false);
-      }, 3e3);
+        window.clearTimeout(toastTimer.current);
+        toastTimer.current = window.setTimeout(() => {
+          setToast(null);
+          setToastFix(false);
+        }, 3e3);
+      }));
     }
     function showError(cause) {
       const errorId = cause?.errorId || "kitesurf.unknown";
@@ -4460,6 +4927,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const finish = () => {
         dialogOpenRef.current = false;
       };
+      const canRepair = RECOVERABLE.test(errorId);
       dialog = openNanoDialog2({
         copy: { cancel: copy.close, confirm: url ? copy.retry : copy.close, close: copy.close },
         title: copy.openFailed,
@@ -4473,12 +4941,26 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           dialog?.close();
           if (url) openPage(url);
         },
-        children: h7(
+        children: h8(
           "div",
           { "data-nks-open-error": "1" },
-          h7("p", { className: "nks-open-error" }, message),
-          url ? h7("p", { className: "nks-open-error nks-open-url" }, url) : null,
-          cause?.detail?.engineLog ? h7("pre", { className: "nks-open-log", "data-nks-open-log": "1" }, cause.detail.engineLog) : null
+          h8("p", { className: "nks-open-error" }, message),
+          cause?.hint ? h8("p", { className: "nks-open-error", "data-nks-open-hint": "1" }, cause.hint) : null,
+          url ? h8("p", { className: "nks-open-error nks-open-url" }, url) : null,
+          // The toast has had a repair shortcut all along; the dialog did not,
+          // so a navigation failure was a dead end with only "retry". The engine
+          // can die mid-navigate (workerd terminates the page script), and then
+          // every retry fails the same way until something restarts it.
+          canRepair ? h8("button", {
+            type: "button",
+            className: "nks-open-repair",
+            "data-nks-open-repair": "1",
+            onClick: () => {
+              finish();
+              dialog?.close();
+              repairNow();
+            }
+          }, copy.openRepairRetry) : null
         )
       });
     }
@@ -4524,7 +5006,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }
     async function loadDom(options = {}) {
       try {
-        const data = await fetch(DOM).then((r) => r.json());
+        const data = await fetch2(DOM).then((r) => r.json());
         if (data?.ok && data.srcdoc) {
           const sig = (data.domSeq ?? data.capturedAt ?? data.generation) != null ? `v:${data.domSeq ?? ""}:${data.capturedAt ?? ""}:${data.generation ?? ""}:${data.url ?? ""}` : `s:${data.srcdoc}:${data.url ?? ""}`;
           if (sig && sig === domVersionRef.current) return true;
@@ -4623,6 +5105,15 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       dragRef.current = null;
       setDraftBox(null);
       setDraftKind(null);
+    }
+    function toggleAnnotate() {
+      setAnnotate((value) => {
+        if (value) {
+          setHover(null);
+          endDrag();
+        }
+        return !value;
+      });
     }
     async function onPointerUp(event) {
       const start = dragRef.current;
@@ -4848,26 +5339,46 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         showError(cause);
       }
     }
-    async function oneClickPrepare() {
-      await run(async () => {
+    function oneClickPrepare() {
+      confirmRestart(() => run(async () => {
         try {
-          const response = await post(RECOVER, {});
+          await runLifecycle("restart");
           await refreshStatus();
-          if (response?.v != null && response.v !== 1) showToast(copy.contractMismatch);
-          else if (response?.ready === true) await reloadShot(0, { keepPick: true });
-          else showToast(copy.prepareNotReady || copy.prepareFailed);
+          await reloadShot(0, { keepPick: true });
         } catch (cause) {
           showError(cause);
         }
-      });
+      }));
+    }
+    async function runLifecycle(action) {
+      const managed = action === "suspend" ? "stop" : action === "resume" ? "start" : action;
+      const data = await post(LIFECYCLE, { action: managed, requestId: crypto.randomUUID() });
+      const operationId = data?.operationId;
+      if (!operationId) throw new Error("missing operation receipt");
+      return awaitOperation(operationId);
+    }
+    async function awaitOperation(operationId) {
+      const deadline = Date.now() + 3e4;
+      while (Date.now() < deadline) {
+        const res = await fetch2(`/nano-local-sandbox/operations?operationId=${encodeURIComponent(operationId)}`);
+        if (!res.ok) throw new Error(`operation read failed (${res.status})`);
+        const last = await res.json().catch(() => null);
+        if (!last || last.operationId !== operationId) throw new Error("operation read mismatch");
+        const state = last.state;
+        if (state && state !== "accepted" && state !== "running") {
+          if (state !== "succeeded") throw new Error(`operation ${operationId} ${state}`);
+          return last;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+      }
+      throw new Error(`operation ${operationId} did not settle`);
     }
     function onStartEngine() {
       run(async () => {
         const fresh = await refreshStatus();
         const phase = engineEndpoint(fresh).phase;
         if (phase === "running") return;
-        const action = phase === "suspended" ? "resume" : "start";
-        await post(LIFECYCLE, { action });
+        await runLifecycle(phase === "suspended" ? "resume" : "start");
         await reloadShot();
       });
     }
@@ -4896,7 +5407,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     })) : [];
     const hasPage = !!shot && !!shotMeta?.url && shotMeta.url !== "about:blank";
     const engineHasPage = hasPage || engine.phase === "running" || !!engine.httpBase;
-    React12.useEffect(() => {
+    React13.useEffect(() => {
       if (!engineHasPage) {
         setControl(null);
         return void 0;
@@ -4904,7 +5415,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       let alive = true;
       const load = async () => {
         try {
-          const data = await fetch(CONTROL).then((r) => r.json());
+          const data = await fetch2(CONTROL).then((r) => r.json());
           if (!alive) return;
           const c = data?.control ?? null;
           setControl(c);
@@ -4918,24 +5429,21 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         } catch {
         }
       };
-      load();
-      let timer = window.setInterval(load, document.visibilityState === "hidden" ? 12e3 : 1500);
-      const onVis = () => {
-        clearInterval(timer);
-        timer = window.setInterval(load, document.visibilityState === "hidden" ? 12e3 : 1500);
-        if (document.visibilityState !== "hidden") load();
-      };
-      document.addEventListener("visibilitychange", onVis);
+      const disarm = armPanePoll2(load, {
+        periodMs: 1500,
+        hiddenPeriodMs: 12e3,
+        immediate: true,
+        isVisible: () => visibleRef.current
+      });
       return () => {
         alive = false;
-        clearInterval(timer);
-        document.removeEventListener("visibilitychange", onVis);
+        disarm();
         clearTimeout(actionToastTimer.current);
       };
-    }, [engineHasPage]);
-    const controlOp = React12.useCallback(async (action) => {
+    }, [engineHasPage, paneVisible]);
+    const controlOp = React13.useCallback(async (action) => {
       try {
-        const data = await fetch(CONTROL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, owner: "kitesurf-pane" }) }).then((r) => r.json());
+        const data = await fetch2(CONTROL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, owner: "kitesurf-pane" }) }).then((r) => r.json());
         if (data?.control) setControl(data.control);
         else setControl(null);
       } catch {
@@ -4962,24 +5470,24 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         panel: primitives2.IconPanelLeftOutlineRegular || primitives2.IconEditOutlineRegular,
         globe: primitives2.IconGlobeOutlineRegular || primitives2.IconLinkOutlineRegular
       }[name];
-      return h7(
+      return h8(
         "span",
         { className: "nks-tool-glyph", style: !navOpen && name === "panel" ? { display: "inline-flex", transform: "scaleX(-1)" } : { display: "inline-flex" } },
-        h7(Icon, { width: 15, height: 15, "aria-hidden": true })
+        h8(Icon, { width: 15, height: 15, "aria-hidden": true })
       );
     };
     function EnvPanel() {
-      const [snap, setSnap] = React12.useState(null);
-      const [probeMisses, setProbeMisses] = React12.useState(0);
-      const [diag, setDiag] = React12.useState(null);
-      const copyRawDiag = React12.useRef(false);
-      const [busyLocal, setBusyLocal] = React12.useState(false);
-      const [note, setNote] = React12.useState("");
-      const logsOpenRef = React12.useRef(false);
-      React12.useEffect(() => {
+      const [snap, setSnap] = React13.useState(null);
+      const [probeMisses, setProbeMisses] = React13.useState(0);
+      const [diag, setDiag] = React13.useState(null);
+      const copyRawDiag = React13.useRef(false);
+      const [busyLocal, setBusyLocal] = React13.useState(false);
+      const [note, setNote] = React13.useState("");
+      const logsOpenRef = React13.useRef(false);
+      React13.useEffect(() => {
         let alive = true;
         let seen = null;
-        const load = () => fetch(PORTS).then((r) => r.json()).then((data) => {
+        const load = () => fetch2(PORTS).then((r) => r.json()).then((data) => {
           if (!alive || !data) return;
           setProbeMisses(0);
           const sig = `${data.v ?? ""}:${data.epoch ?? ""}:${data.ready ?? ""}`;
@@ -4989,50 +5497,44 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }).catch(() => {
           if (alive) setProbeMisses((n) => n + 1);
         });
-        load();
-        const period = () => document.visibilityState === "hidden" ? 12e3 : 1500;
-        let timer = window.setInterval(load, period());
-        const onVis = () => {
-          clearInterval(timer);
-          timer = window.setInterval(load, period());
-          if (document.visibilityState !== "hidden") load();
-        };
-        document.addEventListener("visibilitychange", onVis);
+        const disarm = armPanePoll2(load, {
+          periodMs: 1500,
+          hiddenPeriodMs: 12e3,
+          immediate: true,
+          isVisible: () => visibleRef.current
+        });
         return () => {
           alive = false;
-          clearInterval(timer);
-          document.removeEventListener("visibilitychange", onVis);
+          disarm();
         };
-      }, []);
-      async function prepare() {
-        setBusyLocal(true);
-        setNote(copy.preparingEnv);
-        try {
-          const response = await fetch(RECOVER, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-          const result = await response.json().catch(() => ({}));
-          const ports = result.ports ? result : await fetch(PORTS).then((r) => r.json()).catch(() => null);
-          setSnap(ports);
-          if (Array.isArray(result.summary)) setDiag(result);
-          const failed = planeRows(result, copy).filter((row) => !row.ok && !row.skipped);
-          if (result.planes && Number.isFinite(result.v) && result.v !== 1) setNote(copy.contractNewer);
-          else if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`);
-          else if (result.ready !== true) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.plane || row.label).join(" / ")}`);
-          else setNote(result.action === "noop" ? copy.prepareDone : `${copy.prepareDone} \xB7 ${result.action}`);
-          await refreshStatus();
-          await reloadShot(0, { keepPick: true }).catch(() => {
-          });
-        } catch (cause) {
-          setNote(`${copy.prepareFailed}: ${cause?.message || cause}`);
-        } finally {
-          setBusyLocal(false);
-        }
+      }, [paneVisible]);
+      function prepare() {
+        confirmRestart(() => {
+          setBusyLocal(true);
+          setNote(copy.preparingEnv);
+          (async () => {
+            try {
+              await runLifecycle("restart");
+              const ports = await fetch2(PORTS).then((r) => r.json()).catch(() => null);
+              setSnap(ports);
+              setNote(copy.prepareDone);
+              await refreshStatus();
+              await reloadShot(0, { keepPick: true }).catch(() => {
+              });
+            } catch (cause) {
+              setNote(`${copy.prepareFailed}: ${cause?.message || cause}`);
+            } finally {
+              setBusyLocal(false);
+            }
+          })();
+        });
       }
       async function showLogs() {
         const workspaceEl = workspaceRef.current;
         if (workspaceEl === null || logsOpenRef.current) return;
         let text = copy.logsLoading;
         try {
-          const data = await fetch(`${LOGS}?tail=300`).then((r) => r.json());
+          const data = await fetch2(`${LOGS}?tail=300`).then((r) => r.json());
           text = data.ok ? data.text || copy.logsEmpty : `${data.errorId || "kitesurf.engine.connect"} ${data.error || ""}`;
         } catch (cause) {
           text = String(cause?.message || cause);
@@ -5056,12 +5558,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             close();
             dialog?.close();
           },
-          children: h7("pre", { className: "nks-logs", "data-nks-logs": "1" }, text)
+          children: h8("pre", { className: "nks-logs", "data-nks-logs": "1" }, text)
         });
       }
       async function copyDiagnostics() {
         try {
-          const data = await fetch(DIAGNOSTICS).then((r) => r.json());
+          const data = await fetch2(DIAGNOSTICS).then((r) => r.json());
           setDiag(data);
           const text = copyRawDiag.current ? JSON.stringify(data, null, 2) : data.text || JSON.stringify(data, null, 2);
           await navigator.clipboard.writeText(text);
@@ -5078,43 +5580,43 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const rows = planeRows(snap, copy);
       const probing = snap == null && probeMisses < 3;
       const healthy = !probing && !contractMismatch && snap?.ready === true;
-      return h7(
+      return h8(
         "div",
         { className: "nks-env", "data-nks-env": "1" },
-        h7(
+        h8(
           "div",
           { className: "nks-env-title" },
           copy.envTitle,
-          h7(
+          h8(
             "span",
             { className: healthy ? "nks-env-ok" : probing ? "nks-env-wait" : "nks-env-bad", title: legacyHost ? copy.legacyHostTitle : void 0 },
             probing ? `\u25CB ${copy.envProbing}` : contractMismatch ? copy.contractNewer : healthy ? `\u25CF ${copy.envOk}` : `\u25CF ${copy.envBad}`
           ),
-          legacyHost ? h7("span", { className: "nks-env-legacy", "data-nks-legacy": "1" }, copy.legacyHost) : null
+          legacyHost ? h8("span", { className: "nks-env-legacy", "data-nks-legacy": "1" }, copy.legacyHost) : null
         ),
-        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envPlugin), h7("span", null, snap?.buildId || copy.envUnknown)),
-        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envEngine), h7("span", null, engineBase)),
-        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envContainer), h7("span", null, container)),
-        snap?.containerName ? h7("div", { className: "nks-env-row" }, h7("b", null, copy.envInstance), h7("span", null, snap.containerName)) : null,
-        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envPorts), h7("span", null, portRow)),
+        h8("div", { className: "nks-env-row" }, h8("b", null, copy.envPlugin), h8("span", null, snap?.buildId || copy.envUnknown)),
+        h8("div", { className: "nks-env-row" }, h8("b", null, copy.envEngine), h8("span", null, engineBase)),
+        h8("div", { className: "nks-env-row" }, h8("b", null, copy.envContainer), h8("span", null, container)),
+        snap?.containerName ? h8("div", { className: "nks-env-row" }, h8("b", null, copy.envInstance), h8("span", null, snap.containerName)) : null,
+        h8("div", { className: "nks-env-row" }, h8("b", null, copy.envPorts), h8("span", null, portRow)),
         // Per-plane health, so "OK" can no longer mean "container up but the
         // pane silently fell back to screenshots".
-        rows.length ? h7(
+        rows.length ? h8(
           "div",
           { className: "nks-env-checks", "data-nks-checks": String(rows.length) },
-          rows.map((row) => h7(
+          rows.map((row) => h8(
             "div",
             { key: row.label, className: "nks-env-check", "data-ok": row.skipped ? "skip" : row.ok ? "true" : "false" },
-            h7("span", { className: "nks-env-check-dot" }, row.skipped ? "\u25CB" : row.ok ? "\u2713" : "\u2717"),
-            h7("b", null, row.label),
-            h7("span", { className: "nks-env-check-detail" }, row.detail || "\u2014")
+            h8("span", { className: "nks-env-check-dot" }, row.skipped ? "\u25CB" : row.ok ? "\u2713" : "\u2717"),
+            h8("b", null, row.label),
+            h8("span", { className: "nks-env-check-detail" }, row.detail || "\u2014")
           ))
         ) : null,
-        h7(
+        h8(
           "div",
           { className: "nks-env-actions" },
-          h7("button", { type: "button", className: "nks-start-btn", "data-nks-prepare": "1", disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.prepareEnv),
-          h7("button", {
+          h8("button", { type: "button", className: "nks-start-btn", "data-nks-prepare": "1", disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.restartSandbox),
+          h8("button", {
             type: "button",
             className: "nks-start-btn",
             "data-nks-copy-diag": "1",
@@ -5124,9 +5626,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               copyDiagnostics();
             }
           }, copy.copyDiag),
-          h7("button", { type: "button", className: "nks-start-btn", "data-nks-logs-open": "1", onClick: showLogs }, copy.logsButton)
+          h8("button", { type: "button", className: "nks-start-btn", "data-nks-logs-open": "1", onClick: showLogs }, copy.logsButton)
         ),
-        h7("div", { className: "nks-env-note" }, note || copy.envHint)
+        h8("div", { className: "nks-env-note" }, note || copy.envHint)
       );
     }
     function packetFromDom(el, doc, x, y) {
@@ -5236,21 +5738,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }
       }, true);
       doc.addEventListener("click", (e) => {
-        const dbg = { fired: 0 };
-        dbg.fired += 1;
-        dbg.mode = annotateRef.current;
         if (!annotateRef.current) return;
         e.preventDefault();
         e.stopPropagation();
         const el = doc.elementFromPoint(e.clientX, e.clientY);
-        dbg.hit = el ? el.tagName : null;
-        dbg.coords = [Math.round(e.clientX), Math.round(e.clientY)];
         if (!el) return;
         clearHover();
         const packet = packetFromDom(el, doc, e.clientX, e.clientY);
-        dbg.packet = !!packet;
         setPick({ elements: [packet], anchor: { x: packet.box.x + packet.box.width / 2, y: packet.box.y + packet.box.height } });
-        dbg.picked = true;
         setEditing(false);
       }, true);
       doc.addEventListener("mouseleave", clearHover, true);
@@ -5263,7 +5758,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }, true);
     }
     function SettingsTabs({ env, simulation }) {
-      return h7(NanoTabs2, {
+      return h8(NanoTabs2, {
         label: copy.settingsTitle,
         items: [
           { value: "env", label: copy.tabEnv, content: env },
@@ -5272,14 +5767,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       });
     }
     function HistoryDialog({ open, onClose }) {
-      const [rows, setRows] = React12.useState([]);
-      const [q, setQ] = React12.useState("");
-      const [busy2, setBusy2] = React12.useState(false);
-      const load = React12.useCallback(async (needle) => {
-        const data = await fetch(`${BROWSE_HISTORY}?limit=100${needle ? "&q=" + encodeURIComponent(needle) : ""}`).then((r) => r.json());
+      const [rows, setRows] = React13.useState([]);
+      const [q, setQ] = React13.useState("");
+      const [busy2, setBusy2] = React13.useState(false);
+      const load = React13.useCallback(async (needle) => {
+        const data = await fetch2(`${BROWSE_HISTORY}?limit=100${needle ? "&q=" + encodeURIComponent(needle) : ""}`).then((r) => r.json());
         setRows(data.entries || []);
       }, []);
-      React12.useEffect(() => {
+      React13.useEffect(() => {
         if (open) load("").catch(() => {
         });
       }, [open, load]);
@@ -5287,7 +5782,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const del = async (id) => {
         setBusy2(true);
         try {
-          await fetch(`${BROWSE_HISTORY}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+          await fetch2(`${BROWSE_HISTORY}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
           await load(q);
         } finally {
           setBusy2(false);
@@ -5296,54 +5791,54 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const clear = async () => {
         setBusy2(true);
         try {
-          await fetch(BROWSE_HISTORY, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clear: true }) });
+          await fetch2(BROWSE_HISTORY, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clear: true }) });
           await load(q);
         } finally {
           setBusy2(false);
         }
       };
-      return h7(
+      return h8(
         "div",
         { className: "nks-modal-mask", "data-nks-history": "1", onClick: (e) => {
           if (e.target === e.currentTarget) onClose();
         } },
-        h7(
+        h8(
           "div",
           { className: "nks-modal" },
-          h7(
+          h8(
             "div",
             { className: "nks-modal-head" },
-            h7("b", null, copy.historyTitle),
-            h7("span", { className: "nks-modal-sub" }, fill(copy.historyCount, { n: rows.length })),
-            h7("button", { type: "button", className: "nks-modal-x", onClick: onClose, "aria-label": copy.close }, "\xD7")
+            h8("b", null, copy.historyTitle),
+            h8("span", { className: "nks-modal-sub" }, fill(copy.historyCount, { n: rows.length })),
+            h8("button", { type: "button", className: "nks-modal-x", onClick: onClose, "aria-label": copy.close }, "\xD7")
           ),
-          h7(
+          h8(
             "div",
             { className: "nks-modal-bar" },
-            h7("input", { "data-nks-history-q": "1", placeholder: copy.historySearch, value: q, onChange: async (e) => {
+            h8("input", { "data-nks-history-q": "1", placeholder: copy.historySearch, value: q, onChange: async (e) => {
               setQ(e.target.value);
               await load(e.target.value);
             } }),
-            h7("button", { type: "button", "data-nks-history-clear": "1", disabled: busy2 || !rows.length, onClick: clear }, copy.historyClear)
+            h8("button", { type: "button", "data-nks-history-clear": "1", disabled: busy2 || !rows.length, onClick: clear }, copy.historyClear)
           ),
-          h7(
+          h8(
             "div",
             { className: "nks-modal-body" },
-            rows.length ? rows.map((row) => h7(
+            rows.length ? rows.map((row) => h8(
               "div",
               { className: "nks-hist-row", key: row.id, "data-nks-history-row": row.id },
-              h7(
+              h8(
                 "button",
                 { type: "button", className: "nks-hist-open", onClick: () => {
                   setDraftUrl(row.url);
                   setHistoryOpen(false);
                   openPage(row.url);
                 } },
-                h7("span", { className: "nks-hist-url" }, row.url),
-                h7("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? fill(copy.historyTimes, { n: row.count }) : ""}`)
+                h8("span", { className: "nks-hist-url" }, row.url),
+                h8("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? fill(copy.historyTimes, { n: row.count }) : ""}`)
               ),
-              h7("button", { type: "button", className: "nks-hist-del", "data-nks-history-del": row.id, onClick: () => del(row.id), "aria-label": copy.historyDelete }, "\xD7")
-            )) : h7("div", { className: "nks-modal-empty" }, copy.historyEmpty)
+              h8("button", { type: "button", className: "nks-hist-del", "data-nks-history-del": row.id, onClick: () => del(row.id), "aria-label": copy.historyDelete }, "\xD7")
+            )) : h8("div", { className: "nks-modal-empty" }, copy.historyEmpty)
           )
         )
       );
@@ -5370,9 +5865,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           dialogOpenRef.current = false;
         },
         onConfirm: () => save(),
-        children: h7(SettingsTabs, {
-          env: h7("div", { className: "nks-settings-stack" }, h7(EnvPanel, null)),
-          simulation: h7(
+        children: h8(SettingsTabs, {
+          env: h8("div", { className: "nks-settings-stack" }, h8(EnvPanel, null)),
+          simulation: h8(
             "form",
             {
               className: "nks-settings-body nks-simulation-body",
@@ -5381,10 +5876,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                 save();
               }
             },
-            h7("label", { htmlFor: "nks-ua" }, copy.uaLabel),
-            h7("input", { id: "nks-ua", className: "nks-address", autoFocus: true, placeholder: copy.uaPlaceholder }),
-            h7("span", { id: "nks-viewport-label" }, copy.viewportLabel),
-            h7(
+            h8("label", { htmlFor: "nks-ua" }, copy.uaLabel),
+            h8("input", { id: "nks-ua", className: "nks-address", autoFocus: true, placeholder: copy.uaPlaceholder }),
+            h8("span", { id: "nks-viewport-label" }, copy.viewportLabel),
+            h8(
               "div",
               {
                 id: "nks-viewport",
@@ -5403,7 +5898,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                   event.currentTarget.querySelector(`[data-choice="${next}"]`)?.focus();
                 }
               },
-              [["default", copy.viewportDefault], ["1280", copy.viewportDesktop], ["768", copy.viewportTablet], ["390", copy.viewportPhone]].map(([value, label]) => h7("button", {
+              [["default", copy.viewportDefault], ["1280", copy.viewportDesktop], ["768", copy.viewportTablet], ["390", copy.viewportPhone]].map(([value, label]) => h8("button", {
                 key: value,
                 type: "button",
                 role: "radio",
@@ -5414,19 +5909,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                 onClick: (event) => selectRadio(event.currentTarget.parentElement, value)
               }, label))
             ),
-            h7("span", { className: "nks-settings-hint", "data-nks-vp-unsupported": "1" }, copy.viewportSupport),
-            h7("label", { htmlFor: "nks-locale" }, copy.localeLabel),
-            h7("input", { id: "nks-locale", className: "nks-address", placeholder: copy.localePlaceholder, spellCheck: false, autoComplete: "off" }),
-            h7("label", null, copy.geoLabel),
-            h7(
+            h8("span", { className: "nks-settings-hint", "data-nks-vp-unsupported": "1" }, copy.viewportSupport),
+            h8("label", { htmlFor: "nks-locale" }, copy.localeLabel),
+            h8("input", { id: "nks-locale", className: "nks-address", placeholder: copy.localePlaceholder, spellCheck: false, autoComplete: "off" }),
+            h8("label", null, copy.geoLabel),
+            h8(
               "div",
               { className: "nks-settings-pair" },
-              h7("input", { id: "nks-geo-lat", className: "nks-address", type: "number", step: "any", placeholder: copy.geoLat, "aria-label": copy.geoLat }),
-              h7("input", { id: "nks-geo-lng", className: "nks-address", type: "number", step: "any", placeholder: copy.geoLng, "aria-label": copy.geoLng })
+              h8("input", { id: "nks-geo-lat", className: "nks-address", type: "number", step: "any", placeholder: copy.geoLat, "aria-label": copy.geoLat }),
+              h8("input", { id: "nks-geo-lng", className: "nks-address", type: "number", step: "any", placeholder: copy.geoLng, "aria-label": copy.geoLng })
             ),
-            h7("span", { className: "nks-settings-hint" }, copy.geoHint),
-            h7("span", { id: "nks-color-label" }, copy.colorSchemeLabel),
-            h7(
+            h8("span", { className: "nks-settings-hint" }, copy.geoHint),
+            h8("span", { id: "nks-color-label" }, copy.colorSchemeLabel),
+            h8(
               "div",
               {
                 id: "nks-color",
@@ -5445,7 +5940,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                   event.currentTarget.querySelector(`[data-choice="${next}"]`)?.focus();
                 }
               },
-              [["light", copy.colorSchemeLight], ["dark", copy.colorSchemeDark]].map(([value, label]) => h7("button", {
+              [["light", copy.colorSchemeLight], ["dark", copy.colorSchemeDark]].map(([value, label]) => h8("button", {
                 key: value,
                 type: "button",
                 role: "radio",
@@ -5456,10 +5951,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                 onClick: (event) => selectRadio(event.currentTarget.parentElement, value)
               }, label))
             ),
-            h7("label", { htmlFor: "nks-cookies" }, copy.cookiesLabel),
-            h7("textarea", { id: "nks-cookies", className: "nks-address nks-cookie-text", rows: 4, placeholder: copy.cookiesPlaceholder, spellCheck: false }),
-            h7("span", { className: "nks-settings-hint" }, copy.cookiesHint),
-            h7("button", { type: "submit", style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 })
+            h8("label", { htmlFor: "nks-cookies" }, copy.cookiesLabel),
+            h8("textarea", { id: "nks-cookies", className: "nks-address nks-cookie-text", rows: 4, placeholder: copy.cookiesPlaceholder, spellCheck: false }),
+            h8("span", { className: "nks-settings-hint" }, copy.cookiesHint),
+            h8("button", { type: "submit", style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 })
           )
         })
       });
@@ -5533,7 +6028,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         selectRadio(document.getElementById("nks-color"), current.colorScheme);
       });
     }
-    return h7(
+    return h8(
       "section",
       {
         ref: workspaceRef,
@@ -5541,10 +6036,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         "data-nano-kitesurf": "1",
         "data-nks-workspace": "1"
       },
-      h7(
+      h8(
         "form",
         { className: "nks-toolbar", onSubmit: onSubmitAddress },
-        h7("button", {
+        h8("button", {
           type: "button",
           className: "nks-tool nks-nav-toggle",
           "data-nks-nav-toggle": "1",
@@ -5552,20 +6047,20 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "aria-label": navOpen ? copy.navClose : copy.navOpen,
           title: navOpen ? copy.navCloseTitle : copy.navOpenTitle,
           onClick: () => setNavOpen((value) => !value)
-        }, glyph("panel", navOpen), h7("span", null, copy.navToggleLabel)),
+        }, glyph("panel", navOpen), h8("span", null, copy.navToggleLabel)),
         // Navigation trio shares the host strip's 8px pitch with the
         // trailing cluster — one rhythm across the whole toolbar.
-        h7(
+        h8(
           "div",
           { className: "nks-toolbar-nav" },
-          h7("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1), { beat: true, dialog: true, nav: true }) }, glyph("back")),
-          h7("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1), { beat: true, dialog: true, nav: true }) }, glyph("forward")),
-          h7("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph("refresh"))
+          h8("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1), { beat: true, dialog: true, nav: true }) }, glyph("back")),
+          h8("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1), { beat: true, dialog: true, nav: true }) }, glyph("forward")),
+          h8("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph("refresh"))
         ),
-        h7(
+        h8(
           "span",
           { className: "nks-address-box", "data-address-short": copy.addressShort, "data-dirty": draftUrl ? "true" : "false", "data-loading": beat ? "true" : "false", "aria-busy": beat ? "true" : "false" },
-          h7("input", {
+          h8("input", {
             className: "nks-address",
             "aria-label": copy.addressAria,
             placeholder: copy.addressPlaceholder,
@@ -5581,7 +6076,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               addressFocusedRef.current = false;
             }
           }),
-          beat ? h7(
+          beat ? h8(
             "span",
             {
               className: "nks-address-beat",
@@ -5592,19 +6087,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               // N 秒是本地计时，「导航中」是引擎上报的 navigation.outcome。
               title: engineNavigating ? `${copy.navigating} \xB7 ${copy.opening} ${beatSec}s` : `${copy.opening} ${beatSec}s`
             },
-            h7("i", { className: "nks-spin", "aria-hidden": true }),
-            engineNavigating || beatSec > 0 ? h7("span", { "data-nks-beat-sec": String(beatSec) }, engineNavigating ? `${copy.navigating}${beatSec > 0 ? ` ${beatSec}s` : ""}` : `${beatSec}s`) : null
+            h8("i", { className: "nks-spin", "aria-hidden": true }),
+            engineNavigating || beatSec > 0 ? h8("span", { "data-nks-beat-sec": String(beatSec) }, engineNavigating ? `${copy.navigating}${beatSec > 0 ? ` ${beatSec}s` : ""}` : `${beatSec}s`) : null
           ) : null,
-          h7("button", { type: "submit", className: "nks-tool nks-go", "aria-label": copy.go, disabled: busy }, glyph("go"))
+          h8("button", { type: "submit", className: "nks-tool nks-go", "aria-label": copy.go, disabled: busy }, glyph("go"))
         ),
         // Trailing cluster mirrors the host's three icon buttons (分栏 /
         // 全屏 / 侧栏): same 28×28 seats at an 8px pitch, so each of ours
         // lands under its native counterpart instead of walking 4px apart.
-        h7(
+        h8(
           "div",
           { className: "nks-toolbar-tail" },
-          h7("button", { type: "button", className: "nks-tool", "data-nks-history-open": "1", "aria-label": copy.history, title: copy.history, disabled: busy, onClick: openHistory }, glyph("history")),
-          h7("button", {
+          h8("button", { type: "button", className: "nks-tool", "data-nks-history-open": "1", "aria-label": copy.history, title: copy.history, disabled: busy, onClick: openHistory }, glyph("history")),
+          h8("button", {
             type: "button",
             className: "nks-tool",
             "data-nks-annotate": "1",
@@ -5614,19 +6109,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             onPointerDown: (event) => {
               event.preventDefault();
               event.stopPropagation();
-              setAnnotate((value) => {
-                if (value) {
-                  setHover(null);
-                  endDrag();
-                }
-                return !value;
-              });
+              toggleAnnotate();
+            },
+            // pointerdown covers a mouse press; click covers keyboard activation
+            // (Space/Enter fire click only, with detail 0) and programmatic
+            // callers. Guarding on detail keeps a real press from toggling twice.
+            onClick: (event) => {
+              if (event.detail === 0) toggleAnnotate();
             }
           }, glyph("annotate")),
-          h7("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
+          h8("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
         )
       ),
-      h7(
+      h8(
         "nav",
         {
           className: "nks-nav",
@@ -5634,15 +6129,15 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "data-nks-nav-state": navOpen ? "open" : "closed",
           "aria-label": copy.navTabs
         },
-        h7(
+        h8(
           "div",
           { className: "nks-nav-head" },
-          h7("b", null, copy.navTabs)
+          h8("b", null, copy.navTabs)
         ),
-        h7(
+        h8(
           "div",
           { className: "nks-nav-tabs", role: "list", "data-nks-nav-tabs": "1" },
-          navTabs.length ? navTabs.map((row) => h7(
+          navTabs.length ? navTabs.map((row) => h8(
             "button",
             {
               type: "button",
@@ -5657,9 +6152,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               }
             },
             glyph("globe"),
-            h7("span", { className: "nks-nav-tab-url" }, row.url.replace(/^https?:\/\//, "")),
-            row.count > 1 ? h7("span", { className: "nks-nav-tab-count" }, `\xD7${row.count}`) : null,
-            h7("span", {
+            h8("span", { className: "nks-nav-tab-url" }, row.url.replace(/^https?:\/\//, "")),
+            row.count > 1 ? h8("span", { className: "nks-nav-tab-count" }, `\xD7${row.count}`) : null,
+            h8("span", {
               className: "nks-nav-tab-x",
               role: "button",
               "aria-label": copy.navCloseTab,
@@ -5669,19 +6164,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                 delNavTab(row.url);
               }
             }, "\xD7")
-          )) : h7("div", { className: "nks-nav-empty" }, copy.navEmpty)
+          )) : h8("div", { className: "nks-nav-empty" }, copy.navEmpty)
         )
       ),
-      h7(
+      h8(
         "div",
         { className: "nks-status", "data-nks-status": "1" },
-        h7("button", { type: "button", "data-nks-native-toggle": "1", "aria-pressed": nativeHtml ? "true" : "false", title: copy.nativeHtmlTitle, onClick: () => {
+        h8("button", { type: "button", "data-nks-native-toggle": "1", "aria-pressed": nativeHtml ? "true" : "false", title: copy.nativeHtmlTitle, onClick: () => {
           setNativeHtml((v) => !v);
           if (!nativeHtml) loadDom().catch(() => {
           });
         } }, "HTML"),
-        h7("button", { type: "button", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", title: copy.devtoolsToggleTitle, onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
-        h7("button", {
+        h8("button", { type: "button", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", title: copy.devtoolsToggleTitle, onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
+        h8("button", {
           type: "button",
           "data-nks-vp": "1",
           className: "nks-chip",
@@ -5713,7 +6208,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             });
           }
         }, vp ? `${vp.width}\xD7${vp.height}` : copy.viewportFit),
-        vpCustom ? h7("input", {
+        vpCustom ? h8("input", {
           "data-nks-vp-w": "1",
           type: "number",
           placeholder: copy.viewportWidthPh,
@@ -5732,16 +6227,16 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             }
           }
         }) : null,
-        vpCustom ? h7("input", {
+        vpCustom ? h8("input", {
           "data-nks-vp-h": "1",
           type: "number",
           placeholder: copy.viewportHeightPh,
           className: "nks-vp-input",
           onKeyDown: async (e) => {
             if (e.key !== "Enter") return;
-            const h8 = Number(e.currentTarget.value);
-            if (h8 >= 240) {
-              const next = { width: vp?.width || 1280, height: h8 };
+            const h9 = Number(e.currentTarget.value);
+            if (h9 >= 240) {
+              const next = { width: vp?.width || 1280, height: h9 };
               setVp(next);
               setVpCustom(false);
               try {
@@ -5753,15 +6248,15 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }) : null,
         // Three states, not two: an empty pane is neither native HTML nor a
         // screenshot. Calling it "IMG 截图回退" made a fresh pane look broken.
-        h7("span", {
+        h8("span", {
           "data-nks-mode": nativeHtml && domDoc ? "html" : hasPage ? "img" : "empty",
           style: { color: nativeHtml && domDoc ? "var(--dsw-alias-state-success-primary)" : hasPage ? "var(--dsw-alias-state-warn-primary)" : "var(--dsw-alias-label-tertiary)" }
         }, nativeHtml && domDoc ? copy.modeHtml : hasPage ? copy.modeShot : copy.modeEmpty),
-        h7("span", { style: { flex: "auto" } })
+        h8("span", { style: { flex: "auto" } })
       ),
-      h7(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
-      h7(DevTools, { copy, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
-      h7(
+      h8(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
+      h8(DevTools, { copy, fetch: fetch2, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false), visible: paneVisible }),
+      h8(
         "div",
         {
           ref: frameRef,
@@ -5775,7 +6270,18 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           onWheel,
           style: { cursor: annotate ? "crosshair" : "default" }
         },
-        pins.length || annotate && hasPage ? h7(
+        // Independent of pins/annotate: this one is about the RENDER SURFACE.
+        // HTML mode is a static projection over real addresses — local http
+        // subresources can be blocked as mixed content, so the notice is fixed
+        // while the mode is on, not conditional on a host declaration.
+        nativeHtml && domDoc ? h8("div", {
+          className: "nks-hint nks-float-top",
+          "data-nks-hint-unproxied": "1",
+          role: "status",
+          onPointerDown: (event) => event.stopPropagation(),
+          onClick: (event) => event.stopPropagation()
+        }, h8("span", { className: "nks-hint-text" }, copy.hintUnproxiedHtml)) : null,
+        pins.length || annotate && hasPage ? h8(
           "div",
           {
             className: "nks-float-top",
@@ -5783,33 +6289,33 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             onPointerDown: (event) => event.stopPropagation(),
             onClick: (event) => event.stopPropagation()
           },
-          pins.length ? h7(
+          pins.length ? h8(
             "div",
             { className: "nks-pins", "data-nks-pins": String(pins.length), "aria-live": "polite" },
             `${pins.length} ${copy.pinsCount}${pins.length === MAX_PINS ? copy.pinsFull : ""}`,
-            h7("button", { type: "button", className: "nks-tool", "data-nks-undo-pin": "1", "aria-label": copy.undoPin, onClick: () => setPins((current) => current.slice(0, -1)) }, glyph("undo")),
-            h7("button", { type: "button", className: "nks-tool", "data-nks-clear-pins": "1", "aria-label": copy.clearPins, onClick: () => setPins([]) }, glyph("clear")),
-            h7("button", { type: "button", className: "nks-tool", "data-nks-send-all": "1", "aria-label": copy.sendAll, onClick: onSendAll }, glyph("send"))
+            h8("button", { type: "button", className: "nks-tool", "data-nks-undo-pin": "1", "aria-label": copy.undoPin, onClick: () => setPins((current) => current.slice(0, -1)) }, glyph("undo")),
+            h8("button", { type: "button", className: "nks-tool", "data-nks-clear-pins": "1", "aria-label": copy.clearPins, onClick: () => setPins([]) }, glyph("clear")),
+            h8("button", { type: "button", className: "nks-tool", "data-nks-send-all": "1", "aria-label": copy.sendAll, onClick: onSendAll }, glyph("send"))
           ) : null,
-          annotate && hasPage ? h7(
+          annotate && hasPage ? h8(
             "div",
             { className: "nks-hint", "data-nks-hint": "1" },
-            h7("span", { className: "nks-hint-text" }, copy.hintBar),
-            h7("button", { type: "button", className: "nks-tool", "data-nks-exit-annotate": "1", "aria-label": copy.annotate, onClick: () => setAnnotate(false) }, glyph("exit"))
+            h8("span", { className: "nks-hint-text" }, copy.hintBar),
+            h8("button", { type: "button", className: "nks-tool", "data-nks-exit-annotate": "1", "aria-label": copy.annotate, onClick: () => setAnnotate(false) }, glyph("exit"))
           ) : null
         ) : null,
         // Style row floats on the frame. It used to be an in-flow sibling with
         // order 0, so it landed above the page and pushed it down on every pick.
-        pick?.elements?.[0] && pick.elements[0].style && Object.keys(pick.elements[0].style).length ? h7(
+        pick?.elements?.[0] && pick.elements[0].style && Object.keys(pick.elements[0].style).length ? h8(
           "div",
           { className: "nks-inspector", "data-nks-inspector": "1" },
-          h7("span", null, h7("b", null, pick.elements[0].selector || pick.elements[0].tag)),
-          pick.elements[0].style.color ? h7("span", null, `color ${pick.elements[0].style.color}`) : null,
-          pick.elements[0].style.fontSize ? h7("span", null, `font ${pick.elements[0].style.fontSize}`) : null,
-          pick.elements[0].style.fontFamily ? h7("span", null, pick.elements[0].style.fontFamily.split(",")[0].replace(/["']/g, "")) : null,
-          pick.elements[0].style.display ? h7("span", null, pick.elements[0].style.display) : null,
-          pick.elements[0].box ? h7("span", null, `${Math.round(pick.elements[0].box.width)}\xD7${Math.round(pick.elements[0].box.height)}`) : null,
-          Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length ? h7(
+          h8("span", null, h8("b", null, pick.elements[0].selector || pick.elements[0].tag)),
+          pick.elements[0].style.color ? h8("span", null, `color ${pick.elements[0].style.color}`) : null,
+          pick.elements[0].style.fontSize ? h8("span", null, `font ${pick.elements[0].style.fontSize}`) : null,
+          pick.elements[0].style.fontFamily ? h8("span", null, pick.elements[0].style.fontFamily.split(",")[0].replace(/["']/g, "")) : null,
+          pick.elements[0].style.display ? h8("span", null, pick.elements[0].style.display) : null,
+          pick.elements[0].box ? h8("span", null, `${Math.round(pick.elements[0].box.width)}\xD7${Math.round(pick.elements[0].box.height)}`) : null,
+          Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length ? h8(
             "span",
             { "data-nks-stack": "1", title: pick.elements[0].componentStack.join(" \u2192 ") },
             `\u269B ${pick.elements[0].componentStack.slice(-3).join(" \u2192 ")}`
@@ -5817,7 +6323,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         ) : null,
         // last-good 画面叠加提示：导航/刷新失败但画面还是旧的，地址栏和
         // 画面不能各说各话。新导航/重截成功会自动撤掉。
-        staleNav ? h7("div", {
+        staleNav ? h8("div", {
           className: "nks-stale",
           "data-nks-stale": "1",
           role: "status",
@@ -5825,7 +6331,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           onClick: (event) => event.stopPropagation()
         }, fill(copy.staleBanner, { url: shotMeta?.url || "" })) : null,
         // 引擎仍说自己在导航（/open 已超时返回）：超时≠取消，不能恢复成功态。
-        !beat && engineNavigating ? h7("div", {
+        !beat && engineNavigating ? h8("div", {
           className: "nks-stale",
           "data-nks-nav-busy": "1",
           role: "status",
@@ -5833,12 +6339,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }, copy.engineBusy) : null,
         // srcdoc 是剥离脚本的静态投影，不是活页：角落标出来，别让人以为
         // 在里面点按钮会触发真实交互。
-        nativeHtml && domDoc ? h7("span", {
+        nativeHtml && domDoc ? h8("span", {
           className: "nks-dom-tag",
           "data-nks-dom-tag": "1",
           title: copy.staticPreview
         }, copy.staticPreview) : null,
-        nativeHtml && domDoc ? h7("iframe", {
+        nativeHtml && domDoc ? h8("iframe", {
           className: "nks-dom",
           title: "Kitesurf page",
           // No allow-scripts: the host already strips scripts/handlers/js: URLs,
@@ -5851,12 +6357,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             domFrameRef.current = el;
             if (el) writeDomFrame(el);
           }
-        }) : hasPage ? h7("img", {
+        }) : hasPage ? h8("img", {
           alt: "",
           draggable: false,
           src: `data:${shotMime || "image/webp"};base64,${shot}`,
           style: { pointerEvents: annotate ? "none" : "auto" }
-        }) : h7(
+        }) : h8(
           "div",
           { className: "nks-empty", "data-nks-empty": "" },
           // /status always answers ok:true (the call completed); whether the
@@ -5865,43 +6371,43 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           // positioned .nks-start on top of a flex-centred .nks-empty, which
           // painted the opaque Start button straight over the error text
           // ("引启动引擎答"). Everything below is a single vertical stack.
-          h7("div", { className: "nks-empty-icon" }, glyph("annotate")),
+          h8("div", { className: "nks-empty-icon" }, glyph("annotate")),
           // The address-bar heartbeat already says "opening"; repeating it here
           // made the pane look like two stacked loading states.
-          h7(
+          h8(
             "div",
             { className: "nks-empty-title" },
             status?.engineMismatch === true ? copy.engineMismatch : statusDown ? copy.errorTitle : copy.emptyTitle
           ),
-          !busy && !statusDown && !status?.engineMismatch ? h7("div", { className: "nks-empty-body" }, copy.emptyBody) : null,
-          !busy && statusDown && !status?.engineMismatch ? h7("div", { className: "nks-empty-body" }, copy.errorBody) : null,
-          !busy && statusDown ? h7(
+          !busy && !statusDown && !status?.engineMismatch ? h8("div", { className: "nks-empty-body" }, copy.emptyBody) : null,
+          !busy && statusDown && !status?.engineMismatch ? h8("div", { className: "nks-empty-body" }, copy.errorBody) : null,
+          !busy && statusDown ? h8(
             "div",
             { className: "nks-empty-actions" },
             // Ordinary users get ONE button: it reconciles phase, adopts or
             // repairs the port, starts/resumes the container and polls health.
-            h7("button", {
+            h8("button", {
               type: "button",
               className: "nks-start-btn",
               "data-nks-start-engine": "1",
               "data-nks-prepare": "1",
               onClick: oneClickPrepare
-            }, engine.phase === "running" ? copy.resumeEngine : copy.prepareEnv),
-            h7("button", { type: "button", className: "nks-start-btn", "data-nks-diagnose": "1", onClick: () => run(() => refreshStatus()) }, copy.retry),
-            h7("button", { type: "button", className: "nks-start-btn", "data-nks-open-settings": "1", onClick: openSettings }, copy.settings)
+            }, copy.restartSandbox),
+            h8("button", { type: "button", className: "nks-start-btn", "data-nks-diagnose": "1", onClick: () => run(() => refreshStatus()) }, copy.retry),
+            h8("button", { type: "button", className: "nks-start-btn", "data-nks-open-settings": "1", onClick: openSettings }, copy.settings)
           ) : null,
-          !busy && !statusDown && !status?.engineMismatch ? h7(
+          !busy && !statusDown && !status?.engineMismatch ? h8(
             "div",
             { className: "nks-empty-actions" },
-            h7("button", { type: "button", className: "nks-empty-link", "data-nks-try": "1", onClick: () => {
+            h8("button", { type: "button", className: "nks-empty-link", "data-nks-try": "1", onClick: () => {
               setDraftUrl("https://example.com");
               openPage("https://example.com");
             } }, copy.emptyTry)
           ) : null,
-          statusDown ? h7("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(" / ") : "kitesurf.engine.failed")} \xB7 ${engine.httpBase || ""}`) : null,
-          statusDown ? h7("div", { className: "nks-empty-meta" }, status?.lastError?.error || status?.error || "") : null
+          statusDown ? h8("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(" / ") : "kitesurf.engine.failed")} \xB7 ${engine.httpBase || ""}`) : null,
+          statusDown ? h8("div", { className: "nks-empty-meta" }, status?.lastError?.error || status?.error || "") : null
         ),
-        overlays.map((box, index) => h7("div", {
+        overlays.map((box, index) => h8("div", {
           key: index,
           className: "nks-box",
           "data-nks-box": box.kind,
@@ -5910,7 +6416,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         })),
         // Numbered pin dots stay over their shot until the shot changes; a
         // refreshed page clears them with the old pixels.
-        frame ? pins.filter((pin) => pin.anchor && pin.shot === shot).map((pin, index) => h7("div", {
+        frame ? pins.filter((pin) => pin.anchor && pin.shot === shot).map((pin, index) => h8("div", {
           key: `pin-${index}`,
           className: "nks-pin-dot",
           "data-nks-pin-dot": String(index + 1),
@@ -5924,7 +6430,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           },
           style: { left: frame.left + pin.anchor.x * frame.scale, top: frame.top + pin.anchor.y * frame.scale }
         }, String(index + 1))) : null,
-        pickAnchor && pick ? h7(
+        pickAnchor && pick ? h8(
           "div",
           {
             className: "nks-note",
@@ -5938,11 +6444,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               top: pickAnchor.top + pickAnchor.height + 8 > (frameRef.current?.clientHeight || 0) - 44 ? Math.max(8, pickAnchor.top - 44) : pickAnchor.top + pickAnchor.height + 8
             }
           },
-          pick.elements.length > 1 ? h7("span", { "data-nks-multi": String(pick.elements.length) }, `\xD7${pick.elements.length}`) : null,
-          editing ? h7(
+          pick.elements.length > 1 ? h8("span", { "data-nks-multi": String(pick.elements.length) }, `\xD7${pick.elements.length}`) : null,
+          editing ? h8(
             "form",
             { className: "nks-note-form", onSubmit: onSend },
-            h7("input", {
+            h8("input", {
               "aria-label": copy.editAria,
               "data-nks-comment": "1",
               value: comment,
@@ -5950,12 +6456,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               autoFocus: true,
               onChange: (event) => setComment(event.target.value)
             }),
-            h7("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", "aria-label": copy.editSend }, glyph("edit"))
+            h8("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", "aria-label": copy.editSend }, glyph("edit"))
           ) : null,
-          !editing ? composing ? h7(
+          !editing ? composing ? h8(
             "form",
             { className: "nks-note-form", onSubmit: onSend },
-            h7("input", {
+            h8("input", {
               "aria-label": copy.noteAria,
               "data-nks-comment": "1",
               value: comment,
@@ -5963,16 +6469,16 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               autoFocus: true,
               onChange: (event) => setComment(event.target.value)
             }),
-            h7("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", title: copy.injectContext, "aria-label": copy.injectContext }, glyph("send")),
-            h7("button", { type: "button", className: "nks-tool", "data-nks-clear-pick": "1", title: copy.clearSelection, "aria-label": copy.clearSelection, onClick: (event) => {
+            h8("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", title: copy.injectContext, "aria-label": copy.injectContext }, glyph("send")),
+            h8("button", { type: "button", className: "nks-tool", "data-nks-clear-pick": "1", title: copy.clearSelection, "aria-label": copy.clearSelection, onClick: (event) => {
               event.preventDefault();
               event.stopPropagation();
               clearPick();
             } }, glyph("exit"))
-          ) : h7(
+          ) : h8(
             "div",
             { className: "nks-note-actions" },
-            h7("button", {
+            h8("button", {
               type: "button",
               className: "nks-tool",
               "data-nks-send": "1",
@@ -5983,9 +6489,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                 else injectNote();
               }
             }, glyph("send")),
-            h7("button", { type: "button", className: "nks-tool", "data-nks-copy-note": "1", title: copy.copyContext, "aria-label": copy.copyContext, onClick: copyNote }, glyph("copy")),
-            h7("button", { type: "button", className: "nks-tool", "data-nks-compose": "1", title: copy.inputContext, "aria-label": copy.inputContext, onClick: () => setComposing(true) }, glyph("annotate")),
-            h7("button", { type: "button", className: "nks-tool", "data-nks-clear-pick": "1", title: copy.clearSelection, "aria-label": copy.clearSelection, onClick: (event) => {
+            h8("button", { type: "button", className: "nks-tool", "data-nks-copy-note": "1", title: copy.copyContext, "aria-label": copy.copyContext, onClick: copyNote }, glyph("copy")),
+            h8("button", { type: "button", className: "nks-tool", "data-nks-compose": "1", title: copy.inputContext, "aria-label": copy.inputContext, onClick: () => setComposing(true) }, glyph("annotate")),
+            h8("button", { type: "button", className: "nks-tool", "data-nks-clear-pick": "1", title: copy.clearSelection, "aria-label": copy.clearSelection, onClick: (event) => {
               event.stopPropagation();
               clearPick();
             } }, glyph("exit"))
@@ -5996,7 +6502,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       // an agent holds the bridge writer lock or the human holds the override.
       // "停止写入" is honest wording — the pane cannot kill the agent's run
       // (that lives in the host), it can only hold its page writes.
-      !beat && (control?.humanHold?.active || control?.writer) ? h7(
+      // T-O-2: relay presence is its OWN tier. conns>0 is a long-lived socket
+      // (the agent attached), while lastAt is a recent forwarded write — one
+      // boolean would have collapsed "connected" into "acting" and the bar
+      // would then claim an agent is writing when it is just listening.
+      !beat && (control?.humanHold?.active || control?.writer || relayConns > 0) ? h8(
         "div",
         {
           className: "nks-hitl",
@@ -6005,34 +6515,185 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           onPointerDown: (event) => event.stopPropagation(),
           onClick: (event) => event.stopPropagation()
         },
-        h7("span", {
+        h8("span", {
           className: "nks-hitl-dot",
           "data-held": control?.humanHold?.active ? "true" : "false",
           "aria-hidden": true
         }),
-        control?.humanHold?.active ? h7("span", { className: "nks-hitl-label" }, copy.hitlHeld) : h7("span", { className: "nks-hitl-label" }, copy.hitlAgent, h7("b", null, control?.owner || "agent")),
-        control?.humanHold?.active ? h7("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-release": "1", onClick: () => controlOp("release") }, copy.hitlRelease) : h7("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-takeover": "1", title: copy.hitlTakeoverTitle, onClick: () => controlOp("takeover") }, copy.hitlTakeover)
+        control?.humanHold?.active ? h8("span", { className: "nks-hitl-label" }, copy.hitlHeld) : control?.writer ? h8("span", { className: "nks-hitl-label" }, copy.hitlAgent, h8("b", null, control?.owner || "agent")) : h8("span", { className: "nks-hitl-label" }, relayWriting ? copy.hitlRelayWrite : copy.hitlRelay),
+        control?.humanHold?.active ? h8("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-release": "1", onClick: () => controlOp("release") }, copy.hitlRelease) : h8("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-takeover": "1", title: copy.hitlTakeoverTitle, onClick: () => controlOp("takeover") }, copy.hitlTakeover)
       ) : null,
       // ego's "Clicking element" tooltip: brief tool-name flash on each new
       // agent action the bridge records.
-      actionToast ? h7("div", {
+      actionToast ? h8("div", {
         className: "nks-act",
         "data-nks-act": "1",
         role: "status",
         "data-ok": actionToast.ok === false ? "false" : "true"
-      }, `${copy.hitlAction} ${actionToast.tool}`) : null,
+        // T-O-3 receipt: a relay write refused by the human's takeover shows as
+        // a blocked action, not as an anonymous agent action.
+      }, actionToast.ok === false && String(actionToast.tool || "").startsWith("relay:") ? `${copy.hitlRefused} \xB7 ${actionToast.tool}` : `${copy.hitlAction} ${actionToast.tool}`) : null,
       // One carrier for both toasts: the host Toast through nano-ui. A
       // recoverable failure adds its repair action to the same toast instead of
       // re-implementing the chrome.
-      toast ? h7(NanoToast2, {
+      toast ? h8(NanoToast2, {
         text: toast,
         anchor: workspaceRef.current,
-        actions: toastFix ? [{ label: copy.prepareEnv, onClick: repairNow }] : void 0
+        actions: toastFix ? [{ label: copy.restartSandbox, onClick: repairNow }] : void 0
       }) : null,
-      pick?.elements?.length ? h7("pre", {
+      pick?.elements?.length ? h8("pre", {
         "data-nks-pick": "1",
         style: { display: "none" }
       }, pick.elements.length > 1 ? multiNote2(pick.elements, { url: pageUrl, comment }) : designNote2(pick.elements[0], { url: pageUrl, comment })) : null
+    );
+  }
+  function rowDrivable(row) {
+    return Array.isArray(row?.drivers) && row.drivers.includes("cdp");
+  }
+  function SandboxPicker({ copy, languageOf, theme, onThemeChange, address, visible }) {
+    const [client, setClient] = React13.useState(null);
+    const [rows, setRows] = React13.useState(null);
+    const [error, setError] = React13.useState(null);
+    const [selection, setSelection] = React13.useState(null);
+    const [retrySeq, setRetrySeq] = React13.useState(0);
+    const [reference, setReference] = React13.useState(address ? { state: "verify" } : null);
+    const selAbortRef = React13.useRef(null);
+    React13.useEffect(() => {
+      const abort = new AbortController();
+      let alive = true;
+      const impl = (url, init = {}) => fetch(url, { ...init, signal: init.signal ?? abort.signal });
+      if (address) {
+        setReference({ state: "verify" });
+        (async () => {
+          try {
+            const verified = await verifySandboxReference2(address, impl, location.origin, { createManagedDesignClient: createManagedDesignClient2 });
+            if (!alive) return;
+            noteVerifiedSandboxName2(address, verified.name);
+            setClient(verified.client);
+            setError(null);
+            setReference({ state: "ok" });
+            selectWith(verified.client, verified.sandboxId);
+          } catch (cause) {
+            if (alive) setReference({ state: "error", cause });
+          }
+        })();
+        return () => {
+          alive = false;
+          abort.abort();
+          selAbortRef.current?.abort();
+        };
+      }
+      const managed = createManagedDesignClient2({ fetch: impl, origin: location.origin });
+      (async () => {
+        try {
+          await managed.discover();
+          const res = await managed.list();
+          const body = await res.json().catch(() => null);
+          if (!alive) return;
+          if (!res.ok) {
+            setError(new Error(`sandbox.list HTTP ${res.status}`));
+            return;
+          }
+          setClient(managed);
+          setRows(listSandboxRows2(body));
+          setError(null);
+        } catch (cause) {
+          if (alive) setError(cause);
+        }
+      })();
+      return () => {
+        alive = false;
+        abort.abort();
+        selAbortRef.current?.abort();
+      };
+    }, [retrySeq, address]);
+    function selectWith(managed, sandboxId) {
+      if (!managed || !sandboxId) return;
+      selAbortRef.current?.abort();
+      const abort = new AbortController();
+      selAbortRef.current = abort;
+      const bound = managed.bind(sandboxId);
+      const boundFetch = (path, init = {}) => {
+        const signals = [init?.signal, abort.signal].filter(Boolean);
+        const signal = signals.length > 1 && typeof AbortSignal.any === "function" ? AbortSignal.any(signals) : signals[0];
+        return bound(path, { ...init, signal });
+      };
+      setSelection({ sandboxId, fetch: boundFetch });
+    }
+    function choose(sandboxId) {
+      const row = (rows ?? []).find((entry) => entry.sandboxId === sandboxId);
+      if (!rowDrivable(row)) return;
+      selectWith(client, sandboxId);
+    }
+    const picker = h8(
+      "div",
+      { className: "nks-sandbox-bar", "data-nks-sandbox-bar": "1" },
+      h8(
+        "select",
+        {
+          "data-nks-sandbox-select": "1",
+          "aria-label": copy.sandboxPick,
+          value: selection?.sandboxId ?? "",
+          onChange: (event) => {
+            if (event.target.value) choose(event.target.value);
+          }
+        },
+        h8("option", { value: "", disabled: true }, copy.sandboxPick),
+        (rows ?? []).map((row) => {
+          const drivable = rowDrivable(row);
+          const label = `${row.name || row.sandboxId.slice(0, 8)} \xB7 ${row.envId ?? ""} \xB7 ${row.observedState ?? "unknown"}`;
+          return h8("option", {
+            key: row.sandboxId,
+            value: row.sandboxId,
+            disabled: !drivable || void 0,
+            title: drivable ? void 0 : copy.sandboxNoDriver
+          }, drivable ? label : `${label} \xB7 ${copy.sandboxNoDriver}`);
+        })
+      )
+    );
+    if (address) {
+      if (reference?.state === "error") {
+        const reasonId = String(reference.cause?.errorId ?? "");
+        const reason = reasonId.endsWith(".env") ? copy.referenceReasonEnv : reasonId.endsWith(".driver") ? copy.referenceReasonDriver : reasonId.endsWith(".missing") || reference.cause?.status === 404 || reference.cause?.status === 403 ? copy.referenceReasonMissing : null;
+        return h8(
+          "div",
+          { className: "nks-empty", "data-nks-reference-error": "1" },
+          h8("div", { className: "nks-empty-title" }, copy.referenceFailed),
+          reason ? h8("div", { className: "nks-empty-body", "data-nks-reference-reason": "1" }, reason) : null,
+          h8("div", { className: "nks-empty-body" }, String(reference.cause?.message || reference.cause)),
+          h8(
+            "div",
+            { className: "nks-empty-actions" },
+            h8(primitives2.Button, { variant: "ghost", size: "sm", onClick: () => setRetrySeq((n) => n + 1) }, copy.refresh)
+          )
+        );
+      }
+      if (!selection) {
+        return h8("div", { className: "nks-empty", "data-nks-reference-verify": "1" }, copy.referenceVerifying);
+      }
+      return h8(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId, visible });
+    }
+    if (error) {
+      return h8(
+        "div",
+        { className: "nks-empty", "data-nks-sandbox-error": "1" },
+        h8("div", { className: "nks-empty-title" }, copy.sandboxFailed),
+        h8("div", { className: "nks-empty-body" }, String(error?.message || error)),
+        h8(
+          "div",
+          { className: "nks-empty-actions" },
+          h8(primitives2.Button, { variant: "ghost", size: "sm", onClick: () => setRetrySeq((n) => n + 1) }, copy.refresh)
+        )
+      );
+    }
+    if (rows === null) return h8("div", { className: "nks-empty", "data-nks-sandbox-loading": "1" }, copy.sandboxLoading);
+    if (rows.length === 0) return h8("div", { className: "nks-empty", "data-nks-sandbox-empty": "1" }, copy.sandboxEmpty);
+    if (!selection) return h8("div", { className: "nks-empty", "data-nks-sandbox-pick": "1" }, picker);
+    return h8(
+      React13.Fragment,
+      null,
+      picker,
+      h8(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId, visible })
     );
   }
   var inject = ["slots", "sidebarRightTabs", "locale", "theme"];
@@ -6044,11 +6705,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     ctx.effect(() => () => style.remove());
     const languageOf = () => ctx.locale?.getSnapshot?.().active ?? "zh";
     const copy = () => copyFor2(languageOf());
-    const Pane = () => h7(BrowserPane, {
+    const Pane = (props) => h8(SandboxPicker, {
       copy: copy(),
       languageOf,
       theme: ctx.theme,
-      onThemeChange: (listener) => ctx.on("theme/change", listener)
+      onThemeChange: (listener) => ctx.on("theme/change", listener),
+      address: props?.useTabInfo?.().tab?.navigation?.address,
+      visible: props?.useTabInfo?.().tab?.visible
     });
     ctx.effect(() => ctx.sidebarRightTabs.register({
       id: OWN_ID,
@@ -6064,6 +6727,39 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         description: () => copy().typeDescription
       }]
     }));
+    ctx.effect(() => ctx.sidebarRightTabs.register({
+      id: "dnk-sandbox",
+      kind: "dnk-sandbox",
+      patterns: ["dsh-resource://sandbox/**"],
+      canOpen: (address) => parseSandboxReference2(address) !== null,
+      multiple: true,
+      keepMounted: true,
+      title: (address) => {
+        const ref = parseSandboxReference2(address);
+        return ref ? `${copy().typeLabel} \xB7 ${ref.sandboxId.slice(0, 8)}` : copy().typeLabel;
+      }
+    }));
+    ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register(
+      { name: "sidebar.right.pane.tab", key: "dnk-sandbox" },
+      Pane
+    )));
+    ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register(
+      { name: "sidebar.right.pane.tab.title", key: "dnk-sandbox" },
+      // T-O-67: the host bakes title() once at open — the slot component is
+      // where a verified object name replaces the short id. It subscribes to
+      // the name registry the body's verification pass writes.
+      function DnkSandboxTitle(props) {
+        const address = props?.useTabInfo?.().tab?.navigation?.address;
+        const ref = parseSandboxReference2(address);
+        const [name, setName] = React13.useState(() => verifiedSandboxName2(address));
+        React13.useEffect(() => {
+          setName(verifiedSandboxName2(address));
+          return subscribeVerifiedSandboxNames2(() => setName(verifiedSandboxName2(address)));
+        }, [address]);
+        if (name) return name;
+        return ref ? `sandbox ${ref.sandboxId.slice(0, 8)}` : copy().typeLabel;
+      }
+    )));
     ctx.effect(() => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
       name: "sidebar.right.pane.tab",
       key: OWN_ID

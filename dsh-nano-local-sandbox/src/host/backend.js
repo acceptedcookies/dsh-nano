@@ -62,19 +62,77 @@ function walkValue(value) {
 }
 
 /** Same key tree on every backend. Values may differ; keys may not. */
-export function capabilityReport() {
+export function capabilityReport(supported = true) {
   return {
-    ensureImage: true,
-    create: true,
-    start: true,
-    stop: true,
-    restart: true,
-    inspect: true,
-    exec: { stdin: true },
-    publish: true,
-    mount: true,
-    networkPolicy: true,
-    identity: true,
-    stateVolume: true,
+    ensureImage: supported,
+    create: supported,
+    start: supported,
+    stop: supported,
+    restart: supported,
+    inspect: supported,
+    exec: { stdin: supported },
+    publish: supported,
+    // Guest-channel relay credential delivery (T-O-63): the backend carries
+    // deliverBridgeCredential; consumers gate on the callable too.
+    bridge: { credential: supported },
+    mount: supported,
+    networkPolicy: supported,
+    identity: supported,
+    stateVolume: supported,
+  }
+}
+
+/**
+ * Per-action provider support gate — honest flags AND callable deps:
+ * - every action needs `capabilities().inspect === true` and a callable
+ *   `observe` (the supplied seam overrides `backend.observe`, so standalone
+ *   composition tests that inject an observer satisfy it equivalently);
+ * - create needs the create flag + `createManaged`; start/stop their flag +
+ *   method; restart is the kernel's stop+start — flag plus both callables;
+ * - remove needs a callable `remove`; recreate = remove + create + stop;
+ * - read surfaces ('list'/'read') need only the base; 'processes' needs a
+ *   callable `processes`, 'terminal' the exec.stdin flag + `terminalRpc`,
+ *   'usage' a callable `sampleUsage`.
+ * A backend without `capabilities()` supports nothing — fixtures declare
+ * honest reports rather than defaulting to a full provider.
+ */
+export function supportsAction(backend, action, { observe } = {}) {
+  const caps = typeof backend?.capabilities === 'function' ? backend.capabilities() : null
+  const observer = observe ?? backend?.observe
+  if (caps?.inspect !== true || typeof observer !== 'function') return false
+  const callable = (name) => typeof backend?.[name] === 'function'
+  switch (action) {
+    case 'create':
+      // A managed create needs the verified image evidence seam, not just
+      // a callable create path — real profiles refuse to verify without it.
+      return caps.create === true && callable('createManaged') && callable('imageEvidence')
+    case 'start':
+      return caps.start === true && callable('start')
+    case 'stop':
+      return caps.stop === true && callable('stop')
+    case 'restart':
+      // restart is composite: the provider must honestly advertise stop
+      // AND start, not a restart flag alone.
+      return caps.restart === true && caps.stop === true && caps.start === true &&
+        callable('stop') && callable('start')
+    case 'remove':
+      return callable('remove')
+    case 'logs':
+      return callable('logs')
+    case 'recreate':
+      return supportsAction(backend, 'remove', { observe: observer }) &&
+        supportsAction(backend, 'create', { observe: observer }) &&
+        supportsAction(backend, 'stop', { observe: observer })
+    case 'processes':
+      return callable('processes')
+    case 'terminal':
+      return caps.exec?.stdin === true && callable('terminalRpc')
+    case 'usage':
+      return callable('sampleUsage')
+    case 'list':
+    case 'read':
+      return true
+    default:
+      return false
   }
 }

@@ -11,9 +11,11 @@
  * as the entrypoint.
  */
 import { spawn } from 'node:child_process'
-import { webcrypto } from 'node:crypto'
+import { timingSafeEqual, webcrypto } from 'node:crypto'
+import { lstatSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { connect as netConnect } from 'node:net'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PORT = Number(process.env.DNLS_MCP_PORT || 8791)
@@ -39,6 +41,113 @@ const IDLE_MS = Number(process.env.DNLS_MCP_IDLE_MS || 20 * 60 * 1000)
 // clients send no Origin and are allowed. Comma-separated env overrides.
 const ALLOWED_HOSTS = (process.env.DNLS_MCP_ORIGINS || 'localhost,127.0.0.1,[::1]')
   .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+
+/**
+ * Read-only projection of the host-owned dnls.control/1 health document.
+ * The writer lives in the root-baked /opt/dnls/public-health.mjs helper —
+ * this node-writable file only ever READS the published file and returns
+ * the public summary, never the private identity.
+ */
+const HEALTH_DIR = '/run'
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/
+
+/**
+ * Generation-scoped host credential (T-O-63). The DNLS host delivers one
+ * random token per container generation over `container exec` (root helper,
+ * stdin, env -i — the publishHealth pattern) to a file only the bridge may
+ * read. Its relay handshake presents it; a connection that cannot show the
+ * CURRENT file's token is agent-class. The token is never emitted on any
+ * HTTP/MCP response, ledger, audit line or log — it only proves "this
+ * connection came from the DNLS host process" and grants no permission.
+ */
+const CRED_FILE = 'dnls-relay-credential.json'
+const CRED_PREFIX = 'dnls-relay.'
+const CRED_HEADER = 'x-dnls-relay-credential'
+export const RELAY_TOKEN = /^[A-Za-z0-9_-]{43}$/
+
+/** Read the current generation token, or null. Never logs the value. */
+export function readRelayCredential(dir = HEALTH_DIR) {
+  let doc = null
+  try {
+    const path = join(dir, CRED_FILE)
+    const st = lstatSync(path)
+    // The helper writes node-owned 0400. A looser or symlinked file is not a
+    // credential — fail closed to agent-class rather than trusting it.
+    if (!st.isFile() || (st.mode & 0o077) !== 0) return null
+    const parsed = JSON.parse(readFileSync(path, 'utf8'))
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) doc = parsed
+  } catch { /* absent or unreadable */ }
+  return RELAY_TOKEN.test(doc?.token) ? doc.token : null
+}
+
+/**
+ * The credential a relay handshake presented: the dedicated upgrade header,
+ * or a `dnls-relay.<token>` WebSocket subprotocol offer (the only
+ * client-agnostic header channel — Node's WebSocket cannot set custom
+ * headers). We never echo the offered protocol back, so the 101 response
+ * does not repeat the credential.
+ */
+export function presentedCredential(headers = {}) {
+  const direct = headers?.[CRED_HEADER]
+  if (typeof direct === 'string' && RELAY_TOKEN.test(direct)) return direct
+  const offered = headers?.['sec-websocket-protocol']
+  if (typeof offered === 'string') {
+    for (const part of offered.split(',')) {
+      const token = part.trim()
+      if (token.startsWith(CRED_PREFIX) && RELAY_TOKEN.test(token.slice(CRED_PREFIX.length))) {
+        return token.slice(CRED_PREFIX.length)
+      }
+    }
+  }
+  return null
+}
+
+/** Per-handshake compare: only an exact match against the CURRENT file. */
+export function isHostConnection(headers, dir = HEALTH_DIR) {
+  const presented = presentedCredential(headers)
+  const current = readRelayCredential(dir)
+  if (!presented || !current) return false
+  const a = Buffer.from(presented, 'utf8')
+  const b = Buffer.from(current, 'utf8')
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
+/**
+ * CDP read whitelist for agent-class relay connections while humanHold is
+ * active (T-O-63). Page.navigate, Input.*, Runtime.evaluate and every other
+ * mutating method are refused with kitesurf.control.held; refusal only
+ * happens during a hold.
+ */
+export function heldReadAllowed(method) {
+  if (typeof method !== 'string') return false
+  if (/^[A-Z][A-Za-z]*\.(enable|disable)$/.test(method)) return true
+  return HELD_READ_METHODS.has(method)
+}
+const HELD_READ_METHODS = new Set([
+  'DOM.getDocument',
+  'DOM.querySelector',
+  'DOM.querySelectorAll',
+  'DOM.describeNode',
+  'DOM.getBoxModel',
+  'CSS.getComputedStyleForNode',
+  'Accessibility.getFullAXTree',
+  'Page.captureScreenshot',
+  'Target.getTargets',
+  'Target.attachToTarget',
+])
+
+export function readHealth(dir = HEALTH_DIR) {
+  let doc = null
+  try {
+    const parsed = JSON.parse(readFileSync(join(dir, 'dnls-public-health.json'), 'utf8'))
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) doc = parsed
+  } catch { /* absent or unreadable */ }
+  if (!doc) return null
+  const { contractVersion, state, health, observedAt } = doc
+  if (contractVersion !== 'dnls.control/1' || state !== 'running' || health !== 'unknown' ||
+      typeof observedAt !== 'string' || !ISO_TIME.test(observedAt)) return null
+  return { contractVersion, state, health, observedAt }
+}
 
 export async function acceptKey(key) {
   const data = new TextEncoder().encode(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
@@ -196,13 +305,19 @@ function connectUpstreamWs(wsUrl, { timeoutMs = 5000 } = {}) {
  * the shared page's targetId — the page-creation contract survives while the
  * private page does not.
  */
-export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.MCP_BRIDGE_DEBUG } = {}) {
+export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.MCP_BRIDGE_DEBUG, control = null } = {}) {
   const SLOT_SHIFT = 20
-  const clients = new Map() // socket -> {slot}
+  const clients = new Map() // socket -> {slot, klass: 'host'|'agent'}
   let freeSlot = 1
   let upstream = null           // {send, close, alive}
   let upstreamConnect = null    // in-flight Promise
   const shared = { pageTargetId: null }
+  // Agent-visible relay accounting (T-O-63): conns counts ONLY agent-class
+  // sockets; lastAt/lastMethod stamp the last ADMITTED command. A refused
+  // command records control.lastAction but never moves lastAt.
+  let agentConns = 0
+  let lastAt = null
+  let lastMethod = null
 
   const log = (...args) => { if (debug) try { process.stderr.write(`[cdp-relay] ${args.join(' ')}\n`) } catch {} }
 
@@ -232,6 +347,7 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
     const row = clients.get(socket)
     if (!row) return
     clients.delete(socket)
+    if (row.klass === 'agent' && agentConns > 0) agentConns -= 1
     log(`dropClient ${why} slot=${row.slot}`)
     try { sendClose(socket) } catch { /* gone */ }
     try { socket.destroy() } catch { /* gone */ }
@@ -328,7 +444,7 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
     return upstreamConnect
   }
 
-  const handle = async (socket) => {
+  const handle = async (socket, klass = 'agent') => {
     let link
     try { link = await ensureUpstream() } catch (error) {
       log('upstream unavailable:', error?.message || error)
@@ -354,12 +470,27 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
       try { socket.destroy() } catch { /* gone */ }
       return
     }
-    clients.set(socket, { slot })
+    clients.set(socket, { slot, klass })
+    if (klass === 'agent') agentConns += 1
     const decode = createFrameDecoder({
       onMessage: (text) => {
         let message
         try { message = JSON.parse(text) } catch (e) { log('bad json', e?.message); return }
-        if (message && typeof message === 'object' && typeof message.id === 'number' && message.method) {
+        if (message && typeof message === 'object' && (typeof message.id === 'number' || typeof message.id === 'string') && typeof message.method === 'string') {
+          // T-O-63: while a human holds the page, an agent-class connection
+          // gets ONLY the read whitelist — every mutating CDP method (must
+          // include Page.navigate, Input.*, Runtime.evaluate) is refused with
+          // the existing kitesurf.control.held marker. The refused command is
+          // recorded on lastAction; lastAt/writer never move and nothing is
+          // queued or replayed. Host-class connections are never gated.
+          if (klass === 'agent' && control?.humanHold?.active && !heldReadAllowed(message.method)) {
+            if (control) control.lastAction = { tool: String(message.method).slice(0, 80), owner: 'agent', at: new Date().toISOString(), ok: false }
+            sendText(socket, JSON.stringify({
+              id: message.id,
+              error: { code: -32000, message: 'kitesurf.control.held', data: { errorId: 'kitesurf.control.held' } },
+            }))
+            return
+          }
           // about:blank creation is the engine's per-connection page contract;
           // answer it with the shared page so a client's own blank never
           // exists. Any OTHER createTarget is a real intent and forwards.
@@ -369,16 +500,22 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
             sendText(socket, JSON.stringify({ id: message.id, result: { targetId: shared.pageTargetId } }))
             return
           }
-          message.id = (slot << SLOT_SHIFT) | (message.id & ((1 << SLOT_SHIFT) - 1))
-          cdpPending.set(message.id, { method: message.method, startedMs: performance.now() })
-          text = JSON.stringify(message)
-        } else if (message && typeof message === 'object' && typeof message.id === 'string' && message.method) {
-          // String ids must be namespaced too: an unprefixed string reply is
-          // indistinguishable from an event and would broadcast to every
-          // client, cross-wiring whoever happens to poll first.
-          message.id = `ks:${slot}:${message.id}`
-          cdpPending.set(message.id, { method: message.method, startedMs: performance.now() })
-          text = JSON.stringify(message)
+          // Admitted: stamp lastAt/lastMethod (method name only — params and
+          // results never enter the ledger).
+          lastAt = new Date().toISOString()
+          lastMethod = String(message.method).slice(0, 80)
+          if (typeof message.id === 'number') {
+            message.id = (slot << SLOT_SHIFT) | (message.id & ((1 << SLOT_SHIFT) - 1))
+            cdpPending.set(message.id, { method: message.method, startedMs: performance.now() })
+            text = JSON.stringify(message)
+          } else {
+            // String ids must be namespaced too: an unprefixed string reply is
+            // indistinguishable from an event and would broadcast to every
+            // client, cross-wiring whoever happens to poll first.
+            message.id = `ks:${slot}:${message.id}`
+            cdpPending.set(message.id, { method: message.method, startedMs: performance.now() })
+            text = JSON.stringify(message)
+          }
         }
         try { link.send(text) } catch (e) { log('send failed', e?.message); dropClient(socket, 'send-fail') }
       },
@@ -393,7 +530,7 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
     socket.setTimeout(IDLE_MS, () => dropClient(socket, 'idle'))
   }
 
-  return { handle, clients, shared, stats: () => ({ clients: clients.size, upstreamAlive: upstream?.alive === true, pageTargetId: shared.pageTargetId, cdpCalls: cdpSummary() }) }
+  return { handle, clients, shared, agentStats: () => ({ conns: agentConns, lastAt, lastMethod }), stats: () => ({ clients: clients.size, agentConns, upstreamAlive: upstream?.alive === true, pageTargetId: shared.pageTargetId, cdpCalls: cdpSummary() }) }
 }
 
 /**
@@ -475,9 +612,9 @@ export function createFrameDecoder({ onMessage, onPing, onClose, maxFrame = MAX_
 /**
  * Kitesurf-native MCP tools. The bridge is a byte pipe to `agent-browser mcp`,
  * whose 33 core tools know nothing about the host plugin's execution state.
- * These are answered LOCALLY from the diagnostics snapshot the host pushes to
- * POST /diagnostics, so an agent using only MCP can still answer "what did the
- * plugin just do, and which errorId fired?" — the gap the owner called out.
+ * Snapshot-backed tools once read a host-pushed diagnostics POST; that
+ * channel is gone (POST /diagnostics is a hard 403), so they answer the
+ * stale error honestly rather than fabricating an empty success.
  */
 const KITESURF_TOOLS = [
   {
@@ -577,7 +714,7 @@ const KITESURF_TOOLS = [
   },
   {
     name: 'sandbox.bridge_health',
-    description: 'MCP bridge liveness: conns, accepted, rejected, uptimeMs and when the last host diagnostics snapshot was pushed.',
+    description: 'MCP bridge public health: the host-owned dnls.control/1 summary (state, health, observedAt) or null until the owner publishes.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
 ]
@@ -610,10 +747,60 @@ function toolError(id, code, message) {
 function answerNativeTool(name, args, bridgeState, self = {}) {
   const snap = bridgeState.getDiagnostics()
   if (name === 'sandbox.bridge_health') {
-    return { ok: true, ...bridgeState.stats(), diagnosticsPushedAt: snap?.at || null }
+    const health = bridgeState.getHealth()
+    return { ok: true, health, observedAt: health?.observedAt ?? null }
+  }
+  if (name === 'sandbox.control') {
+    // Answered BEFORE the diagnostics-stale early return: the write gate and
+    // takeover status are bridge-local state, never snapshot-backed (T-O-63
+    // requires an agent takeover refusal to be kitesurf.control.query).
+    const c = bridgeState.control || {}
+    const me = self.connId || null
+    const action = typeof args.action === 'string' ? args.action.toLowerCase() : 'status'
+    const state = () => ({
+      ok: true,
+      ...controlSnapshot(c, bridgeState.getRelayStats),
+      mine: me != null && c.writer === me,
+      hint: 'one MCP writer moves the page at a time; a second MCP writer gets kitesurf.control.busy. release only frees a lock you hold. humanHold.active means a human takeover refuses all MCP writes. The host pane is exempt: its REST writes are human actions.',
+    })
+    if (action === 'status') return state()
+    if (action === 'claim') {
+      // state() returns ok:true — spread it FIRST so the refusal's ok:false
+      // and errorId survive; `...state()` after `ok:false` silently flipped
+      // busy/held answers to {ok:true, errorId:busy} (self-contradicting).
+      // T-O-63: during a hold only a host-class connection (relay credential
+      // at handshake) may claim — a self-declared clientInfo.name is no
+      // exemption, so the old `clientName === humanHold.owner` path is gone.
+      if (c.humanHold?.active && !self.isHost) {
+        return { ...state(), ok: false, errorId: 'kitesurf.control.held', error: `a human (${c.humanHold.owner}) holds the page via takeover` }
+      }
+      if (c.writer !== null && c.writer !== me) {
+        return { ...state(), ok: false, errorId: 'kitesurf.control.busy', error: `another writer (${c.owner || 'unknown'}) holds the page` }
+      }
+      c.writer = me
+      c.owner = self.clientName || c.owner || 'agent'
+      c.ownerSince = c.ownerSince || new Date().toISOString()
+      return state()
+    }
+    if (action === 'takeover') {
+      // T-O-63: takeover is host-class only. An agent-class caller (no
+      // generation credential at handshake) gets the query refusal — the
+      // self-reported clientInfo.name confers nothing.
+      if (!self.isHost) {
+        return { ...state(), ok: false, errorId: 'kitesurf.control.query', error: 'takeover is host-class only; the host pane drives it over POST /control' }
+      }
+      c.humanHold = { active: true, owner: self.clientName || 'human', since: new Date().toISOString(), note: 'mcp-takeover' }
+      c.writer = null; c.owner = null; c.ownerSince = null
+      return { ok: true, tookOver: true, ...state() }
+    }
+    if (action === 'release') {
+      if (c.writer === me) { c.writer = null; c.owner = null; c.ownerSince = null }
+      return { ok: true, released: c.writer !== me, ...state() }
+    }
+    return { ...state(), ok: false, errorId: 'kitesurf.control.query', error: `unknown action ${action}; use status|claim|release|takeover` }
   }
   if (!snap) {
-    return { ok: false, errorId: 'kitesurf.diag.stale', error: 'host has not pushed a diagnostics snapshot yet; retry in a few seconds', hint: 'GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push' }
+    return { ok: false, errorId: 'kitesurf.diag.stale', error: 'no diagnostics snapshot is available on this bridge', hint: 'GET /nano-local-sandbox/diagnostics on the authenticated host' }
   }
   if (name === 'sandbox.diagnostics') return snap
   if (name === 'sandbox.console') {
@@ -688,45 +875,6 @@ function answerNativeTool(name, args, bridgeState, self = {}) {
     steps.push({ order: steps.length + 1, action: 'if a port is busy, free it or change the profile instance hostPorts, then restart the host', call: 'profile instance.hostPorts in profiles/kitesurf/profile.yaml' })
     return { ok: true, phase, engineAlive: alive, steps, notes: 'lifecycle.state (409) means the requested action does not match the current phase; a busy host port means another process holds it and the existing container is preserved.' }
   }
-  if (name === 'sandbox.control') {
-    const c = bridgeState.control || {}
-    const me = self.connId || null
-    const action = typeof args.action === 'string' ? args.action.toLowerCase() : 'status'
-    const state = () => ({
-      ok: true,
-      ...controlSnapshot(c),
-      mine: me != null && c.writer === me,
-      hint: 'one MCP writer moves the page at a time; a second MCP writer gets kitesurf.control.busy. release only frees a lock you hold. humanHold.active means a human takeover refuses all MCP writes. The host pane is exempt: its REST writes are human actions.',
-    })
-    if (action === 'status') return state()
-    if (action === 'claim') {
-      // state() returns ok:true — spread it FIRST so the refusal's ok:false
-      // and errorId survive; `...state()` after `ok:false` silently flipped
-      // busy/held answers to {ok:true, errorId:busy} (self-contradicting).
-      if (c.humanHold?.active && self.clientName !== c.humanHold.owner) {
-        return { ...state(), ok: false, errorId: 'kitesurf.control.held', error: `a human (${c.humanHold.owner}) holds the page via takeover` }
-      }
-      if (c.writer !== null && c.writer !== me) {
-        return { ...state(), ok: false, errorId: 'kitesurf.control.busy', error: `another writer (${c.owner || 'unknown'}) holds the page` }
-      }
-      c.writer = me
-      c.owner = self.clientName || c.owner || 'agent'
-      c.ownerSince = c.ownerSince || new Date().toISOString()
-      return state()
-    }
-    if (action === 'takeover') {
-      // Agent-side takeover (e.g. an agent asked by the human to grab the page):
-      // same semantics as POST /control takeover but attributed to the caller.
-      c.humanHold = { active: true, owner: self.clientName || 'human', since: new Date().toISOString(), note: 'mcp-takeover' }
-      c.writer = null; c.owner = null; c.ownerSince = null
-      return { ok: true, tookOver: true, ...state() }
-    }
-    if (action === 'release') {
-      if (c.writer === me) { c.writer = null; c.owner = null; c.ownerSince = null }
-      return { ok: true, released: c.writer !== me, ...state() }
-    }
-    return { ...state(), ok: false, errorId: 'kitesurf.control.query', error: `unknown action ${action}; use status|claim|release|takeover` }
-  }
   return { ok: false, errorId: 'kitesurf.tool.unknown', error: `unknown native tool ${name}` }
 }
 
@@ -750,7 +898,7 @@ function isWriteCall(name) {
  * the page at a time. A busy write gets kitesurf.control.busy instead of a
  * torn navigation — same ownership model ego's TaskSpace enforces.
  */
-function makeControl() {
+export function makeControl() {
   return {
     writer: null,        // connId currently holding the write lock
     owner: null,         // clientInfo.name of the last writer ('agent'|…)
@@ -769,7 +917,8 @@ function makeControl() {
   }
 }
 
-function controlSnapshot(c) {
+function controlSnapshot(c, relay = null) {
+  const relayStats = typeof relay === 'function' ? relay() : { conns: 0, lastAt: null, lastMethod: null }
   return {
     writer: c.writer != null,
     owner: c.owner ?? null,
@@ -778,10 +927,14 @@ function controlSnapshot(c) {
     humanHold: c.humanHold ? { ...c.humanHold } : { active: false, owner: null, since: null, note: null },
     lastAction: c.lastAction ? { ...c.lastAction } : null,
     lastCallAt: c.lastCallAt ?? null,
+    // T-O-63: relay-facing ledger — conns counts agent-class /cdp sockets
+    // only; lastAt/lastMethod name the last ADMITTED relay command (method
+    // name only, never params).
+    relay: { conns: relayStats?.conns ?? 0, lastAt: relayStats?.lastAt ?? null, lastMethod: relayStats?.lastMethod ?? null },
   }
 }
 
-function attach(socket, env = process.env, bridgeState = { getDiagnostics: () => null, stats: () => ({}), control: makeControl() }) {
+export function attach(socket, env = process.env, bridgeState = { getDiagnostics: () => null, stats: () => ({}), control: makeControl() }, isHost = false, spawnFn = spawn) {
   let alive = true
   const teardown = (code = 1000) => {
     if (!alive) return
@@ -792,7 +945,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
     try { socket.destroy() } catch { /* gone */ }
     child.kill()
   }
-  const child = spawn('agent-browser', ['mcp'], {
+  const child = spawnFn('agent-browser', ['mcp'], {
     env: { ...env, AGENT_BROWSER_CDP: env.AGENT_BROWSER_CDP || CDP },
     stdio: ['pipe', 'pipe', 'inherit'],
   })
@@ -890,10 +1043,10 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
           }
           if (message.method === 'tools/call' && typeof message.params?.name === 'string') {
             const toolName = message.params.name
-            control.lastCallAt = new Date().toISOString()
             const startedMs = performance.now()
             if (toolName.startsWith('sandbox.')) {
-              const data = answerNativeTool(toolName, message.params.arguments || {}, bridgeState, { connId, clientName })
+              control.lastCallAt = new Date().toISOString()
+              const data = answerNativeTool(toolName, message.params.arguments || {}, bridgeState, { connId, clientName, isHost })
               recordCall(toolName, startedMs, data?.ok === false ? 'error' : 'ok')
               sendText(socket, JSON.stringify(message.id == null
                 ? toolError(null, -32600, 'tools/call requires an id')
@@ -905,8 +1058,14 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
               // until kitesurf_control release or socket close, so a human
               // annotating is never torn by a background agent's navigation.
               // A second writer is refused, not queued.
-              if (control.humanHold?.active && clientName !== control.humanHold.owner) {
+              // T-O-63: during a hold only a host-class connection (relay
+              // credential at handshake) may write — clientInfo.name is no
+              // exemption. A refused write is recorded on lastAction first,
+              // but lastCallAt/lastWriteAt/writer never move and nothing is
+              // queued or replayed.
+              if (control.humanHold?.active && !isHost) {
                 recordCall(toolName, startedMs, 'refused')
+                control.lastAction = { tool: toolName.slice(0, 80), owner: clientName, at: new Date().toISOString(), ok: false }
                 sendText(socket, JSON.stringify(message.id == null
                   ? toolError(null, -32600, 'tools/call requires an id')
                   : toolResult(message.id, {
@@ -928,6 +1087,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
                   })))
                 handledLocally = true
               } else {
+                control.lastCallAt = new Date().toISOString()
                 control.writer = connId
                 control.owner = clientName
                 control.ownerSince = control.ownerSince || new Date().toISOString()
@@ -935,6 +1095,8 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
                 control.lastAction = { tool: toolName.slice(0, 80), owner: clientName, at: control.lastWriteAt }
                 if (message.id != null) { pendingWrites.add(message.id); callStarted.set(message.id, { tool: toolName, startedMs }) }
               }
+            } else {
+              control.lastCallAt = new Date().toISOString()
             }
           }
         } catch { /* malformed frame: let the child produce the -32700 */ }
@@ -980,26 +1142,35 @@ export function createBridge(port = PORT, env = process.env) {
   let conns = 0
   let accepted = 0
   let rejected = 0
-  let lastDiagnostics = null
-  let diagnosticsPushedAt = null
   const startedAt = Date.now()
+  const healthDir = env.DNLS_HEALTH_DIR || HEALTH_DIR
+  const credDir = env.DNLS_RELAY_CRED_DIR || HEALTH_DIR
   const control = makeControl()
-  const cdpRelay = makeCdpRelay({ upstreamUrl: env.KITESURF_CDP_UPSTREAM || CDP_UPSTREAM, debug: env.MCP_BRIDGE_DEBUG })
+  const cdpRelay = makeCdpRelay({ upstreamUrl: env.KITESURF_CDP_UPSTREAM || CDP_UPSTREAM, debug: env.MCP_BRIDGE_DEBUG, control })
   const stats = () => ({
     conns, accepted, rejected, uptimeMs: Date.now() - startedAt,
-    control: controlSnapshot(control),
+    control: controlSnapshot(control, cdpRelay.agentStats),
     cdp: cdpRelay.stats(),
     calls: callSummary(bridgeState.callRing),
   })
   const bridgeState = {
-    getDiagnostics: () => lastDiagnostics,
+    // The old host→bridge diagnostics push is gone (POST /diagnostics is a
+    // hard 403 now); snapshot-backed tools stay honest and answer
+    // kitesurf.diag.stale rather than fabricating success.
+    getDiagnostics: () => null,
+    getHealth: () => readHealth(healthDir),
+    getRelayStats: cdpRelay.agentStats,
     stats,
     control,
   }
   const server = createServer((req, res) => {
     if (req.url === '/health') {
+      // Shared readers get only the nonrestricted health summary — no call
+      // ring, control owner/lastAction, or tool bodies. Private liveness
+      // detail belongs to authenticated host routes, not this port.
+      const health = readHealth(healthDir)
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify({ ok: true, mcp: '/mcp', cdp: '/cdp', ...stats(), diagnosticsPushedAt }))
+      res.end(JSON.stringify({ ok: true, health, observedAt: health?.observedAt ?? null }))
       return
     }
     // HITL control endpoint: the DSH pane reaches this through the host's
@@ -1010,10 +1181,15 @@ export function createBridge(port = PORT, env = process.env) {
     if (req.url === '/control' && (req.method === 'POST' || req.method === 'GET')) {
       if (req.method === 'GET') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ ok: true, control: controlSnapshot(control) }))
+        res.end(JSON.stringify({ ok: true, control: controlSnapshot(control, cdpRelay.agentStats) }))
         return
       }
-      if (req.headers.origin || (req.headers['content-type'] || '').indexOf('application/json') === -1) {
+      // T-O-63: a write on /control is host-class only — the DNLS host signs
+      // the request with the current generation credential. No credential or
+      // a stale one is an indistinguishable 403, same as a browser-shaped
+      // request. The credential itself never enters the response or a log.
+      if (req.headers.origin || (req.headers['content-type'] || '').indexOf('application/json') === -1 ||
+          !isHostConnection(req.headers, credDir)) {
         res.writeHead(403)
         res.end()
         return
@@ -1035,13 +1211,13 @@ export function createBridge(port = PORT, env = process.env) {
             // agent's next write gets kitesurf.control.held, not busy.
             control.writer = null; control.owner = null; control.ownerSince = null
             res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-            res.end(JSON.stringify({ ok: true, tookOver: true, control: controlSnapshot(control) }))
+            res.end(JSON.stringify({ ok: true, tookOver: true, control: controlSnapshot(control, cdpRelay.agentStats) }))
             return
           }
           if (action === 'release') {
             control.humanHold = { active: false, owner: null, since: null, note: null }
             res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-            res.end(JSON.stringify({ ok: true, released: true, control: controlSnapshot(control) }))
+            res.end(JSON.stringify({ ok: true, released: true, control: controlSnapshot(control, cdpRelay.agentStats) }))
             return
           }
           res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
@@ -1053,62 +1229,18 @@ export function createBridge(port = PORT, env = process.env) {
       })
       return
     }
-    // Host → bridge push. The dsh host is on the same loopback; the port is
-    // only published on 127.0.0.1. Reject browser-shaped requests (Origin)
-    // and bound the payload so this endpoint cannot be used to grow memory.
-    if (req.url === '/diagnostics' && (req.method === 'POST' || req.method === 'GET')) {
+    // Public health projection. The only writer is the trusted host owner
+    // over `container exec` (dnls.control/1, /run/dnls-public-health.json) —
+    // never the published HTTP port. POST is refused outright with zero
+    // mutation: no writer election, no history merge, no accepted flag.
+    if (req.url === '/diagnostics') {
       if (req.method === 'GET') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ ok: true, pushedAt: diagnosticsPushedAt, diagnostics: lastDiagnostics }))
+        res.end(JSON.stringify({ ok: true, health: readHealth(healthDir) }))
         return
       }
-      if (req.headers.origin || (req.headers['content-type'] || '').indexOf('application/json') === -1) {
-        res.writeHead(403)
-        res.end()
-        return
-      }
-      let body = ''
-      req.on('data', (chunk) => {
-        body += chunk
-        if (body.length > 512 * 1024) { req.destroy() }
-      })
-      req.on('end', () => {
-        try {
-          const parsed = JSON.parse(body)
-          if (!parsed || typeof parsed !== 'object') throw new Error('not an object')
-          // Two hosts can push to one engine (desktop + a dev profile). Keep the
-          // richest history instead of letting an older host erase it.
-          const prev = lastDiagnostics?.history
-          const next = parsed?.history
-          if (prev && (!next || (next.entries?.length || 0) < (prev.entries?.length || 0))) parsed.history = prev
-          // Writer election: two dsh hosts share one container bridge (desktop +
-          // a dev profile). Both may report the same httpBase and engineAlive —
-          // the peer auto-adopts the container — so rank by kite ownership:
-          // the host that started the kite reports phase:"running" and drives
-          // the page; a peer that merely probes the engine stays "idle". Sender
-          // identity is storePath (unique per host install), not httpBase.
-          const rankOf = (d) => {
-            const phase = d?.plugin?.phase
-            const own = phase === 'running' ? 2 : phase === 'suspended' ? 1 : 0
-            const alive = (d?.engine?.engineAlive === true || d?.engine?.ok === true) ? 1 : 0
-            return own * 2 + alive
-          }
-          const senderId = String(parsed?.plugin?.storePath || parsed?.plugin?.httpBase || '?')
-          const prevSenderId = String(lastDiagnostics?.plugin?.storePath || lastDiagnostics?.plugin?.httpBase || '')
-          const wins = lastDiagnostics == null
-            || rankOf(parsed) > rankOf(lastDiagnostics)
-            || (rankOf(parsed) === rankOf(lastDiagnostics) && senderId === prevSenderId)
-          if (wins) {
-            lastDiagnostics = parsed
-            diagnosticsPushedAt = new Date().toISOString()
-          }
-          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-          res.end(JSON.stringify({ ok: true, at: diagnosticsPushedAt, writer: prevSenderId || null, accepted: wins }))
-        } catch (error) {
-          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
-          res.end(JSON.stringify({ ok: false, error: String(error?.message || error) }))
-        }
-      })
+      res.writeHead(403)
+      res.end()
       return
     }
     res.writeHead(404)
@@ -1136,6 +1268,12 @@ export function createBridge(port = PORT, env = process.env) {
     socket.on('close', () => { conns -= 1 })
     try {
       const accept = await acceptKey(req.headers['sec-websocket-key'])
+      // T-O-63: classify by the generation credential presented AT THIS
+      // handshake — header or a dnls-relay.<token> subprotocol offer. The 101
+      // response carries no Sec-WebSocket-Protocol echo, so the credential is
+      // never reflected. A self-declared clientInfo.name or a copied relay
+      // URL does not make a connection host-class.
+      const isHost = isHostConnection(req.headers, credDir)
       socket.write(
         'HTTP/1.1 101 Switching Protocols\r\n' +
         'Upgrade: websocket\r\n' +
@@ -1146,9 +1284,9 @@ export function createBridge(port = PORT, env = process.env) {
         // CDP relay: one upstream engine socket, one shared page. /cdp clients
         // bypass the MCP writer lock by design — the host plugin's own CDP
         // work is trusted the same way the engine's direct port already is.
-        cdpRelay.handle(socket)
+        cdpRelay.handle(socket, isHost ? 'host' : 'agent')
       } else {
-        attach(socket, env, bridgeState)
+        attach(socket, env, bridgeState, isHost)
       }
     } catch (error) {
       // acceptKey/attach threw after we counted the conn — destroy() may not

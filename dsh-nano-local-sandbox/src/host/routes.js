@@ -28,15 +28,19 @@ export const HAR_ROUTE = '/nano-local-sandbox/har'
 export const SNAPSHOT_ROUTE = '/nano-local-sandbox/snapshot'
 export const REFS_ROUTE = '/nano-local-sandbox/refs'
 export const CONTROL_ROUTE = '/nano-local-sandbox/control'
-
+export const CONTRACT_ROUTE = '/nano-local-sandbox/contract'
+export const FLEET_ROUTE = '/nano-local-sandbox/fleet'
+export const SANDBOXES_ROUTE = '/nano-local-sandbox/sandboxes'
+export const INSPECT_ROUTE = '/nano-local-sandbox/inspect'
+export const PROCESSES_ROUTE = '/nano-local-sandbox/processes'
 import { request as httpRequest } from 'node:http'
-import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { createHash, randomUUID } from 'node:crypto'
+import { closeSync, constants, fstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { basename, dirname, join } from 'node:path'
 import { BINDING_TABLE } from '../../lib/bindings.js'
+
 import { createCdpKeeper } from './cdp-keeper.js'
-import { publishedHttpBase } from './backend-apple.js'
 import { ensureClient, evaluatePage, navigate, navigationLedger, queueNavigation, readElements, resetClient, withPage } from './cdp-elements.js'
 import { answerNativeTool, toolsList } from './mcp-sandbox.js'
 import { listProfiles } from './profile-registry.js'
@@ -46,9 +50,7 @@ import { policyFingerprint, tupleFromPolicy } from './policy-adapter.js'
 import { errorCatalog, errorCode, statusOf } from './error-catalog.js'
 import { buildSrcDoc } from './dom-srcdoc.js'
 import { bumpEpoch, projectSnapshot } from './observe.js'
-import { closeTermSession, listTermSessions, openTermSession, readTermSession, resizeTermSession, termStateFor, writeTermSession } from './term-bridge.js'
 import { TERM_TOOLS } from './terminal-driver.js'
-import { spawnContainerPty } from './backend-apple.js'
 
 const keeper = createCdpKeeper()
 
@@ -88,6 +90,24 @@ async function bindProfile(session, deps) {
   return ctx
 }
 
+function readGuestFile(path) {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+  try {
+    const info = fstatSync(fd)
+    if (!info.isFile() || info.size > 16 * 1024 * 1024 || info.nlink !== 1) throw new Error('unsafe object state file')
+    return readFileSync(fd, 'utf8')
+  } finally { closeSync(fd) }
+}
+
+function writeGuestFile(path, doc) {
+  const tmp = `${path}.${randomUUID()}.tmp`
+  const fd = openSync(tmp, 'wx', 0o600)
+  try {
+    try { writeFileSync(fd, JSON.stringify(doc) + '\n') } finally { closeSync(fd) }
+    renameSync(tmp, path)
+  } finally { try { unlinkSync(tmp) } catch (e) { if (e.code !== 'ENOENT') throw e } }
+}
+
 function lastPagePath(session) {
   return join(session.stateDir, 'last-page.json')
 }
@@ -95,7 +115,7 @@ function lastPagePath(session) {
 /** @returns {{url: string, at: string}|null} */
 function readLastPage(session) {
   try {
-    const info = JSON.parse(readFileSync(lastPagePath(session), 'utf8'))
+    const info = JSON.parse(readGuestFile(lastPagePath(session)))
     return typeof info?.url === 'string' && info.url ? { url: info.url, at: String(info.at || '') } : null
   } catch { return null }
 }
@@ -104,7 +124,7 @@ function writeLastPage(session, url) {
   if (typeof url !== 'string' || !url) return
   try {
     mkdirSync(session.stateDir, { recursive: true })
-    writeFileSync(lastPagePath(session), JSON.stringify({ url, at: new Date().toISOString() }, null, 2) + '\n')
+    writeGuestFile(lastPagePath(session), { url, at: new Date().toISOString() })
   } catch { /* a read-only home only costs the restore, not the browse */ }
 }
 
@@ -142,9 +162,7 @@ function persistBrowserState(session) {
       },
       stateSnapshots: session.stateSnapshots || {},
     }
-    const tmp = `${browserStatePath(session)}.tmp`
-    writeFileSync(tmp, JSON.stringify(doc, null, 2) + '\n')
-    renameSync(tmp, browserStatePath(session))
+    writeGuestFile(browserStatePath(session), doc)
     session.__browserStateDirty = false
   } catch { /* persistence is best-effort; the session copy stays correct */ }
 }
@@ -154,7 +172,7 @@ function restoreBrowserState(session) {
   if (session.__browserStateLoaded === true) return
   session.__browserStateLoaded = true
   try {
-    const doc = JSON.parse(readFileSync(browserStatePath(session), 'utf8'))
+    const doc = JSON.parse(readGuestFile(browserStatePath(session)))
     if (doc?.v !== 1) return
     if (Array.isArray(doc.history) && (!Array.isArray(session.history) || session.history.length === 0)) session.history = doc.history
     const s = doc.settings || {}
@@ -193,14 +211,13 @@ export function containerNameFor(session, env = process.env) {
 }
 
 /** Host ports to publish for this environment's container. */
-export function envHostPorts(env = process.env) {
-  const profile = activeProfile
+export function envHostPorts(env = process.env, profile = activeProfile) {
   if (!profile) throw new Error('profile not loaded: cannot derive host ports')
   return portsForProfile(profile, env)
 }
 
 /** Normalize inspect state, publications, resources and visible recipe evidence. */
-function parseInspect(raw, containerPort = 8787) {
+function parseInspect(raw, containerPort = 8787, driver = activeDriver) {
   const text = String(raw ?? '')
   const start = text.indexOf('[')
   const objectStart = text.indexOf('{')
@@ -213,7 +230,9 @@ function parseInspect(raw, containerPort = 8787) {
   const ports = (item?.configuration?.publishedPorts ?? item?.publishedPorts ?? []).map((row) => ({
     containerPort: Number(row.containerPort),
     hostPort: Number(row.hostPort),
-    hostAddress: row.hostAddress || '127.0.0.1',
+    hostAddress: row.hostAddress ?? null,
+    protocol: row.proto ?? 'tcp',
+    count: row.count ?? 1,
   }))
   const resources = item?.configuration?.resources ?? item?.resources ?? null
   // Backend-reported container networking (status.networks[] on apple-container).
@@ -228,7 +247,7 @@ function parseInspect(raw, containerPort = 8787) {
     ports,
     containerPort,
     networking,
-    ...activeDriver.inspectedRecipe(item?.configuration ?? item),
+    ...driver.inspectedRecipe(item?.configuration ?? item),
     resources: resources
       ? {
         cpus: Number(resources.cpus ?? 0) || null,
@@ -412,12 +431,12 @@ function envSnapshot(session, deps) {
 
 async function observeOnce(session, deps) {
   const name = containerNameFor(session, deps.env || process.env)
-  const host = envHostPorts(deps.env || process.env)
+  const host = envHostPorts(deps.env || process.env, session.__profile?.profile)
   let info = null
   let inspectFailed = null
   try {
     const inspected = await deps.backend?.inspect?.(name)
-    info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort)
+    info = deps.managed ? inspected : parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
   } catch (error) {
     info = null
     // A daemon-level inspect failure is NOT "container missing" — that used
@@ -428,16 +447,14 @@ async function observeOnce(session, deps) {
   // A successful inspect retires the stuck backendError — a recovered daemon
   // used to keep reporting its earlier failure forever.
   if (!inspectFailed) session.backendError = null
-  const engineRow = info?.ports?.find((p) => p.containerPort === host.engineContainerPort) || null
-  const bridgeRow = info?.ports?.find((p) => p.containerPort === host.bridgeContainerPort) || null
-  const derived = engineRow ? `http://${engineRow.hostAddress === '0.0.0.0' ? '127.0.0.1' : engineRow.hostAddress}:${engineRow.hostPort}` : null
-  // The container's published port is the observation target; the session
-  // pointer only fills in before the first inspect result arrives.
-  const httpBase = derived || session.httpBase || null
+  const engineRow = publicationFor(info, host.engineContainerPort)
+  const bridgeRow = publicationFor(info, host.bridgeContainerPort)
+  trackBridge(session, bridgeControlBase(bridgeRow))
+  const httpBase = bridgeControlBase(engineRow)
   const httpUp = await engineHttpUp(httpBase, deps)
   const cdpUp = await probeCdp(session, httpBase, httpUp, deps)
   const state = info?.state || (inspectFailed ? 'unknown' : 'missing')
-  const bridgeBase = bridgeControlBase({ httpBase })
+  const bridgeBase = bridgeControlBase(bridgeRow)
   const pageRaw = await probePage(session, httpBase, httpUp && cdpUp, deps)
   const pageUrl = pageRaw.ok ? (pageRaw.detail || '') : ''
   const page = !pageRaw.ok
@@ -455,8 +472,8 @@ async function observeOnce(session, deps) {
   const bridge = bridgeRaw.ok ? { state: 'up', detail: bridgeRaw.detail || '' } : { state: 'down', detail: bridgeRaw.detail || '' }
   const terminal = deps.termPolicyStale
     ? { state: 'policy-stale' }
-    : { state: termStateFor(session.termSessionId) === 'listening' || listTermSessions().length > 0 ? 'listening' : 'absent' }
-  const effective = { httpBase, enginePort: engineRow?.hostPort ?? host.engineHostPort, bridgePort: bridgeRow?.hostPort ?? host.bridgeHostPort }
+    : { state: 'absent' }
+  const effective = { httpBase, bridgeBase, enginePort: engineRow?.hostPort ?? null, bridgePort: bridgeRow?.hostPort ?? null }
   const ports = {
     engine: engineRow ? { port: engineRow.hostPort, containerPort: engineRow.containerPort, heldBy: 'this-container' } : { port: host.engineHostPort, containerPort: host.engineContainerPort, heldBy: 'free' },
     bridge: bridgeRow ? { port: bridgeRow.hostPort, containerPort: bridgeRow.containerPort, heldBy: 'this-container' } : { port: host.bridgeHostPort, containerPort: host.bridgeContainerPort, heldBy: 'free' },
@@ -594,7 +611,7 @@ async function runSelftest(session, deps) {
 
   // Profile-declared probes fill their declared slot; every other id is the
   // kernel's own neutral probe above.
-  const bridgeBase = bridgeControlBase({ httpBase: snap.effective.httpBase })
+  const bridgeBase = snap.effective.bridgeBase
   const bridge = {
     base: bridgeBase,
     json: (pathname, timeoutMs = 900) => (bridgeBase ? probeHttp(`${bridgeBase}${pathname}`, timeoutMs) : Promise.reject(new Error('no bridge port'))),
@@ -638,7 +655,7 @@ async function prepareEnvironment(session, deps, ctx = null) {
   if (canInspect) {
     try {
       const inspected = await deps.backend.inspect(name)
-      info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort)
+      info = deps.managed ? inspected : parseInspect(inspected?.raw ?? inspected, host.engineContainerPort)
       // A running/real container that inspect can't parse is NOT "missing" —
       // routing it to create() would collide "already exists" the moment the
       // daemon recovers. Three-way: missing / inspectable / unknown.
@@ -727,7 +744,7 @@ async function prepareEnvironment(session, deps, ctx = null) {
       snap = await waitUntil((row) => row.live === true, settleMs)
     } catch { /* keep the snapshot; the failure stays visible in planes */ }
   }
-  if (snap.httpBase) session.httpBase = session.httpBase || snap.httpBase
+  session.httpBase = snap.httpBase ?? null
   if (snap.healthy) session.phase = 'running'
   return { action, ...snap }
 }
@@ -984,10 +1001,43 @@ async function readJson(req, limit = 0) {
 }
 
 /**
+ * T-O-63: mint + deliver the host's generation credential and stash it on
+ * the session (memory only — never persisted, logged or returned in a
+ * response). A managed session carries the verified binding pair
+ * (containerName, generation); delivery rides `deps.relayCredentials`.
+ * No vault or no binding means agent-class — the call answers null instead
+ * of connecting the relay under false pretenses. A delivery failure is a
+ * real 503 so the object page stays off the relay (fail-closed).
+ */
+export async function ensureBridgeCredential(session, deps = {}) {
+  if (typeof session.relayToken === 'string' && session.relayToken) return session.relayToken
+  const vault = deps?.relayCredentials
+  const locator = session?.containerName
+  const generation = session?.generation
+  if (typeof vault?.tokenFor !== 'function' || !locator || !generation) {
+    // No host channel or no verified binding: agent-class, honestly — but
+    // never memoized, so a later fully-verified call can still prove itself.
+    session.relayToken = null
+    return null
+  }
+  try {
+    session.relayToken = await vault.tokenFor({ locator, generation })
+  } catch (error) {
+    // Fail-closed: the failure is NOT cached — the next verified action
+    // retries delivery instead of silently degrading to agent-class.
+    session.relayToken = null
+    throw Object.assign(error instanceof Error ? error : new Error(String(error)), { status: error?.status || 503 })
+  }
+  return session.relayToken
+}
+
+/**
  * CDP client for a base url. `deps.connect` lets tests and fixtures inject a
  * fake transport; production falls through to the real socket in cdp-elements.
  */
-function clientFor(session, base, deps) {
+async function clientFor(session, base, deps) {
+  // Present the generation credential at the relay handshake (T-O-63).
+  if (!deps?.connect) await ensureBridgeCredential(session, deps)
   return ensureClient(session, base, deps?.connect)
 }
 
@@ -1014,20 +1064,26 @@ async function restoreLastPage(session, deps) {
 }
 
 async function ensureBase(session, deps) {
-  // The container's published port is the only source: a second writable
-  // pointer would let the pane and the routes operate different engines.
-  if (session.httpBase) return session.httpBase
+  // Always inspect: the engine's actual published tuple is the only source —
+  // no remembered session base, no port arithmetic.
   if (!deps.backend?.inspect) return null
   try {
     const inspected = await deps.backend.inspect(containerNameFor(session, deps.env || process.env))
-    const base = publishedHttpBase(inspected.raw ?? inspected)
+    const host = envHostPorts(deps.env || process.env, session.__profile?.profile)
+    const info = deps.managed ? inspected : parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
+    trackBridge(session, bridgeControlBase(publicationFor(info, host.bridgeContainerPort)))
+    const base = bridgeControlBase(publicationFor(info, host.engineContainerPort))
     if (!base) return null
     if (session.phase === 'idle') session.phase = 'running'
-    session.httpBase = base
     return base
   } catch {
     return null
   }
+}
+
+function trackBridge(session, base) {
+  if (session.cdp && session.bridgeBase !== undefined && session.bridgeBase !== base) resetClient(session)
+  session.bridgeBase = base
 }
 
 /**
@@ -1047,6 +1103,8 @@ async function captureDom(session, base, deps) {
   })
   if (!page?.html) return { error: 'empty' }
   if (page.url === 'about:blank') return { error: 'blank' }
+  // One build only: real addresses. The retired /res proxy rewriting is gone —
+  // the projection keeps the page's own base and subresource URLs verbatim.
   const built = buildSrcDoc({ url: page.url, html: page.html })
   // domSeq is the pane's staleness cursor: it must only advance when the
   // captured document actually changed — bumping it on every read makes the
@@ -1090,11 +1148,11 @@ function send(res, status, body) {
     res.__op.durationMs = Date.now() - res.__op.startedMs
     // Errors get a correlatable incidentId — the diagnostic "this route call
     // failed" receipt an agent can grep in the ops ring (same shape the perf
-    // span events carry). It is echoed BACK on the response so the caller can
-    // find its own row in /operations.
+    // span events carry). T-O-68/R-10: the id lives ONLY on the operations
+    // row (readable via /operations); failure bodies keep the
+    // {ok, errorId, error?, hint?} whitelist and never echo it back.
     if ((status >= 400 || rpcFail) && !res.__op.incidentId) {
       res.__op.incidentId = `op-${Date.now().toString(36)}-${(++opSeq).toString(36)}`
-      if (body && typeof body === 'object' && !Array.isArray(body)) body.incidentId = res.__op.incidentId
     }
   }
   res.statusCode = status
@@ -1103,39 +1161,59 @@ function send(res, status, body) {
 
 /**
  * HITL: the container's MCP bridge holds the real writer lock + humanHold on
- * its loopback HTTP face (engine port +1 — engine:8798 → bridge:8799, the same
- * convention entrypoint uses). The pane can't reach that port directly, so
+ * its own loopback HTTP face. The pane can't reach that port directly, so
  * /nano-local-sandbox/control proxies it: GET merges bridge /health control
  * state, POST {action:takeover|release} toggles the sticky human override.
+ * The bridge address is ONLY the actual published tuple the last inspect
+ * proved — never a hostPort+1 convention and never a stored session base.
  */
-// Exported for the unit suite: the IPv6 double-bracket bug is invisible to
-// black-box route tests because bridgeFetch swallows the base into network
-// errors — the mapping itself needs a direct assertion.
-export function bridgeControlBase(session) {
-  const httpBase = session?.httpBase || ''
-  // URL() handles [::1] bracketed hosts that the old [^:]+ regex split
-  // mid-address — a real bug once an agent configures an IPv6 httpBase.
-  let parsed
-  try { parsed = new URL(httpBase) } catch { return null }
-  const portNum = Number(parsed.port)
-  if (!Number.isInteger(portNum) || portNum <= 0) return null
-  // Every profile that ships a bridge publishes it on the next host port; the
-  // lane is derived from the engine's, never configured separately.
-  const port = portNum + 1
-  // parsed.hostname already carries [] for IPv6 literals — wrapping again
-  // produced http://[[::1]]:8801 and broke every bridge call.
-  return `${parsed.protocol}//${parsed.hostname}:${port}`
+export function bridgeControlBase(publication) {
+  if (!publication || !['127.0.0.1', '::1', '[::1]'].includes(publication.hostAddress) ||
+      !Number.isInteger(publication.hostPort) || publication.hostPort < 1 || publication.hostPort > 65535) {
+    return null
+  }
+  return `http://${publication.hostAddress === '127.0.0.1' ? '127.0.0.1' : '[::1]'}:${publication.hostPort}`
 }
 
-async function bridgeFetch(session, pathname, { method = 'GET', body = null, timeoutMs = 2500 } = {}) {
-  const base = bridgeControlBase(session)
-  if (!base) throw Object.assign(new Error('engine base unknown'), { errorId: errorCode('control.bridge'), status: 502 })
+/** One unique published tuple for a containerPort, or null when absent/ambiguous/unusable. */
+function publicationFor(info, containerPort) {
+  const hits = (info?.ports ?? []).filter((port) => port.containerPort === containerPort)
+  const hit = hits.length === 1 ? hits[0] : null
+  if (!hit || hit.count !== 1 || hit.protocol !== 'tcp' || !bridgeControlBase(hit)) return null
+  return hit
+}
+
+const unavailable = (message) => Object.assign(new Error(message), { errorId: errorCode('control.bridge'), status: 502 })
+
+export async function bridgeFetch(session, deps, pathname, { method = 'GET', body = null, timeoutMs = 2500 } = {}) {
+  // Every dispatch re-inspects: the bridge URL is the CURRENT verified
+  // publication of this exact container, never a remembered or derived one.
+  const host = envHostPorts(deps.env || process.env, session.__profile?.profile)
+  const name = containerNameFor(session, deps.env || process.env)
+  let info = null
+  try {
+    const inspected = await deps.backend?.inspect?.(name)
+    info = deps.managed ? inspected : parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
+  } catch {
+    throw unavailable('bridge mapping could not be verified')
+  }
+  const bridgeRow = publicationFor(info, host.bridgeContainerPort)
+  const base = bridgeControlBase(bridgeRow)
+  if (!base) throw unavailable('no verified bridge publication')
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), timeoutMs)
   try {
+    // T-O-63: the only write face the bridge exposes (/control POST) is
+    // host-class gated; sign it with the generation credential. The token is
+    // a transport header only — never in the body, ops row or response.
+    const headers = body ? { 'content-type': 'application/json' } : {}
+    if (method === 'POST' && pathname === '/control') {
+      const relayToken = await ensureBridgeCredential(session, deps)
+      if (relayToken) headers['x-dnls-relay-credential'] = relayToken
+    }
     const res = await fetch(`${base}${pathname}`, {
       method,
-      headers: body ? { 'content-type': 'application/json' } : {},
+      headers,
       body: body ? JSON.stringify(body) : null,
       signal: ac.signal,
     })
@@ -1207,12 +1285,7 @@ async function diagnosticsPayload(session, deps, { withCatalog = false } = {}) {
       engineUrl: snap.effective?.httpBase
         ? `ws://${(() => { try { return new URL(snap.effective.httpBase).host } catch { return '' } })()}/devtools/browser`
         : '',
-      cdp: (() => {
-        try {
-          const port = snap.effective?.bridgePort
-          return port ? `ws://${new URL(snap.effective?.httpBase || 'http://127.0.0.1').hostname}:${port}/cdp` : null
-        } catch { return null }
-      })(),
+      cdp: snap.effective?.bridgeBase ? `${snap.effective.bridgeBase.replace(/^http/, 'ws')}/cdp` : null,
     },
     container: snap.container,
     containerName: snap.containerName,
@@ -1282,7 +1355,7 @@ function buildOwners(session, deps, ctx) {
             endpoints: {
               engine: httpBase,
               cdp: httpBase ? `${String(httpBase).replace(/^http/, 'ws')}/devtools/browser` : null,
-              mcp: snap.effective?.bridgePort ? `ws://127.0.0.1:${snap.effective.bridgePort}/mcp` : null,
+              mcp: snap.effective?.bridgeBase ? `${snap.effective.bridgeBase.replace(/^http/, 'ws')}/mcp` : null,
             },
           },
         })
@@ -1364,7 +1437,7 @@ function buildOwners(session, deps, ctx) {
         return steps
       },
     },
-    bridge: { health: async () => { try { const r = await bridgeFetch(session, '/health'); return { ok: r.status === 200, status: r.status } } catch (e) { return { ok: false, errorId: errorCode('control.bridge'), error: e.message } } } },
+    bridge: { health: async () => { try { const r = await bridgeFetch(session, deps, '/health'); return { ok: r.status === 200, status: r.status } } catch (e) { return { ok: false, errorId: errorCode('control.bridge'), error: e.message } } } },
   }
 }
 
@@ -1388,47 +1461,16 @@ function livePolicy(session, deps) {
 
 /**
  * A terminal must not attach to a container whose policy fingerprint no longer
- * matches the live session policy. The registry row is the only durable record
- * of the fingerprint that was actually mounted.
+ * matches the live session policy; managed dispatch re-verifies the bound
+ * generation instead of trusting a session map.
+ *
+ * Pre-managed term.* calls fail closed: the v1 URL/token bridge and the
+ * global session map are gone. Managed dispatch (createManagedRoutes +
+ * the terminal owner) is the only live path once activated; until then no
+ * terminal work is served and no credential material is minted.
  */
-function termPolicyStale(session, sessionId, deps) {
-  if (deps?.termPolicyStale === true) return true
-  if (session?.policyStale === true) return true
-  const policy = livePolicy(session, deps)
-  if (!policy || !sessionId) return false
-  const registry = registryFor(deps, session.__profile)
-  const row = registry?.instances ? [...registry.instances.values()].find((item) => item.sessionId === sessionId) : null
-  if (!row?.policyFingerprint) return false
-  try {
-    return policyFingerprint(tupleFromPolicy({ ...policy, sessionId })) !== row.policyFingerprint
-  } catch { return false }
-}
-
-async function callTermTool(name, args, session, deps) {
-  if (name === 'term.session.create') {
-    const snap = await envSnapshot(session, deps)
-    const created = await openTermSession({
-      sessionId: args.sessionId,
-      cols: args.cols,
-      rows: args.rows,
-      containerRunning: snap.planes?.container?.state === 'running',
-      policyStale: termPolicyStale(session, args.sessionId, deps),
-      spawnPty: (spec) => {
-        if (typeof deps.spawnPty === 'function') return deps.spawnPty(spec)
-        if (typeof deps.backend?.openPty === 'function') return deps.backend.openPty(snap.containerName, spec)
-        return spawnContainerPty(snap.containerName, spec)
-      },
-    })
-    if (created.ok) session.termSessionId = created.id
-    return created
-  }
-  if (name === 'term.session.close') return closeTermSession(args.id)
-  if (name === 'term.session.list') return { ok: true, sessions: listTermSessions() }
-  if (name === 'term.session.input') return writeTermSession(args.id, args.data)
-  if (name === 'term.session.read') return readTermSession(args.id, args.lines)
-  if (name === 'term.session.resize') return resizeTermSession(args.id, args.cols, args.rows)
-  if (name === 'term.audit' || name === 'term.lane.status') return { ok: true, sessions: listTermSessions() }
-  return { ok: false, kind: 'invalid', status: 400, error: `no terminal tool ${name}` }
+async function callTermTool(name) {
+  return { ok: false, kind: 'unavailable', status: 503, error: `managed terminal dispatch is not activated for ${name}` }
 }
 
 export function routeSpecs(deps = {}) {
@@ -1444,6 +1486,14 @@ export function routeSpecs(deps = {}) {
     bodyLimit: row.bodyLimit,
     async handler(req, res) {
       deps.onHandler?.()
+      // dnls.control/1 is staged, not live: the managed dispatch
+      // (managed-routes.js) owns this path only after the atomic cutover.
+      // Until then discovery answers unavailable before any profile/session
+      // work — and never carries a successful version header.
+      if (row.path === CONTRACT_ROUTE) {
+        send(res, 503, { ok: false, error: 'dnls.control/1 discovery pending cutover' })
+        return
+      }
       // Every face (HTTP, MCP, diagnostics push) reads the active profile
       // driver; an unusable profile fails the request instead of half-working.
       try {
@@ -1467,7 +1517,9 @@ export function routeSpecs(deps = {}) {
       // A client that disconnects mid-handler never calls send() — the row
       // would sit status:null forever, unsearchable even by errorsOnly.
       res.on?.('close', () => {
-        if (op.status === null && res.destroyed) op.status = 'cancelled'
+        // Transport loss is not an operation cancel (T-O-43): the trace word
+        // stays 'disconnected'; only pre-dispatch cancellation is 'cancelled'.
+        if (op.status === null && res.destroyed) op.status = 'disconnected'
       })
       if (row.path.endsWith('/shot')) {
         // Real implementation: the page-ready stub (deps.pageReady) was a
@@ -1570,7 +1622,7 @@ export function routeSpecs(deps = {}) {
       }
       if (row.path.endsWith('/status')) {
         await ensureBase(session, deps)
-        if (!restoreAttempted && session.phase === 'running') {
+        if (!deps.managed && !restoreAttempted && session.phase === 'running') {
           restoreAttempted = true
           // Fire and forget: the pane polls status, and the next shot picks up
           // the restored page. Never make status wait on a navigation.
@@ -1597,12 +1649,7 @@ export function routeSpecs(deps = {}) {
           ...driverOf(session).settings.read(session),
           // The socket agents attach to — surfaced at top level per the
           // skill contract (jq -r .cdp) as well as inside lifecycle.
-          cdp: (() => {
-            try {
-              const port = snap.effective?.bridgePort
-              return port ? `ws://${new URL(snap.effective?.httpBase || 'http://127.0.0.1').hostname}:${port}/cdp` : null
-            } catch { return null }
-          })(),
+          cdp: snap.effective?.bridgeBase ? `${snap.effective.bridgeBase.replace(/^http/, 'ws')}/cdp` : null,
           via: session.cdp?.via || null, // relay | direct — a silent direct fallback would hide a private page
           engineMismatch,
           lastError: session.lastError || null,
@@ -1621,13 +1668,9 @@ export function routeSpecs(deps = {}) {
               ? `ws://${(() => { try { return new URL(snap.effective.httpBase).host } catch { return '' } })()}/devtools/browser`
               : '',
             // The CDP socket agents attach to — the relay on the bridge, so
-            // their page IS the pane's page. `ws://<host>:<mcpPort>/cdp`.
-            cdp: (() => {
-              try {
-                const port = snap.effective?.bridgePort
-                return port ? `ws://${new URL(snap.effective?.httpBase || 'http://127.0.0.1').hostname}:${port}/cdp` : null
-              } catch { return null }
-            })(),
+            // their page IS the pane's page. Derived only from the verified
+            // bridge publication, never a recombined host/port.
+            cdp: snap.effective?.bridgeBase ? `${snap.effective.bridgeBase.replace(/^http/, 'ws')}/cdp` : null,
           },
           navigating: Boolean(nav && nav.outcome === 'in-flight') || session.cdp?.navigating === true,
           navigation: nav,
@@ -1677,6 +1720,11 @@ export function routeSpecs(deps = {}) {
           // written here — /operations?errorsOnly can then answer "which
           // URL refused" instead of only "navigate.failed".
           if (res.__op) res.__op.argSummary = JSON.stringify({ url }).slice(0, 300)
+          // Profile-owned advisory for this target (e.g. a public tunnel
+          // domain): same hint on success and failure bodies, never a status
+          // change or a refusal. The kernel holds no domain list — the loaded
+          // profile driver owns it (T-O-66).
+          const targetHint = driverOf(session).navigationHint?.(url) ?? null
           // Explicit navigation wins over startup restoration. Never replay a
           // remembered address on top of the page the human is opening now.
           restoreAttempted = true
@@ -1701,14 +1749,16 @@ export function routeSpecs(deps = {}) {
           // navigate() stamps session.lastArrival from the OBSERVED document
           // just before returning, so on success this IS this nav's landing —
           // never the previous open's. On failure this line is unreachable.
-          if (!res.destroyed) send(res, 200, { ok: true, url: result?.url || url, landed: session.lastArrival || null })
+          if (!res.destroyed) send(res, 200, { ok: true, url: result?.url || url, landed: session.lastArrival || null, ...(targetHint ? { hint: targetHint } : {}) })
         } catch (error) {
           const errorId = error.errorId || errorCode('navigate.failed')
-          const hint = error.blockedReason
+          const errorHint = error.blockedReason
             ? (error.blockedReason === 'private-network'
               ? '引擎私网访问策略拒绝：页面从公网源去够更私密的地址。容器内访问宿主服务请确认页面 origin 与目标同层级（GET /status → networking.hostGateway 取宿主网关地址），勿从公网页直联宿主 localhost。'
               : navigateHint(error, url))
             : navigateHint(error, url)
+          const targetHint = (() => { try { return driverOf(session).navigationHint?.(url) ?? null } catch { return null } })()
+          const hint = [targetHint, errorHint].filter(Boolean).join(' ') || errorHint
           if (!res.destroyed) send(res, error.status || statusOf(errorId), { ok: false, errorId, error: error.message, hint })
         }
         return
@@ -1815,7 +1865,7 @@ export function routeSpecs(deps = {}) {
             }
             const client = await clientFor(session, base, deps)
             return readElements(client, options)
-          }))(deps.httpBase ?? session.httpBase, {
+          }))(await ensureBase(session, deps), {
             selector: url.searchParams.get('selector') || '',
             depth: Number(url.searchParams.get('depth') || 4),
           })
@@ -1833,11 +1883,11 @@ export function routeSpecs(deps = {}) {
           await ensureBase(session, deps)
           if (req.method === 'POST') {
             const body = await readJson(req, row.bodyLimit)
-            const { status, data } = await bridgeFetch(session, '/control', { method: 'POST', body })
+            const { status, data } = await bridgeFetch(session, deps, '/control', { method: 'POST', body })
             send(res, status === 200 ? 200 : (status || 502), data?.ok ? data : { ok: false, errorId: data?.errorId || errorCode('control.bridge'), error: data?.error || 'bridge refused' })
             return
           }
-          const { data } = await bridgeFetch(session, '/control')
+          const { data } = await bridgeFetch(session, deps, '/control')
           send(res, 200, { ok: true, control: data?.control ?? null })
         } catch (error) {
           send(res, error.status || 502, { ok: false, errorId: error.errorId || errorCode('control.bridge'), error: error.message })
@@ -2265,9 +2315,9 @@ export function routeSpecs(deps = {}) {
           }
           const opsLimit = Math.max(1, Math.min(Number(opsLimitRaw) || 100, 200))
           let rows = (session.operations || [])
-          // errorsOnly also keeps 'cancelled' — a status:null row the client
-          // dropped mid-flight is still a failed call.
-          if (errorsOnly) rows = rows.filter((item) => item.ok === false || (item.status && (item.status === 'cancelled' || item.status >= 400)))
+          // errorsOnly also keeps 'disconnected' — a status:null row the
+          // client dropped mid-flight is still a failed call.
+          if (errorsOnly) rows = rows.filter((item) => item.ok === false || (item.status && (item.status === 'disconnected' || item.status >= 400)))
           send(res, 200, { ok: true, entries: rows.slice(-opsLimit) })
           return
         }
@@ -2591,7 +2641,7 @@ export function startDiagnosticsPush(session, deps, { intervalMs = 15000 } = {})
         snapshot: session.lastSnapshot || null,
         selftest: session.lastSelftest || null,
       }
-      await bridgeFetch(session, '/diagnostics', { method: 'POST', body: doc })
+      await bridgeFetch(session, deps, '/diagnostics', { method: 'POST', body: doc })
     } catch { /* push is opportunistic */ }
   }
   const timer = setInterval(tick, intervalMs)

@@ -14,7 +14,7 @@
 | dsh 引擎 | 读 `package.json` 的 `engines.dsh` |
 | 平台 | 仅 web |
 | 宿主入口 | `index.js` |
-| 浏览器入口 | 无。本包不是第二个产品面 |
+| 管理页 | `lib/client.js` 注册的右栏 `dnls-sandbox` 页签（总览/控制），只在已挂载 session 的页签内渲染；无 session 的独立页是宿主依赖，本包不另做第二套设计界面 |
 | 宿主 inject | `webServer`、`connection`、`sandboxPolicy`、`sandbox`、`sessions` |
 
 ## 交付物
@@ -27,12 +27,13 @@
 | `src/host/backend-apple.js` | 本包唯一允许调用容器 CLI 的文件 |
 | `src/host/backend-nvx.js` | 会失败的空实现。不是 Windows 后端 |
 | `src/host/` | 中性内核：实例、profile 装载、CDP、terminal、错误目录。不得出现 profile 业务词 |
-| `src/host/profile-drivers.js` | 按 `capabilities.drivers` 发现 profile，`import()` 其 driver；env tag、容器名与 host 端口也从 profile 的 `instance` 段派生 |
+| `src/host/managed-profile.js` | 按所选对象的 profile 加载配方与 driver；已预留的端口只有与本代容器实测映射一致时才可发布 |
 | `profiles/kitesurf/profile.yaml` | 配方与 manifest 的唯一权威：`driver`、`instance`、`build.recipe`、`health` |
 | `profiles/kitesurf/driver/` | kitesurf 业务：镜像/运行时/挂载、CDP 设置与历史、selftest 探针、错误行 |
 | `profiles/kitesurf/` | 配方源文件（`Dockerfile`、`entrypoint.sh`、`mcp-bridge.mjs`）。`linux-prefix/` 不入库 |
 | `profiles/terminal/` | 终端 PTY 入口 |
 | `lib/route-guard.js`、`lib/bindings.js` | 路由注册。绑定表从仓根账本按 id 烘焙。运行时必需 |
+| `lib/client.js` | 浏览器包。运行时必需。右栏 `dnls-sandbox` 页签：总览/控制两视图，只走 `dnls.control/1` 公共合同 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 
 特权只写在这里和 `backend-apple.js`：容器 CLI，以及构建期的 `ctx.sandbox.confine`。不写消费者的路径。
@@ -71,25 +72,32 @@ dsh plugin --profile web add <spec>
 按顺序。前一步失败就停，不要换一个 profile 重试。失败时先看该 profile 目录下 `.plugin-manager/logs` 里这次 `dsh plugin` 的日志。
 
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
-2. 重启后宿主能加载 `index.js`。本包没有浏览器面板，不要到右侧工作区找第二个设计界面。
+2. 重启后从获准的当前宿主读取 `GET /nano-local-sandbox/contract`，核对响应头 `X-DNLS-Contract` 与正文 `contractVersion` 均为 `dnls.control/1`。已挂载会话的右栏出现「沙箱」页签（kind `dnls-sandbox`）；没有真实 `sessionId` 时页面不渲染（宿主依赖），也不用另一个插件的页签代替。
 3. `npm test`（`test/*.mjs` + `test/contracts/*.mjs`）退出码为 0。
 
 ## 初次运行
 
-无宿主初始化命令。`apply` 不创建容器。实例只在 `ensure` 时创建。
+无宿主初始化命令。加载插件会打开本环境的控制台账，不会创建或启动容器。需要新对象时，显式调用 `sandbox.instance.create` 并保存操作引用；`accepted` 不代表已启动。台账不可验证时不要删锁、清库或把旧卷当成新环境。
 
 ## 使用
 
 | 动作 | 结果 |
 |---|---|
-| `sandbox.instance.ensure` | 按 session 复用或创建实例 |
-| 策略指纹变化 | `sandbox.instance.policy-stale`，不热改挂载 |
-| 终端 attach | 只认返回的 `attach.url` |
+| 选择对象 | `sandbox.list` 只列可见对象；调用者显式选择一个 `sandboxId`。使用绑定与物理对象分开，`ensure` 不是分配物理身份的接口 |
+| 请求对象能力 | HTTP 只在 query 传一次 `sandboxId`，带 `X-DNLS-Contract: dnls.control/1`；MCP 只在 `arguments.sandboxId` 传目标，并设置 `params._meta["dnls/contract"]` |
+| 生命周期 | `sandbox.instance.create/start/stop/restart/recreate/remove` 接受 `requestId`，用 `sandbox.operations` 查原操作。结果未决时不要换键重发；stop 保留 ID、端口和卷 |
+| 终端创建与连接 | `term.session.create` 返回 `sandboxId`、`terminalId`，不发 URL。只有 `term.session.attach` 核权后才发无 bearer 的 `dnt-ws-v2` locator。断开是 detach，不结束原执行 |
+| 资源导航 | 从当前 host 的 `envId`、`sandboxId`、`terminalId` 组成 `dsh-resource://sandbox-terminal/<envId>/<sandboxId>/<terminalId>`。它不是访问凭证；无处理器时不要为打开交互而预建终端 |
 | 性能读取 | 本包不拥有 `/perf-review/host`；只读视图在资源管理器、记事本和模型选择器入口 |
+| 工作台总览 | 先 discovery 再 `sandbox.list`；只列主体可见的对象。搜索或刷新不会替用户选择对象 |
+| 对象控制 | 点选名称后查看观测状态、服务发布和用量覆盖；按需读取进程和服务探针。生命周期回执以 `sandbox.operations` 按原 `operationId` 重查，不自动重发 |
+| 设置与工具 | 资源修订的保存和应用是两个动作。终端须逐项获权；设计工作区和终端查看器从宿主正式入口打开，不在控制页复制交互引擎 |
+
+当前 [dsh] 的浏览器 owner 由多条连接共用，是本机唯一用户的稳定主体（键 `owner`）。它可以创建、列出、附着、读写、调整、关闭归属自己且代次匹配的沙箱终端，并在核权后取得无 bearer 的 locator。它只证明宿主管理身份，不是通配授权：别人的终端仍拒绝，也不签发 locator。传 `sessionId`、重复打开页面、开两个浏览器标签或更换终端客户端都不是跨用户证明。上限针对完整 MCP 请求，包括 JSON 信封；较大的交互数据走已获准的流，不拆分重发未确认的输入。
 
 ## 配置与状态
 
-profile 的唯一权威是 `profiles/kitesurf/profile.yaml`。实例状态在该实例自己的 `stateVolume`；根目录由 `DNLS_STATE_ROOT` 决定，默认 `${DSH_HOME}/nano-local-sandbox/state/<profileId>/<instanceKey>`。没有第二份 history 文件。
+profile 的唯一权威是其 `profile.yaml`。每个环境使用独立的 `DNLS_STATE_ROOT`（默认 `${DSH_HOME}/nano-local-sandbox/state`），其中 `registry.json` 保存对象、绑定、操作及回执。新建对象的数据卷为 `<stateRoot>/<profileId>/<sandboxId>`。不要用 session ID、容器名或页面地址重建台账。
 
 环境变量只有三个：`DNLS_ENV`（env tag）、`DNLS_PROFILES`（profile 根）、`DNLS_STATE_ROOT`（状态根）。旧的 `KITESURF_*` 名字已退役，无别名。
 
@@ -112,13 +120,13 @@ node scripts/build-profile.mjs --home <DSH_HOME> --work <派生目录> \
   --host-install <已安装的 dsh 包目录> --container-state <container 服务状态目录>
 ```
 
-pin 只从官方提交导出到 `<派生目录>/pin`，构建在 `<派生目录>/build`，不回写 pin。缺 runtime 或镜像时 `ensure` 失败关闭，不删除健康容器。
+pin 只从官方提交导出到 `<派生目录>/pin`，构建在 `<派生目录>/build`，不回写 pin。缺 runtime 或镜像时停止创建或换代，不删除健康容器。
 
 ## 故障
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| `/nano-local-sandbox/lifecycle` 409 | 动作与当前 phase 不符（`action` 只认 suspend/resume/start/init/restart） | GET `/status` 看 `lifecycle.phase` 再选动作 |
+| `/nano-local-sandbox/lifecycle` 409 | 名称、配额、修订或当前状态冲突 | 读取 `errorId`，按原目标查询对象与操作；不要默认换对象或重试 |
 | `dsh plugin add` 报引擎不符 | `engines.dsh` 与正在跑的 dsh 不一致 | 换符合范围的 dsh，或在操作者明确接受风险后执行命令输出里的 `allow-version`。不要改本包的 `engines` |
 | 构建直接失败 | 没有 `ctx.sandbox` | 这是失败关闭，不要改成裸 spawn |
 | NVX 方法拒绝 | 该后端尚未实现 | 不要把拒绝改成成功 |

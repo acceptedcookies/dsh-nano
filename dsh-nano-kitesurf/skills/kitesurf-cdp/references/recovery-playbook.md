@@ -2,18 +2,20 @@
 
 ## 决策树
 
-1. `GET /nano-local-sandbox/diagnostics` → 读 `hints`。
-2. `lifecycle.phase` 不是 `running` 或引擎不应答 → `POST /nano-local-sandbox/recover {}`；仍不行再 `POST /nano-local-sandbox/lifecycle {"action":"start"}`（休眠中则 `resume`）。引擎由沙箱宿主带起，本包不启动容器。
+1. 先读状态工具的 `hints`（agent 受管入口）；有已登录页面时 `GET /nano-local-sandbox/diagnostics` 给全量 hints。
+2. 状态工具给的 phase 不可用或引擎不应答 → 生命周期动作是**用户在工作台沙箱控件的操作**：报告 phase、指引用户起/停/重启所选对象；动作后读状态工具确认 phase 与 `cdp` 就绪。agent 无生命周期写工具，本包不启动容器。
 3. `engineMismatch=true` → 不要 attach；`GET /nano-local-sandbox/ports` 看 `effective.httpBase` 并报给维护者。端点由实例 registry 返回，pane 不改址。
-4. 有失败调用 → `GET /operations?errorsOnly=true` 取 errorId → 对照 `GET /diagnostics` 的 `errorCatalog`（或 MCP `sandbox.error_catalog`）。
+4. 有失败调用 → `GET /diagnostics` 的 hints 与 `errorCatalog` 取 errorId（或 MCP `sandbox.error_catalog`）。
 5. 页面 JS 报错 → `GET /console?level=error,exception`；网络失败 `level=network`；导航漂移 `level=navigation`。
-6. **导航成功但画面白/交互死**（SSR 到了、应用 JS 没跑）→ 这是应用层问题不是引擎问题：`GET /console?level=exception,error` 取首个报错、`GET /network?failedOnly=true` 找被拦的 JS chunk/子资源（`x-kitesurf-blocked` 头标原因）；`GET /diagnostics` 的 hints 会把「页面加载但应用异常」直接列出。别 `/recover`——引擎是好的。
+6. **导航成功但画面白/交互死**（SSR 到了、应用 JS 没跑）→ 这是应用层问题不是引擎问题：`GET /console?level=exception,error` 取首个报错、`GET /network?failedOnly=true` 找被拦的 JS chunk/子资源（`x-kitesurf-blocked` 头标原因）；`GET /diagnostics` 的 hints 会把「页面加载但应用异常」直接列出。别重启沙箱——引擎是好的。
 7. 画面与 API 对不上 → `GET /targets` 确认附着页，重 `POST /shot`。
-8. 引擎起不来 → 生命周期归 dsh-nano-local-sandbox，不在本包。
+8. 引擎起不来 → 生命周期归 dsh-nano-local-sandbox（工作台沙箱控件），不在本包。
 9. 要复现 → `POST /evaluate` 注入 `console.log`/改 DOM，再 `/shot` 看效果。
-10. **`/open` 报 `ERR_CONNECTION_REFUSED`/`ERR_NAME_NOT_RESOLVED` 且目标是 localhost 或内网地址** → 容器内地址空间不是宿主的：读 `GET /status` 的 `networking.hostGateway` 把 `localhost:port` 换成 `<hostGateway>:<port>` 再开；宿主 dev 服务必须绑 `0.0.0.0`/`0.0.0.0:port`（仅 `127.0.0.1` 时容器够不到）。
+10. **打开（agent 走打开工具 `{sandboxId,url}`，人走 `/open`）报 `ERR_CONNECTION_REFUSED`/`ERR_NAME_NOT_RESOLVED` 且目标是 localhost 或内网地址** → 容器内地址空间不是宿主的：读 `GET /status` 的 `networking.hostGateway` 把 `localhost:port` 换成 `<hostGateway>:<port>` 再开；宿主 dev 服务必须绑 `0.0.0.0`/`0.0.0.0:port`（仅 `127.0.0.1` 时容器够不到）。
 
 桥健康：`GET http://<host>:<lifecycle.mcpPort>/health`。
+
+11. **本地 http 站在「HTML 原生渲染」下只有骨架、没有样式** → 这是确定行为：预览是保留真实地址的静态投影，`http:` 子资源被按混合内容拦掉，不是站点坏了，也不是要你给 dev server 加 https。看样式用默认的**引擎渲染**；**不要**改用公网隧道或自签证书——那会绕开部署拓扑，属明令禁止。
 
 ## `/selftest`
 
@@ -21,7 +23,7 @@
 
 ## 端口韧性
 
-端口由实例 registry 分配，pane 只读 `/nano-local-sandbox/ports` 的 `effective`/`ports`/`container`。自愈入口是 `POST /nano-local-sandbox/recover {}`；只读诊断 `GET /ports`；MCP 对应 `sandbox.ports`/`sandbox.recovery_plan`。
+端口由实例 registry 分配，pane 只读 `/nano-local-sandbox/ports` 的 `effective`/`ports`/`container`。显式重启是用户在工作台沙箱控件的动作（宿主按 `requestId` 记 operation 并可查 `GET /operations?operationId=<op>`）；agent 侧只做只读诊断 `GET /ports`，MCP 对应 `sandbox.ports`/`sandbox.recovery_plan`。
 
 **关键**：本包不删、不重建容器。端口占用修复由沙箱宿主完成。
 

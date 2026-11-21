@@ -6,8 +6,9 @@ import { hits, readSrc, sourceFiles } from './_lib.mjs'
 test('.nano-toast and .nano-tab are gone from styles and component sources', () => {
   const files = sourceFiles()
   assert.ok(files.length > 0)
-  assert.deepEqual(hits(files, /nano-toast|nano-tab/), [])
-  assert.equal(hits([{ path: 'f.js', text: "className: 'nano-tab'\n.nano-toast {}" }], /nano-toast|nano-tab/).length, 2)
+  const skins = /nano-toast|nano-tab(?![a-z-])/
+  assert.deepEqual(hits(files, skins), [])
+  assert.equal(hits([{ path: 'f.js', text: "className: 'nano-tab'\n.nano-toast {}\n.nano-table {}" }], skins).length, 2)
 })
 
 test('NanoToast renders the host Toast', () => {

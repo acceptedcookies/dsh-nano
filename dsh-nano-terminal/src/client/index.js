@@ -4,13 +4,14 @@
 // intentionally not registered — the native terminal kind stays untouched.
 
 import { createElement as h } from 'react'
-import { NanoTerm, anyLiveTerminals, disposeAllTerminals, requestPaneOpen } from './NanoTerm.jsx'
+import { NanoTerm, SandboxResourcePane, anyLiveTerminals, disposeAllTerminals, requestPaneOpen } from './NanoTerm.jsx'
 import { perf, setTerminalRoot } from './perf.js'
 import { installDevProbe } from './dev-probe.js'
+import { parseSandboxResource } from './sandbox-resource.js'
 
 try { window.__dntModule = 'evaluated' } catch { /* non-browser */ }
 
-export const inject = ['slots', 'commandUi', 'locale', 'sidebarRight', 'sessions', 'shortcuts']
+export const inject = ['slots', 'commandUi', 'locale', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'shortcuts']
 
 const mark = (stage) => {
   try {
@@ -42,6 +43,35 @@ export function apply(ctx) {
   ctx.effect(() => () => disposeAllTerminals(), 'dsh-nano-terminal.disposeAll')
   const zh = () => ctx.locale?.getSnapshot?.().active?.startsWith('zh') ?? false
   const t = (en, cn) => (zh() ? cn : en)
+
+  // dsh-resource://sandbox-terminal/<env>/<sandbox>/<terminal> consumer: the
+  // official resource claim — patterns narrow the candidates, canOpen vetoes
+  // anything off the canonical grammar. Attach goes through the mcp lane
+  // only; there is no local fallback and no openLocal.
+  ctx.effect(() => ctx.sidebarRightTabs.register({
+    id: 'dnt-sandbox-terminal',
+    kind: 'dnt-sandbox-terminal',
+    patterns: ['dsh-resource://sandbox-terminal/**'],
+    canOpen: (address) => parseSandboxResource(address) !== null,
+    multiple: true,
+    keepMounted: true,
+    title: (address) => {
+      const ref = parseSandboxResource(address)
+      return ref ? `sandbox ${ref.terminalId.slice(0, 8)}` : t('sandbox terminal', '沙箱终端')
+    },
+  }), 'dsh-nano-terminal.sandboxResourceTabs')
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
+    { name: 'sidebar.right.pane.tab', key: 'dnt-sandbox-terminal' },
+    (props) => h(SandboxResourcePane, {
+      address: props.useTabInfo?.().tab?.navigation?.address,
+      sessionId: props.sessionId,
+      zh: zh(),
+    }),
+  )), 'dsh-nano-terminal.sandboxResourceBody')
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
+    { name: 'sidebar.right.pane.tab.title', key: 'dnt-sandbox-terminal' },
+    function SandboxTerminalTitle() { return t('sandbox terminal', '沙箱终端') },
+  )), 'dsh-nano-terminal.sandboxResourceTitle')
 
   const ProfiledNanoTerm = perf.profiler(NanoTerm)
   const Body = (props) => {

@@ -1,20 +1,20 @@
 ---
 name: nano-kite
-description: Start, resume, suspend, or restart the Kitesurf engine through the sandbox host. Use when the user types /nano-kite.
+description: Guide the user to run Kitesurf engine lifecycle actions in the workbench sandbox controls. Use when the user types /nano-kite.
 version: 0.1.0
-date: 2026-11-19
+date: 2026-11-21
 user-invocable: true
 ---
 
 # nano-kite
 
-Session skill: engine lifecycle through the sandbox host. `POST /nano-local-sandbox/lifecycle` with `{ "action" }`; live values are `GET /nano-local-sandbox/status` under `lifecycle`. Drive pages with `/kitesurf-cdp` and the top-level `cdp` from `/status`. Do not launch Chrome.
+Session skill: the Kitesurf engine lifecycle is a **user action in the workbench** — agents have no lifecycle write tool. When the user types /nano-kite, do not drive the engine yourself; read the object's state and guide the user. Do not launch Chrome.
 
-- `start` — create/start the env container and bring the engine up. Idempotent; a healthy instance is adopted, not recreated.
-- `resume` — only from `suspended`. The page does not come back with it; re-open after.
-- `suspend` — only from `running`. THIS DROPS THE PAGE TO about:blank — anything the user was viewing is gone. Warn before suspending.
-- `restart` — restart the instance. Same page-loss warning.
+## How to handle /nano-kite
 
-The endpoint is reported by the instance registry as `lifecycle.httpBase`/`lifecycle.mcpPort` and is read-only for the pane. The engine must already be running — this package never launches it. Bring-up/repair lives in dsh-nano-local-sandbox (`POST /nano-local-sandbox/recover`).
+1. **对象**：用户没指明对象就用宿主的列表工具列出可见对象并询问——即使只有一个候选也要问。
+2. **读状态**：对用户确认的 `sandboxId` 调状态工具，读 `phase`（以及 relay 地址 `cdp`）。phase 不是可用态或引擎不应答，就是生命周期动作的时机。
+3. **指引用户在工作台操作**：告诉用户在 [dsh工作台] 沙箱控件对所选对象执行相应生命周期动作（起/停/重启）。agent 没有生命周期写工具——不要借人的 cookie 调宿主路由、不要自己凑参数代做。停/重启会把页面打回 about:blank——提醒用户正在看的内容会丢。
+4. **动作之后**：再用状态工具确认 phase 与 `cdp` 就绪，然后才按 `/kitesurf-cdp` 开页与 attach。
 
-A wrong phase or action is a 409 from the host: read `lifecycle.phase` and choose an action that fits. MCP bridge: `ws://<host>:<lifecycle.mcpPort>/mcp`; each text frame carries one complete JSON-RPC message — no trailing `\n` is needed (the bridge tolerates `\n` for batch frames). Full route/error detail: see `/kitesurf-cdp` references and `GET /nano-local-sandbox/diagnostics`.
+MCP bridge framing (if you ever open the bridge socket yourself): each text frame carries one complete JSON-RPC message — no trailing `\n` is needed (the bridge tolerates `\n` for batch frames). Full route/error detail: see `/kitesurf-cdp` references and `GET /nano-local-sandbox/diagnostics`.

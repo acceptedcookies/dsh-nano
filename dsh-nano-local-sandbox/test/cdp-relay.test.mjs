@@ -318,3 +318,66 @@ test('frame decoder enforces maxFrame', () => {
   decode(maskedTextFrame('this payload is far longer than eight bytes'))
   assert.equal(closed, true)
 })
+
+// T-O-63: while humanHold is active, an agent-class relay connection gets only
+// the read whitelist; everything else answers kitesurf.control.held, is
+// recorded on lastAction, and never moves relay.lastAt. A host-class
+// connection is never gated.
+test('T-O-63: humanHold gates agent-class relay writes, not the host class or reads', async () => {
+  const { makeControl } = await import('../profiles/kitesurf/mcp-bridge.mjs')
+  const upstream = await fakeUpstream({
+    'Target.getTargets': () => ({ targetInfos: [{ targetId: 'PAGE-1', type: 'page', url: 'https://example.com/' }] }),
+    'DOM.getDocument': () => ({ root: { nodeId: 1 } }),
+    'Page.navigate': () => ({ frameId: 'F1' }),
+  })
+  try {
+    const control = makeControl()
+    control.humanHold = { active: true, owner: 'human', since: 't0', note: 'takeover' }
+    const relay = makeCdpRelay({ upstreamUrl: `ws://127.0.0.1:${upstream.port}/devtools/browser`, debug: false, control })
+    const agent = fakeClientSocket()
+    const host = fakeClientSocket()
+    await relay.handle(agent)                 // no klass → agent-class
+    await relay.handle(host, 'host')          // generation credential at handshake → host-class
+
+    // relay.conns counts agent-class only.
+    assert.equal(relay.agentStats().conns, 1)
+    assert.equal(relay.clients.size, 2)
+
+    // Whitelisted read passes for the agent even during the hold.
+    agent.sendFrame(JSON.stringify({ id: 1, method: 'DOM.getDocument', params: { depth: 1 } }))
+    const read = await agent.nextMessage()
+    assert.equal(read.result.root.nodeId, 1)
+    assert.equal(upstream.seen.filter((m) => m.method === 'DOM.getDocument').length, 1)
+
+    // Mutating methods are refused in-band, never reach upstream, and do not
+    // move relay.lastAt — but DO record lastAction (the refusal itself is the
+    // pane-visible action, per T-O-63).
+    for (const [id, method] of [[2, 'Page.navigate'], [3, 'Runtime.evaluate'], [4, 'Input.dispatchMouseEvent'], [5, 'Target.createTarget']]) {
+      agent.sendFrame(JSON.stringify({ id, method, params: { url: 'https://evil.example/' } }))
+      const reply = await agent.nextMessage()
+      assert.equal(reply.id, id)
+      assert.equal(reply.error.data.errorId, 'kitesurf.control.held', `${method} must be held-refused`)
+    }
+    assert.equal(upstream.seen.filter((m) => m.method === 'Page.navigate').length, 0)
+    assert.equal(upstream.seen.filter((m) => m.method === 'Runtime.evaluate').length, 0)
+    assert.equal(control.lastAction.ok, false)
+    const stats = relay.agentStats()
+    assert.equal(stats.lastMethod, 'DOM.getDocument', 'lastMethod names only the last ADMITTED command')
+    assert.notEqual(stats.lastAt, null)
+
+    // Host-class writes sail through the same hold.
+    host.sendFrame(JSON.stringify({ id: 7, method: 'Page.navigate', params: { url: 'https://pane.example/' } }))
+    const hostReply = await host.nextMessage()
+    assert.equal(hostReply.id, 7)
+    assert.equal(hostReply.result.frameId, 'F1')
+    assert.equal(upstream.seen.filter((m) => m.method === 'Page.navigate').length, 1)
+
+    // Dropping the host socket leaves the agent count untouched; dropping the
+    // agent frees it.
+    agent.emit('close')
+    await new Promise((r) => setTimeout(r, 10))
+    assert.equal(relay.agentStats().conns, 0)
+  } finally {
+    upstream.teardown()
+  }
+})

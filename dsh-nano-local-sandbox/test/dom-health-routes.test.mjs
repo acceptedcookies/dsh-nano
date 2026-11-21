@@ -47,14 +47,17 @@ function depsWith(overrides = {}) {
     session: { phase: 'running', history: [{ url: 'https://example.com/p' }], containerName: 'kitesurf-dev', httpBase: 'http://127.0.0.1:8800' },
     backend: {
       async inspect() {
+        // No bridge publication in the default fixture: wherever the bridge
+        // is not under test it must fail deterministically ("no bridge
+        // port"), never probe a possibly-live local port.
         return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [
           { containerPort: 8787, hostAddress: '127.0.0.1', hostPort: 8800 },
-          { containerPort: 8791, hostAddress: '127.0.0.1', hostPort: 8801 },
         ] } }]) }
       },
     },
     env: { DSH_HOME: '/tmp/.dsh-dev' },
     connect: async () => fakeClient(),
+    httpProbe: () => true,
     prepareTimeoutMs: 0,
     ...overrides,
   }
@@ -69,7 +72,11 @@ test('/dom returns a sanitized srcdoc, not just a url', async () => {
   assert.equal(typeof result.body.srcdoc, 'string')
   assert.equal(result.body.srcdoc.includes('<script'), false)
   assert.equal(result.body.srcdoc.includes('onclick'), false)
+  // Base is the page's real URL — the /res proxy is retired (T-O-66): the
+  // projection keeps real addresses and never rewrites onto a same-origin
+  // resource path.
   assert.equal(result.body.srcdoc.includes('<base href="https://example.com/p">'), true)
+  assert.equal(result.body.srcdoc.includes('/nano-local-sandbox/res'), false)
   assert.equal(result.body.stripped.scripts, 1)
   assert.equal(result.body.stripped.handlers, 1)
   assert.equal(result.body.bytes > 0, true)

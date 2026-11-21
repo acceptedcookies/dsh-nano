@@ -31,6 +31,9 @@ function indexTable(table, plugin) {
     }
     byPath.set(row.path, {
       path: row.path,
+      // 'prefix' rows match a whole subtree; the guard registers them with the
+      // matching webServer kind instead of forcing every route to be exact.
+      match: row.match === "prefix" ? "prefix" : "exact",
       methods,
       sensitivity: row.sensitivity,
       capability: row.capability,
@@ -168,7 +171,8 @@ function createGuard({ table, plugin, observe } = {}) {
           emitHttp(observe, t0, { ...identity, outcome: "failed", status: 500 });
         }
       };
-      const register = () => ctx.get("webServer").register({ kind: ROUTE_KIND, path: spec.path, handler });
+      const kind = row.match === "prefix" ? "prefix" : ROUTE_KIND;
+      const register = () => ctx.get("webServer").register({ kind, path: spec.path, handler });
       if (typeof ctx.effect === "function") {
         disposers.push(ctx.effect(register, `route-guard: ${spec.path}`));
       } else {

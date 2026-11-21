@@ -12,7 +12,7 @@ import { ensureReady } from '../src/host/profile-registry.js'
 import { acceptUpgrade, routeSpecs } from '../src/host/routes.js'
 import { registerRoutes } from '../lib/route-guard.js'
 import { BINDING_TABLE } from '../lib/bindings.js'
-import { createTermSession } from '../src/host/terminal-driver.js'
+import { appendTermAudit } from '../src/host/terminal-driver.js'
 import { profileFixture } from './support/profile-fixture.mjs'
 import { createMcpHandler } from '../../dsh-nano-terminal/lib/mcp.js'
 
@@ -192,10 +192,10 @@ test('term.session.create does not create audit.jsonl', async () => {
   assert.equal(Object.hasOwn(reply.result.structuredContent.attach, 'path'), false)
   assert.equal(readdirSync(dir).includes('audit.jsonl'), false)
   assert.equal(readdirSync(dir).includes('term.audit'), false)
-  const audit = []
+  // The managed owner records opens through its own audit sink; the only
+  // legacy file helper left is appendTermAudit, invoked explicitly.
   const auditFile = join(dir, 'term.audit')
-  createTermSession({ cols: 80, rows: 24, sessionId: 'sess-a' }, audit, 'ws://127.0.0.1/term?session=a', auditFile)
-  assert.equal(audit.length >= 1, true)
+  appendTermAudit(auditFile, { op: 'open', id: 'sess-a' })
   assert.equal(readFileSync(auditFile, 'utf8').includes('"op":"open"'), true)
   assert.equal(CLOSED, 3)
 })

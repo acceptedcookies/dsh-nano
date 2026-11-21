@@ -101,11 +101,21 @@ export function assertRuntime(manifest, deps = {}) {
 }
 
 export function mounts(manifest, deps, stateDir) {
+  // Legacy arg adapter: only the unmanaged create path speaks raw --mount
+  // strings; the managed path consumes the neutral tuples directly.
+  return managedMounts(manifest, deps, stateDir).map((mount) => ({
+    arg: mount.type === 'tmpfs'
+      ? `type=tmpfs,target=${mount.target}`
+      : `type=virtiofs,source=${mount.source},target=${mount.target}${mount.readOnly ? ',readonly' : ''}`,
+  }))
+}
+
+export function managedMounts(manifest, deps, stateDir) {
   const runtime = assertRuntime(manifest, deps)
   mkdirSync(stateDir, { recursive: true })
   return [
-    { arg: `type=virtiofs,source=${runtime},target=/opt/kitesurf,readonly` },
-    { arg: 'type=tmpfs,target=/opt/kitesurf/packages/engine/.wrangler' },
-    { arg: `type=virtiofs,source=${stateDir},target=/var/lib/kitesurf-state` },
+    { type: 'bind', source: runtime, target: '/opt/kitesurf', readOnly: true },
+    { type: 'tmpfs', source: null, target: '/opt/kitesurf/packages/engine/.wrangler', readOnly: false },
+    { type: 'bind', source: stateDir, target: '/var/lib/kitesurf-state', readOnly: false },
   ]
 }

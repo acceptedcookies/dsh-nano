@@ -34,6 +34,14 @@ test('thirteen methods; NVX rejects all but capabilities with the internal code'
   })
   const nvx = createNvxBackend(fixture)
   assert.deepEqual(Object.keys(apple.capabilities()).sort(), Object.keys(nvx.capabilities()).sort())
+  // The rejecting provider advertises honestly: every capability is false,
+  // including the nested exec.stdin flag and object-shaped leaves whose
+  // members are all false (bridge.credential).
+  const allFalse = (value) => value === false || (value && typeof value === 'object' && Object.values(value).every(allFalse))
+  for (const [name, value] of Object.entries(nvx.capabilities())) {
+    if (name === 'exec') assert.equal(value.stdin, false, 'exec.stdin')
+    else assert.equal(allFalse(value), true, name)
+  }
   for (const method of BACKEND_METHODS) {
     if (method === 'capabilities') {
       assert.equal(typeof nvx.capabilities(), 'object')

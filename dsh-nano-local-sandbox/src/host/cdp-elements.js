@@ -1,5 +1,6 @@
 /** Per-session CDP reader. The socket hangs off the session object, not a module global. */
 import { errorCode } from './error-catalog.js'
+import { WebSocket as NodeWebSocket } from 'ws'
 
 /**
  * The page-level session is cached on the client: this pin's TargetInfo rows
@@ -464,7 +465,10 @@ async function acquireClient(session, httpBase, connect) {
   if (session.cdp) resetClient(session)
   session.console = session.console || []
   session.network = session.network || []
-  const client = connect.length >= 2 ? await connect(httpBase, {}) : await connect(httpBase)
+  if (connect === connectCdp && !session.bridgeBase) throw new Error('verified CDP bridge publication unavailable')
+  const client = connect === connectCdp
+    ? await connect(httpBase, { relayUrl: `${session.bridgeBase.replace(/^http/, 'ws')}/cdp`, relayToken: session.relayToken || undefined })
+    : await connect(httpBase, {})
   client.__session = session
   session.cdp = client
   client.probedAt = Date.now()
@@ -565,26 +569,35 @@ async function acquireClient(session, httpBase, connect) {
 }
 
 /** Optional transport and budgets are a local test seam, not an HTTP setting. */
-export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket, timeouts = {}, relayUrl } = {}) {
-  const budgets = { ...CDP_TIMEOUTS, ...timeouts }
-  // The service's /cdp relay multiplexes every downstream client onto ONE
-  // upstream socket — the only way another client and this socket share the
-  // same page (the engine makes every connection own a private page). Connect
-  // to the relay first; a service without the relay falls back to the direct
-  // socket. The relay lives on the bridge port, declared as the engine port + 1
-  // by every profile that ships one.
-  const direct = `${String(httpBase).replace(/^http/, 'ws')}/devtools/browser`
-  const relay = relayUrl ?? `${String(httpBase).replace(/^http/, 'ws').replace(/:(\d+)(\/|$)/, (m, port, tail) => `:${Number(port) + 1}${tail}`)}/cdp`
-  const urls = relay ? [relay, direct] : [direct]
-  return tryUrls(urls, 0)
+/**
+ * Production relay transport: the generation credential rides a request
+ * header. A requested subprotocol would have to be selected by the bridge's
+ * 101, which it deliberately never does, so WHATWG WebSocket would abort the
+ * handshake (T-O-63). Exported so the header shape is unit-testable without a
+ * socket.
+ */
+export function relaySocket(wsUrl, token, { WebSocket: NodeWS = NodeWebSocket } = {}) {
+  return new NodeWS(wsUrl, [], { headers: { 'x-dnls-relay-credential': token } })
+}
 
-  function tryUrls(list, index) {
-    return openSocket(list[index], index === 0 && list.length > 1 ? 'relay' : 'direct')
-      .catch((error) => (index + 1 < list.length ? tryUrls(list, index + 1) : Promise.reject(error)))
-  }
+export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket, timeouts = {}, relayUrl, relayToken, relayTransport = relaySocket } = {}) {
+  const budgets = { ...CDP_TIMEOUTS, ...timeouts }
+  // A failed shared-page relay must not silently open a different page.
+  const direct = `${String(httpBase).replace(/^http/, 'ws')}/devtools/browser`
+  return openSocket(relayUrl || direct, relayUrl ? 'relay' : 'direct')
 
   function openSocket(wsUrl, via) {
-    const ws = new Socket(wsUrl)
+    // T-O-63: the host proves itself to the bridge with the current
+    // generation credential at the relay handshake. A requested subprotocol
+    // must be selected by the 101, and the bridge deliberately echoes none,
+    // so the production transport presents the token as a request header via
+    // `ws`. Injected sockets (tests, fixtures) keep the subprotocol seam.
+    const production = Socket === globalThis.WebSocket
+    const ws = relayToken
+      ? (production
+        ? relayTransport(wsUrl, relayToken)
+        : new Socket(wsUrl, [`dnls-relay.${relayToken}`]))
+      : new Socket(wsUrl)
   let next = 1
   const navigations = new Set()
   const navIntents = new Map() // command id -> url the caller asked for

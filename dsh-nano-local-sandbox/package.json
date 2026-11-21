@@ -1,7 +1,7 @@
 {
   "name": "dsh-nano-local-sandbox",
   "version": "0.1.0",
-  "description": "Local sandbox host for session-scoped containers. macOS Apple container is the only backend that runs; consumers do not build or start containers.",
+  "description": "Environment-owned local sandboxes and terminals with explicit object selection on macOS.",
   "type": "module",
   "icon": "./icon.svg",
   "main": "./index.js",
@@ -13,7 +13,8 @@
     ".": "./index.js",
     "./icon": "./icon.svg",
     "./locale/*.json": "./locale/*.json",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": "./lib/client.js"
   },
   "files": [
     "index.js",
@@ -24,6 +25,7 @@
     "src/host",
     "profiles/kitesurf",
     "profiles/terminal",
+    "lib/client.js",
     "lib/route-guard.js",
     "lib/bindings.js",
     "lib/perf-review-host.js"
@@ -34,11 +36,24 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-locale"
+      ]
     }
   },
   "devDependencies": {
     "dsh-host-route-guard": "file:../packages/dsh-host-route-guard",
     "dsh-performance-review": "file:../packages/dsh-performance-review",
-    "esbuild": "0.25.0"
+    "esbuild": "0.25.0",
+    "dsh-nano-ui": "file:../packages/dsh-nano-ui"
+  },
+  "dependencies": {
+    "ws": "8.21.3"
   }
 }

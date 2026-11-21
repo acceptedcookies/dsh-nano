@@ -100,6 +100,9 @@ function indexTable(table, plugin) {
     }
     byPath.set(row.path, {
       path: row.path,
+      // 'prefix' rows match a whole subtree; the guard registers them with the
+      // matching webServer kind instead of forcing every route to be exact.
+      match: row.match === 'prefix' ? 'prefix' : 'exact',
       methods,
       sensitivity: row.sensitivity,
       capability: row.capability,
@@ -294,7 +297,12 @@ export function createGuard({ table, plugin, observe } = {}) {
        * every POST 405'd while ctx.webServer.match() claimed a hit).
        * `ctx.get('webServer')` is the explicit service-read path that resolves
        * the injected, bound instance. Always use it for service resolution. */
-      const register = () => ctx.get('webServer').register({ kind: ROUTE_KIND, path: spec.path, handler })
+      // The ledger row decides the scope: an exact path is one URL, a prefix
+      // row owns its subtree. Keeping the decision in the table (not in the
+      // caller) is what stops a route from being registered with a scope the
+      // ledger never reviewed.
+      const kind = row.match === 'prefix' ? 'prefix' : ROUTE_KIND
+      const register = () => ctx.get('webServer').register({ kind, path: spec.path, handler })
       if (typeof ctx.effect === 'function') {
         disposers.push(ctx.effect(register, `route-guard: ${spec.path}`))
       } else {

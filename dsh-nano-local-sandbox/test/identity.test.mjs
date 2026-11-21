@@ -18,11 +18,19 @@ test('package id, engine range, and file whitelist', () => {
   const patch = readFileSync(join(root, 'cordis.patch.yml'), 'utf8')
   assert.match(patch, /id: nano-local-sandbox/)
   assert.match(patch, /name: dsh-nano-local-sandbox/)
-  assert.deepEqual(Object.keys(pkg.exports).sort(), ['.', './icon', './locale/*.json', './package.json'])
+  assert.deepEqual(Object.keys(pkg.exports).sort(), ['.', './client', './icon', './locale/*.json', './package.json'])
+  assert.equal(pkg.exports['./client'], './lib/client.js')
+  assert.equal(pkg.dsh.client.platform, 'web')
+  assert.deepEqual(pkg.dsh.client.inject, [
+    '@deepseek-ai/dsh-client-ui-layout',
+    '@deepseek-ai/dsh-client-ui-sidebar-right',
+    '@deepseek-ai/dsh-client-ui-primitives',
+    '@deepseek-ai/dsh-client-locale',
+  ])
 })
 
-test('inject is exactly the five host services', () => {
-  assert.deepEqual(inject, ['webServer', 'connection', 'sandboxPolicy', 'sandbox', 'sessions'])
+test('inject is exactly the six host services', () => {
+  assert.deepEqual(inject, ['webServer', 'connection', 'sandboxPolicy', 'sandbox', 'sessions', 'tools'])
   const source = readFileSync(join(root, 'index.js'), 'utf8')
   assert.equal(source.includes('ctx.webServer.register'), false)
   assert.equal(typeof apply, 'function')

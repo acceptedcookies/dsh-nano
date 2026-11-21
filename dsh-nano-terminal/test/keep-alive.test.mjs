@@ -51,10 +51,11 @@ test('KA-1 unmount cleanup does not close the pane', () => {
     'function closePaneSession(rec) {',
     'closePaneSession(rec)',
     "}) === 'release') closePaneSession(rec)",
+    'for (const rec of paneSessions.current.values()) closePaneSession(rec)',
   ])
-  assert.equal(sites.length, 5)
+  assert.equal(sites.length, 6)
   const extra = src.replace('const schedulePaint = () => {', 'const schedulePaint = () => { closePaneSession(rec);')
-  assert.equal(closeSites(extra).length, 6)
+  assert.equal(closeSites(extra).length, 7)
 })
 
 test('KA-1 release stays on close and plugin unload only', () => {

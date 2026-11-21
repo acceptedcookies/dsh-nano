@@ -8,8 +8,7 @@
 |---|---|
 | `GET /nano-local-sandbox/diagnostics` | 一击全量诊断（console/network/operations/history 各取尾部，无 limit 参数——`?limit=` 会被忽略） |
 | `GET /nano-local-sandbox/diagnostics?catalog=1` | 附带 DNLS 的错误目录（id→status→cause→next） |
-| `GET /nano-local-sandbox/operations?errorsOnly=true` | 只看失败的调用（errorId + 耗时 + 输入摘要） |
-| `POST /nano-local-sandbox/operations {"clear":true}` | 清空操作 trace |
+| `GET /nano-local-sandbox/operations?sandboxId=<id>&operationId=<op>` | 只读单个 lifecycle operation 文档（dnls.control/1）；旧的 errorsOnly/clear trace 面已退役 |
 | `GET /nano-local-sandbox/console?level=error,exception` | 页面 console.error / 未捕获异常 / 网络失败 |
 | `GET /nano-local-sandbox/console?level=navigation` | 页面导航轨迹（漂移排查） |
 | `POST /nano-local-sandbox/console {"clear":true}` | 清空 console 环形缓冲 |
@@ -22,9 +21,9 @@ console 采集走 DNLS 自己那条 CDP socket 的 `Runtime.consoleAPICalled` / 
 
 ## 状态模型（务必记住）
 
-面板、`GET /status`、`/operations`、`lifecycle.phase` 都读的是**同一个宿主进程状态**，不是各自独立的副本。宿主重启清空 console/操作环形缓冲与 perf 样本，并把引擎共享页打回 `about:blank`。`/status` 在引擎 down 时 HTTP 仍是 **200**，必须读 body 的 `ok`；`buildId`/`engineAlive` 确认「我到底在跟哪份代码说话」。`lifecycle.phase` 的 `start`/`resume`/`suspend`/`restart` 与阶段必须匹配；阶段错是 409，不是引擎故障。
+面板、`GET /status`、`/diagnostics`、`lifecycle.phase` 都读的是**同一个宿主进程状态**，不是各自独立的副本。宿主重启清空 console/操作环形缓冲与 perf 样本，并把引擎共享页打回 `about:blank`。`/status` 在引擎 down 时 HTTP 仍是 **200**，必须读 body 的 `ok`；`buildId`/`engineAlive` 确认「我到底在跟哪份代码说话」。`lifecycle` 的 `start`/`stop`/`restart`/`recreate` 与阶段必须匹配；阶段错是 409，不是引擎故障。
 
-**实例按 session 记录**：`sandbox.instance.ensure` 返回 per-session `instanceId` 与 `policyFingerprint`；物理容器是 env 容器，页面、CDP socket 与 history 在同一 env 容器内共享。`profile.list` 的 `scope: session` 只指记录与策略指纹隔离。
+**共享 env 容器**：页面、CDP socket 与 history 在同一 env 容器内共享——同一对象上人的 pane 与你 attach 的页面是同一页，写前确认在预期页。
 
 **双宿主 push**：desktop 与 dev profile 可指向同一容器 bridge。桥做 writer 选举——引擎 owner 的诊断独占，peer 的 push 不覆盖。`GET http://<host>:<lifecycle.mcpPort>/diagnostics` 是桥侧最后落地的 payload。
 
@@ -55,7 +54,6 @@ console 采集走 DNLS 自己那条 CDP socket 的 `Runtime.consoleAPICalled` / 
 | `/history delta` | 只能 `-1`/`+1` | 输入 400 |
 | `/evaluate expression` | ≤2000 字符；awaitPromise；结果 ≤4000 字符 | 输入 400 |
 | `/console limit`/`level` | limit 1..400；level 逗号分隔 | 输入 400 |
-| `/operations limit` | 1..200 | 输入 400 |
 | `/snapshot maxNodes` | 1..500 | 默认 120 |
 | body | 多数 4096B；edit 8192B | body 超限 413 |
 

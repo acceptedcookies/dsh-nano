@@ -149,6 +149,8 @@
 | `NANO_LAYER` 与间距刻度 | §4 |
 | `icon(name)` / `iconMarkup(glyph, weight)` | 图标门面，名称对 catalog 校验 |
 | `VERSION` | 产物里以 `dsh-nano-ui@<版本>` 注释出现，可检索 |
+| `PanelLayout` / `PanelSection` / `FactGrid` | 通用滚动面板骨架、分节标题与事实格；宿主没有语义化面板布局（[DNLS] 首个使用方） |
+| `Card` / `SplitRow` / `Meter` / `PlainTable` | 宿主没有带边框的事实卡、左标签右控件的行、用量细条和数据表。卡片只是 layer-2 表面，不带标题条 |
 
 ## 7. 宿主接口（解码结论）
 
@@ -214,13 +216,19 @@ U5 只覆盖上面三种模式。宿主 `data-*` 属性被当作样式钩子或�
 
 | 位置 | 缺口说明 |
 |---|---|
+| `dsh-nano-local-sandbox/src/client/shell.jsx`（`ShellToggle` / `.dnls-shell-toggle`） | 工作台外壳（T-O-69 归消费方）顶栏的抽屉切换钮：宿主 `Button` 没有「图标+文字、28px、markdown-tag 底、按下混色」这一颗；度量照 [DNK] `.nks-nav-toggle` |
+| `dsh-nano-local-sandbox/src/client/shell.jsx`（`DrawerRow` / `.dnls-drawer-row`） | 竖排沙箱抽屉的行：宿主 `Button` 不能排「状态点 + 单行截断名称 + 次行读数」，`SegmentedControl` 只做互斥选择且不带次行；度量照 [DNK] `.nks-nav-tab` |
+| `dsh-nano-local-sandbox/src/client/shell.jsx`（`StatusBar` / `.dnls-statusbar-btn`） | 26px 底部状态条里上拉终端坞的 20px 文字按钮：宿主 `Button` 最小档 28px，没有对应档；度量照 [DNK] `.nks-status button` |
+| `dsh-nano-local-sandbox/src/client/history.jsx`（`HistoryLine`） | 宿主及 nano-ui 没有可保留分钟缺样、且不把缺样画成零的历史折线。仅折线使用 SVG，文字与控件不在 SVG 内。 |
 | `dsh-nano-model-selector/src/client/styles.js`（`.nms-trigger-label` / `.nms-trigger-effort` / `.nms-trigger-icon`） | 读 `--dsh-composer-model-text-display` / `--dsh-composer-model-icon-display`：宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts`），不是 `--dsw` 令牌，catalog 不收录，U1 照报（`T20`） |
 | `dsh-nano-explorer-extra/src/client/format.js`（`formatBytes`） | 宿主 `fileSizeText` 输出不等价：不加空格、1024 进制套十进制单位名（`1.0KB`）、最高 GB、对 0/NaN 无兜底；本包状态栏读 `1 KiB`，替换会改掉全部体积文案 |
 | `dsh-nano-explorer-extra/src/client/styles.js`（`.nxe-git-alert`） | 宿主 `Toast` 到 `holdMs` 自动结束，没有「常驻到用户关闭」的形态；Git 读取失败提示必须常驻，故由本包自绘 |
+| `dsh-nano-explorer-extra/src/client/styles.js`（`.nxe-commit-reveal`） | 宿主与 nano-ui 都没有「固定高度展开的 disclosure」；grid-rows 过渡是本包自有布局，内部控件仍是 `IconButton` 加令牌 |
 | `dsh-nano-notepad/src/client/icons.js`（`googleIcon` / `textIcon` / `WIN_MIN_ICON` / `MAC_MIN_ICON` / `MAC_MAX_ICON` / `WIN_MAX_ICON` / `WIN_RESTORE_ICON`） | sprite 没有排版字形（段落 / H1–H3 / 粗体 / 斜体 / 删除线 / 有序列表 / 引用）与窗口按钮字形（最小化 / 最大化 / 还原 / macOS 交通灯），也没有 `Icon*` 的对应导出；且工具条与标题栏由 innerHTML 同步构建，宿主 `Icon*` React 组件无法在其中渲染 |
 | `dsh-nano-notepad/src/client/panel.js:925`（`setShortcut` 的悬浮提示） | 宿主 `Tooltip` 只接受**单个** React 子元素并 clone 后挂 handler / `aria-describedby`；启动器与工具条按钮是 innerHTML 串，且在挂载前要被读回几何做定位与拖拽，无法交给 React 持有，故改用原生 `title` + `aria-label` + `aria-keyshortcuts` |
 | `dsh-nano-notepad/src/client/panel.js`（`.np-tabs` / `.np-tab` / `.np-tab-btn` / `.np-tab-name` / `.np-tab-x` / `.np-tabs-spacer` / `.np-close-tabs`） | 宿主没有可关闭的文档页签条：`SegmentedControl` 只做选择，nano-ui `nanoTabs` 只切面板，都不提供「打开 / 关闭文档 + 拖动窗口」的页签；故页签条由本包自绘 |
 | `dsh-nano-notepad/src/client/panel.js`（`.np-fx-tag` / `.np-fx-tag-x`） | fx composer 的引用 chip 是可移除令牌：innerHTML 列表 + 一个委托删除处理器；宿主 `Tag` 在 `catalog/primitives.json` 只登记导出名、没有公开 props，无法从 HTML 串挂上移除键，故 chip 由本包自绘 |
 | `dsh-nano-terminal/src/client/NanoTerm.jsx`（`.dnt-bar-btn` / `.dnt-header .dnt-toolbtn`，9 个原生 `<button>`） | 宿主 `Button` 最小档 28px（size md/sm），状态条 24px 与窗格头 20px 图标密度没有对应档；9 个按钮保留原生实现（`P3-03`） |
 | `dsh-nano-kitesurf/src/client/index.js`（`.nks-nav-tabs` / `.nks-nav-tab` / `.nks-nav-tab-url` / `.nks-nav-tab-count` / `.nks-nav-tab-x`） | 宿主没有可关闭的文档页签条：`SegmentedControl` 只能表达互斥选中，不能逐项关闭、不能带每项打开次数计数，也不接受每行前置图标；这些行是可关闭的浏览记录页签，故由本包自绘 |
+| `dsh-nano-kitesurf/src/client/index.js`（`.nks-spin`） | 宿主 primitives 与 nano-ui 都没有不确定进度 spinner，故用 token 色环自绘 |
 | `dsh-nano-progress-report/src/client/styles.js`（`.npr-progress` / `.npr-progress-fill`） | 宿主与 nano-ui 都没有进度条 / meter primitive；Tasks 头部需要 Devin 式的 `done/total` 细条，故按 §2 令牌自绘（轨道 `border-l3`、填充 `state-business-primary`） |

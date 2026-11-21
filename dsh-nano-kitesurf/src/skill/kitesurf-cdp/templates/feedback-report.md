@@ -17,7 +17,7 @@
 ## 诊断摘录
 - `/diagnostics` 的 `hints`：
 - `/console?level=error,exception` 尾部：
-- `/operations?errorsOnly=true`：
+- `/diagnostics` 的 `errorCatalog` 对照：
 
 ## 元素上下文（若涉及点选）
 - `/pick` 应答元素包摘要（selector / ref / box / stack）：

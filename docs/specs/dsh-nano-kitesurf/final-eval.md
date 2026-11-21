@@ -1,3 +1,5 @@
+> 冻结指针（2026-11-20）：现状判断以 [DNLS03-extra 问答](../../dsh-nano-local-sandbox/qna/DNLS03-extra-qna.md) §1 与 [补充阶段 S1–S6 跟踪](../../dsh-nano-local-sandbox/plan/todo.DNLS03.md) 为准；本文件正文保留为历史记录，不回改。
+
 # DNK vs ego-browser — 升级后全面对比评估（dsh 插件生态内）
 
 > 评估环境：`dsh-dev.local`（`DSH_HOME=~/.dsh-dev`，profile `web`）。ego-browser 走 `ego-browser nodejs` + `taskSpace`/`task.page`/`page.fetch`；DNK 走 `/nano-local-sandbox/*` 路由 + MCP 桥 `:8799`。全部实测，非推断。

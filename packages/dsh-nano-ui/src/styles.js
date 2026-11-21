@@ -78,4 +78,46 @@ ${LAYER_CSS}
 .nano-window-floating { position: fixed; z-index: var(--nano-layer-window); }
 .nano-window-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .nano-window-body { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+/* Generic panel skeleton (§6.3): scrollable layout, sections, fact grid. */
+.nano-panel { box-sizing: border-box; block-size: 100%; min-block-size: 0; overflow: auto;
+  padding: var(--nano-space-3); color: var(--dsw-alias-label-primary); overflow-wrap: anywhere;
+  font: var(--dsw-font-s-14); }
+.nano-panes > .nano-toolbar { flex: none; flex-wrap: wrap; font: var(--dsw-font-xs-13); }
+.nano-panel-header, .nano-panel-section { display: grid; gap: var(--nano-space-2); margin-block-end: var(--nano-space-3); }
+.nano-panel-header h2, .nano-panel-section h3 { margin: 0; font: var(--dsw-font-s-14); font-weight: 500; }
+.nano-panel-header p { margin: 0; color: var(--dsw-alias-label-secondary); }
+.nano-panel-kicker { font-size: var(--nano-desc-size, inherit); }
+.nano-panel-section { padding-block: var(--nano-space-2); font: var(--dsw-font-s-14); }
+.nano-panel-section > p { margin: 0; }
+.nano-panel th { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.nano-panel-section > pre { min-inline-size: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.nano-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--nano-space-2); margin: 0; }
+.nano-facts dt { color: var(--dsw-alias-label-secondary); }
+.nano-facts dd { margin: 0; font-weight: 500; }
+/* Card surface for a fact block. Host has no bordered card; layer-2 on the base, hairline, radius-lg. */
+.nano-card { box-sizing: border-box; padding: var(--nano-space-3); background: var(--dsw-alias-bg-layer-2);
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); }
+/* Label on the left, control on the right, hairline between rows. */
+.nano-split { display: flex; align-items: center; justify-content: space-between; gap: var(--nano-space-2); min-height: 32px;
+  border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3); }
+.nano-split-label { color: var(--dsw-alias-label-primary); }
+.nano-split-control { flex: none; }
+/* Usage track: 3px rail, fill only when a measurement exists. */
+.nano-meter { display: grid; gap: 4px; }
+.nano-meter-label { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+.nano-meter-track { display: block; height: 3px; background: var(--dsw-alias-border-l3); }
+.nano-meter-fill { display: block; height: 3px; background: var(--dsw-alias-state-business-primary); }
+.nano-table { width: max-content; max-width: 100%; border-collapse: collapse; }
+.nano-table th, .nano-table td { padding: 4px 16px 4px 0; text-align: left; white-space: nowrap; font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-secondary); font-weight: 400; }
+.nano-table th { color: var(--dsw-alias-label-tertiary); border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3); }
+.nano-panel .nano-toolbar { flex-wrap: wrap; }
+.nano-panel .nano-panes { height: auto; }
+.nano-panel .nano-pane { overflow: visible; }
+@media (pointer: coarse) {
+  .nano-panel input,
+  .nano-facts dt,
+  .nano-facts dd { font-size: max(1em, 16px); }
+  .nano-facts dd { font-weight: 500; }
+}
 `

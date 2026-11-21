@@ -1,5 +1,6 @@
 import { spawn, execFile } from 'node:child_process'
 import { assertPublicSpec, capabilityReport } from './backend.js'
+import { decodeAppleObservation } from './apple-evidence.js'
 import { errorCode } from './error-catalog.js'
 
 /**
@@ -21,31 +22,137 @@ function cliError(args, { code, stderr = '', cause = null, timedOut = false } = 
   else if (/no such container|not found|does not exist/i.test(text)) kind = 'not-found'
   else if (/not running|is stopped|already stopped/i.test(text)) kind = 'not-running'
   else if (/already exists|in use|conflict|address already/i.test(text)) kind = 'conflict'
-  const error = new Error(`container ${verb} ${name}: ${timedOut ? 'timed out' : (text || `exit ${code}`)}`)
+  const error = new Error(`container ${verb} ${name}: ${timedOut ? 'timed out' : `exit ${code}`}`)
   error.code = code
   error.cliKind = kind
   error.errorId = timedOut ? errorCode('backend.timeout') : errorCode('backend.cli')
+  // The raw native stderr lines are kept privately for missing-proof
+  // matching; they never go into a public message or JSON payload. Only the
+  // real stderr stream counts — a wrapped "Command failed: …" message must
+  // never be mistaken for it.
+  Object.defineProperty(error, 'nativeStderr', { value: String(stderr || cause?.stderr || '').trim(), enumerable: false })
   if (cause) error.cause = cause
   return error
 }
 
-const CLI_TIMEOUT_MS = Number(process.env.DNLS_CLI_TIMEOUT_MS || 15000)
+/**
+ * Documented absence diagnostics from the Apple container CLI
+ * (ContainerInspect / ContainerLookup). `inspect` treats only a single
+ * diagnostic equal to one of these — for the exact requested name — as
+ * "missing"; everything else is an unknown fault, never an absence.
+ */
+const missingDiagnosticsFor = (name) => [
+  `container not found: ${name}`,
+  `container with ID ${name} not found`,
+]
 
-function run(io, args, { timeoutMs = CLI_TIMEOUT_MS } = {}) {
+/** The debug-build banner the installed CLI prints on stderr before the
+ * real diagnostic. Only this exact fixed line at the very start is
+ * informational; anything else — extra lines, reordering, look-alikes —
+ * keeps the verdict fail-closed. */
+const DEBUG_BANNER = 'Warning! Running debug build. Performance may be degraded.'
+
+function isMissingContainer(error, name) {
+  if (error?.code === 'ENOENT' || error?.cliKind === 'timeout') return false
+  const source = typeof error?.nativeStderr === 'string' && error.nativeStderr !== ''
+    ? error.nativeStderr
+    : (typeof error?.stderr === 'string' ? error.stderr : '')
+  const native = source.trim()
+  if (native === '') return false
+  const lines = native.split('\n')
+  if (lines[0] === DEBUG_BANNER) lines.shift()
+  if (lines.length !== 1) return false
+  const diagnostic = lines[0].replace(/^(?:Error|error|notFound)(?::| )/, '').trim()
+  return missingDiagnosticsFor(name).includes(diagnostic)
+}
+
+const CLI_TIMEOUT_MS = Number(process.env.DNLS_CLI_TIMEOUT_MS || 15000)
+const SESSION_OUTPUT_MAX = 1 << 20
+
+/**
+ * The constant guest probe behind backend.processes (P7). A single fixed
+ * `-c` program: enumerate numeric /proc entries, take pid/comm/state/ppid
+ * from stat (comm may contain spaces or parens — split on the last `)`)
+ * and VmRSS from status. Anything unreadable is skipped, never faked.
+ * Output is pid-sorted `pid\tppid\tstate\tname\trssBytes`, capped before
+ * it ever reaches the CLI. No caller input reaches this string.
+ */
+const PROCESSES_MAX = 201
+// Deployment identity serialized into the guest as env vars: only these
+// two values, validated before they ever touch argv.
+const ENV_ID = /^[a-z0-9][a-z0-9-]{0,31}$/
+const SANDBOX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PROCESSES_PROGRAM = `import os
+rows=[]
+for e in os.listdir("/proc"):
+ if not e.isdigit():continue
+ try:
+  s=open("/proc/"+e+"/stat").read()
+  r=s.rfind(")")
+  t=s[r+2:].split()
+  rss=0
+  for l in open("/proc/"+e+"/status"):
+   if l.startswith("VmRSS:"):rss=int(l.split()[1])*1024;break
+  rows.append((int(s[:s.find("(")]),int(t[1]),t[0],s[s.find("(")+1:r].replace("\\t"," ").replace("\\n"," "),rss))
+ except Exception:pass
+rows.sort()
+for x in rows[:${PROCESSES_MAX}]:print("%d\\t%d\\t%s\\t%s\\t%d"%x)`
+
+/**
+ * Interactive `container exec -i`: the request goes over stdin, the answer
+ * over stdout — typed input never rides argv or CLI logs. `io.execSession`
+ * is the test seam.
+ */
+function runSession(io, args, { input = '', timeoutMs = CLI_TIMEOUT_MS } = {}) {
   io.calls.spawn += 1
-  if (io.spawn) return io.spawn('container', args)
+  if (io.execSession) return io.execSession('container', args, input)
   return new Promise((resolve, reject) => {
-    const child = spawn('container', args, { stdio: 'pipe' })
+    const child = spawn('container', args, { stdio: ['pipe', 'pipe', 'pipe'] })
+    let stdout = ''
     let stderr = ''
+    let capped = false
     const timer = setTimeout(() => {
       try { child.kill('SIGKILL') } catch { /* gone */ }
       reject(cliError(args, { timedOut: true }))
     }, timeoutMs)
+    child.stdout?.on('data', (chunk) => {
+      stdout += chunk
+      if (!capped && Buffer.byteLength(stdout) > SESSION_OUTPUT_MAX) {
+        capped = true
+        try { child.kill('SIGKILL') } catch { /* gone */ }
+      }
+    })
     child.stderr?.on('data', (chunk) => { stderr += chunk })
     child.on('error', (cause) => { clearTimeout(timer); reject(cliError(args, { cause })) })
     child.on('close', (code) => {
       clearTimeout(timer)
-      if (code === 0) resolve({ code })
+      if (code === 0 && !capped) resolve(stdout)
+      else reject(cliError(args, { code: code ?? 1, stderr }))
+    })
+    child.stdin.end(input)
+  })
+}
+
+/** Terminal broker verbs the managed owner may invoke through entry. */
+const TERM_ENTRY_VERBS = new Set(['create', 'rpc'])
+
+function run(io, args, { timeoutMs = CLI_TIMEOUT_MS, command = 'container' } = {}) {
+  io.calls.spawn += 1
+  if (io.spawn) return io.spawn(command, args)
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      try { child.kill('SIGKILL') } catch { /* gone */ }
+    }, timeoutMs)
+    child.stderr?.on('data', (chunk) => { stderr = (stderr + chunk).slice(-8192) })
+    child.on('error', (cause) => { clearTimeout(timer); reject(cliError(args, { cause })) })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (timedOut) reject(cliError(args, { timedOut: true }))
+      else if (code === 0) resolve({ code })
       else reject(cliError(args, { code, stderr }))
     })
   })
@@ -55,9 +162,9 @@ function runFile(io, args, { timeoutMs = CLI_TIMEOUT_MS } = {}) {
   io.calls.spawn += 1
   if (io.execFile) return io.execFile('container', args)
   return new Promise((resolve, reject) => {
-    const child = execFile('container', args, { encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL' }, (error, stdout) => {
+    const child = execFile('container', args, { encoding: 'utf8', timeout: timeoutMs, killSignal: 'SIGKILL' }, (error, stdout, stderr) => {
       if (error) {
-        reject(cliError(args, { code: error.code, stderr: error.stderr, cause: error.killed ? null : error, timedOut: error.killed === true }))
+        reject(cliError(args, { code: error.code, stderr, cause: error.killed ? null : error, timedOut: error.killed === true }))
       }
       else resolve(stdout)
     })
@@ -146,8 +253,21 @@ export function createAppleBackend(spec = {}, io = {}) {
         args.push('--mount', mount.arg)
       }
       for (const port of instance.ports ?? []) args.push('-p', port.publish)
+      if (instance.managedIdentity != null) {
+        const { envId, sandboxId } = instance.managedIdentity
+        if (typeof envId !== 'string' || !ENV_ID.test(envId) ||
+            typeof sandboxId !== 'string' || !SANDBOX_UUID.test(sandboxId)) {
+          throw new Error('invalid managed identity')
+        }
+        args.push('--env', `DNLS_ENV_ID=${envId}`, '--env', `DNLS_SANDBOX_ID=${sandboxId}`)
+      }
       args.push(instance.image)
-      await run(bound, args)
+      if (typeof io.confine !== 'function') throw Object.assign(new Error('host confinement unavailable'), { status: 503 })
+      const confined = await io.confine(['container', ...args])
+      if (!Array.isArray(confined?.argv) || !confined.argv.length || confined.argv[0] === 'container') {
+        throw Object.assign(new Error('host did not confine container creation'), { status: 503 })
+      }
+      await run(bound, confined.argv.slice(1), { command: confined.argv[0] })
       return { id: instance.containerName, started: true }
     },
     async start(name) {
@@ -175,11 +295,109 @@ export function createAppleBackend(spec = {}, io = {}) {
         const stdout = await runFile(bound, ['inspect', name])
         return { raw: stdout ?? '' }
       } catch (error) {
-        // A missing container is a state, not a fault: returning null keeps
-        // "absent → create" distinct from "daemon broken → blocked" upstream.
-        if (error?.cliKind === 'not-found' || /not found|no such container/i.test(error?.message || '')) return null
+        // A missing container is a state, not a fault — but only the
+        // documented absence diagnostic for this exact name is proof.
+        // Anything else (daemon broken, ENOENT, ambiguous output) is an
+        // unknown fault, never an absence.
+        if (isMissingContainer(error, name)) return null
         throw error
       }
+    },
+    /**
+     * Neutral observation for the managed control plane: strict decode of
+     * the raw inspect payload lives in apple-evidence.js — wrong locator,
+     * ≠1 entries, bad creation dates, non-loopback or ambiguous
+     * publications and malformed mounts all yield `null` (unknown), never
+     * "missing" and never a partial proof. `stateTarget` is the profile
+     * driver's trusted guest path for the state volume.
+     */
+    async observe(locator, { stateTarget } = {}) {
+      let raw = null
+      let missing = false
+      try {
+        const stdout = await runFile(bound, ['inspect', locator])
+        raw = stdout ?? ''
+      } catch (error) {
+        if (isMissingContainer(error, locator)) missing = true
+        else throw error
+      }
+      return decodeAppleObservation(raw, locator, { missing, stateTarget })
+    },
+    /**
+     * Neutral usage sample for one exact locator: `{locator,memoryBytes,
+     * cpuUsec}` preserving real zeros, or `null` when the row is absent or
+     * names a different object. Stats decode failures propagate as faults.
+     */
+    async sampleUsage(locator) {
+      const text = await runFile(bound, ['stats', '--no-stream', '--format', 'json', locator])
+      const rows = JSON.parse(text)
+      if (!Array.isArray(rows) || rows.length !== 1 || rows[0]?.id !== locator) return null
+      // No coercion: real 0 stays 0; null/''/false stay null — never a
+      // fabricated zero.
+      const counter = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null
+      return {
+        locator: rows[0].id,
+        memoryBytes: counter(rows[0].memoryUsageBytes),
+        cpuUsec: counter(rows[0].cpuUsageUsec),
+      }
+    },
+    /**
+     * Managed create from a neutral spec: this backend alone formats Apple
+     * CLI arguments (memory, publish tuples, virtiofs/tmpfs mount args) and
+     * then runs the same confined create path as `create`.
+     */
+    async createManaged(spec) {
+      const invalid = (what) => { throw new Error(`createManaged spec invalid: ${what}`) }
+      if (typeof spec?.locator !== 'string' || !spec.locator || /[,\0\r\n]/.test(spec.locator)) invalid('locator')
+      if (typeof spec?.image !== 'string' || !spec.image) invalid('image')
+      const safePath = (value) => typeof value === 'string' && value.length > 0 && !/[,\0\r\n]/.test(value)
+      const mounts = (spec?.mounts ?? []).map((mount) => {
+        if (mount?.type === 'tmpfs') {
+          if (!safePath(mount.target)) invalid('tmpfs target')
+          return { ...mount, arg: `type=tmpfs,target=${mount.target}` }
+        }
+        if (mount?.type === 'bind') {
+          if (!safePath(mount.source) || !safePath(mount.target)) invalid('bind source/target')
+          return { ...mount, arg: `type=virtiofs,source=${mount.source},target=${mount.target}${mount.readOnly ? ',readonly' : ''}` }
+        }
+        invalid(`mount type ${String(mount?.type)}`)
+      })
+      const ports = (spec?.ports ?? []).map((port) => {
+        if (!Number.isInteger(port?.containerPort) || port.containerPort < 1 || port.containerPort > 65535 ||
+            !Number.isInteger(port?.hostPort) || port.hostPort < 1 || port.hostPort > 65535 ||
+            !safePath(port.hostAddress)) invalid('port tuple')
+        const protocol = String(port.protocol ?? 'tcp')
+        if (protocol !== 'tcp' && protocol !== 'udp') invalid(`port protocol ${protocol}`)
+        return { ...port, publish: `${port.hostAddress === '::1' ? '[::1]' : port.hostAddress}:${port.hostPort}:${port.containerPort}/${protocol}` }
+      })
+      const gib = 1024 ** 3
+      const memoryBytes = spec?.resources?.memoryBytes
+      if (!Number.isSafeInteger(memoryBytes) || memoryBytes <= 0 || memoryBytes % (1024 ** 2) !== 0) invalid('memoryBytes')
+      return this.create({
+        containerName: spec.locator,
+        image: spec.image,
+        managedIdentity: spec.managedIdentity,
+        mounts,
+        ports,
+        resources: {
+          cpus: spec?.resources?.cpus,
+          memory: memoryBytes % gib === 0 ? `${memoryBytes / gib}G` : `${memoryBytes / (1024 ** 2)}M`,
+        },
+      })
+    },
+    /**
+     * Read-only image proof: `container image inspect <tag>` must yield
+     * exactly one ImageResource; its `configuration.descriptor.digest` is
+     * the only digest evidence — a tag or repo hash is never equated.
+     */
+    async imageEvidence(tag) {
+      const text = await runFile(bound, ['image', 'inspect', tag])
+      let data
+      try { data = JSON.parse(text) } catch { data = null }
+      if (!Array.isArray(data) || data.length !== 1) return null
+      const digest = data[0]?.configuration?.descriptor?.digest
+      if (typeof digest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(digest)) return null
+      return { tag: String(tag), digest }
     },
     async exec(name, argv) {
       calls.exec += 1
@@ -194,6 +412,114 @@ export function createAppleBackend(spec = {}, io = {}) {
     async stats(name) {
       const text = await runFile(bound, ['stats', '--no-stream', '--format', 'json', name])
       return JSON.parse(text)
+    },
+    /**
+     * Read-only guest process table (P7): one constant program reads
+     * /proc/[0-9]+/stat and /status — never argv, env or caller options.
+     * Returns pid-sorted `{pid,ppid,name,state,rssBytes}` entries, bounded
+     * at PROCESSES_MAX so a caller can still see the table was truncated.
+     */
+    async processes(name) {
+      const text = await runFile(bound, ['exec', name, '/usr/bin/python3', '-I', '-c', PROCESSES_PROGRAM])
+      const out = []
+      for (const line of String(text ?? '').split('\n')) {
+        if (!line.trim()) continue
+        const [pid, ppid, state, pname, rss] = line.split('\t')
+        const entry = {
+          pid: Number(pid), ppid: Number(ppid),
+          state: typeof state === 'string' && state.length === 1 ? state : null,
+          name: typeof pname === 'string' && pname.length > 0 && pname.length <= 64 && !pname.includes('\0') ? pname : null,
+          rssBytes: Number(rss),
+        }
+        if (!Number.isInteger(entry.pid) || entry.pid < 1 || !Number.isInteger(entry.ppid) || entry.ppid < 0 ||
+            entry.state === null || entry.name === null || !Number.isInteger(entry.rssBytes) || entry.rssBytes < 0) {
+          throw cliError(['exec', name], { code: 1, stderr: 'malformed process table row' })
+        }
+        out.push(entry)
+      }
+      out.sort((a, b) => a.pid - b.pid)
+      return out.slice(0, PROCESSES_MAX)
+    },
+    /**
+     * Managed terminal broker control: one JSON request to the baked
+     * `pty-entry.mjs` inside the named container, over stdin/stdout — never
+     * argv, never a shell. `create` spawns the guest worker explicitly;
+     * `rpc` only forwards to an existing socket. This remains the only CLI
+     * call site; no host inputs or credentials reach argv/env/logs.
+     */
+    async terminalRpc(locator, verb, request) {
+      if (!TERM_ENTRY_VERBS.has(verb)) throw new Error(`terminalRpc rejects verb: ${String(verb)}`)
+      const args = [
+        'exec', '-i', '--user', '0:0', '--workdir', '/', locator,
+        '/usr/bin/env', '-i', 'PATH=/usr/local/bin:/usr/bin:/bin',
+        '/usr/local/bin/node', '/opt/dnls/pty-entry.mjs', verb,
+      ]
+      const text = await runSession(bound, args, { input: JSON.stringify(request ?? {}) })
+      const line = String(text).split('\n').find((row) => row.trim())
+      let reply
+      try {
+        reply = JSON.parse(line ?? '{}')
+      } catch {
+        reply = null
+      }
+      // Blank, malformed, or non-{ok:true} replies are never success —
+      // a create must also echo the exact terminalId it was asked for.
+      const bad = () => {
+        const error = new Error(`terminalRpc ${verb}: ${typeof reply?.error === 'string' ? reply.error : 'invalid reply'}`)
+        error.term = reply && typeof reply === 'object' ? reply : undefined
+        return error
+      }
+      if (reply?.ok !== true) throw bad()
+      if (verb === 'create' && reply.terminalId !== request?.terminalId) throw bad()
+      return reply
+    },
+    /**
+     * Authenticated bridge health publication (dnls.control/1): the doc goes
+     * over stdin to the root-baked /opt/dnls/public-health.mjs helper —
+     * never argv, never the published HTTP port, and never the node-writable
+     * /mcp-bridge.mjs path. `env -i` strips the guest environment so Node
+     * options cannot be smuggled in; the guest verifies the deployment IDs
+     * against /proc/1/environ itself. A missing helper is an honest error.
+     */
+    async publishHealth(locator, doc) {
+      const args = [
+        'exec', '-i', '--user', '0:0', '--workdir', '/', locator,
+        '/usr/bin/env', '-i', 'PATH=/usr/local/bin:/usr/bin:/bin',
+        '/usr/local/bin/node', '/opt/dnls/public-health.mjs',
+      ]
+      const text = await runSession(bound, args, { input: JSON.stringify(doc ?? {}) })
+      const line = String(text).split('\n').find((row) => row.trim())
+      let reply
+      try {
+        reply = JSON.parse(line ?? '{}')
+      } catch {
+        reply = null
+      }
+      if (reply?.ok !== true) throw new Error(`publishHealth ${locator}: refused`)
+      return reply
+    },
+    /**
+     * Host→guest relay credential delivery (T-O-63): same privileged pattern
+     * as publishHealth — root helper, stdin, env -i, no argv, no env, no
+     * published-port write. The token never rides argv, logs or replies; a
+     * refused helper is an honest error, never a silent retry.
+     */
+    async deliverBridgeCredential(locator, token) {
+      const args = [
+        'exec', '-i', '--user', '0:0', '--workdir', '/', locator,
+        '/usr/bin/env', '-i', 'PATH=/usr/local/bin:/usr/bin:/bin',
+        '/usr/local/bin/node', '/opt/dnls/relay-credential.mjs',
+      ]
+      const text = await runSession(bound, args, { input: JSON.stringify({ v: 1, token }) })
+      const line = String(text).split('\n').find((row) => row.trim())
+      let reply
+      try {
+        reply = JSON.parse(line ?? '{}')
+      } catch {
+        reply = null
+      }
+      if (reply?.ok !== true) throw new Error(`deliverBridgeCredential ${locator}: refused`)
+      return reply
     },
     /** Remove a container so it can be recreated at a different size. */
     async remove(name) {

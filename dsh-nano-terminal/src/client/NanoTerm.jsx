@@ -12,6 +12,7 @@ import { loadCore, WasmTerm, MODES } from './wasm.js'
 import { TermCanvas, buildPalette } from './render.js'
 import { encodeKey, encodePaste, encodeMouse, encodeFocus, encodeText } from './keys.js'
 import { makeLane } from './lanes.js'
+import { parseSandboxResource, resolveSandboxResource } from './sandbox-resource.js'
 import {
   unmountAction, freezeGap, shouldRepaintNow, createFitCoalescer, noteFit, flushFit, resizeMode, watchDevicePixelRatio,
   applyTerminalOutput, outputDuringGap, paintCurrent, queueFrame,
@@ -251,6 +252,9 @@ const saveLayouts = (() => {
             const addr = rec?.lane?.addr ?? rec?.lane?.id
             const spec = { ...node.laneSpec }
             if (node.laneSpec.lane === 'local' && addr) spec.attach = addr
+            // Managed refs persist only stable identity — the endpoint is
+            // rebuilt from the verified public contract, never from storage.
+            if (spec.contractVersion !== undefined) { delete spec.url; delete spec.attach }
             return { ...node, laneSpec: spec }
           }
           return { ...node, a: graft(node.a), b: graft(node.b) }
@@ -1531,6 +1535,85 @@ function Scrollbar({ status }) {
         height: `${Math.max(12, ratio * 100)}%`,
         top: `${top * (100 - Math.max(12, ratio * 100))}%`,
       }} />
+    </div>
+  )
+}
+
+/**
+ * `dsh-resource://sandbox-terminal/…` tab body. The address is only a hint:
+ * the pane resolves the same-origin public contract, verifies env+sandbox,
+ * then attaches the existing managed terminal through the mcp lane. No split
+ * tree and no local fallback — page teardown detaches via the lane's managed
+ * close, and nothing here persists endpoints or tokens.
+ */
+export function SandboxResourcePane({ address, sessionId, zh }) {
+  const paneSessions = useRef(new Map())
+  const [laneSpec, setLaneSpec] = useState(null)
+  const [problem, setProblem] = useState(null)
+  const [closed, setClosed] = useState(false)
+  const settings = useMemo(() => loadSettings(), [])
+
+  // This tab can mount without the Nano 终端 view, which otherwise owns the
+  // stylesheet and the wasm core load; TermPane needs both.
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.dataset.dntStyles = '1'
+    style.textContent = STYLE
+    document.head.appendChild(style)
+    return () => style.remove()
+  }, [])
+
+  useEffect(() => {
+    setLaneSpec(null)
+    setProblem(null)
+    setClosed(false)
+    if (!address || parseSandboxResource(address) === null) {
+      setProblem({ kind: 'address' })
+      return
+    }
+    let alive = true
+    const abort = new AbortController()
+    const impl = (url, init = {}) => fetch(url, { ...init, signal: abort.signal })
+    Promise.all([resolveSandboxResource(address, impl, location.origin), loadCore()])
+      .then(([spec]) => {
+        if (!alive) return
+        setLaneSpec({ tid: newTermId(), ...spec })
+      })
+      .catch((cause) => { if (alive) setProblem({ kind: 'resolve', cause }) })
+    return () => {
+      alive = false
+      abort.abort()
+      // Tab destruction is detach-only for a managed lane.
+      for (const rec of paneSessions.current.values()) closePaneSession(rec)
+    }
+  }, [address])
+
+  if (!address || problem?.kind === 'address') {
+    return <div className="dnt-root" data-dnt-resource="unavailable">{zh ? '资源地址不可用' : 'resource address unavailable'}</div>
+  }
+  if (problem) {
+    return <div className="dnt-root" data-dnt-resource="unavailable">{zh ? '沙箱终端不可用' : 'sandbox terminal unavailable'}{problem.cause?.message ? ` — ${problem.cause.message}` : ''}</div>
+  }
+  if (closed) {
+    return <div className="dnt-root" data-dnt-resource="detached">{zh ? '终端已分离' : 'terminal detached'}</div>
+  }
+  if (!laneSpec) {
+    return <div className="dnt-root" data-dnt-resource="resolving">{zh ? '正在验证沙箱…' : 'verifying sandbox…'}</div>
+  }
+  return (
+    <div className="dnt-root" data-dnt-resource="sandbox-terminal">
+      <TermPane
+        paneId={`sandbox-${laneSpec.terminalId}`}
+        laneSpec={laneSpec}
+        sessionId={sessionId}
+        focused={true}
+        onFocus={() => {}}
+        onClose={() => setClosed(true)}
+        onSplit={() => setProblem({ kind: 'resolve', cause: new Error(zh ? '此视图不支持分屏' : 'split is not available here') })}
+        paneSessions={paneSessions}
+        zh={zh}
+        settings={settings}
+      />
     </div>
   )
 }

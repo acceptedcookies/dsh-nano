@@ -16,8 +16,17 @@ function harness(t, navigate) {
     if (method === 'Page.navigate') return navigate(params)
     return {}
   } }
-  const session = { phase: 'running', history: [], httpBase: 'http://engine.invalid', cdp: client }
-  const route = routeSpecs({ session, env: { DNLS_STATE_ROOT: home } }).find(row => row.path.endsWith('/open'))
+  const session = { phase: 'running', history: [], cdp: client }
+  const backend = {
+    // A successful /open now needs the engine's actual published tuple;
+    // the session.cdp client is what the route talks to after that proof.
+    async inspect() {
+      return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [
+        { containerPort: 8787, hostPort: 48798, hostAddress: '127.0.0.1' },
+      ] } }]) }
+    },
+  }
+  const route = routeSpecs({ session, env: { DNLS_STATE_ROOT: home }, backend }).find(row => row.path.endsWith('/open'))
   const open = async url => {
     let body
     const res = { statusCode: 0, end(raw) { body = JSON.parse(raw) } }
@@ -87,8 +96,9 @@ function harnessBlocked(t, { bodyText = 'kitesurf: egress timeout after 4000ms',
     if (method === 'Runtime.evaluate') return { result: { value: { url: 'http://dead.invalid/', title: '', readyState: 'complete', root: true, bodyBytes: bodyText.length, bodyText } } }
     return {}
   } }
-  const session = { phase: 'running', history: [], httpBase: 'http://engine.invalid', cdp: client, network }
-  const route = routeSpecs({ session, env: { DNLS_STATE_ROOT: home } }).find(row => row.path.endsWith('/open'))
+  const session = { phase: 'running', history: [], cdp: client, network }
+  const backend = { async inspect() { return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [{ containerPort: 8787, hostPort: 48798, hostAddress: '127.0.0.1' }] } }]) } } }
+  const route = routeSpecs({ session, env: { DNLS_STATE_ROOT: home }, backend }).find(row => row.path.endsWith('/open'))
   const open = async url => {
     let body
     const res = { statusCode: 0, end(raw) { body = JSON.parse(raw) } }
@@ -136,4 +146,50 @@ test('/open hint for an unresolved name points at DNS, not the gateway', async t
   const result = await h.open('https://missing.invalid/')
   assert.equal(result.body.ok, false)
   assert.match(result.body.hint, /域名|DNS/)
+})
+
+test('/open on a known public-tunnel domain attaches the hint on success without changing the status', async t => {
+  const h = harness(t, () => ({ frameId: 'p' }))
+  const result = await h.open('https://cool-site.trycloudflare.com/')
+  assert.equal(result.status, 200)
+  assert.equal(result.body.ok, true)
+  assert.match(result.body.hint, /kitesurf\.navigate\.public-tunnel/)
+  assert.match(result.body.hint, /trycloudflare\.com/)
+  assert.equal(h.session.history.length, 1)
+})
+
+test('/open on a tunnel domain keeps the same hint on failure, status unchanged', async t => {
+  const h = harness(t, () => { throw new Error('Page.navigate timed out') })
+  const result = await h.open('https://demo.ngrok.io/')
+  assert.equal(result.status, 502)
+  assert.equal(result.body.ok, false)
+  assert.equal(result.body.errorId, 'kitesurf.navigate.failed')
+  assert.match(result.body.hint, /kitesurf\.navigate\.public-tunnel/)
+})
+
+test('/open only matches whole tunnel hosts, never a lookalike suffix or prefix', async t => {
+  const h = harness(t, () => ({ frameId: 'p' }))
+  for (const url of ['https://nottrycloudflare.com/', 'https://foo.trycloudflare.com.evil.test/']) {
+    const result = await h.open(url)
+    assert.equal('hint' in result.body, false, `${url} is not a tunnel domain`)
+  }
+})
+
+test('/open on an ordinary host carries no hint on success, and only the error hint on failure', async t => {
+  const h = harness(t, () => ({ frameId: 'p' }))
+  const ok = await h.open('https://archy.studio/')
+  assert.equal(ok.status, 200)
+  assert.equal('hint' in ok.body, false)
+
+  const h2 = harness(t, () => { throw new Error('Page.navigate timed out') })
+  const fail = await h2.open('https://archy.studio/')
+  assert.equal(fail.status, 502)
+  assert.equal(fail.body.hint ?? null, null)
+})
+
+test('the tunnel hint code is registered as a hint row in the kitesurf driver catalog', async () => {
+  const { errorCatalog } = await import('../src/host/error-catalog.js')
+  const row = errorCatalog().find((entry) => entry.example === 'kitesurf.navigate.public-tunnel')
+  assert.ok(row, 'kitesurf.navigate.public-tunnel must be a registered catalog row')
+  assert.equal(row.hint, true)
 })

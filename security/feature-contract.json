@@ -846,6 +846,19 @@
     },
     {
       "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/contract",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/storage",
       "methods": [
         "GET",
@@ -1117,6 +1130,58 @@
         "POST": 65536
       },
       "responseShape": "200 {ok:true,diff|truncated} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/fleet",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "200 {ok:true,envs:[{envId,complete,rows[projection…]}]} | 4xx/5xx {ok:false,error}"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/sandboxes",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "200 {ok:true,envs,rows,total,offset,limit,complete} | 4xx/5xx {ok:false,error}"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/inspect",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "200 {ok:true,<allowlisted projection>,usage?} | 4xx/5xx {ok:false,error}"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/processes",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "200 {ok:true,processes[{pid,ppid,name,state,rssBytes}],truncated,returned} | {ok:false,state:'unknown'|'stopped'|'missing'}"
     }
   ],
   "ui": {

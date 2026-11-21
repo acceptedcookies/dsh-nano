@@ -18,7 +18,7 @@ MCP-over-WS：**每个文本帧一条完整 JSON-RPC**，无 `\n` 终止符（�
 |---|---|
 | `sandbox.diagnostics` | 一击全量诊断（**先调它**，给 `hints`） |
 | `sandbox.console` | 页面 console/exception/network 环形缓冲 |
-| `sandbox.operations` | 每次路由调用 trace（route/status/errorId/耗时） |
+| `sandbox.operations` | 按 `sandboxId`+`operationId` 读/取消单个 lifecycle operation 文档 |
 | `sandbox.error_catalog` | errorId→status→原因→下一步整表 |
 | `sandbox.targets` | 引擎 Target.getTargets（附着页） |
 | `sandbox.history` | 持久浏览历史最近 30 条 |

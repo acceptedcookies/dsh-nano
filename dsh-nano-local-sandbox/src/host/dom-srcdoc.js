@@ -13,6 +13,12 @@
  *    [DNLS]; keeping a second copy there would break 单一真源.
  * What remains is exactly the host concern: sanitize + rebase.
  *
+ * REAL ADDRESSES ONLY (T-O-66): the /res same-origin proxy and its rewriting
+ * are retired. There is exactly one build — <base> is the page's real URL and
+ * every subresource keeps its real address. A local http: page may render
+ * unstyled inside the https pane (mixed content); that is the deterministic
+ * behavior of HTML mode, and the styled surface is the engine render.
+ *
  * Fidelity trade-offs, stated honestly:
  *  - scripts, inline handlers and javascript: URLs are removed — the preview
  *    must never re-run page code;
@@ -56,19 +62,16 @@ export function sanitizeHtml(html) {
 
 /**
  * Build the document the pane's iframe renders.
+ * `base` is the page's real URL; subresource references are untouched.
  * @param {{ url?: string, html?: string }} page
- * @returns {{ srcdoc: string, url: string, bytes: number, stripped: object }}
+ * @returns {{ srcdoc: string, url: string, base: string, bytes: number, stripped: object }}
  */
 export function buildSrcDoc(page) {
   const url = typeof page?.url === 'string' ? page.url : ''
   const { html, stripped } = sanitizeHtml(page?.html)
-  // Rebase every relative asset on the real page URL.
   const head = url ? `<base href="${attr(url)}">` : ''
-  let srcdoc
-  if (/<head[^>]*>/i.test(html)) {
-    srcdoc = html.replace(/<head([^>]*)>/i, `<head$1>${head}`)
-  } else {
-    srcdoc = `<!doctype html><html><head>${head}</head><body>${html}</body></html>`
-  }
-  return { srcdoc, url, bytes: srcdoc.length, stripped }
+  const srcdoc = /<head[^>]*>/i.test(html)
+    ? html.replace(/<head([^>]*)>/i, `<head$1>${head}`)
+    : `<!doctype html><html><head>${head}</head><body>${html}</body></html>`
+  return { srcdoc, url, base: url, bytes: srcdoc.length, stripped }
 }

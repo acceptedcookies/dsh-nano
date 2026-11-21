@@ -13,7 +13,15 @@ function routesFor(session) {
     },
     webServer: { register(route) { routes.push(route); return () => {} } },
   }
-  registerRoutes(ctx, routeSpecs({ session }), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
+  const backend = {
+    // Route consumers now prove the engine face from its published tuple.
+    async inspect() {
+      return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [
+        { containerPort: 8787, hostPort: 48798, hostAddress: '127.0.0.1' },
+      ] } }]) }
+    },
+  }
+  registerRoutes(ctx, routeSpecs({ session, backend }), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
   return Object.fromEntries(routes.map((route) => [route.path, route]))
 }
 
@@ -28,7 +36,7 @@ test('pick, targets, network and har read the session CDP client', async () => {
   const session = {
     phase: 'running',
     history: [],
-    httpBase: 'http://127.0.0.1:8798',
+
     network: [{ id: '1', url: 'https://example.com/', method: 'GET', status: 200, at: '2026-11-14T00:00:00Z' }],
     cdp: {
       listen() { return () => {} },

@@ -30,6 +30,7 @@
 | `lib/route-guard.js` | 路由注册 guard bundle。运行时必需（`index.js` 相对 import） |
 | `lib/bindings.js` | 从仓根 `security/route-sensitivity.json` 按 id 烘焙的绑定表。运行时必需（`index.js` 相对 import） |
 | `lib/subagent-default.js` | 子代理默认模型的读写和「是否仍是父级路由」判断。运行时必需（`index.js` 相对 import） |
+| `lib/account-pin.js` | 当前会话的 magpie 账号钉选。运行时必需（`index.js` 相对 import） |
 | `lib/client.js` | 浏览器包。运行时必需。安装时不重建 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 | `src/` | 作者树。已有上面的 `lib/` 时安装不需要它 |
@@ -111,6 +112,7 @@ media-engine.json 里的显式选择
 | GET | `/nano-model-selector/media-engine` | `{ engine, explicit }`。`explicit: false` 表示自动挑选，未持久化 |
 | PUT | `/nano-model-selector/media-engine` | 正文 `{"engine":"<key>"}`。写入状态文件并重注册 `imagine`。正文上限 16384 字节 |
 | GET/PUT | `/nano-model-selector/subagent-default` | 子代理默认模型。GET `{ok,policy}`。PUT `action` 为 `enable`（provider+model，可选 reasoningEffort）、`disable`（保留组合但不再套用）或 `reset`（删除文件）。正文上限 16384 字节 |
+| GET/PUT | `/nano-model-selector/account-pin` | 当前会话的 magpie 账号。GET `?sessionId=` 返回该会话已钉的上游；`discover=1&models=` 向当前 profile 的 `cordis.patch.yml`（没有则 `settings.yaml`）里配置的 magpie 网关询问显示名。PUT `{sessionId,upstream,account}`，`account` 为 `null` 时清除。不写登录凭证。没钉的会话不发送 `X-Magpie-Account` |
 | GET | `/nano-model-selector/perf-review/host` | 只读全进程性能视图。只接受 `since`；`mode` 和其他参数返回 400，不排空 |
 
 ## 配置与状态

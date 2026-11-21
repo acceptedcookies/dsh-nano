@@ -659,6 +659,23 @@
       "match": "exact"
     },
     {
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/account-pin",
+      "methods": [
+        "GET",
+        "HEAD",
+        "PUT"
+      ],
+      "sensitivity": "L2",
+      "capability": "write:host",
+      "bodyLimit": 16384,
+      "sessionBinding": true,
+      "justification": "dsh-nano-model-selector/index.js — GET reads plugins/nano-model-selector/account-pins.json for one session and, when discover=1, asks the configured magpie gateway which display names serve the named models. PUT sets or clears one upstream pin for that session. No login secret is stored or returned.",
+      "id": "dnms.account-pin",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
       "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/status",
       "methods": [

@@ -2186,16 +2186,20 @@ ${LAYER_CSS}
         setTerms({ denied: true });
         return;
       }
+      if (!running) {
+        setTerms({ list: [] });
+        return;
+      }
       try {
         const out = await api.terminalList(sandboxId);
         if (ok()) setTerms({ list: out.terminals });
       } catch (caught) {
         if (ok()) setTerms(caught?.status === 403 ? { denied: true } : { error: caught });
       }
-    }, [sandboxId]);
+    }, [sandboxId, running]);
     import_react13.default.useEffect(() => {
       if (tab === "terminals") loadTerms();
-    }, [tab, sandboxId, refreshKey, tick]);
+    }, [tab, sandboxId, running, refreshKey, tick]);
     import_react13.default.useEffect(() => {
       if (tab !== "services" || !running || !supports("dnls.control")) return;
       const ok = take("control");

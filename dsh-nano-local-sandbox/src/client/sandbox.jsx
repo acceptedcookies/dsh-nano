@@ -388,17 +388,19 @@ export function SandboxView({
   const loadTerms = React.useCallback(async () => {
     const ok = take('terms')
     if (!supports('term.session.list')) { setTerms({ denied: true }); return }
+    // Shells live only in a running container; the host answers 503 otherwise.
+    if (!running) { setTerms({ list: [] }); return }
     try {
       const out = await api.terminalList(sandboxId)
       if (ok()) setTerms({ list: out.terminals })
     } catch (caught) {
       if (ok()) setTerms(caught?.status === 403 ? { denied: true } : { error: caught })
     }
-  }, [sandboxId])
+  }, [sandboxId, running])
 
   React.useEffect(() => {
     if (tab === 'terminals') loadTerms()
-  }, [tab, sandboxId, refreshKey, tick])
+  }, [tab, sandboxId, running, refreshKey, tick])
 
   React.useEffect(() => {
     if (tab !== 'services' || !running || !supports('dnls.control')) return

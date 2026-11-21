@@ -1,41 +1,48 @@
 /** Sandbox list: what exists, whether it runs and what it uses, without opening anything. */
 import React from 'react'
 import {
-  Button, DisclosureRow, StateDot, IconPlusOutlineRegular, IconRefreshOutlineRegular,
+  Button, StateDot, IconPlusOutlineRegular, IconRefreshOutlineRegular,
   IconEllipsisOutlineRegular, PluginArtworkDefault,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, IconButton, Toolbar } from 'dsh-nano-ui'
 import { createTicket } from './managed.js'
 import { fill } from './i18n.js'
 import { DOT, needsAttention, nameOf, rowMeta, stateText } from './model.js'
-import { ErrorLine, Muted, ReceiptList, Section, UsageCharts, WindowControl } from './parts.jsx'
+import { ErrorLine, Group, Muted, ReceiptList, Section, UsageCharts, WindowControl } from './parts.jsx'
 
 const h = React.createElement
 
 function SandboxRow({ copy, row, busy, supports, onOpen, onMenu, onStart }) {
   const stopped = row.observedState === 'stopped'
-  return h(DisclosureRow, {
-    icon: h(StateDot, { state: DOT[row.observedState] ?? 'idle' }),
-    title: h('span', { className: 'dnls-row-copy' },
-      h('span', { className: 'dnls-row-name' },
-        h('span', null, nameOf(row)),
-        h('span', { className: 'dnls-row-state' }, stateText(copy, row.observedState))),
-      h('span', { className: 'dnls-row-meta' }, rowMeta(copy, row))),
-    open: false,
-    expandable: true,
-    expandOnRowClick: true,
-    previewChevron: false,
-    onToggle: () => onOpen(row),
-    headerAccessory: h('span', { className: 'dnls-row-tail' },
-      stopped && supports('sandbox.instance.start')
-        ? h(Button, { variant: 'outline', size: 'sm', disabled: busy, onClick: () => onStart(row) }, copy.action.start)
-        : null,
-      h(IconButton, {
-        icon: h(IconEllipsisOutlineRegular, { size: 16 }),
-        'aria-label': `${copy.more} · ${nameOf(row)}`,
-        onClick: (event) => onMenu(event, row),
-      })),
-  })
+  const own = (event) => event.target === event.currentTarget
+  return h('div', {
+    className: 'dnls-row',
+    role: 'button',
+    tabIndex: 0,
+    'aria-label': `${nameOf(row)} · ${stateText(copy, row.observedState)}`,
+    onClick: () => onOpen(row),
+    onKeyDown: (event) => {
+      if (!own(event) || (event.key !== 'Enter' && event.key !== ' ')) return
+      event.preventDefault()
+      onOpen(row)
+    },
+  },
+  h(StateDot, { state: DOT[row.observedState] ?? 'idle' }),
+  h('span', { className: 'dnls-row-copy' },
+    h('span', { className: 'dnls-row-name' },
+      h('span', null, nameOf(row)),
+      h('span', { className: 'dnls-row-state' }, stateText(copy, row.observedState))),
+    h('span', { className: 'dnls-row-meta' }, rowMeta(copy, row))),
+  // Row actions must not also open the row.
+  h('span', { className: 'dnls-row-tail', onClick: (event) => event.stopPropagation(), onKeyDown: (event) => event.stopPropagation() },
+    stopped && supports('sandbox.instance.start')
+      ? h(Button, { variant: 'outline', size: 'sm', disabled: busy, onClick: () => onStart(row) }, copy.action.start)
+      : null,
+    h(IconButton, {
+      icon: h(IconEllipsisOutlineRegular, { size: 16 }),
+      'aria-label': `${copy.more} · ${nameOf(row)}`,
+      onClick: (event) => onMenu(event, row),
+    })))
 }
 
 export function FleetView({
@@ -89,7 +96,7 @@ export function FleetView({
     })
   } else {
     body = h(React.Fragment, null,
-      h('div', { className: 'dnls-list', 'data-dnls-list': '1' },
+      h('div', { className: 'dnls-group dnls-rows', 'data-dnls-list': '1' },
         list.map((row) => h(SandboxRow, { key: row.sandboxId, copy, row, busy, supports, onOpen, onMenu, onStart }))),
       !complete ? h(Muted, null, copy.listPartial) : null,
       supports('sandbox.inspect') ? h(Section, {
@@ -119,7 +126,7 @@ export function FleetView({
     h('div', { className: 'dnls-scroll' },
       rows ? h(ErrorLine, { error }) : null,
       recent.length > 0
-        ? h(Section, { title: copy.receipts }, h(ReceiptList, { copy, receipts: recent, onRecheck, showName: true }))
+        ? h(Section, { title: copy.receipts }, h(Group, null, h(ReceiptList, { copy, receipts: recent, onRecheck, showName: true })))
         : null,
       body),
     rows && list.length > 0 ? h('footer', { className: 'dnls-foot' },

@@ -11,14 +11,16 @@ import { fill } from './i18n.js'
 import { formatBytes, serviceAddress } from './format.js'
 import { sandboxAddress, terminalAddress } from '../host/terminal-resource.js'
 import {
-  DOT, OP_DOT, actionText, cores, nameOf, opText, pendingRevision, ratio, shortId, sizeLine, stateText, when, whole,
+  DOT, OP_DOT, actionText, cores, nameOf, opText, pendingRevision, ratio, shortId, sizeLine, stateText, stepText, when, whole,
 } from './model.js'
-import { ErrorLine, Muted, ReceiptList, Section, StateMinutes, UsageCharts, WindowControl } from './parts.jsx'
+import { ErrorLine, Group, Muted, ReceiptList, Section, StateMinutes, UsageCharts, WindowControl } from './parts.jsx'
 
 const h = React.createElement
 const PLANES = ['container', 'engine', 'bridge', 'page', 'dom', 'terminal']
 const HEALTH_TONE = { healthy: 'success', unhealthy: 'danger' }
 const DANGER = 'nano-modal-action nano-modal-danger'
+// Engine logs carry terminal colour codes that a code block would print literally.
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g
 
 function useTickets() {
   const ref = React.useRef(null)
@@ -85,18 +87,18 @@ function MonitorTab({ copy, target, detail, running, usageWindow, setUsageWindow
             h('td', null, formatBytes(proc.rssBytes) ?? copy.none)))),
         procs.truncated ? h(Muted, null, fill(copy.processesTruncated, { n: sortedProcs.length })) : null)),
     h(Section, { title: copy.deployment },
-      detail == null ? h(Muted, null, copy.loading) : h(React.Fragment, null,
+      detail == null ? h(Muted, null, copy.loading) : h(Group, null,
         h(SplitRow, { label: copy.imageDigest },
           typeof detail.applied?.imageDigest === 'string'
             ? h('span', { className: 'dnls-mono', title: detail.applied.imageDigest }, detail.applied.imageDigest.slice(0, 19))
             : copy.none),
         h(SplitRow, { label: copy.verifiedAt }, when(copy, detail.applied?.verifiedAt) ?? copy.none),
         h(SplitRow, { label: copy.observed }, when(copy, detail.observedAt) ?? copy.none))),
-    Array.isArray(detail?.mounts) && detail.mounts.length > 0 ? h(Section, { title: copy.storage },
+    Array.isArray(detail?.mounts) && detail.mounts.length > 0 ? h(Section, { title: copy.storage }, h(Group, null,
       detail.mounts.map((mount, index) => h(SplitRow, {
         key: `${mount.target}:${index}`,
         label: h('span', { className: 'dnls-mono' }, mount.target ?? copy.none),
-      }, `${mount.type ?? ''} · ${mount.readOnly ? copy.readOnly : copy.readWrite}`))) : null)
+      }, `${mount.type ?? ''} · ${mount.readOnly ? copy.readOnly : copy.readWrite}`)))) : null)
 }
 
 /* ── terminals ───────────────────────────────────────────────────────── */
@@ -109,27 +111,28 @@ function TerminalsTab({ copy, host, terms, running, busy, canCreate, canClose, o
   else if (terms.error) body = h(ErrorLine, { error: terms.error })
   else if (list.length === 0) body = h(Muted, null, running ? copy.terminalsEmpty : copy.terminalsStopped)
   else {
-    body = list.map((term) => {
+    body = h(Group, null, list.map((term) => {
       const handlers = typeof term.address === 'string' ? handlersFor(host, term.address) : []
       return h(SplitRow, {
         key: term.terminalId,
         label: h('span', { className: 'dnls-term' },
           h(StateDot, { state: term.state === 'active' ? 'done' : 'idle' }),
           h('span', { className: 'dnls-mono' }, fill(copy.terminalLabel, { id: shortId(term.terminalId) })),
-          term.state ? h(Tag, { tone: 'neutral' }, term.state) : null),
+          term.state ? h(Tag, { tone: 'neutral' }, copy.termState[term.state] ?? term.state) : null),
       }, h('span', { className: 'dnls-inline' },
-        handlers.length === 0
+        term.state !== 'active' ? null
+        : handlers.length === 0
           ? h('span', { className: 'dnls-muted' }, copy.terminalUnavailable)
           : handlers.map((handler, index) => h(Button, {
             key: index, variant: 'ghost', size: 'sm', onClick: () => onOpen(term),
           }, handlers.length === 1 ? copy.terminalOpen : fill(copy.openIn, { name: handlerTitle(handler, term.address, copy.none) }))),
-        canClose ? h(IconButton, {
+        canClose && term.state !== 'ended' ? h(IconButton, {
           icon: h(IconTrashOutlineRegular, { size: 16 }),
           'aria-label': `${copy.terminalClose} ${shortId(term.terminalId)}`,
           disabled: busy,
           onClick: () => onClose(term),
         }) : null))
-    })
+    }))
   }
   return h(Section, {
     title: copy.terminals,
@@ -158,7 +161,7 @@ function ServicesTab({ copy, detail, running, probe, control, canProbe, canContr
     h(Section, { title: copy.services },
       detail == null ? h(Muted, null, copy.loading)
       : services.length === 0 ? h(Muted, null, copy.servicesEmpty)
-      : services.map((service) => {
+      : h(Group, null, services.map((service) => {
         const address = serviceAddress(service)
         const role = service.role && service.role !== service.serviceId ? `${service.role} · ` : ''
         return h(SplitRow, {
@@ -168,10 +171,11 @@ function ServicesTab({ copy, detail, running, probe, control, canProbe, canContr
             h('span', { className: 'dnls-row-meta' }, `${role}${service.containerPort ?? copy.none}/${service.protocol ?? 'tcp'}`)),
         }, h('span', { className: 'dnls-inline' },
           address ? h('span', { className: 'dnls-mono' }, address) : h('span', { className: 'dnls-muted' }, copy.unpublished),
-          h(Tag, { tone: HEALTH_TONE[service.health] ?? 'neutral' }, copy.health[service.health] ?? copy.health.unknown)))
-      })),
+          // Only a recorded verdict earns a tag; live state is the probe below.
+          HEALTH_TONE[service.health] ? h(Tag, { tone: HEALTH_TONE[service.health] }, copy.health[service.health]) : null))
+      }))),
     canProbe ? h(Section, {
-      title: copy.probe,
+      title: copy.probeTitle,
       aside: h(Button, { variant: 'outline', size: 'sm', disabled: !running || probe?.busy, onClick: onProbe },
         probe?.busy ? copy.probing : copy.probe),
     },
@@ -182,25 +186,25 @@ function ServicesTab({ copy, detail, running, probe, control, canProbe, canContr
         h(Tag, { tone: status.healthy ? 'success' : 'danger' },
           status.healthy ? copy.probeHealthy : fill(copy.probeDegraded, { planes: degraded.map((p) => copy.plane[p] ?? p).join(', ') })),
         h('span', { className: 'dnls-muted' }, fill(copy.probeAt, { at: when(copy, status.observedAt) ?? copy.none }))),
-      PLANES.filter((key) => status.planes?.[key]).map((key) => {
+      h(Group, null, PLANES.filter((key) => status.planes?.[key]).map((key) => {
         const plane = status.planes[key]
         return h(SplitRow, {
           key,
           label: h('span', { className: 'dnls-term' }, h(StateDot, { state: planeDot(plane) }), copy.plane[key] ?? key),
-        }, h('span', { className: 'dnls-muted' }, plane.skipped ? copy.planeSkipped : (plane.state ?? copy.none)))
-      }))
+        }, h('span', { className: 'dnls-muted' }, plane.skipped ? copy.planeSkipped : (copy.planeState[plane.state] ?? plane.state ?? copy.none)))
+      })))
     : null) : null,
     canControl ? h(Section, { title: copy.manualControl },
       control?.error ? h(ErrorLine, { error: control.error })
       : control?.state == null ? h(Muted, null, running ? copy.loading : copy.probeStopped)
-      : h(SplitRow, {
+      : h(Group, null, h(SplitRow, {
         label: h('span', { className: 'dnls-term' },
           h(StateDot, { state: control.state.humanHold?.active ? 'warning' : 'done' }),
           control.state.humanHold?.active ? copy.manualHeld : copy.manualFree),
       }, h(Button, {
         variant: 'outline', size: 'sm', disabled: busy || control.busy,
         onClick: () => onControl(control.state.humanHold?.active ? 'release' : 'takeover'),
-      }, control.state.humanHold?.active ? copy.release : copy.takeover))) : null)
+      }, control.state.humanHold?.active ? copy.release : copy.takeover)))) : null)
 }
 
 /* ── logs ────────────────────────────────────────────────────────────── */
@@ -222,7 +226,14 @@ function LogsTab({ copy, running, logs, onTail, onReload }) {
   : logs.text == null ? h(Muted, null, copy.loading)
   : logs.text.trim() === '' ? h(Muted, null, copy.logsEmpty)
   : h('div', { className: 'dnls-log' },
-    h(CodeBlock, { code: logs.text.replace(/\n$/, ''), lang: 'text', copyLabel: copy.copy, copiedLabel: copy.copied })))
+    h(CodeBlock, {
+      code: logs.text.replace(ANSI, '').replace(/\n$/, ''),
+      lang: 'text',
+      wrap: true,
+      copyLabel: copy.copy,
+      copiedLabel: copy.copied,
+      toolbarLabels: { codeLabel: fill(copy.logsTail, { n: logs.tail }), wrapLabel: copy.wrapOn, unwrapLabel: copy.wrapOff },
+    })))
 }
 
 /* ── activity ────────────────────────────────────────────────────────── */
@@ -231,7 +242,7 @@ function ActivityTab({ copy, detail, receipts, lookup, setLookup, onLookup, onRe
   const operations = Array.isArray(detail?.operations) ? [...detail.operations].reverse() : []
   return h(React.Fragment, null,
     receipts.length > 0 ? h(Section, { title: copy.receipts },
-      h(ReceiptList, { copy, receipts, onRecheck }),
+      h(Group, null, h(ReceiptList, { copy, receipts, onRecheck })),
       h(Muted, null, copy.receiptHint)) : null,
     h(Section, { title: copy.lookup },
       h('div', { className: 'dnls-inline' },
@@ -244,53 +255,50 @@ function ActivityTab({ copy, detail, receipts, lookup, setLookup, onLookup, onRe
           })),
         h(Button, { variant: 'outline', size: 'sm', disabled: lookup.busy || lookup.text.trim() === '', onClick: onLookup }, copy.lookupGo)),
       lookup.error ? h(ErrorLine, { error: lookup.error }) : null,
-      lookup.result ? h(SplitRow, {
+      lookup.result ? h(Group, null, h(SplitRow, {
         label: h('span', { className: 'dnls-term' },
           h(StateDot, { state: OP_DOT[lookup.result.state] ?? 'idle' }),
           fill(copy.receiptLine, { action: actionText(copy, lookup.result.action), state: opText(copy, lookup.result.state) })),
-      }, h('span', { className: 'dnls-muted' }, [lookup.result.step, when(copy, lookup.result.finishedAt ?? lookup.result.at)].filter(Boolean).join(' · '))) : null),
+      }, h('span', { className: 'dnls-muted' }, [stepText(copy, lookup.result.step), when(copy, lookup.result.finishedAt ?? lookup.result.at)].filter(Boolean).join(' · ')))) : null),
     h(Section, { title: copy.history },
       detail == null ? h(Muted, null, copy.loading)
       : operations.length === 0 ? h(Muted, null, copy.historyEmpty)
-      : operations.map((op, index) => h(SplitRow, {
+      : h(Group, null, operations.map((op, index) => h(SplitRow, {
         key: `${op.action}:${op.at ?? index}`,
         label: h('span', { className: 'dnls-term' },
           h(StateDot, { state: OP_DOT[op.state] ?? 'idle' }),
           fill(copy.receiptLine, { action: actionText(copy, op.action), state: opText(copy, op.state) })),
-      }, h('span', { className: 'dnls-muted' }, when(copy, op.finishedAt ?? op.at) ?? copy.none)))))
+      }, h('span', { className: 'dnls-muted' }, when(copy, op.finishedAt ?? op.at) ?? copy.none))))))
 }
 
 /* ── settings ────────────────────────────────────────────────────────── */
 
 function SettingsTab({ copy, target, detail, running, busy, supports, draft, setDraft, onAction, onSaveIdle, onSaveResources }) {
   const configuration = detail?.configuration
-  const field = (key, label) => h('span', { className: 'dnls-narrow' }, h(Input, {
+  const field = (key, label) => h(Input, {
     value: draft[key], 'aria-label': label, inputMode: 'numeric',
     onChange: (event) => setDraft({ ...draft, [key]: event.target.value, message: null }),
-  }))
+  })
+  const num = (key, label) => h('span', { className: 'dnls-num' }, field(key, label))
+  const labelled = (label, value) => h('span', { className: 'dnls-label' },
+    h('span', null, label), h('span', { className: 'dnls-muted' }, fill(copy.current, { value })))
   if (detail == null) return h(Muted, null, copy.loading)
   return h(React.Fragment, null,
-    h(Section, { title: copy.power },
+    h(Section, { title: copy.power }, h(Group, null,
       running
         ? h(SplitRow, { label: copy.powerState }, h(Button, { variant: 'outline', size: 'sm', disabled: busy || !supports('sandbox.instance.stop'), onClick: () => onAction('stop') }, copy.action.stop))
         : h(SplitRow, { label: copy.powerState }, h(Button, { variant: 'primary', size: 'sm', disabled: busy || !supports('sandbox.instance.start'), onClick: () => onAction('start') }, copy.action.start)),
       running ? h(SplitRow, { label: copy.restartRow },
         h(Button, { variant: 'outline', size: 'sm', disabled: busy || !supports('sandbox.instance.restart'), onClick: () => onAction('restart') }, copy.action.restart)) : null,
-      configuration && supports('sandbox.idle.configure') ? h(SplitRow, { label: copy.idleMinutes },
+      configuration && supports('sandbox.idle.configure') ? h(SplitRow, { label: labelled(copy.idleMinutes, idleText(copy, configuration)) },
         h('span', { className: 'dnls-inline' },
-          h('span', { className: 'dnls-muted' }, idleText(copy, configuration)),
-          field('idle', copy.idleMinutes),
-          h(Button, { variant: 'outline', size: 'sm', disabled: busy, onClick: onSaveIdle }, copy.save))) : null),
+          num('idle', copy.idleMinutes),
+          h(Button, { variant: 'outline', size: 'sm', disabled: busy, onClick: onSaveIdle }, copy.save))) : null)),
     configuration && supports('sandbox.revision.save') ? h(Section, { title: copy.resources },
       h(Muted, null, copy.resourcesHint),
-      h(SplitRow, { label: copy.cpus },
-        h('span', { className: 'dnls-inline' },
-          h('span', { className: 'dnls-muted' }, fill(copy.current, { value: target.resources?.cpus ?? copy.none })),
-          field('cpus', copy.cpus))),
-      h(SplitRow, { label: copy.memoryMiB },
-        h('span', { className: 'dnls-inline' },
-          h('span', { className: 'dnls-muted' }, fill(copy.current, { value: formatBytes(target.resources?.memoryBytes) ?? copy.none })),
-          field('memory', copy.memoryMiB))),
+      h(Group, null,
+        h(SplitRow, { label: labelled(copy.cpus, target.resources?.cpus ?? copy.none) }, num('cpus', copy.cpus)),
+        h(SplitRow, { label: labelled(copy.memoryMiB, formatBytes(target.resources?.memoryBytes) ?? copy.none) }, num('memory', copy.memoryMiB))),
       h('div', { className: 'dnls-inline' },
         h(Button, { variant: 'primary', size: 'sm', disabled: busy, onClick: onSaveResources }, copy.save),
         pendingRevision(detail) && supports('sandbox.instance.recreate')
@@ -298,11 +306,11 @@ function SettingsTab({ copy, target, detail, running, busy, supports, draft, set
           : null)) : null,
     !configuration ? h(Muted, null, copy.configDenied) : null,
     draft.message ? h(draft.error ? ErrorLine : Muted, draft.error ? { error: draft.message } : null, draft.error ? undefined : draft.message) : null,
-    h(Section, { title: copy.danger },
+    h(Section, { title: copy.danger }, h(Group, null,
       h(SplitRow, { label: copy.recreateRow },
         h(Button, { variant: 'outline', size: 'sm', className: DANGER, disabled: busy || !supports('sandbox.instance.recreate'), onClick: () => onAction('recreate') }, `${copy.action.recreate}…`)),
       h(SplitRow, { label: copy.removeRow },
-        h(Button, { variant: 'outline', size: 'sm', className: DANGER, disabled: busy || !supports('sandbox.instance.remove'), onClick: () => onAction('remove') }, `${copy.action.remove}…`))))
+        h(Button, { variant: 'outline', size: 'sm', className: DANGER, disabled: busy || !supports('sandbox.instance.remove'), onClick: () => onAction('remove') }, `${copy.action.remove}…`)))))
 }
 
 /* ── page ────────────────────────────────────────────────────────────── */
@@ -321,6 +329,7 @@ export function SandboxView({
   const [procs, setProcs] = React.useState(null)
   const [terms, setTerms] = React.useState(null)
   const [closing, setClosing] = React.useState(null)
+  const [closeError, setCloseError] = React.useState(undefined)
   const [probe, setProbe] = React.useState(null)
   const [control, setControl] = React.useState(null)
   const [logs, setLogs] = React.useState({ tail: 100, text: null })
@@ -454,7 +463,10 @@ export function SandboxView({
       await api.terminalClose(sandboxId, term.terminalId)
       setClosing(null)
       await loadTerms()
-    }, setError)
+    }, (caught) => {
+      setCloseError(caught?.status === 503 ? copy.terminalCloseUnavailable : caught?.message ?? String(caught))
+      loadTerms()
+    })
   }
 
   async function runProbe() {
@@ -485,7 +497,7 @@ export function SandboxView({
       const result = await api.readOperation(sandboxId, operationId)
       setLookup({ text: lookup.text, result })
     } catch (caught) {
-      setLookup({ text: lookup.text, error: caught })
+      setLookup({ text: lookup.text, error: caught?.status === 404 ? copy.lookupMissing : caught })
     }
   }
 
@@ -529,7 +541,8 @@ export function SandboxView({
     { value: 'terminals', label: copy.tabTerminals, content: tab === 'terminals' ? h(TerminalsTab, {
       copy, host, terms, running, busy,
       canCreate: supports('term.session.create'), canClose: supports('term.session.close'),
-      onCreate: createTerm, onOpen: openTerm, onClose: setClosing,
+      onCreate: createTerm, onOpen: openTerm,
+      onClose: (term) => { setCloseError(undefined); setClosing(term) },
     }) : null },
     { value: 'services', label: copy.tabServices, content: tab === 'services' ? h(ServicesTab, {
       copy, detail, running, probe, control, busy,
@@ -593,6 +606,7 @@ export function SandboxView({
       confirmLabel: copy.terminalClose,
       danger: true,
       busy,
+      error: closeError,
       onCancel: () => setClosing(null),
       onConfirm: closeTerm,
     }, h('p', { className: 'dnls-muted' }, fill(copy.terminalCloseBody, { id: shortId(closing.terminalId) }))) : null)

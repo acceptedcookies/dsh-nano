@@ -784,6 +784,22 @@ ${LAYER_CSS}
     state: { running: "Running", stopped: "Stopped", failed: "Failed", missing: "Missing", creating: "Creating", starting: "Starting", unknown: "Unknown" },
     opState: { accepted: "accepted", running: "running", succeeded: "succeeded", failed: "failed", indeterminate: "indeterminate", cancelled: "cancelled" },
     action: { create: "Create", start: "Start", stop: "Stop", restart: "Restart", recreate: "Recreate", remove: "Remove" },
+    opStep: {
+      dispatch: "Dispatched",
+      verify: "Verified",
+      already: "Already in that state",
+      cancelled: "Cancelled",
+      authorize: "Not authorized",
+      precheck: "Pre-check",
+      "image-precheck": "Image pre-check",
+      "pre-inspect": "Pre-check observation",
+      "pre-missing": "Container missing",
+      "pre-mismatch": "Object mismatch",
+      "stop-verify": "Stop verification",
+      "remove-precheck": "Removal pre-check",
+      "remove-verify": "Removal verification",
+      "idle-proof-lost": "Idle evidence lost"
+    },
     footRunning: "{running} running \xB7 {stopped} stopped",
     footAttention: "{count} need attention",
     cores: "{n} cores",
@@ -858,7 +874,9 @@ ${LAYER_CSS}
     terminalClose: "Close terminal",
     terminalCloseTitle: "Close terminal",
     terminalCloseBody: "Close terminal {id}? Its shell process ends; output that was not saved is lost.",
+    terminalCloseUnavailable: "The shell did not answer, so closing could not be confirmed. If the sandbox restarted since it opened, the shell is already gone.",
     terminalLabel: "Shell {id}",
+    termState: { pending: "starting", active: "active", ended: "ended", unknown: "unknown" },
     terminalsEmpty: "No terminals are open on this sandbox.",
     terminalsDenied: "Terminals are not available to this principal.",
     terminalsStopped: "Start the sandbox to open a terminal.",
@@ -869,13 +887,33 @@ ${LAYER_CSS}
     servicesEmpty: "This profile declares no services.",
     unpublished: "not published",
     health: { healthy: "healthy", unhealthy: "unhealthy", unknown: "unchecked" },
-    probe: "Run health check",
+    probeTitle: "Live health",
+    probe: "Check now",
     probing: "Checking\u2026",
     probeHealthy: "All planes healthy",
     probeDegraded: "Degraded: {planes}",
     probeAt: "Checked {at}",
     probeStopped: "Start the sandbox to check its engine.",
     plane: { container: "Container", engine: "Engine", page: "Page", dom: "DOM", bridge: "Bridge", terminal: "Terminal" },
+    planeState: {
+      running: "running",
+      stopped: "stopped",
+      missing: "missing",
+      unknown: "unknown",
+      cdp: "CDP ready",
+      "http-only": "HTTP only",
+      down: "down",
+      up: "up",
+      none: "no page",
+      blank: "blank page",
+      open: "page open",
+      ready: "ready",
+      failed: "failed",
+      absent: "none",
+      listening: "listening",
+      "policy-stale": "policy stale"
+    },
+    logsTail: "Last {n} lines",
     planeSkipped: "skipped",
     manualControl: "Manual control",
     manualHeld: "Held by an operator",
@@ -889,6 +927,8 @@ ${LAYER_CSS}
     logsStopped: "Logs are read from the running container.",
     copy: "Copy",
     copied: "Copied",
+    wrapOn: "Wrap lines",
+    wrapOff: "Unwrap lines",
     // activity
     receipts: "Requests from this page",
     receiptLine: "{action} \xB7 {state}",
@@ -898,6 +938,7 @@ ${LAYER_CSS}
     lookup: "Look up an operation",
     lookupPlaceholder: "Operation id",
     lookupGo: "Look up",
+    lookupMissing: "No operation with this id on this sandbox.",
     history: "Operation history",
     historyEmpty: "No operations recorded yet.",
     // settings
@@ -957,6 +998,22 @@ ${LAYER_CSS}
     state: { running: "\u8FD0\u884C\u4E2D", stopped: "\u5DF2\u505C\u6B62", failed: "\u5931\u8D25", missing: "\u7F3A\u5931", creating: "\u521B\u5EFA\u4E2D", starting: "\u542F\u52A8\u4E2D", unknown: "\u672A\u77E5" },
     opState: { accepted: "\u5DF2\u53D7\u7406", running: "\u6267\u884C\u4E2D", succeeded: "\u6210\u529F", failed: "\u5931\u8D25", indeterminate: "\u7ED3\u679C\u672A\u77E5", cancelled: "\u5DF2\u53D6\u6D88" },
     action: { create: "\u521B\u5EFA", start: "\u542F\u52A8", stop: "\u505C\u6B62", restart: "\u91CD\u542F", recreate: "\u91CD\u5EFA", remove: "\u79FB\u9664" },
+    opStep: {
+      dispatch: "\u5DF2\u6D3E\u53D1",
+      verify: "\u5DF2\u6838\u9A8C",
+      already: "\u5DF2\u5904\u4E8E\u8BE5\u72B6\u6001",
+      cancelled: "\u5DF2\u53D6\u6D88",
+      authorize: "\u672A\u83B7\u6388\u6743",
+      precheck: "\u9884\u68C0",
+      "image-precheck": "\u955C\u50CF\u9884\u68C0",
+      "pre-inspect": "\u9884\u68C0\u89C2\u6D4B",
+      "pre-missing": "\u5BB9\u5668\u7F3A\u5931",
+      "pre-mismatch": "\u5BF9\u8C61\u4E0D\u7B26",
+      "stop-verify": "\u505C\u6B62\u6838\u9A8C",
+      "remove-precheck": "\u79FB\u9664\u9884\u68C0",
+      "remove-verify": "\u79FB\u9664\u6838\u9A8C",
+      "idle-proof-lost": "\u95F2\u7F6E\u8BC1\u636E\u4E22\u5931"
+    },
     footRunning: "{running} \u8FD0\u884C \xB7 {stopped} \u505C\u6B62",
     footAttention: "{count} \u9700\u5904\u7406",
     cores: "{n} \u6838",
@@ -1025,7 +1082,9 @@ ${LAYER_CSS}
     terminalClose: "\u5173\u95ED\u7EC8\u7AEF",
     terminalCloseTitle: "\u5173\u95ED\u7EC8\u7AEF",
     terminalCloseBody: "\u5173\u95ED\u7EC8\u7AEF {id}\uFF1F\u5176 shell \u8FDB\u7A0B\u4F1A\u7ED3\u675F\uFF0C\u672A\u4FDD\u5B58\u7684\u8F93\u51FA\u4F1A\u4E22\u5931\u3002",
+    terminalCloseUnavailable: "\u7EC8\u7AEF\u8FDB\u7A0B\u6CA1\u6709\u54CD\u5E94\uFF0C\u65E0\u6CD5\u786E\u8BA4\u5DF2\u5173\u95ED\u3002\u5982\u679C\u5B83\u6253\u5F00\u540E\u6C99\u7BB1\u91CD\u542F\u8FC7\uFF0C\u8FD9\u4E2A shell \u5DF2\u7ECF\u4E0D\u5728\u4E86\u3002",
     terminalLabel: "Shell {id}",
+    termState: { pending: "\u542F\u52A8\u4E2D", active: "\u6D3B\u52A8", ended: "\u5DF2\u7ED3\u675F", unknown: "\u672A\u77E5" },
     terminalsEmpty: "\u8FD9\u4E2A\u6C99\u7BB1\u4E0A\u6CA1\u6709\u6253\u5F00\u7684\u7EC8\u7AEF\u3002",
     terminalsDenied: "\u6B64\u8EAB\u4EFD\u65E0\u6743\u4F7F\u7528\u7EC8\u7AEF\u3002",
     terminalsStopped: "\u542F\u52A8\u6C99\u7BB1\u540E\u624D\u80FD\u6253\u5F00\u7EC8\u7AEF\u3002",
@@ -1035,13 +1094,33 @@ ${LAYER_CSS}
     servicesEmpty: "\u8FD9\u4E2A profile \u6CA1\u6709\u58F0\u660E\u670D\u52A1\u3002",
     unpublished: "\u672A\u53D1\u5E03",
     health: { healthy: "\u5065\u5EB7", unhealthy: "\u5F02\u5E38", unknown: "\u672A\u68C0\u67E5" },
-    probe: "\u8FD0\u884C\u5065\u5EB7\u68C0\u67E5",
+    probeTitle: "\u5B9E\u65F6\u5065\u5EB7",
+    probe: "\u7ACB\u5373\u68C0\u67E5",
     probing: "\u68C0\u67E5\u4E2D\u2026",
     probeHealthy: "\u5404\u5E73\u9762\u5747\u5065\u5EB7",
     probeDegraded: "\u964D\u7EA7\uFF1A{planes}",
     probeAt: "\u68C0\u67E5\u4E8E {at}",
     probeStopped: "\u542F\u52A8\u6C99\u7BB1\u540E\u624D\u80FD\u68C0\u67E5\u5F15\u64CE\u3002",
     plane: { container: "\u5BB9\u5668", engine: "\u5F15\u64CE", page: "\u9875\u9762", dom: "DOM", bridge: "\u6865", terminal: "\u7EC8\u7AEF" },
+    planeState: {
+      running: "\u8FD0\u884C\u4E2D",
+      stopped: "\u5DF2\u505C\u6B62",
+      missing: "\u7F3A\u5931",
+      unknown: "\u672A\u77E5",
+      cdp: "CDP \u5C31\u7EEA",
+      "http-only": "\u4EC5 HTTP",
+      down: "\u4E0D\u53EF\u8FBE",
+      up: "\u5728\u7EBF",
+      none: "\u65E0\u9875\u9762",
+      blank: "\u7A7A\u767D\u9875",
+      open: "\u5DF2\u6253\u5F00",
+      ready: "\u5C31\u7EEA",
+      failed: "\u5931\u8D25",
+      absent: "\u65E0",
+      listening: "\u76D1\u542C\u4E2D",
+      "policy-stale": "\u7B56\u7565\u8FC7\u671F"
+    },
+    logsTail: "\u6700\u8FD1 {n} \u884C",
     planeSkipped: "\u5DF2\u8DF3\u8FC7",
     manualControl: "\u4EBA\u5DE5\u63A5\u7BA1",
     manualHeld: "\u5DF2\u7531\u64CD\u4F5C\u8005\u63A5\u7BA1",
@@ -1054,6 +1133,8 @@ ${LAYER_CSS}
     logsStopped: "\u65E5\u5FD7\u4ECE\u8FD0\u884C\u4E2D\u7684\u5BB9\u5668\u8BFB\u53D6\u3002",
     copy: "\u590D\u5236",
     copied: "\u5DF2\u590D\u5236",
+    wrapOn: "\u81EA\u52A8\u6362\u884C",
+    wrapOff: "\u53D6\u6D88\u6362\u884C",
     receipts: "\u672C\u9875\u53D1\u51FA\u7684\u8BF7\u6C42",
     receiptLine: "{action} \xB7 {state}",
     receiptId: "\u64CD\u4F5C {id}",
@@ -1062,6 +1143,7 @@ ${LAYER_CSS}
     lookup: "\u6309\u64CD\u4F5C\u53F7\u67E5\u8BE2",
     lookupPlaceholder: "\u64CD\u4F5C\u53F7",
     lookupGo: "\u67E5\u8BE2",
+    lookupMissing: "\u8FD9\u4E2A\u6C99\u7BB1\u4E0A\u6CA1\u6709\u8BE5\u64CD\u4F5C\u53F7\u3002",
     history: "\u64CD\u4F5C\u5386\u53F2",
     historyEmpty: "\u8FD8\u6CA1\u6709\u64CD\u4F5C\u8BB0\u5F55\u3002",
     power: "\u7535\u6E90",
@@ -1139,8 +1221,15 @@ ${LAYER_CSS}
 .dnls-count{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xs-13)}
 .dnls-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:var(--nano-space-4);padding:var(--nano-space-3)}
 .dnls-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:var(--nano-space-2);min-height:28px;padding:0 var(--nano-space-3);border-top:var(--dsh-hairline-width) solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11)}
-.dnls-list{display:flex;flex-direction:column}
-.dnls-list>*+*{border-top:var(--dsh-hairline-width) solid var(--dsw-alias-border-l3)}
+.dnls-group{display:flex;flex-direction:column;min-width:0;padding:0 var(--nano-space-3);background:var(--dsw-alias-bg-layer-2);border:var(--dsh-hairline-width) solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg)}
+.dnls-group>.nano-split{flex-wrap:wrap;min-height:40px;padding-block:var(--nano-space-1)}
+.dnls-group>.nano-split:last-child{border-bottom:0}
+.dnls-rows{padding:0;overflow:hidden}
+.dnls-row{display:flex;align-items:center;gap:var(--nano-space-2);min-height:52px;padding:var(--nano-space-2) var(--nano-space-3);cursor:pointer}
+.dnls-row+.dnls-row{border-top:var(--dsh-hairline-width) solid var(--dsw-alias-border-l3)}
+.dnls-row:hover{background:var(--dsw-alias-bg-layer-3)}
+.dnls-row:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}
+.dnls-row>.dnls-row-copy{flex:1 1 auto}
 .dnls-row-copy{display:flex;flex-direction:column;min-width:0;padding:var(--nano-space-1) 0}
 .dnls-row-name{display:flex;align-items:baseline;gap:var(--nano-space-2);min-width:0;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-strong-13)}
 .dnls-row-state{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
@@ -1166,8 +1255,9 @@ ${LAYER_CSS}
 .dnls-term{display:flex;align-items:center;gap:var(--nano-space-2);min-width:0}
 .dnls-mono{font-family:var(--dsh-font-family-code);font-size:var(--dsh-code-font-size)}
 .dnls-field{display:flex;flex-direction:column;gap:var(--nano-space-1);color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12)}
-.dnls-narrow{width:96px}
-.dnls-grow{flex:1 1 12rem;min-width:0}
+.dnls-grow{display:grid;grid-template-columns:minmax(0,1fr);flex:1 1 12rem;min-width:0}
+.dnls-num{display:grid;grid-template-columns:minmax(0,1fr);width:6.5rem}
+.dnls-label{display:flex;flex-direction:column;gap:2px;min-width:0}
 .dnls-log{max-height:360px;overflow:auto;border-radius:var(--dsw-radius-md)}
 `;
 
@@ -1210,6 +1300,7 @@ ${LAYER_CSS}
   var stateText = (copy, state) => copy.state[state] ?? copy.state.unknown;
   var opText = (copy, state) => copy.opState[state] ?? state ?? copy.none;
   var actionText = (copy, action) => copy.action[action] ?? action ?? copy.none;
+  var stepText = (copy, step) => step ? copy.opStep[step] ?? step : null;
   var nameOf = (row) => row?.name ?? row?.sandboxId ?? "";
   var shortId = (id) => typeof id === "string" ? id.slice(0, 8) : "";
   var needsAttention = (row) => row?.observedState === "failed" || row?.observedState === "missing";
@@ -1357,6 +1448,9 @@ ${LAYER_CSS}
       children
     );
   }
+  function Group({ children }) {
+    return h8("div", { className: "dnls-group" }, children);
+  }
   function Muted({ children }) {
     return h8("p", { className: "dnls-muted" }, children);
   }
@@ -1435,9 +1529,23 @@ ${LAYER_CSS}
   var h9 = import_react12.default.createElement;
   function SandboxRow({ copy, row, busy, supports, onOpen, onMenu, onStart }) {
     const stopped = row.observedState === "stopped";
-    return h9(import_dsh_client_ui_primitives7.DisclosureRow, {
-      icon: h9(import_dsh_client_ui_primitives7.StateDot, { state: DOT[row.observedState] ?? "idle" }),
-      title: h9(
+    const own = (event) => event.target === event.currentTarget;
+    return h9(
+      "div",
+      {
+        className: "dnls-row",
+        role: "button",
+        tabIndex: 0,
+        "aria-label": `${nameOf(row)} \xB7 ${stateText(copy, row.observedState)}`,
+        onClick: () => onOpen(row),
+        onKeyDown: (event) => {
+          if (!own(event) || event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          onOpen(row);
+        }
+      },
+      h9(import_dsh_client_ui_primitives7.StateDot, { state: DOT[row.observedState] ?? "idle" }),
+      h9(
         "span",
         { className: "dnls-row-copy" },
         h9(
@@ -1448,14 +1556,10 @@ ${LAYER_CSS}
         ),
         h9("span", { className: "dnls-row-meta" }, rowMeta(copy, row))
       ),
-      open: false,
-      expandable: true,
-      expandOnRowClick: true,
-      previewChevron: false,
-      onToggle: () => onOpen(row),
-      headerAccessory: h9(
+      // Row actions must not also open the row.
+      h9(
         "span",
-        { className: "dnls-row-tail" },
+        { className: "dnls-row-tail", onClick: (event) => event.stopPropagation(), onKeyDown: (event) => event.stopPropagation() },
         stopped && supports("sandbox.instance.start") ? h9(import_dsh_client_ui_primitives7.Button, { variant: "outline", size: "sm", disabled: busy, onClick: () => onStart(row) }, copy.action.start) : null,
         h9(IconButton, {
           icon: h9(import_dsh_client_ui_primitives7.IconEllipsisOutlineRegular, { size: 16 }),
@@ -1463,7 +1567,7 @@ ${LAYER_CSS}
           onClick: (event) => onMenu(event, row)
         })
       )
-    });
+    );
   }
   function FleetView({
     copy,
@@ -1531,7 +1635,7 @@ ${LAYER_CSS}
         null,
         h9(
           "div",
-          { className: "dnls-list", "data-dnls-list": "1" },
+          { className: "dnls-group dnls-rows", "data-dnls-list": "1" },
           list.map((row) => h9(SandboxRow, { key: row.sandboxId, copy, row, busy, supports, onOpen, onMenu, onStart }))
         ),
         !complete ? h9(Muted, null, copy.listPartial) : null,
@@ -1576,7 +1680,7 @@ ${LAYER_CSS}
         "div",
         { className: "dnls-scroll" },
         rows ? h9(ErrorLine, { error }) : null,
-        recent.length > 0 ? h9(Section, { title: copy.receipts }, h9(ReceiptList, { copy, receipts: recent, onRecheck, showName: true })) : null,
+        recent.length > 0 ? h9(Section, { title: copy.receipts }, h9(Group, null, h9(ReceiptList, { copy, receipts: recent, onRecheck, showName: true }))) : null,
         body
       ),
       rows && list.length > 0 ? h9(
@@ -1595,6 +1699,7 @@ ${LAYER_CSS}
   var PLANES = ["container", "engine", "bridge", "page", "dom", "terminal"];
   var HEALTH_TONE = { healthy: "success", unhealthy: "danger" };
   var DANGER = "nano-modal-action nano-modal-danger";
+  var ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
   function useTickets() {
     const ref = import_react13.default.useRef(null);
     if (!ref.current) ref.current = {};
@@ -1679,7 +1784,7 @@ ${LAYER_CSS}
         Section,
         { title: copy.deployment },
         detail == null ? h10(Muted, null, copy.loading) : h10(
-          import_react13.default.Fragment,
+          Group,
           null,
           h10(
             SplitRow,
@@ -1690,14 +1795,14 @@ ${LAYER_CSS}
           h10(SplitRow, { label: copy.observed }, when(copy, detail.observedAt) ?? copy.none)
         )
       ),
-      Array.isArray(detail?.mounts) && detail.mounts.length > 0 ? h10(
-        Section,
-        { title: copy.storage },
+      Array.isArray(detail?.mounts) && detail.mounts.length > 0 ? h10(Section, { title: copy.storage }, h10(
+        Group,
+        null,
         detail.mounts.map((mount2, index) => h10(SplitRow, {
           key: `${mount2.target}:${index}`,
           label: h10("span", { className: "dnls-mono" }, mount2.target ?? copy.none)
         }, `${mount2.type ?? ""} \xB7 ${mount2.readOnly ? copy.readOnly : copy.readWrite}`))
-      ) : null
+      )) : null
     );
   }
   function TerminalsTab({ copy, host, terms, running, busy, canCreate, canClose, onCreate, onOpen, onClose }) {
@@ -1708,7 +1813,7 @@ ${LAYER_CSS}
     else if (terms.error) body = h10(ErrorLine, { error: terms.error });
     else if (list.length === 0) body = h10(Muted, null, running ? copy.terminalsEmpty : copy.terminalsStopped);
     else {
-      body = list.map((term) => {
+      body = h10(Group, null, list.map((term) => {
         const handlers = typeof term.address === "string" ? handlersFor(host, term.address) : [];
         return h10(SplitRow, {
           key: term.terminalId,
@@ -1717,25 +1822,25 @@ ${LAYER_CSS}
             { className: "dnls-term" },
             h10(import_dsh_client_ui_primitives8.StateDot, { state: term.state === "active" ? "done" : "idle" }),
             h10("span", { className: "dnls-mono" }, fill(copy.terminalLabel, { id: shortId(term.terminalId) })),
-            term.state ? h10(import_dsh_client_ui_primitives8.Tag, { tone: "neutral" }, term.state) : null
+            term.state ? h10(import_dsh_client_ui_primitives8.Tag, { tone: "neutral" }, copy.termState[term.state] ?? term.state) : null
           )
         }, h10(
           "span",
           { className: "dnls-inline" },
-          handlers.length === 0 ? h10("span", { className: "dnls-muted" }, copy.terminalUnavailable) : handlers.map((handler, index) => h10(import_dsh_client_ui_primitives8.Button, {
+          term.state !== "active" ? null : handlers.length === 0 ? h10("span", { className: "dnls-muted" }, copy.terminalUnavailable) : handlers.map((handler, index) => h10(import_dsh_client_ui_primitives8.Button, {
             key: index,
             variant: "ghost",
             size: "sm",
             onClick: () => onOpen(term)
           }, handlers.length === 1 ? copy.terminalOpen : fill(copy.openIn, { name: handlerTitle(handler, term.address, copy.none) }))),
-          canClose ? h10(IconButton, {
+          canClose && term.state !== "ended" ? h10(IconButton, {
             icon: h10(import_dsh_client_ui_primitives8.IconTrashOutlineRegular, { size: 16 }),
             "aria-label": `${copy.terminalClose} ${shortId(term.terminalId)}`,
             disabled: busy,
             onClick: () => onClose(term)
           }) : null
         ));
-      });
+      }));
     }
     return h10(Section, {
       title: copy.terminals,
@@ -1764,7 +1869,7 @@ ${LAYER_CSS}
       h10(
         Section,
         { title: copy.services },
-        detail == null ? h10(Muted, null, copy.loading) : services.length === 0 ? h10(Muted, null, copy.servicesEmpty) : services.map((service) => {
+        detail == null ? h10(Muted, null, copy.loading) : services.length === 0 ? h10(Muted, null, copy.servicesEmpty) : h10(Group, null, services.map((service) => {
           const address = serviceAddress(service);
           const role = service.role && service.role !== service.serviceId ? `${service.role} \xB7 ` : "";
           return h10(SplitRow, {
@@ -1779,14 +1884,15 @@ ${LAYER_CSS}
             "span",
             { className: "dnls-inline" },
             address ? h10("span", { className: "dnls-mono" }, address) : h10("span", { className: "dnls-muted" }, copy.unpublished),
-            h10(import_dsh_client_ui_primitives8.Tag, { tone: HEALTH_TONE[service.health] ?? "neutral" }, copy.health[service.health] ?? copy.health.unknown)
+            // Only a recorded verdict earns a tag; live state is the probe below.
+            HEALTH_TONE[service.health] ? h10(import_dsh_client_ui_primitives8.Tag, { tone: HEALTH_TONE[service.health] }, copy.health[service.health]) : null
           ));
-        })
+        }))
       ),
       canProbe ? h10(
         Section,
         {
-          title: copy.probe,
+          title: copy.probeTitle,
           aside: h10(
             import_dsh_client_ui_primitives8.Button,
             { variant: "outline", size: "sm", disabled: !running || probe?.busy, onClick: onProbe },
@@ -1806,19 +1912,19 @@ ${LAYER_CSS}
             ),
             h10("span", { className: "dnls-muted" }, fill(copy.probeAt, { at: when(copy, status.observedAt) ?? copy.none }))
           ),
-          PLANES.filter((key) => status.planes?.[key]).map((key) => {
+          h10(Group, null, PLANES.filter((key) => status.planes?.[key]).map((key) => {
             const plane = status.planes[key];
             return h10(SplitRow, {
               key,
               label: h10("span", { className: "dnls-term" }, h10(import_dsh_client_ui_primitives8.StateDot, { state: planeDot(plane) }), copy.plane[key] ?? key)
-            }, h10("span", { className: "dnls-muted" }, plane.skipped ? copy.planeSkipped : plane.state ?? copy.none));
-          })
+            }, h10("span", { className: "dnls-muted" }, plane.skipped ? copy.planeSkipped : copy.planeState[plane.state] ?? plane.state ?? copy.none));
+          }))
         ) : null
       ) : null,
       canControl ? h10(
         Section,
         { title: copy.manualControl },
-        control?.error ? h10(ErrorLine, { error: control.error }) : control?.state == null ? h10(Muted, null, running ? copy.loading : copy.probeStopped) : h10(SplitRow, {
+        control?.error ? h10(ErrorLine, { error: control.error }) : control?.state == null ? h10(Muted, null, running ? copy.loading : copy.probeStopped) : h10(Group, null, h10(SplitRow, {
           label: h10(
             "span",
             { className: "dnls-term" },
@@ -1830,7 +1936,7 @@ ${LAYER_CSS}
           size: "sm",
           disabled: busy || control.busy,
           onClick: () => onControl(control.state.humanHold?.active ? "release" : "takeover")
-        }, control.state.humanHold?.active ? copy.release : copy.takeover))
+        }, control.state.humanHold?.active ? copy.release : copy.takeover)))
       ) : null
     );
   }
@@ -1854,7 +1960,14 @@ ${LAYER_CSS}
       !running ? h10(Muted, null, copy.logsStopped) : logs.error ? h10(ErrorLine, { error: logs.error }) : logs.text == null ? h10(Muted, null, copy.loading) : logs.text.trim() === "" ? h10(Muted, null, copy.logsEmpty) : h10(
         "div",
         { className: "dnls-log" },
-        h10(import_dsh_client_ui_primitives8.CodeBlock, { code: logs.text.replace(/\n$/, ""), lang: "text", copyLabel: copy.copy, copiedLabel: copy.copied })
+        h10(import_dsh_client_ui_primitives8.CodeBlock, {
+          code: logs.text.replace(ANSI, "").replace(/\n$/, ""),
+          lang: "text",
+          wrap: true,
+          copyLabel: copy.copy,
+          copiedLabel: copy.copied,
+          toolbarLabels: { codeLabel: fill(copy.logsTail, { n: logs.tail }), wrapLabel: copy.wrapOn, unwrapLabel: copy.wrapOff }
+        })
       )
     );
   }
@@ -1866,7 +1979,7 @@ ${LAYER_CSS}
       receipts.length > 0 ? h10(
         Section,
         { title: copy.receipts },
-        h10(ReceiptList, { copy, receipts, onRecheck }),
+        h10(Group, null, h10(ReceiptList, { copy, receipts, onRecheck })),
         h10(Muted, null, copy.receiptHint)
       ) : null,
       h10(
@@ -1888,19 +2001,19 @@ ${LAYER_CSS}
           h10(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", disabled: lookup.busy || lookup.text.trim() === "", onClick: onLookup }, copy.lookupGo)
         ),
         lookup.error ? h10(ErrorLine, { error: lookup.error }) : null,
-        lookup.result ? h10(SplitRow, {
+        lookup.result ? h10(Group, null, h10(SplitRow, {
           label: h10(
             "span",
             { className: "dnls-term" },
             h10(import_dsh_client_ui_primitives8.StateDot, { state: OP_DOT[lookup.result.state] ?? "idle" }),
             fill(copy.receiptLine, { action: actionText(copy, lookup.result.action), state: opText(copy, lookup.result.state) })
           )
-        }, h10("span", { className: "dnls-muted" }, [lookup.result.step, when(copy, lookup.result.finishedAt ?? lookup.result.at)].filter(Boolean).join(" \xB7 "))) : null
+        }, h10("span", { className: "dnls-muted" }, [stepText(copy, lookup.result.step), when(copy, lookup.result.finishedAt ?? lookup.result.at)].filter(Boolean).join(" \xB7 ")))) : null
       ),
       h10(
         Section,
         { title: copy.history },
-        detail == null ? h10(Muted, null, copy.loading) : operations.length === 0 ? h10(Muted, null, copy.historyEmpty) : operations.map((op, index) => h10(SplitRow, {
+        detail == null ? h10(Muted, null, copy.loading) : operations.length === 0 ? h10(Muted, null, copy.historyEmpty) : h10(Group, null, operations.map((op, index) => h10(SplitRow, {
           key: `${op.action}:${op.at ?? index}`,
           label: h10(
             "span",
@@ -1908,25 +2021,32 @@ ${LAYER_CSS}
             h10(import_dsh_client_ui_primitives8.StateDot, { state: OP_DOT[op.state] ?? "idle" }),
             fill(copy.receiptLine, { action: actionText(copy, op.action), state: opText(copy, op.state) })
           )
-        }, h10("span", { className: "dnls-muted" }, when(copy, op.finishedAt ?? op.at) ?? copy.none)))
+        }, h10("span", { className: "dnls-muted" }, when(copy, op.finishedAt ?? op.at) ?? copy.none))))
       )
     );
   }
   function SettingsTab({ copy, target, detail, running, busy, supports, draft, setDraft, onAction, onSaveIdle, onSaveResources }) {
     const configuration = detail?.configuration;
-    const field = (key, label) => h10("span", { className: "dnls-narrow" }, h10(import_dsh_client_ui_primitives8.Input, {
+    const field = (key, label) => h10(import_dsh_client_ui_primitives8.Input, {
       value: draft[key],
       "aria-label": label,
       inputMode: "numeric",
       onChange: (event) => setDraft({ ...draft, [key]: event.target.value, message: null })
-    }));
+    });
+    const num = (key, label) => h10("span", { className: "dnls-num" }, field(key, label));
+    const labelled = (label, value) => h10(
+      "span",
+      { className: "dnls-label" },
+      h10("span", null, label),
+      h10("span", { className: "dnls-muted" }, fill(copy.current, { value }))
+    );
     if (detail == null) return h10(Muted, null, copy.loading);
     return h10(
       import_react13.default.Fragment,
       null,
-      h10(
-        Section,
-        { title: copy.power },
+      h10(Section, { title: copy.power }, h10(
+        Group,
+        null,
         running ? h10(SplitRow, { label: copy.powerState }, h10(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", disabled: busy || !supports("sandbox.instance.stop"), onClick: () => onAction("stop") }, copy.action.stop)) : h10(SplitRow, { label: copy.powerState }, h10(import_dsh_client_ui_primitives8.Button, { variant: "primary", size: "sm", disabled: busy || !supports("sandbox.instance.start"), onClick: () => onAction("start") }, copy.action.start)),
         running ? h10(
           SplitRow,
@@ -1935,39 +2055,24 @@ ${LAYER_CSS}
         ) : null,
         configuration && supports("sandbox.idle.configure") ? h10(
           SplitRow,
-          { label: copy.idleMinutes },
+          { label: labelled(copy.idleMinutes, idleText(copy, configuration)) },
           h10(
             "span",
             { className: "dnls-inline" },
-            h10("span", { className: "dnls-muted" }, idleText(copy, configuration)),
-            field("idle", copy.idleMinutes),
+            num("idle", copy.idleMinutes),
             h10(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", disabled: busy, onClick: onSaveIdle }, copy.save)
           )
         ) : null
-      ),
+      )),
       configuration && supports("sandbox.revision.save") ? h10(
         Section,
         { title: copy.resources },
         h10(Muted, null, copy.resourcesHint),
         h10(
-          SplitRow,
-          { label: copy.cpus },
-          h10(
-            "span",
-            { className: "dnls-inline" },
-            h10("span", { className: "dnls-muted" }, fill(copy.current, { value: target.resources?.cpus ?? copy.none })),
-            field("cpus", copy.cpus)
-          )
-        ),
-        h10(
-          SplitRow,
-          { label: copy.memoryMiB },
-          h10(
-            "span",
-            { className: "dnls-inline" },
-            h10("span", { className: "dnls-muted" }, fill(copy.current, { value: formatBytes(target.resources?.memoryBytes) ?? copy.none })),
-            field("memory", copy.memoryMiB)
-          )
+          Group,
+          null,
+          h10(SplitRow, { label: labelled(copy.cpus, target.resources?.cpus ?? copy.none) }, num("cpus", copy.cpus)),
+          h10(SplitRow, { label: labelled(copy.memoryMiB, formatBytes(target.resources?.memoryBytes) ?? copy.none) }, num("memory", copy.memoryMiB))
         ),
         h10(
           "div",
@@ -1978,9 +2083,9 @@ ${LAYER_CSS}
       ) : null,
       !configuration ? h10(Muted, null, copy.configDenied) : null,
       draft.message ? h10(draft.error ? ErrorLine : Muted, draft.error ? { error: draft.message } : null, draft.error ? void 0 : draft.message) : null,
-      h10(
-        Section,
-        { title: copy.danger },
+      h10(Section, { title: copy.danger }, h10(
+        Group,
+        null,
         h10(
           SplitRow,
           { label: copy.recreateRow },
@@ -1991,7 +2096,7 @@ ${LAYER_CSS}
           { label: copy.removeRow },
           h10(import_dsh_client_ui_primitives8.Button, { variant: "outline", size: "sm", className: DANGER, disabled: busy || !supports("sandbox.instance.remove"), onClick: () => onAction("remove") }, `${copy.action.remove}\u2026`)
         )
-      )
+      ))
     );
   }
   function SandboxView({
@@ -2022,6 +2127,7 @@ ${LAYER_CSS}
     const [procs, setProcs] = import_react13.default.useState(null);
     const [terms, setTerms] = import_react13.default.useState(null);
     const [closing, setClosing] = import_react13.default.useState(null);
+    const [closeError, setCloseError] = import_react13.default.useState(void 0);
     const [probe, setProbe] = import_react13.default.useState(null);
     const [control, setControl] = import_react13.default.useState(null);
     const [logs, setLogs] = import_react13.default.useState({ tail: 100, text: null });
@@ -2155,7 +2261,10 @@ ${LAYER_CSS}
         await api.terminalClose(sandboxId, term.terminalId);
         setClosing(null);
         await loadTerms();
-      }, setError);
+      }, (caught) => {
+        setCloseError(caught?.status === 503 ? copy.terminalCloseUnavailable : caught?.message ?? String(caught));
+        loadTerms();
+      });
     }
     async function runProbe() {
       setProbe((prev) => ({ ...prev, busy: true, error: null }));
@@ -2183,7 +2292,7 @@ ${LAYER_CSS}
         const result = await api.readOperation(sandboxId, operationId);
         setLookup({ text: lookup.text, result });
       } catch (caught) {
-        setLookup({ text: lookup.text, error: caught });
+        setLookup({ text: lookup.text, error: caught?.status === 404 ? copy.lookupMissing : caught });
       }
     }
     async function saveIdle() {
@@ -2242,7 +2351,10 @@ ${LAYER_CSS}
         canClose: supports("term.session.close"),
         onCreate: createTerm,
         onOpen: openTerm,
-        onClose: setClosing
+        onClose: (term) => {
+          setCloseError(void 0);
+          setClosing(term);
+        }
       }) : null },
       { value: "services", label: copy.tabServices, content: tab === "services" ? h10(ServicesTab, {
         copy,
@@ -2338,6 +2450,7 @@ ${LAYER_CSS}
         confirmLabel: copy.terminalClose,
         danger: true,
         busy,
+        error: closeError,
         onCancel: () => setClosing(null),
         onConfirm: closeTerm
       }, h10("p", { className: "dnls-muted" }, fill(copy.terminalCloseBody, { id: shortId(closing.terminalId) }))) : null

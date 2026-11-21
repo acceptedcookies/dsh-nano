@@ -17,6 +17,11 @@ export function Section({ title, aside, children }) {
     children)
 }
 
+/** Rows that belong together, on one bordered surface. */
+export function Group({ children }) {
+  return h('div', { className: 'dnls-group' }, children)
+}
+
 export function Muted({ children }) {
   return h('p', { className: 'dnls-muted' }, children)
 }

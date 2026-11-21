@@ -335,7 +335,7 @@ test('provider-shaped projections render ids, ports and null-safe stats', () => 
 test('the workbench is host primitives plus nano-ui, not a private dashboard', () => {
   const read = (name) => readFileSync(join(root, 'src/client', name), 'utf8')
   const views = ['index.jsx', 'fleet.jsx', 'sandbox.jsx', 'dialogs.jsx', 'parts.jsx'].map(read).join('\n')
-  for (const required of ['NANO_STYLES', 'Toolbar', 'NanoTabs', 'NanoDialog', 'FactGrid', 'DisclosureRow', 'StateDot', 'RiskConfirmation', 'SegmentedControl']) {
+  for (const required of ['NANO_STYLES', 'Toolbar', 'NanoTabs', 'NanoDialog', 'FactGrid', 'SplitRow', 'StateDot', 'RiskConfirmation', 'SegmentedControl']) {
     assert.equal(views.includes(required), true, required)
   }
   for (const forbidden of ['WorkbenchShell', 'TabDrawer', 'StatusDock', 'PanelLayout', 'style={', '<select', '<button', '<input', 'font-weight']) {

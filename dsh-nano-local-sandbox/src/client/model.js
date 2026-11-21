@@ -18,6 +18,7 @@ export const ACTIONS = ['start', 'stop', 'restart', 'recreate', 'remove']
 export const stateText = (copy, state) => copy.state[state] ?? copy.state.unknown
 export const opText = (copy, state) => copy.opState[state] ?? state ?? copy.none
 export const actionText = (copy, action) => copy.action[action] ?? action ?? copy.none
+export const stepText = (copy, step) => (step ? copy.opStep[step] ?? step : null)
 export const nameOf = (row) => row?.name ?? row?.sandboxId ?? ''
 export const shortId = (id) => (typeof id === 'string' ? id.slice(0, 8) : '')
 export const needsAttention = (row) => row?.observedState === 'failed' || row?.observedState === 'missing'

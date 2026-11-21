@@ -199,7 +199,10 @@ test('v2 wire: exact open → ready → aligned SNAPSHOT before any DATA, credit
   ws.send(frame(4, Buffer.from('pn')))                   // PING
   await c.until(() => c.frames.some((fr) => fr.kind === 8))
   assert.equal(c.frames.find((fr) => fr.kind === 8).payload.toString(), 'pn')
-  await c.until(() => f.rpcCalls.some((r) => r.verb === 'input' && r.data_b64 === Buffer.from('in\x00\xff').toString('base64')))
+  // Input frames queued behind a busy hop may share one broker call; the
+  // bytes still reach the broker exactly once, in wire order.
+  const inputBytes = () => Buffer.concat(f.rpcCalls.filter((r) => r.verb === 'input').map((r) => Buffer.from(r.data_b64, 'base64')))
+  await c.until(() => inputBytes().equals(Buffer.from('in\x00\xffauto')))
   await c.until(() => f.rpcCalls.filter((r) => r.verb === 'resize').length >= 2)
   const resizes = f.rpcCalls.filter((r) => r.verb === 'resize')
   assert.deepEqual(resizes.map(({ cols, rows }) => [cols, rows]), [[120, 40], [100, 30]])
@@ -276,4 +279,20 @@ test('sequence gap realigns: a ring overflow yields a fresh SNAPSHOT, never repl
   assert.equal(second.payload.readUInt32BE(1), 90)
   assert.equal(second.payload.toString('utf8', 13), 'second')
   assert.equal(c.frames.some((fr) => fr.kind === 0), false, 'no raw bytes after an eviction gap')
+})
+
+test('typing faster than the broker answers coalesces input instead of overflowing the job queue', async (t) => {
+  const slow = async () => { await new Promise((r) => setTimeout(r, 30)); return { ok: true } }
+  const f = await fixture(t, { script: { input: Array.from({ length: 64 }, () => slow) } })
+  const url = await f.stream.issueLocator(f.ref, f.row, { req: f.req })
+  const { ws, c } = await connect(url, { type: 'open', v: 2, align: 1, session: f.ref.terminalId })
+  await c.until(() => c.frames.some((fr) => fr.kind === 7))
+  const typed = 'echo dnls-io-42 && uname -s && pwd\r'
+  for (const ch of typed) ws.send(frame(0, Buffer.from(ch)))
+  const inputs = () => f.rpcCalls.filter((r) => r.verb === 'input')
+  const bytes = () => Buffer.concat(inputs().map((r) => Buffer.from(r.data_b64, 'base64'))).toString()
+  await c.until(() => bytes() === typed)
+  assert.equal(ws.readyState, 1, 'a burst of keystrokes is not a policy violation')
+  assert.ok(inputs().length < typed.length, `coalesced into ${inputs().length} broker calls`)
+  ws.close()
 })

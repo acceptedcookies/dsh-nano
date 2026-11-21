@@ -95,6 +95,15 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
   const failures = []
   const enqueue = schedule ?? ((task) => setImmediate(task))
   const observeOne = observe ?? createObservationSource({ backend, profileFor })
+  // A verified stop reaps every guest process, terminal workers included;
+  // the ledger must not keep listing those shells as active.
+  const endTerminals = (sandboxId, generation) => {
+    for (const terminal of registry.get(sandboxId)?.terminals ?? []) {
+      if (terminal.state !== 'ended' && terminal.generation === generation) {
+        registry.transitionTerminal(sandboxId, terminal.terminalId, { state: 'ended', generation })
+      }
+    }
+  }
   const auditEvent = (event) => {
     if (typeof audit === 'function') audit(auditRecord(event))
     else auditRecord(event)
@@ -403,11 +412,7 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
           const mid = await observed(locator, row)
           if (!mid || mid.state !== 'stopped' || !verified(row, mid)) return done('indeterminate', { step: 'stop-verify' })
         }
-        for (const terminal of row.terminals ?? []) {
-          if (terminal.state !== 'ended' && terminal.generation === row.binding.generation) {
-            registry.transitionTerminal(row.sandboxId, terminal.terminalId, { state: 'ended', generation: terminal.generation })
-          }
-        }
+        endTerminals(row.sandboxId, row.binding.generation)
         const stopped = await observed(locator, row)
         if (!verified(row, stopped) || stopped.state !== 'stopped') return done('indeterminate', { step: 'remove-precheck' })
         if (!(await stillAuthorized())) return
@@ -451,10 +456,15 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
         return done(await verifyStep('running'), { step: 'verify' })
       }
       if (operation.action === 'stop') {
-        if (pre.state === 'stopped') return done('succeeded', { step: 'already' })
+        if (pre.state === 'stopped') {
+          endTerminals(row.sandboxId, row.binding.generation)
+          return done('succeeded', { step: 'already' })
+        }
         if (!(await stillAuthorized())) return
         await backend.stop(locator)
-        return done(await verifyStep('stopped'), { step: 'verify' })
+        const verdict = await verifyStep('stopped')
+        if (verdict === 'succeeded') endTerminals(row.sandboxId, row.binding.generation)
+        return done(verdict, { step: 'verify' })
       }
       if (operation.action === 'restart') {
         if (pre.state !== 'stopped') {
@@ -466,6 +476,7 @@ export function createLifecycleOwner({ registry, envId, backend, profileFor, obs
           }
           if (mid.state !== 'stopped') return done('failed', { step: 'stop-verify' })
         }
+        endTerminals(row.sandboxId, row.binding.generation)
         if (!(await stillAuthorized())) return
         await backend.start(locator)
         return done(await verifyStep('running'), { step: 'verify' })

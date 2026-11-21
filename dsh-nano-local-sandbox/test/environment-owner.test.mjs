@@ -970,3 +970,29 @@ test('R-11: a failed humanHold read refuses with control.bridge before any kerne
   assert.equal(mcpRefused.result.structuredContent.errorId, 'kitesurf.control.bridge')
   assert.equal(connects.length, kernelBefore)
 })
+
+test('environment-owner stop/restart: a verified stop ends the shells it reaped', async (t) => {
+  const { owner, call, create } = await setup(t, true)
+  const row = await create('stop-ends')
+  const open = async (openId) => {
+    const out = await call('term.session.create', { sandboxId: row.sandboxId, openId, paneId: 'p-1', service: 'engine' })
+    assert.equal(out.result.isError, false, JSON.stringify(out.result))
+    return out.result.structuredContent.terminalId
+  }
+  const stateOf = (terminalId) => owner.registry.get(row.sandboxId).terminals.find((entry) => entry.terminalId === terminalId).state
+
+  const beforeRestart = await open('o-restart')
+  const restart = await call('sandbox.instance.restart', { sandboxId: row.sandboxId, requestId: 'restart-1' })
+  assert.equal(restart.result.isError, false, JSON.stringify(restart.result))
+  await owner.drain()
+  assert.equal(owner.registry.get(row.sandboxId).operations.at(-1).state, 'succeeded')
+  assert.equal(stateOf(beforeRestart), 'ended', 'restart stops the container: its shells are gone')
+
+  const beforeStop = await open('o-stop')
+  const stop = await call('sandbox.instance.stop', { sandboxId: row.sandboxId, requestId: 'stop-1' })
+  assert.equal(stop.result.isError, false, JSON.stringify(stop.result))
+  await owner.drain()
+  assert.equal(owner.registry.get(row.sandboxId).operations.at(-1).state, 'succeeded')
+  assert.equal(stateOf(beforeStop), 'ended')
+  assert.equal(owner.registry.get(row.sandboxId).binding.generation, row.binding.generation, 'stop keeps the generation')
+})

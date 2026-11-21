@@ -35,6 +35,7 @@ const CREDIT_CAP = 4 << 20
 const CHUNK_MAX = 64 << 10      // one s→c DATA payload
 const BUFFER_MAX = 1 << 20      // ws bufferedAmount ceiling
 const JOBS_MAX = 16             // queued per-socket async jobs
+const INPUT_BATCH_MAX = 64 << 10 // coalesced input bytes per broker hop
 const UINT32 = 0xffffffff
 const IDLE_MS = 1000            // bounded non-overlapping poll when ring empty
 
@@ -87,6 +88,25 @@ function validSnapshot(snap) {
 
 function fail(status, error) {
   return Object.assign(new Error(error), { status })
+}
+
+/**
+ * The ws(s) origin the browser that sent `req` can reach. The listener origin
+ * is not it behind a TLS-terminating proxy (`--public-url`): the page speaks
+ * wss to the proxy's authority, and DNT accepts only a same-origin locator.
+ * Host and Origin are the headers Connection already fenced for this request;
+ * a request without Origin (non-browser caller) gets the listener origin.
+ */
+export function requestWsOrigin(req, listenerOrigin) {
+  const origin = req?.headers?.origin
+  if (origin == null) return listenerOrigin()
+  const host = String(req?.headers?.host ?? '').toLowerCase()
+  let parsed
+  try { parsed = new URL(String(origin)) } catch { parsed = null }
+  if (!parsed || !host || parsed.host !== host || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')) {
+    throw fail(503, 'unavailable')
+  }
+  return `${parsed.protocol === 'https:' ? 'wss:' : 'ws:'}//${parsed.host}`
 }
 
 /**
@@ -255,6 +275,7 @@ export function createTerminalStream({ connection, webServer, registry, envId, r
       pump: null,
       tail: Promise.resolve(),
       jobs: 0,
+      input: null,          // newest queued input batch, until it starts
     }
     live.add(ctx)
 
@@ -464,8 +485,7 @@ export function createTerminalStream({ connection, webServer, registry, envId, r
         }
         case KIND.DATA:
         case KIND.AUTO_INPUT:
-          await rpc({ verb: 'input', data_b64: frame.payload.toString('base64') }, 'terminal.input')
-          break
+          return sendInput({ chunks: [frame.payload] })
         case KIND.CLOSE:
           return drop(CLOSE.DETACH)
         case KIND.PING:
@@ -476,7 +496,39 @@ export function createTerminalStream({ connection, webServer, registry, envId, r
       }
     }
 
-    ws.on('message', (data, isBinary) => { void enqueue(() => handleMessage(data, isBinary)) })
+    /**
+     * Keystrokes arrive one frame each, but every broker hop costs a fresh
+     * container exec plus two inspections. Consecutive input frames queued
+     * behind a busy hop join one not-yet-started input job — same socket,
+     * same authority, wire order kept — so typing cannot overflow JOBS_MAX.
+     */
+    async function sendInput(batch) {
+      if (!ctx.opened || !ctx.aligned) return drop(CLOSE.PROTOCOL)
+      const data = batch.chunks.length === 1 ? batch.chunks[0] : Buffer.concat(batch.chunks)
+      await rpc({ verb: 'input', data_b64: data.toString('base64') }, 'terminal.input')
+    }
+
+    ws.on('message', (data, isBinary) => {
+      const frame = isBinary ? decodeFrame(Buffer.from(data)) : null
+      if (frame && frame.channel === 0 && (frame.kind === KIND.DATA || frame.kind === KIND.AUTO_INPUT)) {
+        const open = ctx.input
+        if (open && !open.started && open.size + frame.payload.length <= INPUT_BATCH_MAX) {
+          open.chunks.push(frame.payload)
+          open.size += frame.payload.length
+          return
+        }
+        const batch = { started: false, chunks: [frame.payload], size: frame.payload.length }
+        ctx.input = batch
+        void enqueue(() => {
+          batch.started = true
+          if (ctx.input === batch) ctx.input = null
+          return sendInput(batch)
+        })
+        return
+      }
+      ctx.input = null
+      void enqueue(() => handleMessage(data, isBinary))
+    })
     ws.on('error', () => drop())
   }
 

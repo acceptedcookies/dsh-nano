@@ -9,6 +9,7 @@ import { ensurePerfReviewHost } from './lib/perf-review-host.js'
 import { createAppleBackend } from './src/host/backend-apple.js'
 import { openEnvironmentOwner } from './src/host/environment-owner.js'
 import { createManagedRoutes } from './src/host/managed-routes.js'
+import { requestWsOrigin } from './src/host/term-ws.js'
 import { makeAgentToolDefinitions } from './src/host/agent-tools.js'
 import { stateRootFor } from './src/host/profile-drivers.js'
 import { appendFileSync } from 'node:fs'
@@ -29,7 +30,7 @@ export function apply(ctx, deps = {}) {
   } })
   const auditPath = join(stateRootFor(deps), 'control.audit.jsonl')
   const owner = openEnvironmentOwner({ ...deps, backend, webServer, connection,
-    originFor: () => webServer.getOrigin().replace(/^http/, 'ws'),
+    originFor: (req) => requestWsOrigin(req, () => webServer.getOrigin().replace(/^http/, 'ws')),
     audit: deps.audit ?? (record => appendFileSync(auditPath, JSON.stringify(record) + '\n', { mode: 0o600 })) })
   return ctx.effect(function* () {
     yield ctx.effect(() => () => owner.close())
